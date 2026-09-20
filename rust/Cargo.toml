@@ -1,0 +1,16 @@
+[workspace]
+members = ["crates/bopify-core"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.85"
+
+# Pinned deliberately: librespot has no stable released API. Upgrading is
+# a decision, not a side effect of a build.
+[workspace.dependencies]
+librespot-core = { git = "https://github.com/librespot-org/librespot.git", rev = "939dc5ee9d833e1980f9495241219d9d4868a061" }
+librespot-playback = { git = "https://github.com/librespot-org/librespot.git", rev = "939dc5ee9d833e1980f9495241219d9d4868a061" }
+librespot-connect = { git = "https://github.com/librespot-org/librespot.git", rev = "939dc5ee9d833e1980f9495241219d9d4868a061" }
+librespot-metadata = { git = "https://github.com/librespot-org/librespot.git", rev = "939dc5ee9d833e1980f9495241219d9d4868a061" }
+librespot-oauth = { git = "https://github.com/librespot-org/librespot.git", rev = "939dc5ee9d833e1980f9495241219d9d4868a061" }
