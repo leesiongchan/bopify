@@ -43,4 +43,20 @@ struct PlaybackEventTests {
     @Test func throwsOnAnUnrecognisedEventType() {
         #expect(throws: (any Error).self) { try decode(#"{"type":"teleported"}"#) }
     }
+
+    @Test func decodesVolumeAtFullScale() throws {
+        #expect(try decode(#"{"type":"volumeChanged","volume":65535}"#) == .volumeChanged(volume: 1.0))
+    }
+
+    @Test func decodesVolumeAtZero() throws {
+        #expect(try decode(#"{"type":"volumeChanged","volume":0}"#) == .volumeChanged(volume: 0.0))
+    }
+
+    @Test func normalisesVolumeAgainstUInt16Max() throws {
+        guard case let .volumeChanged(volume) = try decode(#"{"type":"volumeChanged","volume":32768}"#) else {
+            Issue.record("expected volumeChanged"); return
+        }
+        // 32768 / 65535 — asserts the divisor is UInt16.max, not 65536.
+        #expect(abs(volume - 0.500007) < 0.00001)
+    }
 }
