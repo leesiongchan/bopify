@@ -8,6 +8,13 @@ public actor SpotifyAuthService {
     private let store: any TokenStoring
     private let openURL: @Sendable (URL) -> Void
     private var tokens: TokenSet?
+    /// Actors are reentrant across `await`: `signOut()` can finish while
+    /// `signIn()`/`validAccessToken()` are suspended mid-flight. `signOut()`
+    /// and `signIn()` bump this on entry and both check it before persisting,
+    /// so a sign-out (or a fresher sign-in) discards stale in-flight work.
+    /// `validAccessToken()` only checks it, guarding against a `signOut()`
+    /// mid-refresh -- not against two overlapping refreshes.
+    private var generation = 0
 
     public init(
         clientID: String,
@@ -27,6 +34,8 @@ public actor SpotifyAuthService {
     }
 
     public func signIn() async throws -> TokenSet {
+        generation += 1
+        let myGeneration = generation
         let pkce = PKCEPair.random()
         let state = UUID().uuidString
         let listener = LoopbackCallbackListener(expectedState: state)
@@ -44,6 +53,10 @@ public actor SpotifyAuthService {
         catch { throw PlayerError.invalidCallback }
 
         let tokens = try await client.exchange(code: code, redirectURI: redirectURI, pkce: pkce)
+        // A signOut() during any of the awaits above already cleared the
+        // store; a widened generation means that happened, so this result is
+        // stale and must not resurrect the session the user just left.
+        guard generation == myGeneration else { throw PlayerError.authDenied }
         try store.save(tokens)
         self.tokens = tokens
         return tokens
@@ -55,13 +68,18 @@ public actor SpotifyAuthService {
         guard let current = tokens ?? restore() else { throw PlayerError.authExpired }
         guard current.needsRefresh() else { return current.accessToken }
         guard let refreshToken = current.refreshToken else { throw PlayerError.authExpired }
+        let myGeneration = generation
         let refreshed = try await client.refresh(refreshToken: refreshToken)
+        // Same reentrancy hazard as signIn(): a signOut() during the refresh
+        // must not have its result written back over the cleared session.
+        guard generation == myGeneration else { throw PlayerError.authExpired }
         try store.save(refreshed)
         tokens = refreshed
         return refreshed.accessToken
     }
 
     public func signOut() {
+        generation += 1
         try? store.clear()
         tokens = nil
     }
