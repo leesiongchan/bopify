@@ -1,0 +1,52 @@
+import Testing
+import Foundation
+@testable import BopifyAuth
+
+@Suite("LoopbackCallbackListener")
+struct LoopbackCallbackListenerTests {
+    private func get(_ url: URL) async throws {
+        _ = try? await URLSession.shared.data(from: url)
+    }
+
+    @Test func bindsAnEphemeralPort() async throws {
+        let listener = LoopbackCallbackListener(expectedState: "s")
+        let port = try await listener.start()
+        #expect(port > 0)
+        await listener.stop()
+    }
+
+    @Test func returnsTheAuthorizationCode() async throws {
+        let listener = LoopbackCallbackListener(expectedState: "state123")
+        let port = try await listener.start()
+
+        async let code = listener.waitForCallback()
+        try await get(URL(string: "http://127.0.0.1:\(port)/callback?code=abc123&state=state123")!)
+
+        #expect(try await code == "abc123")
+        await listener.stop()
+    }
+
+    @Test func rejectsAMismatchedState() async throws {
+        let listener = LoopbackCallbackListener(expectedState: "expected")
+        let port = try await listener.start()
+
+        // `async let` bindings can't be captured by a closure, so the concurrent
+        // wait uses a `Task` instead -- `#expect(throws:)` can capture `.value`.
+        let result = Task { try await listener.waitForCallback() }
+        try await get(URL(string: "http://127.0.0.1:\(port)/callback?code=abc&state=attacker")!)
+
+        await #expect(throws: CallbackError.stateMismatch) { try await result.value }
+        await listener.stop()
+    }
+
+    @Test func surfacesUserDenial() async throws {
+        let listener = LoopbackCallbackListener(expectedState: "s")
+        let port = try await listener.start()
+
+        let result = Task { try await listener.waitForCallback() }
+        try await get(URL(string: "http://127.0.0.1:\(port)/callback?error=access_denied&state=s")!)
+
+        await #expect(throws: CallbackError.accessDenied) { try await result.value }
+        await listener.stop()
+    }
+}
