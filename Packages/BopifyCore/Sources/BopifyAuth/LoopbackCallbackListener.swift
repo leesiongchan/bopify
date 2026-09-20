@@ -63,7 +63,10 @@ public actor LoopbackCallbackListener {
         if let continuation {
             self.continuation = nil
             continuation.resume(with: result)
-        } else {
+        } else if pendingResult == nil {
+            // First outcome wins: a delivered code must not be overwritten by a
+            // later stop(), and a stopped listener must not be revived by a late
+            // request.
             pendingResult = result
         }
     }
