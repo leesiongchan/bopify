@@ -55,6 +55,10 @@ public final class PlayerModel {
     public func load(_ request: PlayRequest) { Task { [engine] in try? await engine.load(request) } }
 
     private func apply(_ event: PlaybackEvent) {
+        // Any event but a failure is evidence the engine is alive and
+        // progressing, so a previously recorded error is no longer current.
+        // Clearing here rather than per-branch keeps the invariant in one place.
+        if case .failed = event {} else { state.error = nil }
         switch event {
         case let .trackChanged(track):
             state.currentTrack = track
@@ -63,10 +67,9 @@ public final class PlayerModel {
             state.canNext = true
             state.canPrevious = true
             state.canSeek = true
-            state.error = nil
         case let .playing(position):
             state.phase = .playing; state.positionMs = position
-            state.isActiveDevice = true; state.error = nil
+            state.isActiveDevice = true
         case let .paused(position):
             state.phase = .paused; state.positionMs = position
             state.isActiveDevice = true

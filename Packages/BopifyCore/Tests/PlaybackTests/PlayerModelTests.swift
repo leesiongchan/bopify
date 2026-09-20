@@ -119,4 +119,18 @@ struct PlayerModelTests {
 
         #expect(engine.recordedCommands.contains("load:spotify:playlist:xyz"))
     }
+
+    @Test func recoveringFromFailureClearsTheStaleError() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        await settle(model, engine, [.failed(.networkUnavailable)])
+
+        #expect(model.state.phase == .error)
+        #expect(model.state.error == .networkUnavailable)
+
+        await settle(model, engine, [.paused(positionMs: 900)])
+        #expect(model.state.phase == .paused)
+        #expect(model.state.error == nil)  // the whole point: not just phase, the error too
+    }
 }
