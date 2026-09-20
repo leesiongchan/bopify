@@ -8,15 +8,12 @@ public protocol TokenStoring: Sendable {
     func clear() throws
 }
 
-/// Direct SecItem. No maintained Swift wrapper sets
-/// kSecUseDataProtectionKeychain, which Apple recommends for all keychain
-/// operations, and the whole surface is about sixty lines.
-///
-/// kSecUseDataProtectionKeychain is omitted: under local development
-/// signing (no provisioning profile yet, per TN3137) it fails every
-/// operation with errSecMissingEntitlement (-34018). This falls back to
-/// the legacy file-based keychain until the app target carries proper
-/// entitlements.
+/// Direct SecItem: no maintained Swift wrapper is needed for a ~60-line
+/// surface. kSecUseDataProtectionKeychain is omitted because, under local
+/// development signing with no provisioning profile, it fails every
+/// operation with errSecMissingEntitlement (-34018) per TN3137 -- this
+/// falls back to the legacy file-based keychain until the app target
+/// carries proper entitlements.
 public struct KeychainTokenStore: TokenStoring {
     private let service: String
     private let account = "spotify-tokens"
