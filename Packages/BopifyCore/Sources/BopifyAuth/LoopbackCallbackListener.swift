@@ -2,7 +2,7 @@ import Foundation
 import Network
 
 public enum CallbackError: Error, Hashable, Sendable {
-    case invalidCallback, accessDenied, stateMismatch, listenerFailed
+    case invalidCallback, accessDenied, stateMismatch, listenerFailed, cancelled
 }
 
 /// A single-shot HTTP listener on 127.0.0.1 with an OS-assigned port.
@@ -14,6 +14,7 @@ public actor LoopbackCallbackListener {
     private let expectedState: String
     private var listener: NWListener?
     private var continuation: CheckedContinuation<String, any Error>?
+    private var pendingResult: Result<String, any Error>?
 
     public init(expectedState: String) { self.expectedState = expectedState }
 
@@ -42,31 +43,46 @@ public actor LoopbackCallbackListener {
     }
 
     public func waitForCallback() async throws -> String {
-        try await withCheckedThrowingContinuation { self.continuation = $0 }
+        if let pendingResult {
+            self.pendingResult = nil
+            return try pendingResult.get()
+        }
+        return try await withCheckedThrowingContinuation { self.continuation = $0 }
     }
 
     public func stop() {
         listener?.cancel()
         listener = nil
+        deliver(.failure(CallbackError.cancelled))
+    }
+
+    /// The single point of decision between resuming a waiter and buffering the
+    /// result, so a request that arrives before `waitForCallback()` is called
+    /// can't be dropped on the floor.
+    private func deliver(_ result: Result<String, any Error>) {
+        if let continuation {
+            self.continuation = nil
+            continuation.resume(with: result)
+        } else {
+            pendingResult = result
+        }
     }
 
     private func handle(requestLine: String, on connection: NWConnection) {
         defer { connection.cancel() }
-        guard let continuation else { return }
-        self.continuation = nil
 
         respond(on: connection)
 
         guard let path = requestLine.split(separator: " ").dropFirst().first,
               let components = URLComponents(string: "http://127.0.0.1\(path)") else {
-            continuation.resume(throwing: CallbackError.invalidCallback); return
+            deliver(.failure(CallbackError.invalidCallback)); return
         }
         let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
 
-        if query["error"] == "access_denied" { continuation.resume(throwing: CallbackError.accessDenied); return }
-        guard query["state"] == expectedState else { continuation.resume(throwing: CallbackError.stateMismatch); return }
-        guard let code = query["code"], !code.isEmpty else { continuation.resume(throwing: CallbackError.invalidCallback); return }
-        continuation.resume(returning: code)
+        if query["error"] == "access_denied" { deliver(.failure(CallbackError.accessDenied)); return }
+        guard query["state"] == expectedState else { deliver(.failure(CallbackError.stateMismatch)); return }
+        guard let code = query["code"], !code.isEmpty else { deliver(.failure(CallbackError.invalidCallback)); return }
+        deliver(.success(code))
     }
 
     private func respond(on connection: NWConnection) {
