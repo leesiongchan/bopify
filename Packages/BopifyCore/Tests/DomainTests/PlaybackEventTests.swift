@@ -56,7 +56,9 @@ struct PlaybackEventTests {
         guard case let .volumeChanged(volume) = try decode(#"{"type":"volumeChanged","volume":32768}"#) else {
             Issue.record("expected volumeChanged"); return
         }
-        // 32768 / 65535 — asserts the divisor is UInt16.max, not 65536.
-        #expect(abs(volume - 0.500007) < 0.00001)
+        // Divisor spelled as a literal rather than read from UInt16.max, so this
+        // pins the value independently of the implementation. A divisor of 65536
+        // yields exactly 0.5 and fails here.
+        #expect(volume == 32768.0 / 65535.0)
     }
 }
