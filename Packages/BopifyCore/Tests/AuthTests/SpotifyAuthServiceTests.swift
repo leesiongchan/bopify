@@ -23,6 +23,14 @@ final class AuthFlowStubProtocol: URLProtocol, @unchecked Sendable {
     }
 }
 
+/// Late-binds a reference the `openURL` closure needs but that doesn't exist
+/// yet when the closure is constructed (the service being built takes the
+/// closure as an init argument). Set once, read only after that, from a
+/// closure that only ever fires once `signIn()` is called.
+final class LateBinding<Value>: @unchecked Sendable {
+    var value: Value?
+}
+
 final class InMemoryTokenStore: TokenStoring, @unchecked Sendable {
     private let lock = NSLock()
     private var tokens: TokenSet?
@@ -81,5 +89,37 @@ struct SpotifyAuthServiceTests {
         #expect(tokens.accessToken == "AT")
         #expect(tokens.grantedScopes == ["streaming"])
         #expect(store.load()?.accessToken == "AT")
+    }
+
+    /// Actors are reentrant across `await`: `signOut()` can run to completion
+    /// while `signIn()` is suspended waiting for the browser callback. The
+    /// opener awaits `signOut()` before firing that callback, so `signOut()`
+    /// is always fully finished before `signIn()` resumes -- deterministic,
+    /// not a race that happens to pass.
+    @Test func signOutWhileSignInIsSuspendedDiscardsTheStaleResultInsteadOfResurrectingTheSession() async throws {
+        AuthFlowStubProtocol.handler = { _ in (200, Data(self.success.utf8)) }
+        let store = InMemoryTokenStore()
+        let serviceBox = LateBinding<SpotifyAuthService>()
+        let service = SpotifyAuthService(
+            clientID: "client123",
+            client: makeClient(),
+            store: store,
+            openURL: { url in
+                let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+                let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
+                guard let redirectURI = query["redirect_uri"], let state = query["state"] else { return }
+                Task {
+                    await serviceBox.value?.signOut()
+                    let callbackURL = URL(string: "\(redirectURI)?code=TESTCODE&state=\(state)")!
+                    _ = try? await URLSession.shared.data(from: callbackURL)
+                }
+            }
+        )
+        serviceBox.value = service
+
+        await #expect(throws: PlayerError.authDenied) {
+            _ = try await service.signIn()
+        }
+        #expect(store.load() == nil)
     }
 }
