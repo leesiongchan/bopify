@@ -6,12 +6,19 @@ public actor SpotifyAuthService {
     private let clientID: String
     private let client: TokenClient
     private let store: any TokenStoring
+    private let openURL: @Sendable (URL) -> Void
     private var tokens: TokenSet?
 
-    public init(clientID: String, client: TokenClient? = nil, store: any TokenStoring = KeychainTokenStore()) {
+    public init(
+        clientID: String,
+        client: TokenClient? = nil,
+        store: any TokenStoring = KeychainTokenStore(),
+        openURL: @Sendable @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }
+    ) {
         self.clientID = clientID
         self.client = client ?? TokenClient(clientID: clientID)
         self.store = store
+        self.openURL = openURL
     }
 
     public func restore() -> TokenSet? {
@@ -29,7 +36,7 @@ public actor SpotifyAuthService {
         let redirectURI = "http://127.0.0.1:\(port)/callback"
         let request = AuthorizationRequest(clientID: clientID, redirectURI: redirectURI,
                                            scopes: ["streaming"], pkce: pkce, state: state)
-        NSWorkspace.shared.open(request.url)
+        openURL(request.url)
 
         let code: String
         do { code = try await listener.waitForCallback() }
