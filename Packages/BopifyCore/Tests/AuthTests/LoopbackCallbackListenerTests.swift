@@ -49,4 +49,14 @@ struct LoopbackCallbackListenerTests {
         await #expect(throws: CallbackError.accessDenied) { try await result.value }
         await listener.stop()
     }
+
+    @Test func stopCancelsAPendingWait() async throws {
+        let listener = LoopbackCallbackListener(expectedState: "s")
+        _ = try await listener.start()
+
+        let result = Task { try await listener.waitForCallback() }
+        await listener.stop()
+
+        await #expect(throws: CallbackError.cancelled) { try await result.value }
+    }
 }
