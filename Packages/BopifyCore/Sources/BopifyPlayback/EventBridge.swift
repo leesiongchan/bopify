@@ -29,16 +29,19 @@ public final class EventBridge: Sendable {
         Unmanaged.passRetained(self).toOpaque()
     }
 
-    /// Balances exactly one `retainedContext()`. Safe only once
-    /// `bopify_engine_destroy` has returned, or once `bopify_engine_create`
-    /// has returned null — which it only does after dropping the runtime, so
-    /// no callback can follow either.
-    public func releaseContext() {
-        Unmanaged.passUnretained(self).release()
+    /// Balances exactly one `retainedContext()`, and takes that same pointer
+    /// so the pairing is visible at the call site.
+    ///
+    /// Safe only once `bopify_engine_destroy` has returned, or once
+    /// `bopify_engine_create` has returned null — which it only does after
+    /// dropping the runtime, so no callback can follow either. That ordering
+    /// is the one part of this the signature cannot enforce.
+    public static func releaseContext(_ ctx: UnsafeMutableRawPointer) {
+        Unmanaged<EventBridge>.fromOpaque(ctx).release()
     }
 
     /// Decodes one event off the Rust runtime thread that delivered it.
-    public func yield(rawJSON: UnsafeRawBufferPointer) {
+    func yield(rawJSON: UnsafeRawBufferPointer) {
         guard let base = rawJSON.baseAddress, !rawJSON.isEmpty else { return }
         let data = Data(bytes: base, count: rawJSON.count)
         // A malformed payload is a bug in the wire contract, not a user-facing
@@ -68,7 +71,7 @@ public final class EventBridge: Sendable {
 ///
 /// Runs on a Rust runtime thread, so it must not issue a command on the
 /// engine: per the header that can deadlock against a concurrent destroy.
-public func bopifyEventTrampoline(
+func bopifyEventTrampoline(
     _ json: UnsafePointer<UInt8>?,
     _ len: UInt,
     _ ctx: UnsafeMutableRawPointer?
