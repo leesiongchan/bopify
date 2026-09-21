@@ -37,8 +37,9 @@ cargo test
 
 Bopify authenticates with librespot's first-party Spotify client ID, not
 one registered on the Spotify Developer Dashboard. Spotify gives third
-parties no way to stream audio natively: the Web Playback SDK only runs
-in a browser, and the Web API only remote-controls an already-running
+parties no way to stream audio natively: the [Web Playback
+SDK](https://developer.spotify.com/documentation/web-playback-sdk) only
+runs in a browser, and the Web API only remote-controls an already-running
 official client. There is no supported path to local playback.
 
 This sits outside Spotify's developer terms, which expect an app to use
@@ -53,7 +54,8 @@ updated.
 
 The scope requested is minimal: `streaming`, and nothing else. Bopify
 cannot read your library, playlists, or email. librespot's own CLI
-requests 28 scopes; this app requests one.
+requests 26 scopes (`OAUTH_SCOPES` in `main.rs` at pinned revision
+`939dc5e`); this app requests one.
 
 No telemetry. The OAuth token flows browser -> a loopback listener on
 `127.0.0.1` -> Keychain, and never reaches any third party; the only
