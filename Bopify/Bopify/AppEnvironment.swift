@@ -36,6 +36,15 @@ final class AppEnvironment {
     /// terminates, rather than racing it.
     @ObservationIgnored private var pending: Task<Void, Never> = Task {}
 
+    /// `signIn()`'s in-flight guard used to read `authState`, but `authState`
+    /// is mutated inside `serialize`d blocks belonging to *other*
+    /// operations too — an enqueued sign-out can overwrite it out from under
+    /// a sign-in still waiting in the chain. A guard is only as good as the
+    /// thing it reads, so this tracks sign-in-in-flight on its own, and
+    /// `authState` goes back to being purely a description of what the UI
+    /// should show.
+    @ObservationIgnored private var signInRequested = false
+
     private func serialize(_ operation: @escaping @MainActor () async -> Void) async {
         let previous = pending
         let task = Task { @MainActor in
@@ -65,13 +74,18 @@ final class AppEnvironment {
     func signIn() async {
         // Not redundant with `serialize`: this rejects a second whole OAuth
         // round-trip while one is already open, rather than just running
-        // two of them back to back.
-        guard authState != .authenticating else {
+        // two of them back to back. Guards on its own flag, not `authState`
+        // — an operation ahead of this one in the chain (a sign-out) can
+        // still be running when this is called, and it owns `authState`
+        // until its block finishes.
+        guard !signInRequested else {
             BopifyLog.auth.notice("sign-in skipped: already authenticating")
             return
         }
-        authState = .authenticating
+        signInRequested = true
         await serialize { [self] in
+            defer { signInRequested = false }
+            authState = .authenticating
             do {
                 _ = try await auth.signIn()
                 await connect()
