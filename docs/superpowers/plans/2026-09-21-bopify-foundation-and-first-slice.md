@@ -2815,6 +2815,17 @@ everything above the seam is unchanged by which engine is installed."
 >    provisioning profile existed**. This task creates one. Re-run the check
 >    with `kSecUseDataProtectionKeychain: true`; if it now succeeds, drop the
 >    documented legacy-keychain fallback.
+>
+>    *Withdrawn 2026-09-22 — the premise was wrong.* Creating an Xcode
+>    project does not create a provisioning profile; a signing team does, and
+>    this is a build-from-source personal tool with none. Checked on the
+>    built product: `Signature=adhoc`, `TeamIdentifier=not set`, no
+>    `Contents/embedded.provisionprofile`, and no `application-identifier` or
+>    `keychain-access-groups` entitlement. Per TN3137 the data-protection
+>    keychain needs exactly those, so the -34018 result is unchanged and
+>    spec §10 Q3 stands resolved *no*. The legacy-keychain fallback in
+>    `KeychainTokenStore` stays, and its comment is already accurate.
+>    Revisit only if the app is ever signed with a real team.
 > 5. **Watch for a hang on first teardown.** `bopify_engine_destroy` joins
 >    the Rust runtime and then librespot's audio thread, whose network work
 >    was driven by the runtime just shut down. It is plausible that cancelled
