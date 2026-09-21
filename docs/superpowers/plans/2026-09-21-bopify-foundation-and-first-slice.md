@@ -575,7 +575,11 @@ is a known source of silent drift on upgrade."
 
 **Interfaces:**
 - Consumes: `BopifyError`, `WireEvent` from Task 3.
-- Produces: `artifacts/BopifyCoreFFI.xcframework` and `include/bopify_core.h` declaring exactly: `bopify_engine_create`, `bopify_engine_destroy`, `bopify_activate`, `bopify_play`, `bopify_pause`, `bopify_next`, `bopify_previous`, `bopify_seek`, `bopify_set_volume`, `bopify_load`, `bopify_update_token`, `bopify_error_message`.
+- Produces: `artifacts/BopifyCoreFFI.xcframework` and `include/bopify_core.h` declaring exactly: `bopify_engine_create`, `bopify_engine_destroy`, `bopify_activate`, `bopify_play`, `bopify_pause`, `bopify_next`, `bopify_previous`, `bopify_seek`, `bopify_set_volume`, `bopify_load`, `bopify_update_token`. **Eleven functions, not twelve —
+amended 2026-09-21:** `bopify_error_message` was removed per pre-flight
+ruling F2. It is dead ABI with no Swift caller, and the PRD requires
+user-facing error copy to be localised, which a Rust-side English string
+bypasses. Swift maps codes via `PlayerError(ffiCode:)` and owns the text.
 
 - [ ] **Step 1: Write the engine**
 
@@ -914,7 +918,7 @@ cd rust && cargo test -p bopify-core && cd ..
 ./scripts/build-rust.sh
 ```
 
-Expected: tests pass; `artifacts/BopifyCoreFFI.xcframework` exists; `artifacts/include/bopify_core.h` declares all twelve functions. Note the printed native libs — Task 7 needs them.
+Expected: tests pass; `artifacts/BopifyCoreFFI.xcframework` exists; `artifacts/include/bopify_core.h` declares all eleven functions (twelve minus `bopify_error_message`, removed per the amendment at Task 4's Interfaces). Note the printed native libs — Task 7 needs them.
 
 - [ ] **Step 7: Commit**
 
@@ -3045,7 +3049,7 @@ slice: signing in results in audio playing from this Mac."
 
 ## Self-Review
 
-**Spec coverage.** §3 structure → Tasks 1, 5, 14. §4 domain → Task 6. §5 C ABI → Task 4 (all twelve functions, including `bopify_activate` and the widened `bopify_load`). §6 concurrency → Tasks 7 and 12. §7 first feature and its six steps → Tasks 2, 4, 7, 11, 12, 14 in that order. §8 error taxonomy → Task 6 `PlayerError` plus Task 3's Rust codes; `premiumRequired` is mapped explicitly in `classify_connect_error`. §9 test boundary → automated in Tasks 3, 5–13; manual in Task 14 Step 6. §10 open questions → Q1 and Q5 in Task 2, Q2 in Task 1 Step 3, Q3 in Task 11 Step 4, Q4 in Task 2 Step 4. §11 deviations → the `isActiveDevice` behaviour is asserted in Task 12. §12 risks → no task required.
+**Spec coverage.** §3 structure → Tasks 1, 5, 14. §4 domain → Task 6. §5 C ABI → Task 4 (all eleven functions — see the amendment at Task 4's Interfaces — including `bopify_activate` and the widened `bopify_load`). §6 concurrency → Tasks 7 and 12. §7 first feature and its six steps → Tasks 2, 4, 7, 11, 12, 14 in that order. §8 error taxonomy → Task 6 `PlayerError` plus Task 3's Rust codes; `premiumRequired` is mapped explicitly in `classify_connect_error`. §9 test boundary → automated in Tasks 3, 5–13; manual in Task 14 Step 6. §10 open questions → Q1 and Q5 in Task 2, Q2 in Task 1 Step 3, Q3 in Task 11 Step 4, Q4 in Task 2 Step 4. §11 deviations → the `isActiveDevice` behaviour is asserted in Task 12. §12 risks → no task required.
 
 **Two gaps found and left deliberate.** `bopify_update_token` returns `SessionLost` rather than swapping credentials in place, because librespot exposes no documented way to do it; the facade's rebuild path covers the case, and Task 4 Step 3 says so in a comment. And session-rebuild-on-expiry is not exercised by an automated test — it needs a >1 hour session. Both are worth a follow-up slice; neither blocks this one.
 
