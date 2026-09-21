@@ -26,70 +26,103 @@ final class AppEnvironment {
     @ObservationIgnored private let auth = SpotifyAuthService(clientID: librespotClientID)
     @ObservationIgnored private var engine: LibrespotEngine?
 
+    /// `engine == nil` cannot serve as a lock: it cannot distinguish "torn
+    /// down" from "teardown in flight", and a check at the top of a function
+    /// says nothing about what happens across the awaits below it. Every
+    /// operation that touches `engine`, `player`, or the auth session is
+    /// funneled through `serialize` instead, so each one runs only after
+    /// the previous one has fully finished — including quit waiting out an
+    /// in-flight sign-out so the keychain actually clears before the app
+    /// terminates, rather than racing it.
+    @ObservationIgnored private var pending: Task<Void, Never> = Task {}
+
+    private func serialize(_ operation: @escaping @MainActor () async -> Void) async {
+        let previous = pending
+        let task = Task { @MainActor in
+            await previous.value
+            await operation()
+        }
+        pending = task
+        BopifyLog.playback.debug("engine lifecycle operation enqueued")
+        await task.value
+    }
+
     func restoreOrPromptSignIn() async {
-        if await auth.restore() != nil { await connect() }
+        await serialize { [self] in
+            // Shown as authenticating rather than left signedOut: a restore
+            // that finds a token still has to reach Spotify before playback
+            // can start, and signedOut would offer a redundant "Sign In"
+            // button for the whole restore window.
+            authState = .authenticating
+            if await auth.restore() != nil {
+                await connect()
+            } else {
+                authState = .signedOut
+            }
+        }
     }
 
     func signIn() async {
-        // A second tap while the first sign-in is still in flight would
-        // otherwise enqueue a second `signIn()`; the auth service's
-        // generation guard then makes the loser throw *after* the winner
-        // reached `.signedIn`, showing a failure over playing audio.
+        // Not redundant with `serialize`: this rejects a second whole OAuth
+        // round-trip while one is already open, rather than just running
+        // two of them back to back.
         guard authState != .authenticating else {
             BopifyLog.auth.notice("sign-in skipped: already authenticating")
             return
         }
         authState = .authenticating
-        do {
-            _ = try await auth.signIn()
-            await connect()
-        } catch {
-            let playerError = error as? PlayerError ?? .unknown
-            BopifyLog.auth.error("sign-in failed error=\(String(describing: playerError), privacy: .public)")
-            authState = .error(playerError)
+        await serialize { [self] in
+            do {
+                _ = try await auth.signIn()
+                await connect()
+            } catch {
+                let playerError = error as? PlayerError ?? .unknown
+                BopifyLog.auth.error("sign-in failed error=\(String(describing: playerError), privacy: .public)")
+                authState = .error(playerError)
+            }
         }
     }
 
     func signOut() async {
-        BopifyLog.auth.info("sign-out starting")
-        player?.stop()
-        player = nil
-        // Set before the teardown `await`, not after: `engine.shutdown()`
-        // can take multiple seconds, and leaving `authState` at `.signedIn`
-        // across that suspension makes the UI fall through to the
-        // "signing in" presentation for someone who is signing out.
-        authState = .signedOut
-        if let engine {
-            self.engine = nil
-            await engine.shutdown()
+        await serialize { [self] in
+            BopifyLog.auth.info("sign-out starting")
+            player?.stop()
+            player = nil
+            // Set before the teardown `await`, not after: `engine.shutdown()`
+            // can take multiple seconds, and leaving `authState` at `.signedIn`
+            // across that suspension makes the UI fall through to the
+            // "signing in" presentation for someone who is signing out.
+            authState = .signedOut
+            if let engine {
+                self.engine = nil
+                await engine.shutdown()
+            }
+            await auth.signOut()
         }
-        await auth.signOut()
     }
 
     /// Quit tears the engine down but must not sign out: AUTH-05 requires
     /// the session to survive a quit and relaunch, so the keychain is left
-    /// alone. Do not reuse `signOut()` here.
+    /// alone. Do not reuse `signOut()` here. Going through `serialize` means
+    /// a quit that lands mid-sign-out waits for that sign-out's keychain
+    /// clear to actually run before this returns and the caller terminates.
     func prepareForQuit() async {
-        BopifyLog.playback.info("prepare for quit starting")
-        player?.stop()
-        player = nil
-        if let engine {
-            self.engine = nil
-            await engine.shutdown()
+        await serialize { [self] in
+            BopifyLog.playback.info("prepare for quit starting")
+            player?.stop()
+            player = nil
+            if let engine {
+                self.engine = nil
+                await engine.shutdown()
+            }
+            BopifyLog.playback.info("prepare for quit complete")
         }
-        BopifyLog.playback.info("prepare for quit complete")
     }
 
+    /// Only ever called from inside a `serialize`d operation above. Never
+    /// enqueue another one from in here — that would await a chain link
+    /// that is itself still waiting to run.
     private func connect() async {
-        // A second `connect()` racing in (e.g. a second sign-in completing
-        // for the already-signed-in case) must not clobber a live engine:
-        // `LibrespotEngine.deinit` deliberately does not destroy, so
-        // overwriting `self.engine` without shutting the old one down first
-        // leaks the Rust runtime and librespot's audio thread for good.
-        guard engine == nil else {
-            BopifyLog.auth.notice("connect skipped: engine already active")
-            return
-        }
         do {
             let token = try await auth.validAccessToken()
             // `LibrespotEngine.init` is `@concurrent`, so this call already
