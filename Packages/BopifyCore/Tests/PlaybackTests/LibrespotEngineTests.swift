@@ -5,19 +5,32 @@ import BopifyDomain
 
 @Suite("LibrespotEngine")
 struct LibrespotEngineTests {
-    /// The only end-to-end FFI path reachable without a Spotify account:
-    /// a real `bopify_engine_create` that fails. Which case comes back
-    /// depends on the machine — a rejected token, no network, or an
-    /// unclassifiable librespot failure — so this pins the taxonomy, not the
-    /// verdict. It also exercises the throw path that has to hand the
-    /// retained context back.
-    @Test func rejectsAnInvalidTokenWithATypedError() async {
+    /// The only end-to-end FFI path reachable without a Spotify account: a
+    /// real `bopify_engine_create`, with a real callback pointer and a real
+    /// retained context, that fails and takes the throw path.
+    ///
+    /// The value is in the execution, not the assertion: an over-release on
+    /// that path would take the bridge's refcount to zero mid-scope and very
+    /// likely trap. The assertion itself is weak on purpose — `init` has one
+    /// throw site and it throws `PlayerError(ffiCode:)` by construction, so
+    /// this can only fail if create succeeds or the process dies, and there
+    /// is no honest way to tighten it: an offline machine legitimately yields
+    /// `.networkUnavailable` where a rejected token yields `.authExpired`.
+    /// It cannot detect a *missing* release, which is the likelier mistake,
+    /// because that is a silent leak.
+    @Test func createFailurePathReleasesTheContextWithoutCrashing() async {
         await #expect(throws: PlayerError.self) {
             _ = try await LibrespotEngine(accessToken: "not-a-real-token", deviceName: "Bopify Test")
         }
     }
 
-    @Test func mapsEveryFFICodeToADistinctError() {
+    /// Characterises the whole `BopifyError` → `PlayerError` mapping, one
+    /// case per Rust code. The mapping is not injective and is not meant to
+    /// be: `InvalidArgument` (-1), `Unknown` (-99) and anything unrecognised
+    /// all fold to `.unknown`, because -1 is a caller bug with nothing useful
+    /// to show a listener.
+    @Test func mapsFFICodesOntoTheErrorTaxonomy() {
+        #expect(PlayerError(ffiCode: -1) == .unknown)
         #expect(PlayerError(ffiCode: -2) == .playbackSessionLost)
         #expect(PlayerError(ffiCode: -3) == .authExpired)
         #expect(PlayerError(ffiCode: -4) == .premiumRequired)
