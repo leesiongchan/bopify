@@ -1,0 +1,197 @@
+//! Owns the librespot session, player and Spirc on a dedicated tokio runtime.
+
+use std::sync::Arc;
+
+use librespot_connect::{ConnectConfig, LoadRequest, LoadRequestOptions, PlayingTrack, Spirc};
+use librespot_core::{Session, SessionConfig, authentication::Credentials};
+use librespot_playback::{
+    audio_backend,
+    config::{AudioFormat, PlayerConfig},
+    mixer::{Mixer, MixerConfig, softmixer::SoftMixer},
+    player::{Player, PlayerEventChannel},
+};
+use tokio::runtime::Runtime;
+
+use crate::{error::BopifyError, event::WireEvent};
+
+/// Called on a librespot runtime thread, never on the caller's. The Swift
+/// side must be safe to invoke from a non-main thread.
+pub type EventSink = Arc<dyn Fn(WireEvent) + Send + Sync>;
+
+/// A live Connect device.
+///
+/// Dropping an `Engine` drops the runtime, which joins its worker threads
+/// before returning; that cancels the Spirc task, which releases the last
+/// `Arc<Player>`, whose `Drop` joins the audio thread. So no spawned work,
+/// and therefore no [`EventSink`] call, can outlive the drop.
+pub struct Engine {
+    runtime: Runtime,
+    spirc: Spirc,
+}
+
+impl Engine {
+    /// Blocks the calling thread for the whole network login. Callers must
+    /// not run this on a UI thread.
+    pub fn new(access_token: &str, device_name: &str, sink: EventSink) -> Result<Self, BopifyError> {
+        log::info!("engine: creating device_name={device_name}");
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .map_err(|why| {
+                log::error!("engine: runtime build failed kind={:?}", why.kind());
+                BopifyError::Unknown
+            })?;
+
+        let spirc = runtime.block_on(async {
+            // SessionConfig::default() supplies librespot's own client id.
+            // A Spotify Developer Dashboard id is rejected by login5 with a
+            // raw HTTP 400, so it must not be overridden here.
+            let session = Session::new(SessionConfig::default(), None);
+            let credentials = Credentials::with_access_token(access_token);
+
+            // Do NOT call session.connect() here. Spirc::new() connects the
+            // session itself (connect/src/spirc.rs:223 at the pinned rev), and
+            // Session holds its transport in a OnceLock whose second `set`
+            // fails -- so a pre-connect makes Spirc::new die with the
+            // misleadingly named SessionError::NotConnected. Connection errors
+            // are classified off Spirc::new below instead.
+
+            let mixer: Arc<dyn Mixer> = Arc::new(SoftMixer::open(MixerConfig::default()).map_err(
+                |_| {
+                    log::error!("engine: mixer open failed");
+                    BopifyError::Unknown
+                },
+            )?);
+            let backend = audio_backend::find(None).ok_or_else(|| {
+                log::error!("engine: no audio backend available");
+                BopifyError::Unknown
+            })?;
+            let player = Player::new(
+                PlayerConfig::default(),
+                session.clone(),
+                mixer.get_soft_volume(),
+                move || backend(None, AudioFormat::default()),
+            );
+
+            // Subscribe before connecting so nothing emitted during login is
+            // lost: the channel is unbounded and buffers until the forwarder
+            // is spawned, which only happens once the engine really exists.
+            let events = player.get_player_event_channel();
+
+            let (spirc, task) = Spirc::new(
+                ConnectConfig { name: device_name.to_string(), ..Default::default() },
+                session,
+                credentials,
+                player,
+                mixer,
+            )
+            .await
+            // This is the only place a bad token or a non-Premium account
+            // surfaces: librespot reports both through the same failure path,
+            // and since Spotify removed `product` from GET /me in February
+            // 2026 it is the only Premium signal available. Classifying it
+            // here, not mapping it to Unknown, is what keeps PremiumRequired
+            // and AuthInvalid reachable in the error taxonomy.
+            .map_err(classify_connect_error)?;
+
+            // The returned future is the event loop. Commands issued before
+            // it is driven are queued, so spawning it here is correct.
+            tokio::spawn(task);
+            tokio::spawn(forward_events(events, sink));
+            Ok::<_, BopifyError>(spirc)
+        })?;
+
+        log::info!("engine: session connected, spirc running");
+        Ok(Self { runtime, spirc })
+    }
+
+    pub fn activate(&self) -> Result<(), BopifyError> {
+        self.spirc.activate().map_err(command_failed)
+    }
+    pub fn play(&self) -> Result<(), BopifyError> {
+        self.spirc.play().map_err(command_failed)
+    }
+    pub fn pause(&self) -> Result<(), BopifyError> {
+        self.spirc.pause().map_err(command_failed)
+    }
+    pub fn next(&self) -> Result<(), BopifyError> {
+        self.spirc.next().map_err(command_failed)
+    }
+    pub fn previous(&self) -> Result<(), BopifyError> {
+        self.spirc.prev().map_err(command_failed)
+    }
+    pub fn seek(&self, position_ms: u32) -> Result<(), BopifyError> {
+        self.spirc.set_position_ms(position_ms).map_err(command_failed)
+    }
+    pub fn set_volume(&self, volume: u16) -> Result<(), BopifyError> {
+        self.spirc.set_volume(volume).map_err(command_failed)
+    }
+
+    pub fn load(
+        &self,
+        context_uri: &str,
+        start_track_uri: Option<&str>,
+        position_ms: u32,
+    ) -> Result<(), BopifyError> {
+        let request = LoadRequest::from_context_uri(
+            context_uri.to_string(),
+            LoadRequestOptions {
+                start_playing: true,
+                seek_to: position_ms,
+                playing_track: start_track_uri.map(|u| PlayingTrack::Uri(u.to_string())),
+                ..Default::default()
+            },
+        );
+        self.spirc.load(request).map_err(command_failed)
+    }
+
+    pub fn runtime(&self) -> &Runtime {
+        &self.runtime
+    }
+    pub fn spirc(&self) -> &Spirc {
+        &self.spirc
+    }
+}
+
+/// Drains librespot's player events onto the sink until the player goes away.
+async fn forward_events(mut events: PlayerEventChannel, sink: EventSink) {
+    while let Some(event) = events.recv().await {
+        if let Some(wire) = crate::event::translate(event) {
+            sink(wire);
+        }
+    }
+    // The channel only closes when the player thread is gone, which during a
+    // normal teardown never gets here: runtime shutdown drops this task
+    // rather than polling it.
+    log::error!("engine: player event channel closed, reporting SessionLost");
+    sink(WireEvent::Failed {
+        code: BopifyError::SessionLost.code(),
+        message: BopifyError::SessionLost.message().to_string(),
+    });
+}
+
+/// Every `Spirc` command is an unbounded-channel send, so this only fires
+/// once the Spirc event loop has ended.
+fn command_failed<E>(_err: E) -> BopifyError {
+    log::error!("engine: spirc command rejected, event loop gone");
+    BopifyError::SessionLost
+}
+
+fn classify_connect_error<E: std::fmt::Debug>(err: E) -> BopifyError {
+    // Classification only. This string can carry login5 payload, so it must
+    // never be logged or put on the wire -- only the verdict below escapes.
+    let text = format!("{err:?}").to_lowercase();
+    let error = if text.contains("premium") {
+        BopifyError::PremiumRequired
+    } else if text.contains("token") || text.contains("credential") || text.contains("unauthor") {
+        BopifyError::AuthInvalid
+    } else if text.contains("dns") || text.contains("connect") || text.contains("network") {
+        BopifyError::NetworkUnavailable
+    } else {
+        BopifyError::Unknown
+    };
+    log::error!("engine: spirc connect failed error={error:?}");
+    error
+}
