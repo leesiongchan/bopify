@@ -2186,7 +2186,7 @@ public struct KeychainTokenStore: TokenStoring {
     private let service: String
     private let account = "spotify-tokens"
 
-    public init(service: String = "my.bopify.tokens") { self.service = service }
+    public init(service: String = "my.snsoft.bopify") { self.service = service }
 
     private var baseQuery: [String: Any] {
         [
@@ -2803,6 +2803,13 @@ everything above the seam is unchanged by which engine is installed."
 >    reconcile all three **before first real use**: changing the keychain
 >    service string after a token is stored orphans it and silently forces a
 >    re-sign-in.
+>
+>    *Resolved 2026-09-22.* All three are now `my.snsoft.bopify`: the bundle
+>    identifier (`PRODUCT_BUNDLE_IDENTIFIER`), the log subsystem, and the
+>    keychain service default in `KeychainTokenStore.init`. Done before any
+>    token was ever stored, so nothing was orphaned. `TokenStoreTests` was
+>    unaffected — it already passes a unique per-run service string rather
+>    than relying on the default.
 > 4. **Re-test the data-protection keychain.** Spec §10 Q3 was resolved *no*
 >    (`errSecMissingEntitlement`, -34018) **because no Xcode project or
 >    provisioning profile existed**. This task creates one. Re-run the check

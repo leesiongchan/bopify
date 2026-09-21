@@ -19,7 +19,7 @@ public struct KeychainTokenStore: TokenStoring {
     private let service: String
     private let account = "spotify-tokens"
 
-    public init(service: String = "my.bopify.tokens") { self.service = service }
+    public init(service: String = "my.snsoft.bopify") { self.service = service }
 
     private var baseQuery: [String: Any] {
         [
