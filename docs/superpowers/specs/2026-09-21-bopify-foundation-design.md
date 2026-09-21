@@ -237,7 +237,7 @@ librespot tokio thread ──cb──▶ AsyncStream.Continuation.yield
 
 Next and previous are included because they are the same one-line command through the same ABI and the same reconciliation path. They add no architecture.
 
-**Scopes requested:** `["streaming"]` only — what librespot's own `play_connect.rs` uses. The 28-scope bundle in librespot's CLI mirrors the Spotify desktop app and carries its own warning that some entries are only available to Spotify's client IDs.
+**Scopes requested:** `["streaming"]` only — what librespot's own `play_connect.rs` uses. The 26-scope bundle in librespot's CLI (`OAUTH_SCOPES` in `main.rs` at pinned revision `939dc5e`) mirrors the Spotify desktop app and carries its own warning that some entries are only available to Spotify's client IDs.
 
 ### Ordered steps
 

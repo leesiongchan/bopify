@@ -10,8 +10,8 @@ public enum CallbackError: Error, Hashable, Sendable {
 /// A single-shot HTTP listener on 127.0.0.1 with an OS-assigned port.
 ///
 /// Spotify rejects `localhost` but permits loopback IP literals, and those
-/// alone may use a dynamically assigned port -- which is why the app is
-/// registered as `http://127.0.0.1/login` with no port.
+/// alone may use a dynamically assigned port -- which is why librespot's
+/// client ID is registered as `http://127.0.0.1/login` with no port.
 public actor LoopbackCallbackListener {
     private let expectedState: String
     private var listener: NWListener?

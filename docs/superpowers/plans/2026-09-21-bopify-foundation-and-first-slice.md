@@ -265,8 +265,9 @@ const REDIRECT_URI: &str = "http://127.0.0.1:8898/callback";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 1. Token. Only `streaming` — the 28-scope bundle in librespot's CLI
-    //    mirrors the Spotify desktop app and is not required here.
+    // 1. Token. Only `streaming` — the 26-scope bundle in librespot's CLI
+    //    (OAUTH_SCOPES in main.rs at pinned revision 939dc5e) mirrors the
+    //    Spotify desktop app and is not required here.
     let oauth = OAuthClientBuilder::new(CLIENT_ID, REDIRECT_URI, vec!["streaming"])
         .open_in_browser()
         .build()?;
