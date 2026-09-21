@@ -6,6 +6,12 @@
 	objectVersion = 110;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		BF0F170000000000000000C1 /* BopifyDomain in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B1 /* BopifyDomain */; };
+		BF0F170000000000000000C2 /* BopifyAuth in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B2 /* BopifyAuth */; };
+		BF0F170000000000000000C3 /* BopifyPlayback in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B3 /* BopifyPlayback */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		19D0CF2A3061E194001CC3E1 /* Bopify.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Bopify.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -22,6 +28,9 @@
 		19D0CF273061E194001CC3E1 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				BF0F170000000000000000C1 /* BopifyDomain in Frameworks */,
+				BF0F170000000000000000C2 /* BopifyAuth in Frameworks */,
+				BF0F170000000000000000C3 /* BopifyPlayback in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -61,6 +70,11 @@
 			);
 			name = Bopify;
 			productName = Bopify;
+			packageProductDependencies = (
+				BF0F170000000000000000B1 /* BopifyDomain */,
+				BF0F170000000000000000B2 /* BopifyAuth */,
+				BF0F170000000000000000B3 /* BopifyPlayback */,
+			);
 			productReference = 19D0CF2A3061E194001CC3E1 /* Bopify.app */;
 			productType = "com.apple.product-type.application";
 		};
@@ -87,6 +101,9 @@
 				Base,
 			);
 			mainGroup = 19D0CF213061E194001CC3E1;
+			packageReferences = (
+				BF0F170000000000000000A1 /* XCLocalSwiftPackageReference "../Packages/BopifyCore" */,
+			);
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 19D0CF2B3061E194001CC3E1 /* Products */;
@@ -335,6 +352,28 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		BF0F170000000000000000A1 /* XCLocalSwiftPackageReference "../Packages/BopifyCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../Packages/BopifyCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		BF0F170000000000000000B1 /* BopifyDomain */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = BopifyDomain;
+		};
+		BF0F170000000000000000B2 /* BopifyAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = BopifyAuth;
+		};
+		BF0F170000000000000000B3 /* BopifyPlayback */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = BopifyPlayback;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 19D0CF223061E194001CC3E1 /* Project object */;
 	validationLevel = 1;
