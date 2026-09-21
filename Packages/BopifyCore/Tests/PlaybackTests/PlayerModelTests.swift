@@ -77,8 +77,7 @@ struct PlayerModelTests {
         model.start()
         await settle(model, engine, [.failed(.premiumRequired)])
 
-        #expect(model.state.phase == .error)
-        #expect(model.state.error == .premiumRequired)
+        #expect(model.state.phase == .error(.premiumRequired))
     }
 
     @Test func togglePlayPauseSendsTheCommandButDoesNotAssumeItWorked() async {
@@ -126,11 +125,20 @@ struct PlayerModelTests {
         model.start()
         await settle(model, engine, [.failed(.networkUnavailable)])
 
-        #expect(model.state.phase == .error)
-        #expect(model.state.error == .networkUnavailable)
+        #expect(model.state.phase == .error(.networkUnavailable))
 
         await settle(model, engine, [.paused(positionMs: 900)])
         #expect(model.state.phase == .paused)
-        #expect(model.state.error == nil)  // the whole point: not just phase, the error too
+    }
+
+    @Test func metadataArrivingDoesNotClearAFailure() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        await settle(model, engine, [.failed(.networkUnavailable)])
+        await settle(model, engine, [.trackChanged(makeTrack())])
+
+        #expect(model.state.phase == .error(.networkUnavailable))
+        #expect(model.state.currentTrack?.title == "Title")
     }
 }

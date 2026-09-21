@@ -1,5 +1,6 @@
 public enum PlaybackPhase: Hashable, Sendable {
-    case idle, loading, buffering, playing, paused, ended, error
+    case idle, loading, buffering, playing, paused, ended
+    case error(PlayerError)
 }
 
 public struct PlaybackState: Hashable, Sendable {
@@ -14,7 +15,6 @@ public struct PlaybackState: Hashable, Sendable {
     /// False when another Spotify device has taken over. Without this the
     /// UI would show a phantom paused track indefinitely.
     public var isActiveDevice = false
-    public var error: PlayerError?
 
     public init() {}
 }
