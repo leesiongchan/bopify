@@ -11,14 +11,41 @@ use librespot_playback::{
     player::Player,
 };
 
-const CLIENT_ID: &str = "25bbd3bacca4412b80f17b892072af71";
-const REDIRECT_URI: &str = "http://127.0.0.1:8898/callback";
+/// The Spotify app the user registered. Usable for Web API calls, but NOT
+/// for the streaming path -- Spotify does not admit third-party dashboard
+/// client ids to the login5/AP endpoint that librespot authenticates against.
+const OWN_CLIENT_ID: &str = "25bbd3bacca4412b80f17b892072af71";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 1. Token. Only `streaming` — the 28-scope bundle in librespot's CLI
-    //    mirrors the Spotify desktop app and is not required here.
-    let oauth = OAuthClientBuilder::new(CLIENT_ID, REDIRECT_URI, vec!["streaming"])
+    // Two modes so the client-id question can be settled empirically.
+    //
+    //   BOPIFY_SPIKE_MODE=own       -- force BOTH the OAuth client id and the
+    //                                  session's client id to OWN_CLIENT_ID so
+    //                                  the two genuinely match. Expected to
+    //                                  fail: Spotify's AP rejects third-party
+    //                                  ids regardless of self-consistency.
+    //   BOPIFY_SPIKE_MODE=keymaster -- librespot's own configuration, matching
+    //                                  examples/play_connect.rs: the session
+    //                                  default client id (KEYMASTER on macOS)
+    //                                  and the /login redirect path.
+    let mode = std::env::var("BOPIFY_SPIKE_MODE").unwrap_or_else(|_| "keymaster".into());
+
+    let mut session_config = SessionConfig::default();
+    let redirect_uri = match mode.as_str() {
+        "own" => {
+            session_config.client_id = OWN_CLIENT_ID.to_string();
+            "http://127.0.0.1:8898/callback"
+        }
+        "keymaster" => "http://127.0.0.1:8898/login",
+        other => return Err(format!("unknown BOPIFY_SPIKE_MODE {other:?}").into()),
+    };
+    println!("[spike] mode={mode} client_id={} redirect={redirect_uri}", session_config.client_id);
+
+    // 1. Token, minted with the SAME client id the session will present to
+    //    login5. librespot's own example does exactly this; a mismatch is what
+    //    produced FaultyRequest(INVALID_CREDENTIALS) on the first run.
+    let oauth = OAuthClientBuilder::new(&session_config.client_id, redirect_uri, vec!["streaming"])
         .open_in_browser()
         .build()?;
     let token = oauth.get_access_token_async().await?;
@@ -27,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 2. Session. Deliberately not connected here: `Spirc::new` calls
     //    `session.connect` itself, and `Session` stores its transport in a
     //    `OnceLock`, so a second connect fails with `SessionError::NotConnected`.
-    let session = Session::new(SessionConfig::default(), None);
+    let session = Session::new(session_config, None);
     let credentials = Credentials::with_access_token(token.access_token.clone());
     println!("[spike] session built, connecting via Spirc");
 
