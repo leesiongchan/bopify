@@ -27,6 +27,21 @@ const CATEGORY_LIBRESPOT: &str = "librespot";
 /// unified log. There is no runtime switch to raise this -- that would mean
 /// a twelfth ABI function -- so to debug a connection problem, change this
 /// to `LevelFilter::Debug` and rebuild.
+///
+/// **Doing that needs no privacy review.** Everything routed to the
+/// `librespot` category is emitted with `%{private}s`, so whatever a future
+/// librespot version decides to interpolate stays out of collected logs and
+/// sysdiagnose at any level. The two decisions are coupled on purpose: the
+/// alternative was "re-audit the dependency's log statements before lowering
+/// this", which is a hope, not a safety property.
+///
+/// The cost, measured rather than assumed: on a stock machine those lines
+/// read `<private>` even in a local `log show`. If you need the text as well
+/// as the level, flip `OsLogBackend::new`'s `librespot` category to `true`
+/// in the same local edit -- it is four lines below this one -- and do not
+/// commit that. Enabling private data system-wide, via the
+/// `com.apple.system.logging` configuration profile, is the other route and
+/// affects every app on the machine.
 const LIBRESPOT_CEILING: LevelFilter = LevelFilter::Warn;
 
 /// Our own modules log at debug; the FFI entry points depend on it.
@@ -42,8 +57,11 @@ mod sys {
         /// object is owned by the logging runtime and never deallocated.
         pub fn os_log_create(subsystem: *const c_char, category: *const c_char) -> *mut c_void;
 
-        /// Ours, from `oslog_shim.c`. `type` is an `os_log_type_t`.
-        pub fn bopify_os_log_emit(log: *mut c_void, r#type: u8, message: *const c_char);
+        /// Ours, from `oslog_shim.c`. `type` is an `os_log_type_t`. The two
+        /// differ only in the privacy qualifier on the format string, which
+        /// has to be a literal at the C call site.
+        pub fn bopify_os_log_emit_public(log: *mut c_void, r#type: u8, message: *const c_char);
+        pub fn bopify_os_log_emit_private(log: *mut c_void, r#type: u8, message: *const c_char);
     }
 }
 
@@ -53,8 +71,13 @@ const OS_LOG_TYPE_INFO: u8 = 0x01;
 const OS_LOG_TYPE_DEBUG: u8 = 0x02;
 const OS_LOG_TYPE_ERROR: u8 = 0x10;
 
-/// An `os_log_t`, which is an opaque handle Rust only ever passes back.
-struct Category(*mut c_void);
+/// An `os_log_t`, which is an opaque handle Rust only ever passes back,
+/// plus whether messages routed to it may appear in collected logs.
+struct Category {
+    handle: *mut c_void,
+    /// True only for lines this project writes. See `Category::emit`.
+    public: bool,
+}
 
 // SAFETY: `os_log_t` is documented as a process-wide object the logging
 // runtime owns and hands out per subsystem/category pair; emitting through
@@ -63,25 +86,49 @@ unsafe impl Send for Category {}
 unsafe impl Sync for Category {}
 
 impl Category {
-    fn new(category: &str) -> Self {
+    fn new(category: &str, public: bool) -> Self {
         let subsystem = CString::new(SUBSYSTEM).expect("subsystem has no interior NUL");
-        let category = CString::new(category).expect("category has no interior NUL");
+        let name = CString::new(category).expect("category has no interior NUL");
         // SAFETY: both pointers are NUL-terminated and live for this call,
         // which is all `os_log_create` requires. It always returns a usable
         // object, never null.
-        Self(unsafe { sys::os_log_create(subsystem.as_ptr(), category.as_ptr()) })
+        let handle = unsafe { sys::os_log_create(subsystem.as_ptr(), name.as_ptr()) };
+        Self { handle, public }
     }
 
+    /// The privacy qualifier is chosen by the origin of the line, not by its
+    /// content, so it cannot be wrong for a line nobody has read yet. That is
+    /// what makes raising `LIBRESPOT_CEILING` safe without re-auditing a
+    /// dependency's log statements.
     fn emit(&self, kind: u8, message: *const c_char) {
-        // SAFETY: `self.0` came from `os_log_create` and is never freed;
+        // SAFETY: `self.handle` came from `os_log_create` and is never freed;
         // `message` is a NUL-terminated string that outlives the call.
-        unsafe { sys::bopify_os_log_emit(self.0, kind, message) };
+        unsafe {
+            if self.public {
+                sys::bopify_os_log_emit_public(self.handle, kind, message);
+            } else {
+                sys::bopify_os_log_emit_private(self.handle, kind, message);
+            }
+        }
     }
 }
 
 struct OsLogBackend {
     playback: Category,
     librespot: Category,
+}
+
+impl OsLogBackend {
+    fn new() -> Self {
+        Self {
+            // Ours: public, because a redacted log of our own audited lines
+            // would be useless and there is nothing in them to protect.
+            playback: Category::new(CATEGORY_PLAYBACK, true),
+            // Theirs: private, because we cannot audit what a future version
+            // will interpolate.
+            librespot: Category::new(CATEGORY_LIBRESPOT, false),
+        }
+    }
 }
 
 impl Log for OsLogBackend {
@@ -146,10 +193,7 @@ fn os_log_type(level: Level) -> u8 {
 pub(crate) fn install() {
     static INSTALL: Once = Once::new();
     INSTALL.call_once(|| {
-        let backend = OsLogBackend {
-            playback: Category::new(CATEGORY_PLAYBACK),
-            librespot: Category::new(CATEGORY_LIBRESPOT),
-        };
+        let backend = OsLogBackend::new();
         // `log`'s macros test the global ceiling before calling `enabled`,
         // so it has to be the most permissive of the per-target ceilings.
         log::set_max_level(OWN_CEILING.max(LIBRESPOT_CEILING));
@@ -193,12 +237,21 @@ mod tests {
     }
 
     #[test]
+    fn only_our_own_lines_are_public() {
+        let backend = OsLogBackend::new();
+        assert!(backend.category_for("bopify_core::engine").public);
+        assert!(backend.category_for("bopify_core::ffi").public);
+        assert!(!backend.category_for("librespot_core::session").public);
+        assert!(!backend.category_for("librespot_playback::player").public);
+    }
+
+    #[test]
     fn a_real_category_can_be_created_and_written_to() {
-        // Exercises the C shim and the os_log_create declaration: a bad
-        // signature or a missing symbol fails to link, and a bad pointer
+        // Exercises both shim functions and the os_log_create declaration: a
+        // bad signature or a missing symbol fails to link, and a bad pointer
         // would crash here rather than in the app.
-        let category = Category::new("test");
         let message = CString::new("bopify logging self-test").unwrap();
-        category.emit(OS_LOG_TYPE_DEBUG, message.as_ptr());
+        Category::new("test", true).emit(OS_LOG_TYPE_DEBUG, message.as_ptr());
+        Category::new("test", false).emit(OS_LOG_TYPE_DEBUG, message.as_ptr());
     }
 }
