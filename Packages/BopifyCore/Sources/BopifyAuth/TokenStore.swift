@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import os
 import BopifyDomain
 
 public protocol TokenStoring: Sendable {
@@ -36,10 +37,15 @@ public struct KeychainTokenStore: TokenStoring {
             attributes[kSecValueData as String] = data
             attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
             let addStatus = SecItemAdd(attributes as CFDictionary, nil)
-            guard addStatus == errSecSuccess else { throw KeychainError.unexpected(addStatus) }
+            guard addStatus == errSecSuccess else {
+                BopifyLog.keychain.error("save failed status=\(addStatus, privacy: .public)")
+                throw KeychainError.unexpected(addStatus)
+            }
         } else if status != errSecSuccess {
+            BopifyLog.keychain.error("save failed status=\(status, privacy: .public)")
             throw KeychainError.unexpected(status)
         }
+        BopifyLog.keychain.debug("save succeeded")
     }
 
     public func load() -> TokenSet? {
@@ -47,15 +53,28 @@ public struct KeychainTokenStore: TokenStoring {
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        guard status == errSecSuccess,
               let data = item as? Data,
-              let stored = try? JSONDecoder().decode(Stored.self, from: data) else { return nil }
+              let stored = try? JSONDecoder().decode(Stored.self, from: data) else {
+            if status != errSecSuccess && status != errSecItemNotFound {
+                BopifyLog.keychain.error("load failed status=\(status, privacy: .public)")
+            } else {
+                BopifyLog.keychain.debug("load returned no usable token set")
+            }
+            return nil
+        }
+        BopifyLog.keychain.debug("load succeeded")
         return stored.tokenSet
     }
 
     public func clear() throws {
         let status = SecItemDelete(baseQuery as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else { throw KeychainError.unexpected(status) }
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            BopifyLog.keychain.error("clear failed status=\(status, privacy: .public)")
+            throw KeychainError.unexpected(status)
+        }
+        BopifyLog.keychain.debug("clear succeeded")
     }
 
     private struct Stored: Codable {

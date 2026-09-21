@@ -1,5 +1,7 @@
 import Foundation
 import Network
+import os
+import BopifyDomain
 
 public enum CallbackError: Error, Hashable, Sendable {
     case invalidCallback, accessDenied, stateMismatch, listenerFailed, cancelled
@@ -36,7 +38,10 @@ public actor LoopbackCallbackListener {
 
         // NWListener assigns the port asynchronously; spin briefly for it.
         for _ in 0..<100 {
-            if let port = listener.port?.rawValue, port != 0 { return Int(port) }
+            if let port = listener.port?.rawValue, port != 0 {
+                BopifyLog.callback.debug("listener bound port=\(port, privacy: .public)")
+                return Int(port)
+            }
             Thread.sleep(forTimeInterval: 0.01)
         }
         throw CallbackError.listenerFailed
@@ -73,6 +78,7 @@ public actor LoopbackCallbackListener {
 
     private func handle(requestLine: String, on connection: NWConnection) {
         defer { connection.cancel() }
+        BopifyLog.callback.info("received callback")
 
         respond(on: connection)
 
@@ -83,7 +89,10 @@ public actor LoopbackCallbackListener {
         let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
 
         if query["error"] == "access_denied" { deliver(.failure(CallbackError.accessDenied)); return }
-        guard query["state"] == expectedState else { deliver(.failure(CallbackError.stateMismatch)); return }
+        guard query["state"] == expectedState else {
+            BopifyLog.callback.error("callback state did not match expected state")
+            deliver(.failure(CallbackError.stateMismatch)); return
+        }
         guard let code = query["code"], !code.isEmpty else { deliver(.failure(CallbackError.invalidCallback)); return }
         deliver(.success(code))
     }
