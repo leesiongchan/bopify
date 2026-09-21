@@ -2779,6 +2779,50 @@ everything above the seam is unchanged by which engine is installed."
 
 ### Task 14: The app — menu bar, views, wiring, and manual acceptance
 
+> **AMENDMENT 2026-09-22 — carried forward from Tasks 4, 7, 13 and the spike.**
+> Seven items this task owns that the text below predates.
+>
+> 1. **`shutdown()` is not on the `PlaybackEngine` protocol.** `PlayerModel`
+>    holds `any PlaybackEngine`, so the natural composition
+>    `PlayerModel(engine: LibrespotEngine(...))` **erases the only route to
+>    teardown**. The entire "a mistake is a leak, never a use-after-free"
+>    property rests on `shutdown()` actually being reachable. Either keep a
+>    reference to the concrete `LibrespotEngine` alongside the model, or add
+>    `shutdown()` to the protocol — the latter also touches
+>    `StubPlaybackEngine`. Decide deliberately; do not let it fall out.
+> 2. **`LibrespotEngine.init` has no cancellation check** and no suspension
+>    point after its guard, while `bopify_engine_create` blocks for the whole
+>    network login. A cancelled enclosing task — a `.task` on a disappearing
+>    view is the realistic case here — still runs the login to completion and
+>    drops a live engine, leaking the Rust runtime and librespot's audio
+>    thread for the process lifetime. Do not attach engine creation to a view
+>    whose lifetime is shorter than the sign-in.
+> 3. **Unify the bundle identifier.** The log subsystem is
+>    `my.snsoft.bopify` (`BopifyLog.swift`) and the keychain service is
+>    `my.bopify.tokens` (`TokenStore.swift`). Set the app's bundle ID and
+>    reconcile all three **before first real use**: changing the keychain
+>    service string after a token is stored orphans it and silently forces a
+>    re-sign-in.
+> 4. **Re-test the data-protection keychain.** Spec §10 Q3 was resolved *no*
+>    (`errSecMissingEntitlement`, -34018) **because no Xcode project or
+>    provisioning profile existed**. This task creates one. Re-run the check
+>    with `kSecUseDataProtectionKeychain: true`; if it now succeeds, drop the
+>    documented legacy-keychain fallback.
+> 5. **Watch for a hang on first teardown.** `bopify_engine_destroy` joins
+>    the Rust runtime and then librespot's audio thread, whose network work
+>    was driven by the runtime just shut down. It is plausible that cancelled
+>    fetches close their channels and the thread exits; it is not proven, and
+>    there is no timeout. This task is the first real exercise of that path.
+> 6. **The manual walk is the first test of every command.** Nothing
+>    automated proves any command's actual effect — a transposed argument
+>    would not have been caught. Exercise play, pause, next, previous, seek
+>    and volume individually and confirm each does what it says.
+> 7. **A terminal `Failed` does not stop commands succeeding.** After a
+>    forwarder panic the Rust engine stays `alive`, so the UI can show an
+>    error while commands still return success. Do not infer engine health
+>    from command return values.
+>
+
 **Files:**
 - Create: `Config/Shared.xcconfig`, `Config/Bopify.xcconfig`
 - Create: `App/BopifyApp.swift`, `App/AppEnvironment.swift`
