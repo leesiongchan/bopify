@@ -28,13 +28,15 @@ struct SignedOutView: View {
             case let .error(error):
                 VStack(spacing: 4) {
                     Text("signIn.error")
-                    Text(String(describing: error))
+                    error.localizedText
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Button(action: signIn) { Text("signIn.button") }
             }
         }
-        .padding()
+        // No padding here: `MiniPlayerView` already pads its single content
+        // area once, inside its fixed-size frame. A second layer here would
+        // reintroduce the same overflow this view's sibling doesn't have.
     }
 }

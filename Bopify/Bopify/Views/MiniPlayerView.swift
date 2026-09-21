@@ -25,8 +25,11 @@ struct MiniPlayerView: View {
                 }
             }
         }
-        .frame(width: 320, height: 180)
+        // Padding inside the frame, not outside it: the panel's window is a
+        // fixed 320x180 (`StatusPanel`'s contentRect), so padding applied
+        // after the frame inflates the wanted size beyond it and clips.
         .padding()
+        .frame(width: 320, height: 180)
     }
 
     private func requestSignIn() {
@@ -60,7 +63,7 @@ private struct PlayingView: View {
             case let .error(error):
                 VStack(spacing: 4) {
                     Text("player.error")
-                    Text(String(describing: error))
+                    error.localizedText
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
