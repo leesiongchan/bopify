@@ -69,12 +69,12 @@
 				19D0CF2C3061E194001CC3E1 /* Bopify */,
 			);
 			name = Bopify;
-			productName = Bopify;
 			packageProductDependencies = (
 				BF0F170000000000000000B1 /* BopifyDomain */,
 				BF0F170000000000000000B2 /* BopifyAuth */,
 				BF0F170000000000000000B3 /* BopifyPlayback */,
 			);
+			productName = Bopify;
 			productReference = 19D0CF2A3061E194001CC3E1 /* Bopify.app */;
 			productType = "com.apple.product-type.application";
 		};
@@ -101,10 +101,10 @@
 				Base,
 			);
 			mainGroup = 19D0CF213061E194001CC3E1;
+			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				BF0F170000000000000000A1 /* XCLocalSwiftPackageReference "../Packages/BopifyCore" */,
 			);
-			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 19D0CF2B3061E194001CC3E1 /* Products */;
 			projectDirPath = "";
