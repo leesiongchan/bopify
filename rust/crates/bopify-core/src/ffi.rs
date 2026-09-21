@@ -22,9 +22,7 @@
 
 use std::ffi::{CStr, c_char, c_void};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Once, PoisonError, RwLock};
-
-use log::LevelFilter;
+use std::sync::{Arc, PoisonError, RwLock};
 
 use crate::{engine::Engine, error::BopifyError, event::WireEvent};
 
@@ -122,7 +120,7 @@ pub unsafe extern "C" fn bopify_engine_create(
     ctx: *mut c_void,
     out_err: *mut i32,
 ) -> *mut BopifyEngine {
-    install_logging();
+    crate::logging::install();
     log::info!("ffi: bopify_engine_create");
 
     // SAFETY: both pointers satisfy `str_from`'s contract per the header, and
@@ -373,60 +371,6 @@ pub unsafe extern "C" fn bopify_update_token(
     BopifyError::SessionLost.code()
 }
 
-/// Installs the `os_log` backend once, on the first `bopify_engine_create`.
-///
-/// It goes here rather than behind its own entry point because the C ABI is
-/// pinned at eleven functions. Failure is ignored: a host that installed its
-/// own `log` backend first keeps it.
-fn install_logging() {
-    static INSTALL: Once = Once::new();
-    INSTALL.call_once(|| {
-        // Same subsystem as the Swift side (BopifyLog.subsystem), so one
-        // `log stream --subsystem my.snsoft.bopify` shows both halves.
-        let logger = TargetFiltered(oslog::OsLogger::new("my.snsoft.bopify"));
-        // Permissive globally, restrictive per target: `log`'s macros check
-        // the global max first, so anything the per-target filter should be
-        // able to let through has to pass this.
-        log::set_max_level(LevelFilter::Debug);
-        if log::set_boxed_logger(Box::new(logger)).is_err() {
-            log::debug!("ffi: a log backend was already installed, keeping it");
-        }
-    });
-}
-
-/// Wraps `OsLogger` with prefix-based level filtering.
-///
-/// `OsLogger::category_level_filter` matches a target exactly, and librespot
-/// logs under a dozen different module paths at debug and trace, so exact
-/// matching cannot hold it back. Prefixes can.
-struct TargetFiltered(oslog::OsLogger);
-
-impl log::Log for TargetFiltered {
-    fn enabled(&self, metadata: &log::Metadata) -> bool {
-        metadata.level() <= ceiling_for(metadata.target()) && self.0.enabled(metadata)
-    }
-
-    fn log(&self, record: &log::Record) {
-        if self.enabled(record.metadata()) {
-            self.0.log(record);
-        }
-    }
-
-    fn flush(&self) {
-        self.0.flush();
-    }
-}
-
-fn ceiling_for(target: &str) -> LevelFilter {
-    if target.starts_with("bopify_core") {
-        LevelFilter::Debug
-    } else {
-        // Everything else is librespot, which is extremely chatty at debug
-        // and trace and would swamp the unified log.
-        LevelFilter::Warn
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -508,14 +452,6 @@ mod tests {
             assert!(!(*ptr).alive.load(Ordering::Relaxed));
             release(ptr);
         }
-    }
-
-    #[test]
-    fn librespot_targets_are_held_back_but_ours_are_not() {
-        assert_eq!(ceiling_for("bopify_core::engine"), LevelFilter::Debug);
-        assert_eq!(ceiling_for("bopify_core::ffi"), LevelFilter::Debug);
-        assert_eq!(ceiling_for("librespot_core::session"), LevelFilter::Warn);
-        assert_eq!(ceiling_for("librespot_playback::player"), LevelFilter::Warn);
     }
 
     #[test]
