@@ -14,9 +14,15 @@
 //! * `ctx` must stay alive until `bopify_engine_destroy` has returned. Once
 //!   it has, no further callback can occur.
 //! * `bopify_engine_destroy` is idempotent and may be called concurrently
-//!   with any other entry point. The handle is never freed; after destroy
+//!   with any other entry point, and every concurrent destroy waits for the
+//!   teardown before returning. The handle is never freed; after destroy
 //!   every command returns `SessionLost` (-2). **The caller does not need to
 //!   serialise.** This is enforced in Rust, not merely tolerated.
+//! * The one exception: do **not** issue a command on the same handle from
+//!   inside the event callback. The callback runs on a runtime worker, so a
+//!   command that reaches the lock just as destroy takes it would block that
+//!   worker while `Runtime::drop` is trying to join it, and both hang. Hand
+//!   the event to your own queue and issue commands from somewhere else.
 //! * String arguments are borrowed for the duration of the call only; the
 //!   engine copies whatever it keeps.
 
@@ -176,6 +182,9 @@ pub unsafe extern "C" fn bopify_engine_create(
 ///
 /// Blocks until every runtime thread and librespot's audio thread have
 /// stopped, which is what makes a callback after this point impossible.
+/// That applies to *every* caller: a second, concurrent destroy waits for
+/// the first one's teardown rather than returning early, so the guarantee
+/// holds no matter which call a caller is holding `ctx` for.
 ///
 /// # Safety
 /// `handle` must be null or a pointer returned by `bopify_engine_create`.
@@ -189,21 +198,34 @@ pub unsafe extern "C" fn bopify_engine_destroy(handle: *mut BopifyEngine) {
     let Some(handle) = (unsafe { handle.as_ref() }) else {
         return;
     };
-    // Single-winner: a concurrent second destroy sees false and returns
-    // without waiting on the write lock the winner holds for seconds.
-    if !handle.alive.swap(false, Ordering::AcqRel) {
-        log::debug!("ffi: bopify_engine_destroy on an already-destroyed handle");
-        return;
-    }
-    log::info!("ffi: bopify_engine_destroy, shutting down runtime");
+    log::info!("ffi: bopify_engine_destroy");
+    // Stop new commands from queueing behind the write lock below. This is a
+    // hint, not the synchronisation: the lock is.
+    handle.alive.store(false, Ordering::Release);
+
+    // Every caller waits here, including a concurrent second destroy.
+    //
+    // Returning early on an already-cleared `alive` would be faster and is
+    // wrong: the loser of that race would return while the winner is still
+    // inside `Runtime::drop`, and a caller that releases `ctx` when destroy
+    // returns -- exactly what this module's contract tells it to do -- would
+    // be releasing it under a live callback. Taking a *read* lock instead is
+    // not a substitute either: it can be acquired before the winner has even
+    // requested the write lock, and return early just the same.
     let mut guard = handle.inner.write().unwrap_or_else(PoisonError::into_inner);
+    let was_live = guard.is_some();
     // The Engine must be dropped while this write guard is held: that is what
     // makes "no callback after destroy returns" true, because the drop is
     // where the runtime joins its threads. Assigning None drops it in place;
     // do not hoist it into a local, and do not move it out of the lock.
     *guard = None;
     drop(guard);
-    log::info!("ffi: bopify_engine_destroy complete");
+
+    if was_live {
+        log::info!("ffi: bopify_engine_destroy complete, runtime stopped");
+    } else {
+        log::debug!("ffi: bopify_engine_destroy on an already-destroyed handle");
+    }
 }
 
 /// Runs `command` against the live engine, holding the read lock for exactly
@@ -438,6 +460,47 @@ mod tests {
             assert_eq!(bopify_play(ptr), BopifyError::SessionLost.code());
             release(ptr);
         }
+    }
+
+    #[test]
+    fn a_concurrent_second_destroy_waits_for_the_teardown() {
+        use std::sync::mpsc::{self, RecvTimeoutError};
+        use std::time::Duration;
+
+        // Stands in for the winner mid-teardown: `alive` already cleared,
+        // and the write lock held across what would be `Runtime::drop`.
+        let ptr = handle_without_an_engine(false);
+        // SAFETY: `ptr` is a live box from `handle_without_an_engine`, and
+        // this thread holds the only reference until the join below.
+        let guard = unsafe { (*ptr).inner.write().unwrap() };
+
+        // Raw pointers are not Send; the box outlives the thread because the
+        // test joins it before releasing.
+        let address = ptr as usize;
+        let (tx, rx) = mpsc::channel();
+        let loser = std::thread::spawn(move || {
+            // SAFETY: `address` is that same live box, freed only after join.
+            unsafe { bopify_engine_destroy(address as *mut BopifyEngine) };
+            let _ = tx.send(());
+        });
+
+        // The property the header promises: destroy does not return while
+        // teardown is still in progress, even for a caller that lost the
+        // race. Before the fix this returned immediately on the `alive`
+        // check, and a caller releasing `ctx` here would have released it
+        // under a live callback.
+        assert_eq!(
+            rx.recv_timeout(Duration::from_millis(200)),
+            Err(RecvTimeoutError::Timeout),
+            "destroy returned while the teardown it must wait for was still running"
+        );
+
+        drop(guard);
+        rx.recv_timeout(Duration::from_secs(5))
+            .expect("destroy should return once the teardown completes");
+        loser.join().unwrap();
+        // SAFETY: the thread is joined, so nothing else touches the box.
+        unsafe { release(ptr) };
     }
 
     #[test]

@@ -17,9 +17,15 @@ header = """
  *  - `ctx` must stay alive until bopify_engine_destroy has returned. Once it
  *    has, no further callback can occur.
  *  - bopify_engine_destroy is idempotent and may be called concurrently with
- *    any other entry point. The handle is never freed; after destroy every
- *    command returns SessionLost (-2). THE CALLER DOES NOT NEED TO
+ *    any other entry point, and every concurrent destroy waits for the
+ *    teardown before returning. The handle is never freed; after destroy
+ *    every command returns SessionLost (-2). THE CALLER DOES NOT NEED TO
  *    SERIALISE -- this is guaranteed by the Rust side, not merely tolerated.
+ *  - The one exception: do NOT issue a command on the same handle from
+ *    inside the event callback. The callback runs on a Rust runtime worker,
+ *    so a command that reaches the lock just as destroy takes it would block
+ *    that worker while the runtime is trying to join it, and both hang. Hand
+ *    the event to your own queue and issue commands from somewhere else.
  *  - Every command returns 0 on success or a negative BopifyError code.
  *    Success means "enqueued", not "took effect": observe the events.
  *  - String arguments are borrowed for the duration of the call only.
