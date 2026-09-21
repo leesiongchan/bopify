@@ -13,11 +13,9 @@ app.
 
 ## Build and test
 
-There is no Xcode app target yet; what exists today is the Swift package
-and the Rust crate that will back it.
-
-The Swift package links the Rust static library, so build that first —
-`artifacts/` is build output and is not in the repository:
+The Rust static library has to exist before anything else will configure —
+the Swift package declares it as a binary target, and `artifacts/` is build
+output that is not in the repository:
 
 ```sh
 ./scripts/build-rust.sh
@@ -39,6 +37,17 @@ cd rust
 cargo build
 cargo test
 ```
+
+The app itself:
+
+```sh
+xcodebuild -project Bopify/Bopify.xcodeproj -scheme Bopify \
+  -destination 'platform=macOS,arch=arm64' build
+```
+
+Bopify is an agent app (`LSUIElement`), so it has no Dock icon and no menu
+bar of its own — it appears only as a status item, and you quit it from
+that item's right-click menu.
 
 ## Spotify client ID
 

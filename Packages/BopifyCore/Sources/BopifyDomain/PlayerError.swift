@@ -3,6 +3,10 @@
 public enum PlayerError: Error, Hashable, Sendable {
     case authDenied
     case invalidCallback
+    /// Rust's `AuthInvalid` (-3) means "rejected **or** expired", and the
+    /// two are indistinguishable at the boundary. The name follows PRD.md's
+    /// taxonomy and is accurate for the Swift-side throws; the user-facing
+    /// string deliberately does not promise that signing in again will work.
     case authExpired
     case premiumRequired
     case networkUnavailable
