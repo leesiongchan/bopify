@@ -24,7 +24,19 @@ pub type EventSink = Arc<dyn Fn(WireEvent) + Send + Sync>;
 /// before returning; that cancels the Spirc task, which releases the last
 /// `Arc<Player>`, whose `Drop` joins the audio thread. So no spawned work,
 /// and therefore no [`EventSink`] call, can outlive the drop.
+///
+/// **Never replace that plain drop with `Runtime::shutdown_timeout` or
+/// `Runtime::shutdown_background`.** Only `Runtime::drop` joins every worker
+/// thread unconditionally; the other two return while tasks may still be
+/// running, which turns "no callback after destroy" into a use-after-free of
+/// the Swift context. Neither substitution produces a compiler error or a
+/// failing test, so this comment is the only guard. Destroy being slow is a
+/// latency complaint, not a bug to fix that way.
 pub struct Engine {
+    /// Never read. Owned for its `Drop`, which is what joins the worker
+    /// threads and makes the guarantee above hold, and so that the runtime
+    /// outlives the tasks spawned onto it.
+    #[expect(dead_code, reason = "held for its Drop, not its value")]
     runtime: Runtime,
     spirc: Spirc,
 }
@@ -99,7 +111,7 @@ impl Engine {
             // The returned future is the event loop. Commands issued before
             // it is driven are queued, so spawning it here is correct.
             tokio::spawn(task);
-            tokio::spawn(forward_events(events, sink));
+            supervise_forwarder(events, sink);
             Ok::<_, BopifyError>(spirc)
         })?;
 
@@ -146,13 +158,27 @@ impl Engine {
         );
         self.spirc.load(request).map_err(command_failed)
     }
+}
 
-    pub fn runtime(&self) -> &Runtime {
-        &self.runtime
-    }
-    pub fn spirc(&self) -> &Spirc {
-        &self.spirc
-    }
+/// Spawns the forwarder under a watcher.
+///
+/// Without the watcher a panic anywhere in translation or serialisation would
+/// kill the task, tokio would swallow it, and event delivery would stop for
+/// good with no terminal `Failed` -- the UI would sit on stale state forever.
+fn supervise_forwarder(events: PlayerEventChannel, sink: EventSink) {
+    let forwarder = tokio::spawn(forward_events(events, sink.clone()));
+    tokio::spawn(async move {
+        match forwarder.await {
+            Ok(()) => {}
+            // Cancellation is the normal teardown path -- the runtime is going
+            // away and Swift is not listening any more, so stay quiet.
+            Err(why) if why.is_cancelled() => {}
+            Err(_) => {
+                log::error!("engine: event forwarder panicked, reporting SessionLost");
+                sink(session_lost_event());
+            }
+        }
+    });
 }
 
 /// Drains librespot's player events onto the sink until the player goes away.
@@ -166,10 +192,14 @@ async fn forward_events(mut events: PlayerEventChannel, sink: EventSink) {
     // normal teardown never gets here: runtime shutdown drops this task
     // rather than polling it.
     log::error!("engine: player event channel closed, reporting SessionLost");
-    sink(WireEvent::Failed {
+    sink(session_lost_event());
+}
+
+fn session_lost_event() -> WireEvent {
+    WireEvent::Failed {
         code: BopifyError::SessionLost.code(),
         message: BopifyError::SessionLost.message().to_string(),
-    });
+    }
 }
 
 /// Every `Spirc` command is an unbounded-channel send, so this only fires

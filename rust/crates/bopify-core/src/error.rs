@@ -9,6 +9,14 @@ pub enum BopifyError {
 }
 
 impl BopifyError {
+    /// Every variant, for tests that need to iterate the taxonomy.
+    ///
+    /// Hand-maintained, and deliberately so: adding a variant already breaks
+    /// the build twice, at `code()` and at `message()`, which are exhaustive
+    /// matches in this file. This third list is the one the compiler will not
+    /// catch. Forgetting it does not break the wire contract -- it only makes
+    /// `every_code_has_a_message`, currently its sole consumer, silently skip
+    /// the new variant.
     pub const ALL: [BopifyError; 6] = [
         Self::InvalidArgument,
         Self::SessionLost,

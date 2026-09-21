@@ -94,7 +94,7 @@ fn dropped(kind: &str) -> Option<WireEvent> {
 fn track_changed(item: AudioItem) -> WireEvent {
     let (artists, album_title) = match item.unique_fields {
         UniqueFields::Track { artists, album, .. } => {
-            (artists.iter().map(|a| a.name.clone()).collect(), Some(album))
+            (artists.0.into_iter().map(|a| a.name).collect(), Some(album))
         }
         UniqueFields::Episode { show_name, .. } => (vec![show_name], None),
         UniqueFields::Local { artists, album, .. } => (artists.into_iter().collect(), album),

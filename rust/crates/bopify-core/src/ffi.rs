@@ -13,22 +13,45 @@
 //!   not assume the handle has been stored yet.
 //! * `ctx` must stay alive until `bopify_engine_destroy` has returned. Once
 //!   it has, no further callback can occur.
-//! * `bopify_engine_destroy` must not overlap with any other call on the
-//!   same handle. The caller serialises: no command may be in flight when
-//!   destroy is entered, and no call may use the handle afterwards. Destroy
-//!   frees the box while a concurrent command still holds a borrow of it.
+//! * `bopify_engine_destroy` is idempotent and may be called concurrently
+//!   with any other entry point. The handle is never freed; after destroy
+//!   every command returns `SessionLost` (-2). **The caller does not need to
+//!   serialise.** This is enforced in Rust, not merely tolerated.
 //! * String arguments are borrowed for the duration of the call only; the
 //!   engine copies whatever it keeps.
 
 use std::ffi::{CStr, c_char, c_void};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Once, PoisonError, RwLock};
+
+use log::LevelFilter;
 
 use crate::{engine::Engine, error::BopifyError, event::WireEvent};
 
 /// Opaque handle. Swift never looks inside.
+///
+/// The box behind this pointer is **never freed**, which is what makes a
+/// command racing `bopify_engine_destroy` safe: destroy drops the `Engine`
+/// out of the `Option` under the write lock and leaves the shell behind, so
+/// a concurrent or late call still reads live memory and gets `SessionLost`.
+/// The shell is tens of bytes and an engine is created about as often as a
+/// token expires, so the leak is not worth a registry or a generation
+/// counter.
 pub struct BopifyEngine {
-    inner: Engine,
+    /// Read without the lock so a late command fails fast instead of queueing
+    /// behind a write lock that is held across a multi-second runtime drop.
+    alive: AtomicBool,
+    inner: RwLock<Option<Engine>>,
 }
+
+// Commands arrive on arbitrary Swift threads, so the engine really is shared.
+// Nothing checks that across an `extern "C"` boundary, and `RwLock<Option<T>>`
+// is only `Sync` when `T: Send + Sync`, so assert it here: a future field that
+// breaks it should fail the build, not the app.
+const _: fn() = || {
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<Engine>();
+};
 
 /// The Swift-provided context pointer, carried onto the runtime threads.
 struct SendCtx(*mut c_void);
@@ -88,8 +111,9 @@ unsafe fn write_err(out_err: *mut i32, code: i32) {
 /// `access_token` and `device_name` must each be a NUL-terminated UTF-8
 /// string that stays valid for the call, `out_err` must be null or a
 /// writable `int32_t`, and `ctx` must satisfy the contract at the top of
-/// this header. The returned handle is owned by the caller and must be
-/// released with `bopify_engine_destroy`.
+/// this header. The returned handle must be shut down with
+/// `bopify_engine_destroy`; it stays safe to pass to any entry point after
+/// that, so the caller may keep or discard the pointer as it likes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn bopify_engine_create(
     access_token: *const c_char,
@@ -98,6 +122,7 @@ pub unsafe extern "C" fn bopify_engine_create(
     ctx: *mut c_void,
     out_err: *mut i32,
 ) -> *mut BopifyEngine {
+    install_logging();
     log::info!("ffi: bopify_engine_create");
 
     // SAFETY: both pointers satisfy `str_from`'s contract per the header, and
@@ -134,7 +159,10 @@ pub unsafe extern "C" fn bopify_engine_create(
             // SAFETY: as above.
             unsafe { write_err(out_err, 0) };
             log::info!("ffi: bopify_engine_create succeeded");
-            Box::into_raw(Box::new(BopifyEngine { inner }))
+            Box::into_raw(Box::new(BopifyEngine {
+                alive: AtomicBool::new(true),
+                inner: RwLock::new(Some(inner)),
+            }))
         }
         Err(error) => {
             log::error!("ffi: bopify_engine_create failed error={error:?}");
@@ -145,41 +173,74 @@ pub unsafe extern "C" fn bopify_engine_create(
     }
 }
 
+/// Shuts the engine down. Idempotent, and safe to call while other entry
+/// points are running on other threads.
+///
 /// Blocks until every runtime thread and librespot's audio thread have
 /// stopped, which is what makes a callback after this point impossible.
 ///
 /// # Safety
-/// `handle` must be null, or a pointer returned by `bopify_engine_create`
-/// and not yet destroyed. No other call on the same handle may be running
-/// concurrently, and it must not be used again afterwards.
+/// `handle` must be null or a pointer returned by `bopify_engine_create`.
+/// It stays valid to pass to any entry point afterwards; later calls simply
+/// report `SessionLost`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn bopify_engine_destroy(handle: *mut BopifyEngine) {
-    if handle.is_null() {
+    // SAFETY: per the contract the pointer is null or points at a box from
+    // `bopify_engine_create`, which is never freed, so this borrow is always
+    // valid; `as_ref` turns null into None.
+    let Some(handle) = (unsafe { handle.as_ref() }) else {
+        return;
+    };
+    // Single-winner: a concurrent second destroy sees false and returns
+    // without waiting on the write lock the winner holds for seconds.
+    if !handle.alive.swap(false, Ordering::AcqRel) {
+        log::debug!("ffi: bopify_engine_destroy on an already-destroyed handle");
         return;
     }
     log::info!("ffi: bopify_engine_destroy, shutting down runtime");
-    // SAFETY: non-null and, per the contract, an unaliased box from
-    // `bopify_engine_create` that has not been freed yet.
-    drop(unsafe { Box::from_raw(handle) });
+    let mut guard = handle.inner.write().unwrap_or_else(PoisonError::into_inner);
+    // The Engine must be dropped while this write guard is held: that is what
+    // makes "no callback after destroy returns" true, because the drop is
+    // where the runtime joins its threads. Assigning None drops it in place;
+    // do not hoist it into a local, and do not move it out of the lock.
+    *guard = None;
+    drop(guard);
     log::info!("ffi: bopify_engine_destroy complete");
 }
 
-/// Borrows the engine behind a handle the caller promises is null or live.
+/// Runs `command` against the live engine, holding the read lock for exactly
+/// as long as the call takes.
+///
+/// Returns `InvalidArgument` for a null handle and `SessionLost` once the
+/// engine has been destroyed -- which Swift already maps to
+/// `PlayerError.playbackSessionLost`.
 ///
 /// # Safety
-/// `handle` must be null or a live handle from `bopify_engine_create`. The
-/// returned lifetime is unbound, so the borrow must not outlive the entry
-/// point that took it -- every one below drops it before returning.
-unsafe fn engine_for<'a>(handle: *mut BopifyEngine) -> Option<&'a Engine> {
+/// `handle` must be null or a pointer returned by `bopify_engine_create`.
+unsafe fn with_engine<F>(handle: *mut BopifyEngine, command: F) -> i32
+where
+    F: FnOnce(&Engine) -> Result<(), BopifyError>,
+{
     // SAFETY: per this function's contract the pointer is null or points at a
-    // live, unaliased `BopifyEngine`; `as_ref` turns null into None.
-    unsafe { handle.as_ref() }.map(|handle| &handle.inner)
-}
-
-fn code_of(result: Result<(), BopifyError>) -> i32 {
-    match result {
-        Ok(()) => 0,
-        Err(error) => error.code(),
+    // box from `bopify_engine_create`, which is never freed; `as_ref` turns
+    // null into None.
+    let Some(handle) = (unsafe { handle.as_ref() }) else {
+        return BopifyError::InvalidArgument.code();
+    };
+    if !handle.alive.load(Ordering::Relaxed) {
+        return BopifyError::SessionLost.code();
+    }
+    // Poisoning means some earlier command panicked. A command is only a
+    // channel send, so it cannot leave the Engine half-modified, and refusing
+    // the lock here would strand the runtime instead.
+    let guard = handle.inner.read().unwrap_or_else(PoisonError::into_inner);
+    match guard.as_ref() {
+        Some(engine) => match command(engine) {
+            Ok(()) => 0,
+            Err(error) => error.code(),
+        },
+        // Lost the race with destroy between the `alive` read and the lock.
+        None => BopifyError::SessionLost.code(),
     }
 }
 
@@ -192,11 +253,8 @@ fn code_of(result: Result<(), BopifyError>) -> i32 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn bopify_activate(handle: *mut BopifyEngine) -> i32 {
     log::debug!("ffi: bopify_activate");
-    // SAFETY: forwards this function's own contract to `engine_for`.
-    let Some(engine) = (unsafe { engine_for(handle) }) else {
-        return BopifyError::InvalidArgument.code();
-    };
-    code_of(engine.activate())
+    // SAFETY: forwards this function's own contract to `with_engine`.
+    unsafe { with_engine(handle, Engine::activate) }
 }
 
 /// # Safety
@@ -204,11 +262,8 @@ pub unsafe extern "C" fn bopify_activate(handle: *mut BopifyEngine) -> i32 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn bopify_play(handle: *mut BopifyEngine) -> i32 {
     log::debug!("ffi: bopify_play");
-    // SAFETY: forwards this function's own contract to `engine_for`.
-    let Some(engine) = (unsafe { engine_for(handle) }) else {
-        return BopifyError::InvalidArgument.code();
-    };
-    code_of(engine.play())
+    // SAFETY: forwards this function's own contract to `with_engine`.
+    unsafe { with_engine(handle, Engine::play) }
 }
 
 /// # Safety
@@ -216,11 +271,8 @@ pub unsafe extern "C" fn bopify_play(handle: *mut BopifyEngine) -> i32 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn bopify_pause(handle: *mut BopifyEngine) -> i32 {
     log::debug!("ffi: bopify_pause");
-    // SAFETY: forwards this function's own contract to `engine_for`.
-    let Some(engine) = (unsafe { engine_for(handle) }) else {
-        return BopifyError::InvalidArgument.code();
-    };
-    code_of(engine.pause())
+    // SAFETY: forwards this function's own contract to `with_engine`.
+    unsafe { with_engine(handle, Engine::pause) }
 }
 
 /// # Safety
@@ -228,11 +280,8 @@ pub unsafe extern "C" fn bopify_pause(handle: *mut BopifyEngine) -> i32 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn bopify_next(handle: *mut BopifyEngine) -> i32 {
     log::debug!("ffi: bopify_next");
-    // SAFETY: forwards this function's own contract to `engine_for`.
-    let Some(engine) = (unsafe { engine_for(handle) }) else {
-        return BopifyError::InvalidArgument.code();
-    };
-    code_of(engine.next())
+    // SAFETY: forwards this function's own contract to `with_engine`.
+    unsafe { with_engine(handle, Engine::next) }
 }
 
 /// # Safety
@@ -240,11 +289,8 @@ pub unsafe extern "C" fn bopify_next(handle: *mut BopifyEngine) -> i32 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn bopify_previous(handle: *mut BopifyEngine) -> i32 {
     log::debug!("ffi: bopify_previous");
-    // SAFETY: forwards this function's own contract to `engine_for`.
-    let Some(engine) = (unsafe { engine_for(handle) }) else {
-        return BopifyError::InvalidArgument.code();
-    };
-    code_of(engine.previous())
+    // SAFETY: forwards this function's own contract to `with_engine`.
+    unsafe { with_engine(handle, Engine::previous) }
 }
 
 /// # Safety
@@ -252,11 +298,8 @@ pub unsafe extern "C" fn bopify_previous(handle: *mut BopifyEngine) -> i32 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn bopify_seek(handle: *mut BopifyEngine, position_ms: u32) -> i32 {
     log::debug!("ffi: bopify_seek position_ms={position_ms}");
-    // SAFETY: forwards this function's own contract to `engine_for`.
-    let Some(engine) = (unsafe { engine_for(handle) }) else {
-        return BopifyError::InvalidArgument.code();
-    };
-    code_of(engine.seek(position_ms))
+    // SAFETY: forwards this function's own contract to `with_engine`.
+    unsafe { with_engine(handle, |engine| engine.seek(position_ms)) }
 }
 
 /// `volume` is on librespot's `u16::MAX` scale.
@@ -266,11 +309,8 @@ pub unsafe extern "C" fn bopify_seek(handle: *mut BopifyEngine, position_ms: u32
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn bopify_set_volume(handle: *mut BopifyEngine, volume: u16) -> i32 {
     log::debug!("ffi: bopify_set_volume volume={volume}");
-    // SAFETY: forwards this function's own contract to `engine_for`.
-    let Some(engine) = (unsafe { engine_for(handle) }) else {
-        return BopifyError::InvalidArgument.code();
-    };
-    code_of(engine.set_volume(volume))
+    // SAFETY: forwards this function's own contract to `with_engine`.
+    unsafe { with_engine(handle, |engine| engine.set_volume(volume)) }
 }
 
 /// Starts playback of a context URI, optionally at a given track.
@@ -287,17 +327,14 @@ pub unsafe extern "C" fn bopify_load(
     start_position_ms: u32,
 ) -> i32 {
     log::debug!("ffi: bopify_load start_position_ms={start_position_ms}");
-    // SAFETY: forwards this function's own contract to `engine_for`.
-    let Some(engine) = (unsafe { engine_for(handle) }) else {
-        return BopifyError::InvalidArgument.code();
-    };
     // SAFETY: the URI pointers satisfy `str_from`'s contract per the header,
     // and both borrows are consumed before this call returns.
     let Some(context) = (unsafe { str_from(context_uri) }) else {
         return BopifyError::InvalidArgument.code();
     };
     let start = unsafe { str_from(start_track_uri) };
-    code_of(engine.load(context, start, start_position_ms))
+    // SAFETY: forwards this function's own contract to `with_engine`.
+    unsafe { with_engine(handle, |engine| engine.load(context, start, start_position_ms)) }
 }
 
 /// Always fails with `SessionLost`: librespot cannot swap credentials in
@@ -312,15 +349,22 @@ pub unsafe extern "C" fn bopify_update_token(
     access_token: *const c_char,
 ) -> i32 {
     log::debug!("ffi: bopify_update_token");
-    // SAFETY: forwards this function's own contract to `engine_for`.
-    let Some(_engine) = (unsafe { engine_for(handle) }) else {
-        return BopifyError::InvalidArgument.code();
-    };
+    // Arguments are validated before the handle's state, matching
+    // `bopify_load`: a malformed call is a caller bug either way, and
+    // reporting it as SessionLost would send Swift off rebuilding the engine.
+    //
     // SAFETY: satisfies `str_from`'s contract per the header; the borrow is
     // consumed before returning.
     let Some(_token) = (unsafe { str_from(access_token) }) else {
         return BopifyError::InvalidArgument.code();
     };
+    // SAFETY: forwards this function's own contract to `with_engine`. The
+    // engine is only looked up so a null or destroyed handle is reported as
+    // such rather than as the unsupported-operation answer below.
+    let looked_up = unsafe { with_engine(handle, |_| Ok(())) };
+    if looked_up != 0 {
+        return looked_up;
+    }
     // librespot has no in-place credential swap: `Credentials` is consumed by
     // `Spirc::new`. Returning SessionLost tells Swift to tear down and rebuild
     // the engine, which is the behaviour the facade already implements for a
@@ -329,29 +373,57 @@ pub unsafe extern "C" fn bopify_update_token(
     BopifyError::SessionLost.code()
 }
 
-/// Returns a static, never-freed message for an error code. Unknown codes
-/// map onto the "unknown error" message.
-#[unsafe(no_mangle)]
-pub extern "C" fn bopify_error_message(code: i32) -> *const c_char {
-    let error = BopifyError::ALL
-        .iter()
-        .find(|candidate| candidate.code() == code)
-        .copied()
-        .unwrap_or(BopifyError::Unknown);
-    message_cstr(error).as_ptr()
+/// Installs the `os_log` backend once, on the first `bopify_engine_create`.
+///
+/// It goes here rather than behind its own entry point because the C ABI is
+/// pinned at eleven functions. Failure is ignored: a host that installed its
+/// own `log` backend first keeps it.
+fn install_logging() {
+    static INSTALL: Once = Once::new();
+    INSTALL.call_once(|| {
+        // Same subsystem as the Swift side (BopifyLog.subsystem), so one
+        // `log stream --subsystem my.snsoft.bopify` shows both halves.
+        let logger = TargetFiltered(oslog::OsLogger::new("my.snsoft.bopify"));
+        // Permissive globally, restrictive per target: `log`'s macros check
+        // the global max first, so anything the per-target filter should be
+        // able to let through has to pass this.
+        log::set_max_level(LevelFilter::Debug);
+        if log::set_boxed_logger(Box::new(logger)).is_err() {
+            log::debug!("ffi: a log backend was already installed, keeping it");
+        }
+    });
 }
 
-/// NUL-terminated mirror of `BopifyError::message`, kept here so the C ABI
-/// can hand out a `'static` pointer without allocating or leaking per call.
-/// `messages_match_the_rust_side` keeps the two in step.
-fn message_cstr(error: BopifyError) -> &'static CStr {
-    match error {
-        BopifyError::InvalidArgument => c"invalid argument",
-        BopifyError::SessionLost => c"playback session lost",
-        BopifyError::AuthInvalid => c"access token rejected or expired",
-        BopifyError::PremiumRequired => c"Spotify Premium is required",
-        BopifyError::NetworkUnavailable => c"network unavailable",
-        BopifyError::Unknown => c"unknown error",
+/// Wraps `OsLogger` with prefix-based level filtering.
+///
+/// `OsLogger::category_level_filter` matches a target exactly, and librespot
+/// logs under a dozen different module paths at debug and trace, so exact
+/// matching cannot hold it back. Prefixes can.
+struct TargetFiltered(oslog::OsLogger);
+
+impl log::Log for TargetFiltered {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level() <= ceiling_for(metadata.target()) && self.0.enabled(metadata)
+    }
+
+    fn log(&self, record: &log::Record) {
+        if self.enabled(record.metadata()) {
+            self.0.log(record);
+        }
+    }
+
+    fn flush(&self) {
+        self.0.flush();
+    }
+}
+
+fn ceiling_for(target: &str) -> LevelFilter {
+    if target.starts_with("bopify_core") {
+        LevelFilter::Debug
+    } else {
+        // Everything else is librespot, which is extremely chatty at debug
+        // and trace and would swamp the unified log.
+        LevelFilter::Warn
     }
 }
 
@@ -359,26 +431,91 @@ fn message_cstr(error: BopifyError) -> &'static CStr {
 mod tests {
     use super::*;
 
+    /// Stands in for a handle whose `Engine` destroy has already taken.
+    /// Building a real one needs a network login, but every command reaches
+    /// the engine through `with_engine`, so this exercises the whole guard.
+    fn handle_without_an_engine(alive: bool) -> *mut BopifyEngine {
+        Box::into_raw(Box::new(BopifyEngine {
+            alive: AtomicBool::new(alive),
+            inner: RwLock::new(None),
+        }))
+    }
+
+    /// Production never frees the box; tests do, so they do not leak.
+    ///
+    /// # Safety
+    /// `ptr` must come from `handle_without_an_engine` and not be used after.
+    unsafe fn release(ptr: *mut BopifyEngine) {
+        // SAFETY: guaranteed by this function's contract.
+        drop(unsafe { Box::from_raw(ptr) });
+    }
+
     #[test]
-    fn messages_match_the_rust_side() {
-        for error in BopifyError::ALL {
-            assert_eq!(message_cstr(error).to_str().unwrap(), error.message());
+    fn every_command_on_a_destroyed_handle_reports_session_lost() {
+        let ptr = handle_without_an_engine(false);
+        let lost = BopifyError::SessionLost.code();
+        // SAFETY: `ptr` is a live handle from `handle_without_an_engine`, and
+        // the string pointers are valid literals.
+        unsafe {
+            assert_eq!(bopify_activate(ptr), lost);
+            assert_eq!(bopify_play(ptr), lost);
+            assert_eq!(bopify_pause(ptr), lost);
+            assert_eq!(bopify_next(ptr), lost);
+            assert_eq!(bopify_previous(ptr), lost);
+            assert_eq!(bopify_seek(ptr, 1000), lost);
+            assert_eq!(bopify_set_volume(ptr, 32767), lost);
+            assert_eq!(bopify_load(ptr, c"spotify:album:x".as_ptr(), std::ptr::null(), 0), lost);
+            assert_eq!(bopify_update_token(ptr, c"token".as_ptr()), lost);
+            release(ptr);
         }
     }
 
     #[test]
-    fn error_message_resolves_every_code_and_falls_back() {
-        for error in BopifyError::ALL {
-            let ptr = bopify_error_message(error.code());
-            // SAFETY: `bopify_error_message` always returns a static, NUL-
-            // terminated string that lives for the whole program.
-            let text = unsafe { CStr::from_ptr(ptr) }.to_str().unwrap();
-            assert_eq!(text, error.message());
+    fn update_token_validates_its_argument_before_the_handle_state() {
+        let ptr = handle_without_an_engine(false);
+        // SAFETY: `ptr` is a live handle and a null token is explicitly
+        // allowed as an input to be rejected.
+        unsafe {
+            assert_eq!(
+                bopify_update_token(ptr, std::ptr::null()),
+                BopifyError::InvalidArgument.code()
+            );
+            release(ptr);
         }
-        let ptr = bopify_error_message(12345);
+    }
+
+    #[test]
+    fn losing_the_race_with_destroy_also_reports_session_lost() {
+        // `alive` is still true but the engine is gone: the window between
+        // the relaxed `alive` read and taking the read lock.
+        let ptr = handle_without_an_engine(true);
         // SAFETY: as above.
-        let text = unsafe { CStr::from_ptr(ptr) }.to_str().unwrap();
-        assert_eq!(text, BopifyError::Unknown.message());
+        unsafe {
+            assert_eq!(bopify_play(ptr), BopifyError::SessionLost.code());
+            release(ptr);
+        }
+    }
+
+    #[test]
+    fn destroy_is_idempotent_and_leaves_the_handle_usable() {
+        let ptr = handle_without_an_engine(true);
+        // SAFETY: as above. Calling destroy twice, then a command, is exactly
+        // the sequence the header promises is safe.
+        unsafe {
+            bopify_engine_destroy(ptr);
+            bopify_engine_destroy(ptr);
+            assert_eq!(bopify_play(ptr), BopifyError::SessionLost.code());
+            assert!(!(*ptr).alive.load(Ordering::Relaxed));
+            release(ptr);
+        }
+    }
+
+    #[test]
+    fn librespot_targets_are_held_back_but_ours_are_not() {
+        assert_eq!(ceiling_for("bopify_core::engine"), LevelFilter::Debug);
+        assert_eq!(ceiling_for("bopify_core::ffi"), LevelFilter::Debug);
+        assert_eq!(ceiling_for("librespot_core::session"), LevelFilter::Warn);
+        assert_eq!(ceiling_for("librespot_playback::player"), LevelFilter::Warn);
     }
 
     #[test]
