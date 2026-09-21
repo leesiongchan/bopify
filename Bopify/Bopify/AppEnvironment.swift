@@ -31,6 +31,14 @@ final class AppEnvironment {
     }
 
     func signIn() async {
+        // A second tap while the first sign-in is still in flight would
+        // otherwise enqueue a second `signIn()`; the auth service's
+        // generation guard then makes the loser throw *after* the winner
+        // reached `.signedIn`, showing a failure over playing audio.
+        guard authState != .authenticating else {
+            BopifyLog.auth.notice("sign-in skipped: already authenticating")
+            return
+        }
         authState = .authenticating
         do {
             _ = try await auth.signIn()
@@ -46,15 +54,42 @@ final class AppEnvironment {
         BopifyLog.auth.info("sign-out starting")
         player?.stop()
         player = nil
+        // Set before the teardown `await`, not after: `engine.shutdown()`
+        // can take multiple seconds, and leaving `authState` at `.signedIn`
+        // across that suspension makes the UI fall through to the
+        // "signing in" presentation for someone who is signing out.
+        authState = .signedOut
         if let engine {
             self.engine = nil
             await engine.shutdown()
         }
         await auth.signOut()
-        authState = .signedOut
+    }
+
+    /// Quit tears the engine down but must not sign out: AUTH-05 requires
+    /// the session to survive a quit and relaunch, so the keychain is left
+    /// alone. Do not reuse `signOut()` here.
+    func prepareForQuit() async {
+        BopifyLog.playback.info("prepare for quit starting")
+        player?.stop()
+        player = nil
+        if let engine {
+            self.engine = nil
+            await engine.shutdown()
+        }
+        BopifyLog.playback.info("prepare for quit complete")
     }
 
     private func connect() async {
+        // A second `connect()` racing in (e.g. a second sign-in completing
+        // for the already-signed-in case) must not clobber a live engine:
+        // `LibrespotEngine.deinit` deliberately does not destroy, so
+        // overwriting `self.engine` without shutting the old one down first
+        // leaks the Rust runtime and librespot's audio thread for good.
+        guard engine == nil else {
+            BopifyLog.auth.notice("connect skipped: engine already active")
+            return
+        }
         do {
             let token = try await auth.validAccessToken()
             // `LibrespotEngine.init` is `@concurrent`, so this call already

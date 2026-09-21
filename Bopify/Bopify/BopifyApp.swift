@@ -19,7 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: StatusItemController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        statusItem = StatusItemController(content: MiniPlayerView(environment: environment))
+        statusItem = StatusItemController(content: MiniPlayerView(environment: environment), environment: environment)
         Task { await environment.restoreOrPromptSignIn() }
     }
 }
