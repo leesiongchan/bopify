@@ -16,9 +16,10 @@ header = """
  *    assume the handle has been stored yet.
  *  - `ctx` must stay alive until bopify_engine_destroy has returned. Once it
  *    has, no further callback can occur.
- *  - bopify_engine_destroy must not overlap with any other call on the same
- *    handle. The caller serialises: no command may be in flight when destroy
- *    is entered, and no call may use the handle afterwards.
+ *  - bopify_engine_destroy is idempotent and may be called concurrently with
+ *    any other entry point. The handle is never freed; after destroy every
+ *    command returns SessionLost (-2). THE CALLER DOES NOT NEED TO
+ *    SERIALISE -- this is guaranteed by the Rust side, not merely tolerated.
  *  - Every command returns 0 on success or a negative BopifyError code.
  *    Success means "enqueued", not "took effect": observe the events.
  *  - String arguments are borrowed for the duration of the call only.

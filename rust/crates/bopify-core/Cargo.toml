@@ -13,8 +13,13 @@ librespot-connect.workspace = true
 librespot-metadata.workspace = true
 librespot-playback = { workspace = true, features = ["rodio-backend"] }
 # The facade librespot already logs through; a second framework would split
-# the output. Installing a backend is the host app's job.
+# the output.
 log = "0.4"
+# Forwards `log` to os_log under the same subsystem as the Swift side.
+# Unmaintained since 2022 but the de-facto choice (1.3M recent downloads vs
+# 297 lifetime for the only fresher alternative) and it wraps a frozen OS
+# API; hand-rolling would mean vendoring its seven-line C shim.
+oslog = "0.2.0"
 # "time" and "net" are what the engine's own runtime needs from enable_all().
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros", "time", "net"] }
 serde = { version = "1", features = ["derive"] }
