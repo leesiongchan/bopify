@@ -14,7 +14,7 @@ struct EventBridgeTests {
         // pointer is not Sendable, and this is where Rust holds it anyway.
         Thread.detachNewThread {
             let ctx = bridge.retainedContext()
-            defer { bridge.releaseContext() }
+            defer { EventBridge.releaseContext(ctx) }
             json.withUnsafeBufferPointer { buffer in
                 bopifyEventTrampoline(buffer.baseAddress!, UInt(buffer.count), ctx)
             }
@@ -32,7 +32,7 @@ struct EventBridgeTests {
 
         Thread.detachNewThread {
             let ctx = bridge.retainedContext()
-            defer { bridge.releaseContext() }
+            defer { EventBridge.releaseContext(ctx) }
             bad.withUnsafeBufferPointer { bopifyEventTrampoline($0.baseAddress!, UInt($0.count), ctx) }
             good.withUnsafeBufferPointer { bopifyEventTrampoline($0.baseAddress!, UInt($0.count), ctx) }
         }
@@ -55,7 +55,7 @@ struct EventBridgeTests {
 
         var iterator = events.makeAsyncIterator()
         #expect(await iterator.next() == .endOfTrack)
-        Unmanaged<EventBridge>.fromOpaque(ctx).release()
+        EventBridge.releaseContext(ctx)
     }
 
     @Test func finishTerminatesTheStream() async throws {
