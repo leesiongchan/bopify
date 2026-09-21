@@ -2617,6 +2617,42 @@ main actor."
 
 ### Task 13: The real librespot engine
 
+> **AMENDMENT 2026-09-22 — the Swift code below is STALE. Read this first.**
+>
+> Tasks 4 and 7 changed the contract this task was written against. Where this
+> task's code disagrees with `artifacts/include/bopify_core.h` or with the
+> `LibrespotEventBridge` that Task 7 actually shipped, **those win**. Known
+> divergences, all verified:
+>
+> 1. **`bopify_engine_create` returns `OpaquePointer?`.** Every
+>    `UnsafeMutablePointer(handle)` cast below is wrong and will not compile.
+>    Pass the `OpaquePointer` straight through.
+> 2. **`ctx` is retained, not unretained.** Task 7 replaced the brief's
+>    `passUnretained` with `retainedContext()` / `releaseContext()` (+1),
+>    because the unretained version made every early-drop path a
+>    use-after-free on a tokio thread. `releaseContext()` is a **once-only**
+>    obligation this task owns. The teardown order is exactly:
+>    `finish()` → `bopify_engine_destroy` → `releaseContext()`.
+>    Releasing before destroy returns is a use-after-free; the C header states
+>    that `ctx` must outlive destroy, and it is the one safety property Rust
+>    deliberately cannot enforce.
+> 3. **Do not tear down from `deinit`.** `deinit` runs wherever the last
+>    release happens, including the main actor, and `bopify_engine_destroy`
+>    blocks on the Rust runtime join and then librespot's audio-thread join.
+>    This task needs an explicit `shutdown()` hopped to a background executor.
+>    `bopify_engine_create` blocks for the whole network login and is subject
+>    to the same rule.
+> 4. **The event callback can fire before `bopify_engine_create` returns**
+>    (librespot emits a volume event during login), so nothing may force-unwrap
+>    a handle assigned from the create call.
+> 5. **Commands need no serialisation, with one carve-out:** never issue a
+>    command synchronously from inside the event callback — that can deadlock
+>    against a concurrent destroy. The header documents this.
+> 6. **A terminal `Failed` does not mean commands start failing.** After a
+>    forwarder panic the Rust engine stays `alive`, so commands keep returning
+>    success while the stream has already reported failure.
+>
+
 **Files:**
 - Create: `Packages/BopifyCore/Sources/BopifyPlayback/LibrespotEngine.swift`
 - Test: `Packages/BopifyCore/Tests/PlaybackTests/LibrespotEngineTests.swift`
