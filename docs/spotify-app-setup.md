@@ -1,6 +1,6 @@
 # Spotify application setup
 
-- Client ID: `<paste-your-client-id>`
+- Client ID: `25bbd3bacca4412b80f17b892072af71`
 - Redirect URI registered: `http://127.0.0.1/callback` (no port — loopback
   literals may use a dynamically assigned port)
 - Scopes requested: `streaming`

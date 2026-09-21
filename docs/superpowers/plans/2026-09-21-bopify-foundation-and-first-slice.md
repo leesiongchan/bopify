@@ -273,11 +273,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let token = oauth.get_access_token_async().await?;
     println!("[spike] token acquired, scopes: {:?}", token.scopes);
 
-    // 2. Session.
+    // 2. Session. Do NOT connect it here -- Spirc::new does that itself,
+    //    and Session's transport OnceLock rejects a second connect with the
+    //    misleadingly named SessionError::NotConnected.
     let session = Session::new(SessionConfig::default(), None);
     let credentials = Credentials::with_access_token(token.access_token.clone());
-    session.connect(credentials.clone(), false).await?;
-    println!("[spike] session connected");
 
     // 3. Player with the default rodio sink.
     let mixer = Arc::new(SoftMixer::open(MixerConfig::default()));
@@ -617,14 +617,12 @@ impl Engine {
             let session = Session::new(SessionConfig::default(), None);
             let credentials = Credentials::with_access_token(access_token);
 
-            // librespot reports a rejected token and a non-Premium account
-            // through the same failure path. Since Spotify removed the
-            // `product` field from GET /me in February 2026, this is the
-            // only Premium signal available -- classify it, do not swallow it.
-            session
-                .connect(credentials.clone(), false)
-                .await
-                .map_err(classify_connect_error)?;
+            // Do NOT call session.connect() here. Spirc::new() connects the
+            // session itself (connect/src/spirc.rs:223 at the pinned rev), and
+            // Session holds its transport in a OnceLock whose second `set`
+            // fails -- so a pre-connect makes Spirc::new die with the
+            // misleadingly named SessionError::NotConnected. Connection errors
+            // are classified off Spirc::new below instead.
 
             let mixer = Arc::new(SoftMixer::open(MixerConfig::default()));
             let backend = audio_backend::find(None).ok_or(BopifyError::Unknown)?;
@@ -657,7 +655,13 @@ impl Engine {
                 mixer,
             )
             .await
-            .map_err(|_| BopifyError::Unknown)?;
+            // This is now the only place a bad token or a non-Premium account
+            // surfaces: librespot reports both through the same failure path,
+            // and since Spotify removed `product` from GET /me in February
+            // 2026 it is the only Premium signal available. Classifying it
+            // here, not mapping it to Unknown, is what keeps PremiumRequired
+            // and AuthInvalid reachable in the error taxonomy.
+            .map_err(classify_connect_error)?;
 
             // The returned future is the event loop. Commands issued before
             // it is driven are queued, so spawning it here is correct.
@@ -3045,5 +3049,13 @@ slice: signing in results in audio playing from this Mac."
 **Two gaps found and left deliberate.** `bopify_update_token` returns `SessionLost` rather than swapping credentials in place, because librespot exposes no documented way to do it; the facade's rebuild path covers the case, and Task 4 Step 3 says so in a comment. And session-rebuild-on-expiry is not exercised by an automated test — it needs a >1 hour session. Both are worth a follow-up slice; neither blocks this one.
 
 **Type consistency.** `PlaybackEvent` cases match the Rust `WireEvent` tags one-for-one (`trackChanged`, `playing`, `paused`, `seeked`, `positionCorrection`, `volumeChanged`, `loading`, `endOfTrack`, `activeDeviceChanged`, `failed`). Error codes agree between Task 3's Rust `code()` and Task 6's `PlayerError(ffiCode:)`. Volume crosses as `u16` and is normalised to `0...1` in exactly one place (Task 6's decoder), with `LibrespotEngine.setVolume` scaling back. `PlayRequest` fields match `bopify_load`'s three parameters.
+
+**Corrected 2026-09-21 (found building Task 2).** `Spirc::new` connects the
+session internally, so the pre-connect `session.connect(...)` that Tasks 2 and
+4 originally carried made `Spirc::new` fail at runtime with
+`SessionError::NotConnected` -- code that compiles cleanly and dies on first
+run. Both call sites are fixed. Error classification moved onto `Spirc::new`
+so `PremiumRequired`/`AuthInvalid` stay reachable. Note `Spirc::new` passes
+`store_credentials: true` internally.
 
 **Standing caveat on the Rust code.** librespot is pinned to a `dev` revision and the signatures in Tasks 2 and 4 were read at tag v0.8.0. `SoftMixer::open`, `Spirc::new`'s tuple return, and the `LoadRequest` option type names are the most likely to have moved. Where the pinned source disagrees with this plan, the source wins — fix the code, then correct the plan.
