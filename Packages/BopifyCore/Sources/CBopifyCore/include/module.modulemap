@@ -1,0 +1,7 @@
+// The generated header lives outside the package, in gitignored build
+// output, so it is named by path rather than copied: a copy would go stale
+// against the Rust ABI without anything noticing.
+module CBopifyCore {
+    header "../../../../../artifacts/include/bopify_core.h"
+    export *
+}
