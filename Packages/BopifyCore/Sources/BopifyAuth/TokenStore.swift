@@ -54,14 +54,17 @@ public struct KeychainTokenStore: TokenStoring {
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
-        guard status == errSecSuccess,
-              let data = item as? Data,
-              let stored = try? JSONDecoder().decode(Stored.self, from: data) else {
-            if status != errSecSuccess && status != errSecItemNotFound {
-                BopifyLog.keychain.error("load failed status=\(status, privacy: .public)")
+        guard status == errSecSuccess else {
+            if status == errSecItemNotFound {
+                BopifyLog.keychain.debug("load found nothing stored")
             } else {
-                BopifyLog.keychain.debug("load returned no usable token set")
+                BopifyLog.keychain.error("load failed status=\(status, privacy: .public)")
             }
+            return nil
+        }
+        guard let data = item as? Data,
+              let stored = try? JSONDecoder().decode(Stored.self, from: data) else {
+            BopifyLog.keychain.error("load found a stored token set that could not be decoded")
             return nil
         }
         BopifyLog.keychain.debug("load succeeded")

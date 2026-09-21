@@ -31,6 +31,7 @@ public final class PlayerModel {
     }
 
     public func stop() {
+        guard consumer != nil else { return }
         BopifyLog.playback.info("player model stopping")
         consumer?.cancel()
         consumer = nil
