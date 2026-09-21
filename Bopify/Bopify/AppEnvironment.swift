@@ -139,12 +139,21 @@ final class AppEnvironment {
     private func connect() async {
         do {
             let token = try await auth.validAccessToken()
-            // `LibrespotEngine.init` is `@concurrent`, so this call already
-            // runs off the main actor; no separate wrapper is needed.
+            // Runs off the main actor: the package is built in Swift 6
+            // language mode without NonisolatedNonsendingByDefault, so a
+            // `nonisolated async` initialiser already hops to the global
+            // executor. The `@concurrent` on it guards against that default
+            // changing, rather than being what saves us today.
             let engine = try await LibrespotEngine(accessToken: token, deviceName: "Bopify")
             let model = PlayerModel(engine: engine)
             model.start()
             model.activate()
+            // Today the UI and `serialize` make a second connect unreachable,
+            // so this teardown is structural rather than load-bearing: the
+            // cost of being wrong is a leaked Rust runtime and audio thread
+            // for the process lifetime, which no test would catch.
+            await self.engine?.shutdown()
+            player?.stop()
             self.engine = engine
             player = model
             authState = .signedIn

@@ -5,9 +5,11 @@ import BopifyDomain
 
 /// Folds engine events into observable state on the main actor.
 ///
-/// Deliberately not an actor: under SE-0461 a nonisolated async function
-/// runs on the caller's actor, so an actor here would drag blocking FFI
-/// work onto the main thread. Blocking work goes through @concurrent instead.
+/// Deliberately not an actor: this folds events into state that SwiftUI
+/// observes, so it belongs on the main actor. Blocking FFI work stays off
+/// it because `LibrespotEngine`'s methods are nonisolated and this package
+/// does not enable NonisolatedNonsendingByDefault, so awaiting them hops to
+/// the global executor.
 @MainActor
 @Observable
 public final class PlayerModel {

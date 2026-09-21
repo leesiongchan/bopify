@@ -50,7 +50,7 @@ struct PlayerModelTests {
         #expect(model.state.positionMs == 2000)
     }
 
-    @Test func bufferingPreservesTheCurrentTrack() async {
+    @Test func loadingPreservesTheCurrentTrack() async {
         let engine = StubPlaybackEngine()
         let model = PlayerModel(engine: engine)
         model.start()
