@@ -2621,18 +2621,22 @@ main actor."
 >
 > Tasks 4 and 7 changed the contract this task was written against. Where this
 > task's code disagrees with `artifacts/include/bopify_core.h` or with the
-> `LibrespotEventBridge` that Task 7 actually shipped, **those win**. Known
+> `EventBridge` that Task 7 actually shipped, **those win**. Known
 > divergences, all verified:
 >
 > 1. **`bopify_engine_create` returns `OpaquePointer?`.** Every
 >    `UnsafeMutablePointer(handle)` cast below is wrong and will not compile.
 >    Pass the `OpaquePointer` straight through.
 > 2. **`ctx` is retained, not unretained.** Task 7 replaced the brief's
->    `passUnretained` with `retainedContext()` / `releaseContext()` (+1),
+>    `passUnretained` with `retainedContext()` / `releaseContext(_:)` (+1),
 >    because the unretained version made every early-drop path a
->    use-after-free on a tokio thread. `releaseContext()` is a **once-only**
->    obligation this task owns. The teardown order is exactly:
->    `finish()` → `bopify_engine_destroy` → `releaseContext()`.
+>    use-after-free on a tokio thread. The shipped API is
+>    `EventBridge.retainedContext() -> UnsafeMutableRawPointer` and the
+>    **static** `EventBridge.releaseContext(_ ctx: UnsafeMutableRawPointer)`,
+>    so **this task must keep the `ctx` pointer alongside the bridge
+>    reference** — the release needs the pointer, not the object. It is a
+>    **once-only** obligation this task owns. The teardown order is exactly:
+>    `finish()` → `bopify_engine_destroy` → `EventBridge.releaseContext(ctx)`.
 >    Releasing before destroy returns is a use-after-free; the C header states
 >    that `ctx` must outlive destroy, and it is the one safety property Rust
 >    deliberately cannot enforce.
