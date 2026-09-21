@@ -22,6 +22,11 @@ public actor SpotifyAuthService {
     /// so a sign-out (or a fresher sign-in) discards stale in-flight work.
     /// `validAccessToken()` only checks it, guarding against a `signOut()`
     /// mid-refresh -- not against two overlapping refreshes.
+    ///
+    /// This defends the actor's own contract, for any caller. Bopify's app
+    /// additionally serialises every auth operation through
+    /// `AppEnvironment.serialize`, so in-app the interleaving this guards
+    /// against cannot arise; only the tests construct it directly.
     private var generation = 0
 
     public init(

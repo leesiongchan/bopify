@@ -1,30 +1,19 @@
 //! The C ABI Swift links against.
 //!
-//! Contract for every entry point below:
+//! **The contract lives in one place: the `header` block in
+//! `rust/cbindgen.toml`.** That block is what reaches `bopify_core.h`, which
+//! is what Swift actually reads, so it is the copy that has to be right.
+//! This comment used to restate it here and the two had already drifted --
+//! the header carried a rule about commands returning "enqueued, not took
+//! effect" that this file never mentioned. Read the contract there and
+//! change it there.
 //!
-//! * `bopify_engine_create` and `bopify_engine_destroy` **block**. Create
-//!   performs the whole network login; destroy waits for the runtime's
-//!   worker threads and then for librespot's audio thread. Neither may be
-//!   called on the main thread.
-//! * The event callback runs on a librespot runtime thread, never the
-//!   caller's, and may fire before `bopify_engine_create` returns: librespot
-//!   emits a volume event while still inside the login. `ctx` must therefore
-//!   be fully usable at the moment of the create call, and the handler must
-//!   not assume the handle has been stored yet.
-//! * `ctx` must stay alive until `bopify_engine_destroy` has returned. Once
-//!   it has, no further callback can occur.
-//! * `bopify_engine_destroy` is idempotent and may be called concurrently
-//!   with any other entry point, and every concurrent destroy waits for the
-//!   teardown before returning. The handle is never freed; after destroy
-//!   every command returns `SessionLost` (-2). **The caller does not need to
-//!   serialise.** This is enforced in Rust, not merely tolerated.
-//! * The one exception: do **not** issue a command on the same handle from
-//!   inside the event callback. The callback runs on a runtime worker, so a
-//!   command that reaches the lock just as destroy takes it would block that
-//!   worker while `Runtime::drop` is trying to join it, and both hang. Hand
-//!   the event to your own queue and issue commands from somewhere else.
-//! * String arguments are borrowed for the duration of the call only; the
-//!   engine copies whatever it keeps.
+//! What is true here and nowhere else: `BopifyEngine` is never freed. It
+//! holds `alive: AtomicBool` beside `RwLock<Option<Engine>>` so that a
+//! caller who uses a destroyed handle gets `SessionLost` instead of
+//! undefined behaviour. That turns the worst cross-language mistake -- a
+//! use-after-free reached from Swift -- into a bounded leak, which is the
+//! whole reason the type is shaped this way.
 
 use std::ffi::{CStr, c_char, c_void};
 use std::sync::atomic::{AtomicBool, Ordering};
