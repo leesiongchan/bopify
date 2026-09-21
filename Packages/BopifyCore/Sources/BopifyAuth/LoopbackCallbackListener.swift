@@ -11,7 +11,7 @@ public enum CallbackError: Error, Hashable, Sendable {
 ///
 /// Spotify rejects `localhost` but permits loopback IP literals, and those
 /// alone may use a dynamically assigned port -- which is why the app is
-/// registered as `http://127.0.0.1/callback` with no port.
+/// registered as `http://127.0.0.1/login` with no port.
 public actor LoopbackCallbackListener {
     private let expectedState: String
     private var listener: NWListener?

@@ -3,6 +3,13 @@ import Foundation
 import os
 import BopifyDomain
 
+/// librespot's first-party Spotify client ID, and the only one that can
+/// reach the streaming endpoint -- a Developer Dashboard ID is rejected
+/// by login5 with HTTP 400 (see docs/superpowers/specs/2026-09-21-spike-findings.md).
+/// Spotify may revoke it at any time, which is the realistic failure
+/// mode for this app; keeping it in one place makes that a one-line fix.
+public let librespotClientID = "65b708073fc0480ea92a077233ca87bd"
+
 public actor SpotifyAuthService {
     private let clientID: String
     private let client: TokenClient
@@ -47,7 +54,7 @@ public actor SpotifyAuthService {
         BopifyLog.auth.debug("callback listener bound port=\(port, privacy: .public)")
         defer { Task { await listener.stop() } }
 
-        let redirectURI = "http://127.0.0.1:\(port)/callback"
+        let redirectURI = "http://127.0.0.1:\(port)/login"
         let request = AuthorizationRequest(clientID: clientID, redirectURI: redirectURI,
                                            scopes: ["streaming"], pkce: pkce, state: state)
         openURL(request.url)

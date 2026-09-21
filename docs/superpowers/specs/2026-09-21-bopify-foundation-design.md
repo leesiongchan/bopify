@@ -95,6 +95,8 @@ There is no stable librespot API to depend on. 0.8.0 (2025-11-10) is ten months 
 
 `librespot-oauth` could do the whole flow, but auth state, the error taxonomy, and all recovery UI are Swift concerns, and Keychain is a Swift API. Doing it in Swift keeps the FFI surface purely about playback and keeps the auth flow unit-testable without the Rust library present.
 
+**Amendment, 2026-09-21 (Task 2 spike):** the PKCE, loopback-listener and token-exchange design above is unchanged and correct. What changes is the client ID and the redirect path: the client ID must be librespot's first-party ID, not a Developer Dashboard registration, and the redirect path is `/login`, not `/callback`. Evidence is the three-run table in `docs/superpowers/specs/2026-09-21-spike-findings.md` — a dashboard client ID is rejected by `login5` with a raw HTTP 400 even when token and session both use it consistently, so it is inadmissible, not merely mismatched. The registered dashboard app is retained only for possible future Web API use, which this slice does not need.
+
 ---
 
 ## 3. Repository structure
