@@ -16,6 +16,13 @@ app.
 There is no Xcode app target yet; what exists today is the Swift package
 and the Rust crate that will back it.
 
+The Swift package links the Rust static library, so build that first —
+`artifacts/` is build output and is not in the repository:
+
+```sh
+./scripts/build-rust.sh
+```
+
 Swift package (`Packages/BopifyCore`: `BopifyDomain`, `BopifyAuth`,
 `BopifyPlayback`):
 
