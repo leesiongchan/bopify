@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 import BopifyDomain
 
 /// Folds engine events into observable state on the main actor.
@@ -21,6 +22,7 @@ public final class PlayerModel {
     /// resubscribe whenever view identity changed.
     public func start() {
         guard consumer == nil else { return }
+        BopifyLog.playback.info("player model starting")
         consumer = Task { [engine] in
             for await event in engine.events {
                 self.apply(event)
@@ -29,6 +31,7 @@ public final class PlayerModel {
     }
 
     public func stop() {
+        BopifyLog.playback.info("player model stopping")
         consumer?.cancel()
         consumer = nil
     }
@@ -39,24 +42,68 @@ public final class PlayerModel {
             // A failure is reported by the engine as an event; nothing is
             // assumed here about whether the command took effect.
             if shouldPause {
-                try? await engine.pause()
+                do { try await engine.pause() }
+                catch {
+                    let description = String(describing: error)
+                    BopifyLog.playback.error("command failed command=pause error=\(description, privacy: .public)")
+                }
             } else {
-                try? await engine.resume()
+                do { try await engine.resume() }
+                catch {
+                    let description = String(describing: error)
+                    BopifyLog.playback.error("command failed command=resume error=\(description, privacy: .public)")
+                }
             }
         }
     }
 
-    public func next() { Task { [engine] in try? await engine.next() } }
-    public func previous() { Task { [engine] in try? await engine.previous() } }
-    public func activate() { Task { [engine] in try? await engine.activate() } }
+    public func next() {
+        Task { [engine] in
+            do { try await engine.next() }
+            catch {
+                let description = String(describing: error)
+                BopifyLog.playback.error("command failed command=next error=\(description, privacy: .public)")
+            }
+        }
+    }
+
+    public func previous() {
+        Task { [engine] in
+            do { try await engine.previous() }
+            catch {
+                let description = String(describing: error)
+                BopifyLog.playback.error("command failed command=previous error=\(description, privacy: .public)")
+            }
+        }
+    }
+
+    public func activate() {
+        Task { [engine] in
+            do { try await engine.activate() }
+            catch {
+                let description = String(describing: error)
+                BopifyLog.playback.error("command failed command=activate error=\(description, privacy: .public)")
+            }
+        }
+    }
 
     /// Lets the UI start playback from a known context URI directly, in case
     /// Spotify Connect handoff to this device does not work.
-    public func load(_ request: PlayRequest) { Task { [engine] in try? await engine.load(request) } }
+    public func load(_ request: PlayRequest) {
+        Task { [engine] in
+            do { try await engine.load(request) }
+            catch {
+                let description = String(describing: error)
+                BopifyLog.playback.error("command failed command=load error=\(description, privacy: .public)")
+            }
+        }
+    }
 
     private func apply(_ event: PlaybackEvent) {
+        let oldPhase = state.phase
         switch event {
         case let .trackChanged(track):
+            BopifyLog.playback.debug("track changed title=\(track.title, privacy: .private)")
             state.currentTrack = track
             state.durationMs = track.durationMs
             state.positionMs = 0
@@ -83,7 +130,14 @@ public final class PlayerModel {
             if !isActive { state.phase = .idle }
         case let .failed(error):
             state.phase = .error(error)
+            let description = String(describing: error)
+            BopifyLog.playback.error("playback failed error=\(description, privacy: .public)")
             if error == .playbackSessionLost { state.isActiveDevice = false }
+        }
+        if state.phase != oldPhase {
+            let old = String(describing: oldPhase)
+            let new = String(describing: state.phase)
+            BopifyLog.playback.debug("phase transition old=\(old, privacy: .public) new=\(new, privacy: .public)")
         }
     }
 }
