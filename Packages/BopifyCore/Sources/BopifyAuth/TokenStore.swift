@@ -10,11 +10,11 @@ public protocol TokenStoring: Sendable {
 }
 
 /// Direct SecItem: no maintained Swift wrapper is needed for a ~60-line
-/// surface. kSecUseDataProtectionKeychain is omitted because, under local
-/// development signing with no provisioning profile, it fails every
-/// operation with errSecMissingEntitlement (-34018) per TN3137 -- this
-/// falls back to the legacy file-based keychain until the app target
-/// carries proper entitlements.
+/// surface. kSecUseDataProtectionKeychain is omitted because, per TN3137,
+/// it needs an application-identifier entitlement that only team signing
+/// grants; the app ships ad-hoc signed, so it would fail every operation
+/// with errSecMissingEntitlement (-34018). Revisit only if Bopify is ever
+/// signed with a real team.
 public struct KeychainTokenStore: TokenStoring {
     private let service: String
     private let account = "spotify-tokens"
