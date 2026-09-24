@@ -6,3 +6,4 @@ artifacts/
 .swiftpm/
 xcuserdata/
 *.xcuserstate
+.worktrees/
