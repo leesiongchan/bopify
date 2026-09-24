@@ -5,6 +5,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+./scripts/prepare-librespot.sh
+
 export MACOSX_DEPLOYMENT_TARGET=14.0   # must match the Xcode target
 TARGET=aarch64-apple-darwin            # arm64 only; for universal, build
                                        # x86_64-apple-darwin too and lipo them

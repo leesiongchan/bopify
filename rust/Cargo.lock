@@ -1144,7 +1144,6 @@ checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 [[package]]
 name = "librespot-audio"
 version = "0.8.0"
-source = "git+https://github.com/librespot-org/librespot.git?rev=939dc5ee9d833e1980f9495241219d9d4868a061#939dc5ee9d833e1980f9495241219d9d4868a061"
 dependencies = [
  "aes",
  "bytes",
@@ -1163,7 +1162,6 @@ dependencies = [
 [[package]]
 name = "librespot-connect"
 version = "0.8.0"
-source = "git+https://github.com/librespot-org/librespot.git?rev=939dc5ee9d833e1980f9495241219d9d4868a061#939dc5ee9d833e1980f9495241219d9d4868a061"
 dependencies = [
  "futures-util",
  "librespot-core",
@@ -1182,7 +1180,6 @@ dependencies = [
 [[package]]
 name = "librespot-core"
 version = "0.8.0"
-source = "git+https://github.com/librespot-org/librespot.git?rev=939dc5ee9d833e1980f9495241219d9d4868a061#939dc5ee9d833e1980f9495241219d9d4868a061"
 dependencies = [
  "aes",
  "base64",
@@ -1239,7 +1236,6 @@ dependencies = [
 [[package]]
 name = "librespot-metadata"
 version = "0.8.0"
-source = "git+https://github.com/librespot-org/librespot.git?rev=939dc5ee9d833e1980f9495241219d9d4868a061#939dc5ee9d833e1980f9495241219d9d4868a061"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1256,7 +1252,6 @@ dependencies = [
 [[package]]
 name = "librespot-oauth"
 version = "0.8.0"
-source = "git+https://github.com/librespot-org/librespot.git?rev=939dc5ee9d833e1980f9495241219d9d4868a061#939dc5ee9d833e1980f9495241219d9d4868a061"
 dependencies = [
  "log",
  "oauth2",
@@ -1270,7 +1265,6 @@ dependencies = [
 [[package]]
 name = "librespot-playback"
 version = "0.8.0"
-source = "git+https://github.com/librespot-org/librespot.git?rev=939dc5ee9d833e1980f9495241219d9d4868a061#939dc5ee9d833e1980f9495241219d9d4868a061"
 dependencies = [
  "cpal",
  "form_urlencoded",
@@ -1293,7 +1287,6 @@ dependencies = [
 [[package]]
 name = "librespot-protocol"
 version = "0.8.0"
-source = "git+https://github.com/librespot-org/librespot.git?rev=939dc5ee9d833e1980f9495241219d9d4868a061#939dc5ee9d833e1980f9495241219d9d4868a061"
 dependencies = [
  "protobuf",
  "protobuf-codegen",

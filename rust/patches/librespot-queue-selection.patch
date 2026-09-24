@@ -1,0 +1,1040 @@
+diff --git a/connect/src/lib.rs b/connect/src/lib.rs
+index ba00aa4..14025a8 100644
+--- a/connect/src/lib.rs
++++ b/connect/src/lib.rs
+@@ -12,6 +12,7 @@ mod context_resolver;
+ mod model;
+ mod shuffle_vec;
+ mod spirc;
++mod queue;
+ mod state;
+ 
+ pub use model::*;
+diff --git a/connect/src/queue.rs b/connect/src/queue.rs
+new file mode 100644
+index 0000000..a630e8e
+--- /dev/null
++++ b/connect/src/queue.rs
+@@ -0,0 +1,255 @@
++use crate::{
++    playback::player::QueueTrack, protocol::player::ProvidedTrack, state::provider::IsProvider,
++};
++
++#[derive(Clone, Copy, Debug)]
++pub(crate) enum QueueMovement {
++    Forward(usize),
++    Backward,
++}
++
++#[derive(Clone, Debug)]
++struct Entry {
++    track: ProvidedTrack,
++    id: u64,
++}
++
++#[derive(Default)]
++pub(crate) struct QueueTracker {
++    pub generation: u64,
++    serial: u64,
++    previous: Vec<Entry>,
++    current: Option<Entry>,
++    next: Vec<Entry>,
++}
++
++pub(crate) struct Snapshot {
++    pub generation: u64,
++    pub previous: Vec<QueueTrack>,
++    pub current: Option<QueueTrack>,
++    pub next: Vec<QueueTrack>,
++}
++
++impl crate::state::ConnectState {
++    pub(crate) fn queue_snapshot(&mut self, tracker: &mut QueueTracker) -> Option<Snapshot> {
++        let movement = self.queue_movement.take();
++        let replaced = std::mem::take(&mut self.queue_replaced);
++        let state = self.player();
++        tracker.update(
++            &state.prev_tracks,
++            state.track.as_ref(),
++            &state.next_tracks,
++            movement,
++            replaced,
++        )
++    }
++}
++
++impl QueueTracker {
++    pub fn update(
++        &mut self,
++        previous: &[ProvidedTrack],
++        current: Option<&ProvidedTrack>,
++        next: &[ProvidedTrack],
++        movement: Option<QueueMovement>,
++        replaced: bool,
++    ) -> Option<Snapshot> {
++        if !replaced
++            && movement.is_none()
++            && self.generation > 0
++            && same(&self.previous, previous)
++            && same(&self.next, next)
++            && self.current.as_ref().map(|e| &e.track) == current
++        {
++            return None;
++        }
++        self.generation += 1;
++        let old: Vec<_> = self
++            .previous
++            .iter()
++            .chain(self.current.iter())
++            .chain(self.next.iter())
++            .cloned()
++            .collect();
++        let all: Vec<_> = previous.iter().chain(current).chain(next.iter()).collect();
++        let mut expected_previous = self.previous.clone();
++        let mut expected_current = self.current.clone();
++        let mut expected_next = self.next.clone();
++        if !replaced {
++            match movement {
++                Some(QueueMovement::Forward(index)) if index < self.next.len() => {
++                    expected_previous.extend(
++                        self.current
++                            .iter()
++                            .chain(self.next[..index].iter())
++                            .filter(|e| e.track.is_context() || e.track.is_autoplay())
++                            .cloned(),
++                    );
++                    expected_current = Some(self.next[index].clone());
++                    expected_next = self.next[index + 1..].to_vec();
++                }
++                Some(QueueMovement::Backward) => {
++                    if let Some(e) = expected_previous.last() {
++                        if e.track.uid.starts_with("delimiter") {
++                            expected_next.insert(0, expected_previous.pop().unwrap());
++                        }
++                    }
++                    if let Some(e) = &self.current {
++                        if e.track.is_context() || e.track.is_autoplay() {
++                            expected_next.insert(0, e.clone());
++                        }
++                    }
++                    expected_current = expected_previous.pop();
++                }
++                _ => {}
++            }
++        }
++        let mut used = std::collections::HashSet::new();
++        let mut assign = |track: &ProvidedTrack, expected: Option<&Entry>| {
++            let candidate = if !replaced {
++                expected.filter(|e| &e.track == track)
++            } else {
++                None
++            };
++            let candidate = candidate.or_else(|| {
++                let mut matches = old.iter().filter(|e| &e.track == track);
++                let first = matches.next()?;
++                if matches.next().is_none() && all.iter().filter(|t| ***t == *track).count() == 1 {
++                    Some(first)
++                } else {
++                    None
++                }
++            });
++            let id = match candidate.filter(|e| !used.contains(&e.id)) {
++                Some(e) => e.id,
++                None => {
++                    self.serial += 1;
++                    self.serial
++                }
++            };
++            used.insert(id);
++            Entry {
++                track: track.clone(),
++                id,
++            }
++        };
++        // History is capped by the provider, so align its retained suffix.
++        let offset = expected_previous.len().saturating_sub(previous.len());
++        let previous: Vec<_> = previous
++            .iter()
++            .enumerate()
++            .map(|(i, t)| assign(t, expected_previous.get(i + offset)))
++            .collect();
++        let current = current.map(|t| assign(t, expected_current.as_ref()));
++        let next: Vec<_> = next
++            .iter()
++            .enumerate()
++            .map(|(i, t)| assign(t, expected_next.get(i)))
++            .collect();
++        self.previous = previous;
++        self.current = current;
++        self.next = next;
++        Some(Snapshot {
++            generation: self.generation,
++            previous: self.previous.iter().map(|e| export(e, None)).collect(),
++            current: self.current.as_ref().map(|e| export(e, None)),
++            next: self
++                .next
++                .iter()
++                .enumerate()
++                .map(|(i, e)| export(e, Some(i as u32)))
++                .collect(),
++        })
++    }
++}
++
++fn same(entries: &[Entry], tracks: &[ProvidedTrack]) -> bool {
++    entries.len() == tracks.len() && entries.iter().zip(tracks).all(|(e, t)| &e.track == t)
++}
++
++fn export(entry: &Entry, raw_next_index: Option<u32>) -> QueueTrack {
++    QueueTrack {
++        uri: entry.track.uri.clone(),
++        provider: entry.track.provider.clone(),
++        uid: entry.track.uid.clone(),
++        id: entry.id,
++        raw_next_index,
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    fn song() -> ProvidedTrack {
++        ProvidedTrack {
++            uri: "spotify:track:same".into(),
++            uid: "duplicate".into(),
++            provider: "context".into(),
++            ..Default::default()
++        }
++    }
++    #[test]
++    fn forward_keeps_exact_duplicate_identity_and_suffix() {
++        let mut tracker = QueueTracker::default();
++        let old = tracker
++            .update(&[], Some(&song()), &[song(), song(), song()], None, false)
++            .unwrap();
++        let new = tracker
++            .update(
++                &[song(), song()],
++                Some(&song()),
++                &[song()],
++                Some(QueueMovement::Forward(1)),
++                false,
++            )
++            .unwrap();
++        assert_eq!(new.current.as_ref().unwrap().id, old.next[1].id);
++        assert_eq!(new.next[0].id, old.next[2].id);
++        assert_eq!(new.previous[0].id, old.current.unwrap().id);
++        assert_ne!(old.next[0].id, old.next[1].id);
++        assert!(new.generation > old.generation);
++    }
++    #[test]
++    fn external_identical_duplicates_invalidate_generation_and_identity() {
++        let mut tracker = QueueTracker::default();
++        let old = tracker
++            .update(&[], Some(&song()), &[song(), song()], None, false)
++            .unwrap();
++        let new = tracker
++            .update(&[], Some(&song()), &[song(), song()], None, true)
++            .unwrap();
++        assert!(new.generation > old.generation);
++        assert_ne!(new.current.unwrap().id, old.current.unwrap().id);
++        assert_ne!(new.next[0].id, old.next[0].id);
++    }
++    #[test]
++    fn unchanged_snapshot_does_not_invalidate_clicks() {
++        let mut tracker = QueueTracker::default();
++        tracker
++            .update(&[], Some(&song()), &[song()], None, false)
++            .unwrap();
++        assert!(
++            tracker
++                .update(&[], Some(&song()), &[song()], None, false)
++                .is_none()
++        );
++    }
++    #[test]
++    fn previous_reverses_known_movement() {
++        let mut tracker = QueueTracker::default();
++        let old = tracker
++            .update(&[song()], Some(&song()), &[song()], None, false)
++            .unwrap();
++        let new = tracker
++            .update(
++                &[],
++                Some(&song()),
++                &[song(), song()],
++                Some(QueueMovement::Backward),
++                false,
++            )
++            .unwrap();
++        assert_eq!(new.current.unwrap().id, old.previous[0].id);
++        assert_eq!(new.next[0].id, old.current.unwrap().id);
++    }
++}
+diff --git a/connect/src/spirc.rs b/connect/src/spirc.rs
+index c7c195b..642c8e4 100644
+--- a/connect/src/spirc.rs
++++ b/connect/src/spirc.rs
+@@ -14,7 +14,7 @@ use crate::{
+     model::{LoadRequest, PlayingTrack, SpircPlayStatus},
+     playback::{
+         mixer::Mixer,
+-        player::{Player, PlayerEvent, PlayerEventChannel, QueueTrack},
++        player::{Player, PlayerEvent, PlayerEventChannel},
+     },
+     protocol::{
+         connect::{Cluster, ClusterUpdate, LogoutCommand, SetVolumeCommand},
+@@ -70,6 +70,7 @@ impl From<SpircError> for Error {
+ }
+ 
+ struct SpircTask {
++    queue_tracker: crate::queue::QueueTracker,
+     player: Arc<Player>,
+     mixer: Arc<dyn Mixer>,
+ 
+@@ -123,6 +124,10 @@ enum SpircCommand {
+     Pause,
+     Prev,
+     Next,
++    SelectQueue(
++        QueueSelection,
++        tokio::sync::oneshot::Sender<Result<(), QueueSelectionError>>,
++    ),
+     VolumeUp,
+     VolumeDown,
+     Shutdown,
+@@ -139,6 +144,56 @@ enum SpircCommand {
+     ClearQueue,
+ }
+ 
++/// An occurrence in the last published queue, including hidden raw entries.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct QueueSelection {
++    /// Structural snapshot version.
++    pub generation: u64,
++    /// Position before delimiter filtering.
++    pub raw_next_index: u32,
++}
++
++/// A rejected selection leaves playback unchanged.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum QueueSelectionError {
++    /// The queue changed after it was displayed.
++    Stale,
++    /// The entry no longer exists.
++    OutOfRange,
++    /// The device or entry cannot play.
++    Unavailable,
++}
++
++pub(crate) fn validate_selection(
++    generation: u64,
++    selection: QueueSelection,
++    len: usize,
++) -> Result<usize, QueueSelectionError> {
++    if generation != selection.generation {
++        return Err(QueueSelectionError::Stale);
++    }
++    let index = selection.raw_next_index as usize;
++    if index >= len {
++        return Err(QueueSelectionError::OutOfRange);
++    }
++    Ok(index)
++}
++
++pub(crate) fn dispatch_selection(
++    state: &mut ConnectState,
++    generation: u64,
++    selection: QueueSelection,
++    load: impl FnOnce(SpotifyUri),
++) -> Result<(), QueueSelectionError> {
++    // Parse before promotion as well as before invoking the audio boundary.
++    let index = validate_selection(generation, selection, state.player().next_tracks.len())?;
++    let uri = SpotifyUri::from_uri(&state.player().next_tracks[index].uri)
++        .map_err(|_| QueueSelectionError::Unavailable)?;
++    state.select_queue_entry(generation, selection)?;
++    load(uri);
++    Ok(())
++}
++
+ const CONTEXT_FETCH_THRESHOLD: usize = 2;
+ 
+ // delay to update volume after a certain amount of time, instead on each update request
+@@ -230,6 +285,7 @@ impl Spirc {
+         let player_events = player.get_player_event_channel();
+ 
+         let mut task = SpircTask {
++            queue_tracker: Default::default(),
+             player,
+             mixer,
+ 
+@@ -329,6 +385,17 @@ impl Spirc {
+         Ok(self.commands.send(SpircCommand::Next)?)
+     }
+ 
++    /// Select an exact occurrence without reloading its context or intermediate audio.
++    pub fn select_queue_entry(
++        &self,
++        selection: QueueSelection,
++    ) -> Result<tokio::sync::oneshot::Receiver<Result<(), QueueSelectionError>>, Error> {
++        let (sender, receiver) = tokio::sync::oneshot::channel();
++        self.commands
++            .send(SpircCommand::SelectQueue(selection, sender))?;
++        Ok(receiver)
++    }
++
+     /// Increases the volume by configured steps of [ConnectConfig].
+     ///
+     /// Does nothing if we are not the active device.
+@@ -599,6 +666,7 @@ impl SpircTask {
+                 },
+                 else => break
+             }
++            self.emit_set_queue_event();
+         }
+ 
+         if !self.shutdown && self.connect_state.is_active() {
+@@ -662,41 +730,20 @@ impl SpircTask {
+         update_state
+     }
+ 
+-    /// Emit set queue event via PlayerEvent
+-    fn emit_set_queue_event(&self) {
++    /// Publish only changed structure; called after every event-loop mutation.
++    fn emit_set_queue_event(&mut self) {
+         if !self.emit_set_queue_events {
+             return;
+         }
+-
+-        let state_player = self.connect_state.player();
+-
+-        let current_track = state_player.track.as_ref().map(|t| QueueTrack {
+-            uri: t.uri.clone(),
+-            provider: t.provider.clone(),
+-        });
+-
+-        let next_tracks: Vec<_> = state_player
+-            .next_tracks
+-            .iter()
+-            .map(|t| QueueTrack {
+-                uri: t.uri.clone(),
+-                provider: t.provider.clone(),
+-            })
+-            .collect();
+-
+-        let prev_tracks: Vec<_> = state_player
+-            .prev_tracks
+-            .iter()
+-            .map(|t| QueueTrack {
+-                uri: t.uri.clone(),
+-                provider: t.provider.clone(),
+-            })
+-            .collect();
+-
+-        let context_uri = self.connect_state.context_uri().clone();
+-
+-        self.player
+-            .emit_set_queue_event(context_uri, current_track, next_tracks, prev_tracks);
++        if let Some(snapshot) = self.connect_state.queue_snapshot(&mut self.queue_tracker) {
++            self.player.emit_set_queue_event(
++                snapshot.generation,
++                self.connect_state.context_uri().clone(),
++                snapshot.current,
++                snapshot.next,
++                snapshot.previous,
++            );
++        }
+     }
+ 
+     // todo: is the time_delta still necessary?
+@@ -711,6 +758,27 @@ impl SpircTask {
+     async fn handle_command(&mut self, cmd: SpircCommand) -> Result<(), Error> {
+         trace!("Received SpircCommand::{cmd:?}");
+         match cmd {
++            SpircCommand::SelectQueue(selection, reply) => {
++                self.emit_set_queue_event();
++                let playing = self.connect_state.is_playing();
++                let result = if !self.connect_state.is_active() {
++                    Err(QueueSelectionError::Unavailable)
++                } else {
++                    dispatch_selection(
++                        &mut self.connect_state,
++                        self.queue_tracker.generation,
++                        selection,
++                        |id| self.player.load(id, playing, 0),
++                    )
++                };
++                if result.is_ok() {
++                    self.add_autoplay_resolving_when_required();
++                    self.record_loading(playing, 0);
++                    self.emit_set_queue_event();
++                }
++                let _ = reply.send(result);
++            }
++
+             SpircCommand::Shutdown => {
+                 trace!("Received SpircCommand::Shutdown");
+                 self.handle_pause();
+@@ -1181,6 +1249,7 @@ impl SpircTask {
+     }
+ 
+     fn handle_transfer(&mut self, mut transfer: TransferState) -> Result<(), Error> {
++        self.connect_state.queue_replaced = true;
+         let mut ctx_uri = match transfer.current_session.context.uri {
+             None => Err(SpircError::NoUri("transfer context"))?,
+             // can apparently happen when a state is transferred and was started with "uris" via the api
+@@ -1363,6 +1432,7 @@ impl SpircTask {
+         page: Option<ContextPage>,
+         fallback_index: Option<usize>,
+     ) -> Result<(), Error> {
++        self.connect_state.queue_replaced = true;
+         self.connect_state
+             .reset_context(if let PlayContext::Uri(ref uri) = cmd.context {
+                 ResetContext::WhenDifferent(uri)
+@@ -1621,6 +1691,7 @@ impl SpircTask {
+     }
+ 
+     fn handle_shuffle(&mut self, shuffle: bool) -> Result<(), Error> {
++        self.connect_state.queue_replaced = true;
+         self.player.emit_shuffle_changed_event(shuffle);
+         self.connect_state.handle_shuffle(shuffle)
+     }
+@@ -1896,7 +1967,11 @@ impl SpircTask {
+         let current_uri = self.connect_state.current_track(|t| &t.uri);
+         let id = SpotifyUri::from_uri(current_uri)?;
+         self.player.load(id, start_playing, position_ms);
++        self.record_loading(start_playing, position_ms);
++        Ok(())
++    }
+ 
++    fn record_loading(&mut self, start_playing: bool, position_ms: u32) {
+         self.connect_state
+             .update_position(position_ms, self.now_ms());
+         if start_playing {
+@@ -1905,11 +1980,10 @@ impl SpircTask {
+             self.play_status = SpircPlayStatus::LoadingPause { position_ms };
+         }
+         self.connect_state.set_status(&self.play_status);
+-
+-        Ok(())
+     }
+ 
+     async fn notify(&mut self) -> Result<(), Error> {
++        self.emit_set_queue_event();
+         self.connect_state.set_status(&self.play_status);
+ 
+         if self.connect_state.is_playing() {
+diff --git a/connect/src/state.rs b/connect/src/state.rs
+index f810d85..2988f8f 100644
+--- a/connect/src/state.rs
++++ b/connect/src/state.rs
+@@ -108,8 +108,10 @@ impl Default for ConnectConfig {
+     }
+ }
+ 
+-#[derive(Default, Debug)]
++#[derive(Default, Debug, Clone)]
+ pub(super) struct ConnectState {
++    pub queue_movement: Option<crate::queue::QueueMovement>,
++    pub queue_replaced: bool,
+     /// the entire state that is updated to the remote server
+     request: PutStateRequest,
+ 
+diff --git a/connect/src/state/context.rs b/connect/src/state/context.rs
+index 5913022..52fc68e 100644
+--- a/connect/src/state/context.rs
++++ b/connect/src/state/context.rs
+@@ -21,7 +21,7 @@ use uuid::Uuid;
+ const LOCAL_FILES_IDENTIFIER: &str = "spotify:local-files";
+ const SEARCH_IDENTIFIER: &str = "spotify:search";
+ 
+-#[derive(Debug)]
++#[derive(Debug, Clone)]
+ pub struct StateContext {
+     pub tracks: ShuffleVec<ProvidedTrack>,
+     pub metadata: HashMap<String, String>,
+diff --git a/connect/src/state/options.rs b/connect/src/state/options.rs
+index efb8376..dd526dd 100644
+--- a/connect/src/state/options.rs
++++ b/connect/src/state/options.rs
+@@ -10,7 +10,7 @@ use crate::{
+ use protobuf::MessageField;
+ use rand::Rng;
+ 
+-#[derive(Default, Debug)]
++#[derive(Default, Debug, Clone)]
+ pub(crate) struct ShuffleState {
+     pub seed: u64,
+     pub initial_track: String,
+diff --git a/connect/src/state/tracks.rs b/connect/src/state/tracks.rs
+index 0ecfde2..172530c 100644
+--- a/connect/src/state/tracks.rs
++++ b/connect/src/state/tracks.rs
+@@ -38,15 +38,6 @@ impl<'ct> ConnectState {
+         prev_tracks.push(prev)
+     }
+ 
+-    fn get_next_track(&mut self) -> Option<ProvidedTrack> {
+-        if self.next_tracks().is_empty() {
+-            None
+-        } else {
+-            // todo: O(n), but technically only maximal O(SPOTIFY_MAX_NEXT_TRACKS_SIZE) aka O(80)
+-            Some(self.next_tracks_mut().remove(0))
+-        }
+-    }
+-
+     /// bottom => top, aka the last track of the list is the prev track
+     fn prev_tracks_mut(&mut self) -> &mut Vec<ProvidedTrack> {
+         &mut self.player_mut().prev_tracks
+@@ -103,35 +94,73 @@ impl<'ct> ConnectState {
+     /// Updates the current track to the next track. Adds the old track
+     /// to prev tracks and fills up the next tracks from the current context
+     pub fn next_track(&mut self) -> Result<Option<u32>, Error> {
+-        // when we skip in repeat track, we don't repeat the current track anymore
+-        if self.repeat_track() {
+-            self.set_repeat_track(false);
+-        }
+-
+-        let old_track = self.player_mut().track.take();
+-
+-        if let Some(old_track) = old_track {
+-            // only add songs from our context to our previous tracks
+-            if old_track.is_context() || old_track.is_autoplay() {
+-                self.push_prev(old_track)
++        let selected = self
++            .next_tracks()
++            .iter()
++            .position(|t| !t.uid.starts_with(IDENTIFIER_DELIMITER) && !t.is_unavailable());
++        match selected {
++            Some(index) => self.promote_next(index).map(Some),
++            None => {
++                self.set_repeat_track(false);
++                if let Some(old) = self.player_mut().track.take() {
++                    if old.is_context() || old.is_autoplay() {
++                        self.push_prev(old);
++                    }
++                }
++                let skipped = std::mem::take(self.next_tracks_mut());
++                for track in skipped {
++                    if track.uid.starts_with(IDENTIFIER_DELIMITER) {
++                        self.push_prev(track);
++                    }
++                }
++                Ok(None)
+             }
+         }
++    }
+ 
+-        let new_track = loop {
+-            match self.get_next_track() {
+-                Some(next) if next.uid.starts_with(IDENTIFIER_DELIMITER) => {
+-                    self.push_prev(next);
+-                    continue;
+-                }
+-                Some(next) if next.is_unavailable() => continue,
+-                other => break other,
+-            };
+-        };
++    pub(crate) fn select_queue_entry(
++        &mut self,
++        generation: u64,
++        selection: crate::spirc::QueueSelection,
++    ) -> Result<(), crate::spirc::QueueSelectionError> {
++        use crate::spirc::{QueueSelectionError, validate_selection};
++        let index = validate_selection(generation, selection, self.next_tracks().len())?;
++        let track = &self.next_tracks()[index];
++        if track.is_unavailable()
++            || !matches!(
++                SpotifyUri::from_uri(&track.uri),
++                Ok(SpotifyUri::Track { .. } | SpotifyUri::Episode { .. })
++            )
++        {
++            return Err(QueueSelectionError::Unavailable);
++        }
++        // Refilling can fail when a transfer has not resolved its context yet.
++        // Stage the bounded state change so rejection cannot consume history.
++        let mut staged = self.clone();
++        staged
++            .promote_next(index)
++            .map_err(|_| QueueSelectionError::Unavailable)?;
++        *self = staged;
++        Ok(())
++    }
+ 
+-        let new_track = match new_track {
+-            None => return Ok(None),
+-            Some(t) => t,
+-        };
++    fn promote_next(&mut self, index: usize) -> Result<u32, Error> {
++        self.queue_movement = Some(crate::queue::QueueMovement::Forward(index));
++        self.set_repeat_track(false);
++        if let Some(old) = self.player_mut().track.take() {
++            if old.is_context() || old.is_autoplay() {
++                self.push_prev(old);
++            }
++        }
++        let mut prefix: Vec<_> = self.next_tracks_mut().drain(..=index).collect();
++        let new_track = prefix.pop().expect("validated upcoming index");
++        for track in prefix {
++            if track.uid.starts_with(IDENTIFIER_DELIMITER)
++                || (!track.is_unavailable() && (track.is_context() || track.is_autoplay()))
++            {
++                self.push_prev(track);
++            }
++        }
+ 
+         self.fill_up_next_tracks()?;
+ 
+@@ -159,7 +188,7 @@ impl<'ct> ConnectState {
+         self.set_track(new_track);
+         self.update_restrictions();
+ 
+-        Ok(Some(self.player().index.track))
++        Ok(self.player().index.track)
+     }
+ 
+     /// Move to the prev track
+@@ -168,6 +197,7 @@ impl<'ct> ConnectState {
+     /// to next tracks (when from the context) and fills up the prev tracks from the
+     /// current context
+     pub fn prev_track(&mut self) -> Result<Option<&MessageField<ProvidedTrack>>, Error> {
++        self.queue_movement = Some(crate::queue::QueueMovement::Backward);
+         let old_track = self.player_mut().track.take();
+ 
+         if let Some(old_track) = old_track {
+@@ -233,6 +263,7 @@ impl<'ct> ConnectState {
+     }
+ 
+     pub fn set_next_tracks(&mut self, mut tracks: Vec<ProvidedTrack>) {
++        self.queue_replaced = true;
+         // mobile only sends a set_queue command instead of an add_to_queue command
+         // in addition to handling the mobile add_to_queue handling, this should also handle
+         // a mass queue addition
+@@ -259,6 +290,7 @@ impl<'ct> ConnectState {
+     }
+ 
+     pub fn set_prev_tracks(&mut self, tracks: Vec<ProvidedTrack>) {
++        self.queue_replaced = true;
+         self.player_mut().prev_tracks = tracks;
+     }
+ 
+@@ -448,3 +480,245 @@ impl<'ct> ConnectState {
+         self.update_restrictions();
+     }
+ }
++
++#[cfg(test)]
++mod selection_tests {
++    use super::*;
++    use crate::protocol::{connect::Device, player::PlayerState};
++    use crate::spirc::{QueueSelection, QueueSelectionError};
++    use crate::state::context::StateContext;
++
++    fn track(label: &str, provider: &str) -> ProvidedTrack {
++        ProvidedTrack {
++            uri: "spotify:track:6rqhFgbbKwnb9MLmUQDhG6".into(),
++            uid: "same-repeated-uid".into(),
++            provider: provider.into(),
++            metadata: [("label".into(), label.into())].into(),
++            ..Default::default()
++        }
++    }
++    fn fixture() -> ConnectState {
++        let mut state = ConnectState::default();
++        state.request.device = MessageField::some(Device {
++            player_state: MessageField::some(PlayerState::default()),
++            ..Default::default()
++        });
++        state.context = Some(StateContext {
++            tracks: Vec::new().into(),
++            metadata: Default::default(),
++            restrictions: None,
++            index: Default::default(),
++        });
++        state.set_track(track("current", "context"));
++        state.player_mut().next_tracks = vec![
++            track("first", "context"),
++            track("second", "context"),
++            track("suffix", "queue"),
++        ];
++        state
++    }
++    #[test]
++    fn selects_second_duplicate_and_preserves_suffix_and_history() {
++        let mut state = fixture();
++        state
++            .select_queue_entry(
++                7,
++                QueueSelection {
++                    generation: 7,
++                    raw_next_index: 1,
++                },
++            )
++            .unwrap();
++        assert_eq!(state.player().track.metadata["label"], "second");
++        assert_eq!(
++            state
++                .player()
++                .next_tracks
++                .iter()
++                .map(|t| t.metadata["label"].as_str())
++                .collect::<Vec<_>>(),
++            ["suffix"]
++        );
++        assert_eq!(
++            state
++                .player()
++                .prev_tracks
++                .iter()
++                .map(|t| t.metadata["label"].as_str())
++                .collect::<Vec<_>>(),
++            ["current", "first"]
++        );
++    }
++    #[test]
++    fn rejects_stale_or_invalid_without_mutating_state() {
++        for (generation, raw_next_index, expected) in [
++            (6, 1, QueueSelectionError::Stale),
++            (7, 3, QueueSelectionError::OutOfRange),
++        ] {
++            let mut state = fixture();
++            let before = state.request.clone();
++            assert_eq!(
++                state.select_queue_entry(
++                    7,
++                    QueueSelection {
++                        generation,
++                        raw_next_index
++                    }
++                ),
++                Err(expected)
++            );
++            assert_eq!(state.request, before);
++        }
++    }
++    #[test]
++    fn rejects_unplayable_before_consuming_any_history() {
++        let mut state = fixture();
++        state.player_mut().next_tracks[1].provider = "unavailable".into();
++        let before = state.request.clone();
++        assert_eq!(
++            state.select_queue_entry(
++                7,
++                QueueSelection {
++                    generation: 7,
++                    raw_next_index: 1
++                }
++            ),
++            Err(QueueSelectionError::Unavailable)
++        );
++        assert_eq!(state.request, before);
++    }
++    #[test]
++    fn bulk_skip_keeps_delimiters_and_ignores_manual_queue_in_history() {
++        let mut state = fixture();
++        state.player_mut().next_tracks = vec![
++            track("queued", "queue"),
++            ConnectState::new_delimiter(1),
++            track("selected", "context"),
++            track("suffix", "context"),
++        ];
++        state.set_repeat_track(true);
++        state
++            .select_queue_entry(
++                7,
++                QueueSelection {
++                    generation: 7,
++                    raw_next_index: 2,
++                },
++            )
++            .unwrap();
++        assert!(!state.repeat_track());
++        assert_eq!(state.player().prev_tracks.len(), 2);
++        assert!(state.player().prev_tracks[1].uid.starts_with("delimiter"));
++        assert_eq!(state.player().next_tracks[0].metadata["label"], "suffix");
++    }
++    #[test]
++    fn command_loads_only_selected_audio_once_and_rejects_without_loading() {
++        let mut state = fixture();
++        let mut loads = Vec::new();
++        crate::spirc::dispatch_selection(
++            &mut state,
++            7,
++            QueueSelection {
++                generation: 7,
++                raw_next_index: 1,
++            },
++            |id| loads.push(id),
++        )
++        .unwrap();
++        assert_eq!(loads.len(), 1);
++        assert_eq!(state.player().track.metadata["label"], "second");
++        assert_eq!(
++            crate::spirc::dispatch_selection(
++                &mut state,
++                8,
++                QueueSelection {
++                    generation: 7,
++                    raw_next_index: 1
++                },
++                |id| loads.push(id)
++            ),
++            Err(QueueSelectionError::Stale)
++        );
++        assert_eq!(loads.len(), 1);
++    }
++    #[test]
++    fn unresolved_context_rejects_without_consuming_queue() {
++        let mut state = fixture();
++        state.context = None;
++        let before = state.request.clone();
++        assert_eq!(
++            state.select_queue_entry(
++                7,
++                QueueSelection {
++                    generation: 7,
++                    raw_next_index: 1
++                }
++            ),
++            Err(QueueSelectionError::Unavailable)
++        );
++        assert_eq!(state.request, before);
++    }
++    #[test]
++    fn autoplay_selection_switches_context_and_preserves_shuffle() {
++        let mut state = fixture();
++        state.player_mut().options =
++            MessageField::some(crate::protocol::player::ContextPlayerOptions {
++                shuffling_context: true,
++                ..Default::default()
++            });
++        state.autoplay_context = Some(StateContext {
++            tracks: Vec::new().into(),
++            metadata: Default::default(),
++            restrictions: None,
++            index: Default::default(),
++        });
++        state.player_mut().next_tracks[1].provider = "autoplay".into();
++        state
++            .select_queue_entry(
++                7,
++                QueueSelection {
++                    generation: 7,
++                    raw_next_index: 1,
++                },
++            )
++            .unwrap();
++        assert_eq!(state.active_context, ContextType::Autoplay);
++        assert!(state.player().options.shuffling_context);
++        assert_eq!(state.player().next_tracks[0].metadata["label"], "suffix");
++    }
++    #[test]
++    fn next_and_previous_publish_new_versions_with_continuous_identity() {
++        let mut state = fixture();
++        let mut tracker = crate::queue::QueueTracker::default();
++        let before = state.queue_snapshot(&mut tracker).unwrap();
++        state.next_track().unwrap();
++        let next = state.queue_snapshot(&mut tracker).unwrap();
++        assert_eq!(next.current.as_ref().unwrap().id, before.next[0].id);
++        assert!(next.generation > before.generation);
++        state.prev_track().unwrap();
++        let previous = state.queue_snapshot(&mut tracker).unwrap();
++        assert_eq!(previous.current.unwrap().id, before.current.unwrap().id);
++        assert!(previous.generation > next.generation);
++        assert!(state.queue_snapshot(&mut tracker).is_none());
++    }
++    #[test]
++    fn rapid_second_selection_rejects_the_obsolete_snapshot() {
++        let mut state = fixture();
++        let mut tracker = crate::queue::QueueTracker::default();
++        let before = state.queue_snapshot(&mut tracker).unwrap();
++        let selection = QueueSelection {
++            generation: before.generation,
++            raw_next_index: 0,
++        };
++        state
++            .select_queue_entry(tracker.generation, selection)
++            .unwrap();
++        state.queue_snapshot(&mut tracker).unwrap();
++        let request = state.request.clone();
++        assert_eq!(
++            state.select_queue_entry(tracker.generation, selection),
++            Err(QueueSelectionError::Stale)
++        );
++        assert_eq!(state.request, request);
++    }
++}
+diff --git a/playback/src/player.rs b/playback/src/player.rs
+index f3d803d..425b7d7 100644
+--- a/playback/src/player.rs
++++ b/playback/src/player.rs
+@@ -139,6 +139,7 @@ enum PlayerCommand {
+     },
+     EmitAutoPlayChangedEvent(bool),
+     EmitSetQueueEvent {
++        generation: u64,
+         context_uri: String,
+         current_track: Option<QueueTrack>,
+         next_tracks: Vec<QueueTrack>,
+@@ -151,6 +152,9 @@ enum PlayerCommand {
+ pub struct QueueTrack {
+     pub uri: String,
+     pub provider: String,
++    pub uid: String,
++    pub id: u64,
++    pub raw_next_index: Option<u32>,
+ }
+ 
+ #[derive(Debug, Clone)]
+@@ -263,6 +267,7 @@ pub enum PlayerEvent {
+     },
+     /// Fired when the queue is set or context is loaded with its track list.
+     SetQueue {
++        generation: u64,
+         context_uri: String,
+         current_track: Option<QueueTrack>,
+         next_tracks: Vec<QueueTrack>,
+@@ -670,12 +675,14 @@ impl Player {
+ 
+     pub fn emit_set_queue_event(
+         &self,
++        generation: u64,
+         context_uri: String,
+         current_track: Option<QueueTrack>,
+         next_tracks: Vec<QueueTrack>,
+         prev_tracks: Vec<QueueTrack>,
+     ) {
+         self.command(PlayerCommand::EmitSetQueueEvent {
++            generation,
+             context_uri,
+             current_track,
+             next_tracks,
+@@ -2371,11 +2378,13 @@ impl PlayerInternal {
+             }
+ 
+             PlayerCommand::EmitSetQueueEvent {
++                generation,
+                 context_uri,
+                 current_track,
+                 next_tracks,
+                 prev_tracks,
+             } => self.send_event(PlayerEvent::SetQueue {
++                generation,
+                 context_uri,
+                 current_track,
+                 next_tracks,
+@@ -2584,12 +2593,14 @@ impl fmt::Debug for PlayerCommand {
+                 .field(&auto_play)
+                 .finish(),
+             PlayerCommand::EmitSetQueueEvent {
++                generation,
+                 context_uri,
+                 next_tracks,
+                 prev_tracks,
+                 ..
+             } => f
+                 .debug_tuple("EmitSetQueueEvent")
++                .field(generation)
+                 .field(&context_uri)
+                 .field(&next_tracks.len())
+                 .field(&prev_tracks.len())
