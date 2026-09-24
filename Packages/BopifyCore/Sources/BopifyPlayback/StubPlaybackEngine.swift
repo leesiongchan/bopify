@@ -30,4 +30,8 @@ public final class StubPlaybackEngine: PlaybackEngine, @unchecked Sendable {
     public func previous() async throws { record("previous") }
     public func seek(to milliseconds: Int64) async throws { record("seek:\(milliseconds)") }
     public func setVolume(_ value: Double) async throws { record("setVolume:\(value)") }
+    public func selectQueueEntry(_ target: QueueTarget) async throws { record("selectQueue:\(target.generation):\(target.rawNextIndex)") }
+    public func setShuffle(_ enabled: Bool) async throws { record("setShuffle:\(enabled)") }
+    public func setRepeat(_ mode: RepeatMode) async throws { record("setRepeat:\(mode.rawValue)") }
+
 }

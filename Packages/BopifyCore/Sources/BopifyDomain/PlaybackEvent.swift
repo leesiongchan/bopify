@@ -1,6 +1,11 @@
 import Foundation
 
 public enum PlaybackEvent: Hashable, Sendable {
+    case queueChanged(PlaybackQueue)
+    case queueMetadata(generation: UInt64, entryID: String, track: Track?)
+    case shuffleChanged(Bool)
+    case repeatChanged(RepeatMode)
+    case commandRejected(String)
     case trackChanged(Track)
     case playing(positionMs: Int64)
     case paused(positionMs: Int64)
@@ -16,6 +21,7 @@ public enum PlaybackEvent: Hashable, Sendable {
 extension PlaybackEvent: Decodable {
     private enum CodingKeys: String, CodingKey {
         case type, positionMs, volume, isActive, code
+        case generation, entryID, track, enabled, mode, reason
         case trackUri, title, artists, albumTitle, artworkUrl, durationMs
     }
 
@@ -23,6 +29,14 @@ extension PlaybackEvent: Decodable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let type = try c.decode(String.self, forKey: .type)
         switch type {
+        case "queueChanged": self = .queueChanged(try PlaybackQueue(from: decoder))
+        case "queueMetadata":
+            self = .queueMetadata(generation: try c.decode(UInt64.self, forKey: .generation),
+                                  entryID: try c.decode(String.self, forKey: .entryID),
+                                  track: try c.decodeNil(forKey: .track) ? nil : Self.decodeTrack(from: c.superDecoder(forKey: .track)))
+        case "shuffleChanged": self = .shuffleChanged(try c.decode(Bool.self, forKey: .enabled))
+        case "repeatChanged": self = .repeatChanged(try c.decode(RepeatMode.self, forKey: .mode))
+        case "commandRejected": self = .commandRejected(try c.decode(String.self, forKey: .reason))
         case "playing":            self = .playing(positionMs: try c.decode(Int64.self, forKey: .positionMs))
         case "paused":             self = .paused(positionMs: try c.decode(Int64.self, forKey: .positionMs))
         case "seeked":             self = .seeked(positionMs: try c.decode(Int64.self, forKey: .positionMs))
@@ -36,20 +50,25 @@ extension PlaybackEvent: Decodable {
             let raw = try c.decode(Double.self, forKey: .volume)
             self = .volumeChanged(volume: raw / Double(UInt16.max))
         case "trackChanged":
-            let raw = try c.decode(String.self, forKey: .trackUri)
-            guard let uri = SpotifyURI(raw) else {
-                throw DecodingError.dataCorruptedError(forKey: .trackUri, in: c, debugDescription: "malformed Spotify URI")
-            }
-            self = .trackChanged(Track(
-                uri: uri,
-                title: try c.decode(String.self, forKey: .title),
-                artists: try c.decode([String].self, forKey: .artists).map(ArtistSummary.init(name:)),
-                albumTitle: try c.decodeIfPresent(String.self, forKey: .albumTitle),
-                artwork: try c.decodeIfPresent(String.self, forKey: .artworkUrl).flatMap(URL.init(string:)).map(Artwork.init(url:)),
-                durationMs: try c.decode(Int64.self, forKey: .durationMs)
-            ))
+            self = .trackChanged(try Self.decodeTrack(from: decoder))
         default:
             throw DecodingError.dataCorruptedError(forKey: .type, in: c, debugDescription: "unrecognised event type \(type)")
         }
+    }
+
+    private static func decodeTrack(from decoder: any Decoder) throws -> Track {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let raw = try c.decode(String.self, forKey: .trackUri)
+        guard let uri = SpotifyURI(raw) else {
+            throw DecodingError.dataCorruptedError(forKey: .trackUri, in: c, debugDescription: "malformed Spotify URI")
+        }
+        return Track(
+            uri: uri,
+            title: try c.decode(String.self, forKey: .title),
+            artists: try c.decode([String].self, forKey: .artists).map(ArtistSummary.init(name:)),
+            albumTitle: try c.decodeIfPresent(String.self, forKey: .albumTitle),
+            artwork: try c.decodeIfPresent(String.self, forKey: .artworkUrl).flatMap(URL.init(string:)).map(Artwork.init(url:)),
+            durationMs: try c.decode(Int64.self, forKey: .durationMs)
+        )
     }
 }

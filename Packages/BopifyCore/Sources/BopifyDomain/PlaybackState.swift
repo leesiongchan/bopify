@@ -5,6 +5,9 @@ public enum PlaybackPhase: Hashable, Sendable {
 
 public struct PlaybackState: Hashable, Sendable {
     public var phase: PlaybackPhase = .idle
+    public var queue: PlaybackQueue?
+    public var shuffleEnabled = false
+    public var repeatMode: RepeatMode = .off
     public var currentTrack: Track?
     public var positionMs: Int64 = 0
     public var durationMs: Int64 = 0

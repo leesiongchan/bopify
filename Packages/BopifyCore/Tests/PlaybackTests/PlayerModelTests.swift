@@ -18,6 +18,30 @@ struct PlayerModelTests {
         try? await Task.sleep(for: .milliseconds(50))
     }
 
+    @Test func obsoleteQueueMetadataCannotReplaceANewerSnapshot() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        let entry = QueueEntry(id: "a", uri: makeTrack().uri, target: QueueTarget(generation: 13, rawNextIndex: 0), track: nil, metadataFailed: false)
+        await settle(model, engine, [.queueChanged(PlaybackQueue(generation: 13, previous: [], current: nil, next: [entry])), .queueMetadata(generation: 12, entryID: "a", track: makeTrack())])
+        #expect(model.state.queue?.next[0].track == nil)
+        await settle(model, engine, [.queueMetadata(generation: 13, entryID: "a", track: makeTrack())])
+        #expect(model.state.queue?.next[0].track == makeTrack())
+        #expect(model.state.currentTrack == nil)
+    }
+    @Test func rejectionAndPlaybackModesAreObservedWithoutStoppingPlayback() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        await settle(model, engine, [.playing(positionMs: 1000), .shuffleChanged(true), .repeatChanged(.track), .commandRejected("staleQueue")])
+        #expect(model.state.shuffleEnabled)
+        #expect(model.state.repeatMode == .track)
+        #expect(model.state.phase == .playing)
+        #expect(model.commandNotice != nil)
+    }
+
     @Test func startsIdle() {
         let model = PlayerModel(engine: StubPlaybackEngine())
         #expect(model.state.phase == .idle)

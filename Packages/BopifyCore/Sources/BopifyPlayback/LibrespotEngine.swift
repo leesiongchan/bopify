@@ -137,6 +137,22 @@ public final class LibrespotEngine: PlaybackEngine, @unchecked Sendable {
     }
 
     @concurrent
+    public func selectQueueEntry(_ target: QueueTarget) async throws {
+        try perform("selectQueue") { bopify_select_queue(handle, target.generation, target.rawNextIndex) }
+    }
+
+    @concurrent
+    public func setShuffle(_ enabled: Bool) async throws {
+        try perform("setShuffle") { bopify_set_shuffle(handle, enabled) }
+    }
+
+    @concurrent
+    public func setRepeat(_ mode: RepeatMode) async throws {
+        let raw: UInt8 = switch mode { case .off: 0; case .context: 1; case .track: 2 }
+        try perform("setRepeat") { bopify_set_repeat(handle, raw) }
+    }
+
+    @concurrent
     public func load(_ request: PlayRequest) async throws {
         let context = request.contextURI.rawValue
         let startTrack = request.startTrackURI?.rawValue

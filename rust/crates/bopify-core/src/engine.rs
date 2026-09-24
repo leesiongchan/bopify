@@ -2,7 +2,10 @@
 
 use std::sync::Arc;
 
-use librespot_connect::{ConnectConfig, LoadRequest, LoadRequestOptions, PlayingTrack, Spirc};
+use librespot_connect::{
+    ConnectConfig, LoadRequest, LoadRequestOptions, PlayingTrack, QueueSelection,
+    QueueSelectionError, Spirc,
+};
 use librespot_core::{Session, SessionConfig, authentication::Credentials};
 use librespot_playback::{
     audio_backend,
@@ -33,18 +36,21 @@ pub type EventSink = Arc<dyn Fn(WireEvent) + Send + Sync>;
 /// failing test, so this comment is the only guard. Destroy being slow is a
 /// latency complaint, not a bug to fix that way.
 pub struct Engine {
-    /// Never read. Owned for its `Drop`, which is what joins the worker
-    /// threads and makes the guarantee above hold, and so that the runtime
-    /// outlives the tasks spawned onto it.
-    #[expect(dead_code, reason = "held for its Drop, not its value")]
+    /// Owns every worker, including selection acknowledgements; Drop joins them
+    /// before Swift releases the event callback context.
     runtime: Runtime,
     spirc: Spirc,
+    sink: EventSink,
 }
 
 impl Engine {
     /// Blocks the calling thread for the whole network login. Callers must
     /// not run this on a UI thread.
-    pub fn new(access_token: &str, device_name: &str, sink: EventSink) -> Result<Self, BopifyError> {
+    pub fn new(
+        access_token: &str,
+        device_name: &str,
+        sink: EventSink,
+    ) -> Result<Self, BopifyError> {
         log::info!("engine: creating device_name={device_name}");
 
         let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -70,12 +76,11 @@ impl Engine {
             // misleadingly named SessionError::NotConnected. Connection errors
             // are classified off Spirc::new below instead.
 
-            let mixer: Arc<dyn Mixer> = Arc::new(SoftMixer::open(MixerConfig::default()).map_err(
-                |_| {
+            let mixer: Arc<dyn Mixer> =
+                Arc::new(SoftMixer::open(MixerConfig::default()).map_err(|_| {
                     log::error!("engine: mixer open failed");
                     BopifyError::Unknown
-                },
-            )?);
+                })?);
             let backend = audio_backend::find(None).ok_or_else(|| {
                 log::error!("engine: no audio backend available");
                 BopifyError::Unknown
@@ -93,8 +98,12 @@ impl Engine {
             let events = player.get_player_event_channel();
 
             let (spirc, task) = Spirc::new(
-                ConnectConfig { name: device_name.to_string(), ..Default::default() },
-                session,
+                ConnectConfig {
+                    name: device_name.to_string(),
+                    emit_set_queue_events: true,
+                    ..Default::default()
+                },
+                session.clone(),
                 credentials,
                 player,
                 mixer,
@@ -111,12 +120,16 @@ impl Engine {
             // The returned future is the event loop. Commands issued before
             // it is driven are queued, so spawning it here is correct.
             tokio::spawn(task);
-            supervise_forwarder(events, sink);
+            supervise_forwarder(events, sink.clone(), session);
             Ok::<_, BopifyError>(spirc)
         })?;
 
         log::info!("engine: session connected, spirc running");
-        Ok(Self { runtime, spirc })
+        Ok(Self {
+            runtime,
+            spirc,
+            sink,
+        })
     }
 
     pub fn activate(&self) -> Result<(), BopifyError> {
@@ -135,10 +148,51 @@ impl Engine {
         self.spirc.prev().map_err(command_failed)
     }
     pub fn seek(&self, position_ms: u32) -> Result<(), BopifyError> {
-        self.spirc.set_position_ms(position_ms).map_err(command_failed)
+        self.spirc
+            .set_position_ms(position_ms)
+            .map_err(command_failed)
     }
     pub fn set_volume(&self, volume: u16) -> Result<(), BopifyError> {
         self.spirc.set_volume(volume).map_err(command_failed)
+    }
+
+    pub fn select_queue(&self, generation: u64, raw_next_index: u32) -> Result<(), BopifyError> {
+        let reply = self
+            .spirc
+            .select_queue_entry(QueueSelection {
+                generation,
+                raw_next_index,
+            })
+            .map_err(command_failed)?;
+        let sink = self.sink.clone();
+        self.runtime.spawn(async move {
+            match reply.await {
+                Ok(Ok(())) => {}
+                Ok(Err(reason)) => {
+                    let reason = match reason {
+                        QueueSelectionError::Stale => "staleQueue",
+                        QueueSelectionError::Unavailable => "unavailable",
+                        QueueSelectionError::OutOfRange => "rejected",
+                    };
+                    log::debug!("engine: queue selection rejected reason={reason}");
+                    sink(WireEvent::CommandRejected { reason });
+                }
+                Err(_) => sink(session_lost_event()),
+            }
+        });
+        Ok(())
+    }
+
+    pub fn set_shuffle(&self, enabled: bool) -> Result<(), BopifyError> {
+        self.spirc.shuffle(enabled).map_err(command_failed)
+    }
+
+    pub fn set_repeat(&self, mode: u8) -> Result<(), BopifyError> {
+        if mode > 2 {
+            return Err(BopifyError::InvalidArgument);
+        }
+        self.spirc.repeat(mode == 1).map_err(command_failed)?;
+        self.spirc.repeat_track(mode == 2).map_err(command_failed)
     }
 
     pub fn load(
@@ -165,8 +219,9 @@ impl Engine {
 /// Without the watcher a panic anywhere in translation or serialisation would
 /// kill the task, tokio would swallow it, and event delivery would stop for
 /// good with no terminal `Failed` -- the UI would sit on stale state forever.
-fn supervise_forwarder(events: PlayerEventChannel, sink: EventSink) {
-    let forwarder = tokio::spawn(forward_events(events, sink.clone()));
+fn supervise_forwarder(events: PlayerEventChannel, sink: EventSink, session: Session) {
+    let metadata = crate::queue::start(session, sink.clone());
+    let forwarder = tokio::spawn(forward_events(events, sink.clone(), metadata));
     tokio::spawn(async move {
         match forwarder.await {
             Ok(()) => {}
@@ -182,10 +237,18 @@ fn supervise_forwarder(events: PlayerEventChannel, sink: EventSink) {
 }
 
 /// Drains librespot's player events onto the sink until the player goes away.
-async fn forward_events(mut events: PlayerEventChannel, sink: EventSink) {
+async fn forward_events(
+    mut events: PlayerEventChannel,
+    sink: EventSink,
+    metadata: tokio::sync::watch::Sender<Option<crate::queue::MetadataRequest>>,
+) {
     while let Some(event) = events.recv().await {
         if let Some(wire) = crate::event::translate(event) {
+            let request = crate::queue::MetadataRequest::from_event(&wire);
             sink(wire);
+            if let Some(request) = request {
+                metadata.send_replace(Some(request));
+            }
         }
     }
     // The channel only closes when the player thread is gone, which during a
@@ -224,4 +287,24 @@ fn classify_connect_error<E: std::fmt::Debug>(err: E) -> BopifyError {
     };
     log::error!("engine: spirc connect failed error={error:?}");
     error
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use librespot_playback::player::PlayerEvent;
+    #[tokio::test]
+    async fn transport_drain_publishes_structure_before_metadata_without_waiting() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let (metadata, mut requests) = tokio::sync::watch::channel(None);
+        let (output, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let sink: EventSink = Arc::new(move |event| { output.send(event).unwrap(); });
+        tx.send(PlayerEvent::SetQueue { generation: 9, context_uri: String::new(), current_track: None, next_tracks: vec![], prev_tracks: vec![] }).unwrap();
+        tx.send(PlayerEvent::Paused { play_request_id: 0, track_id: librespot_core::SpotifyUri::from_uri("spotify:track:6rqhFgbbKwnb9MLmUQDhG6").unwrap(), position_ms: 250 }).unwrap();
+        drop(tx);
+        forward_events(rx, sink, metadata).await;
+        assert!(matches!(received.recv().await.unwrap(), WireEvent::QueueChanged { generation: 9, .. }));
+        assert!(matches!(received.recv().await.unwrap(), WireEvent::Paused { position_ms: 250 }));
+        assert!(requests.borrow_and_update().is_some());
+    }
 }

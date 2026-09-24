@@ -14,6 +14,7 @@ import BopifyDomain
 @Observable
 public final class PlayerModel {
     public private(set) var state = PlaybackState()
+    public private(set) var commandNotice: String?
     private(set) var positionUpdatedAt = Date.now
 
     @ObservationIgnored private let engine: any PlaybackEngine
@@ -113,6 +114,27 @@ public final class PlayerModel {
     private func apply(_ event: PlaybackEvent) {
         let oldPhase = state.phase
         switch event {
+        case let .queueChanged(queue):
+            state.queue = queue
+            commandNotice = nil
+        case let .queueMetadata(generation, entryID, track):
+            guard var queue = state.queue, queue.generation == generation else { return }
+            func hydrated(_ entry: QueueEntry) -> QueueEntry {
+                guard entry.id == entryID else { return entry }
+                var result = entry
+                result.track = track
+                result.metadataFailed = track == nil
+                return result
+            }
+            queue.previous = queue.previous.map(hydrated)
+            queue.current = queue.current.map(hydrated)
+            queue.next = queue.next.map(hydrated)
+            state.queue = queue
+        case let .shuffleChanged(enabled): state.shuffleEnabled = enabled
+        case let .repeatChanged(mode): state.repeatMode = mode
+        case let .commandRejected(reason):
+            commandNotice = reason == "staleQueue" ? "The queue changed. Choose the track again." : "That action is unavailable."
+            BopifyLog.playback.debug("player command rejected")
         case let .trackChanged(track):
             positionUpdatedAt = .now
             BopifyLog.playback.debug("track changed title=\(track.title, privacy: .private)")

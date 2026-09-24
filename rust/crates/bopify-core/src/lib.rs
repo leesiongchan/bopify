@@ -8,3 +8,4 @@ pub mod ffi;
 /// Nothing in here is part of the published C ABI -- it only *imports* C
 /// symbols -- so the header generator must skip the whole module.
 mod logging;
+mod queue;
