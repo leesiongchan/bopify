@@ -1,5 +1,8 @@
 import AppKit
 import SwiftUI
+import BopifyDomain
+import BopifyPlayback
+import os
 
 @MainActor
 final class StatusItemController {
@@ -16,6 +19,12 @@ final class StatusItemController {
         statusItem.button?.action = #selector(handleClick)
         statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         panel = StatusPanel(content: content)
+        panel?.onDismiss = { [weak self] in self?.dismiss() }
+        panel?.onTogglePlayback = { [weak self] in
+            guard let player = self?.environment.player, player.state.isActiveDevice,
+                  player.state.phase == .playing || player.state.phase == .paused else { return }
+            player.togglePlayPause()
+        }
     }
 
     @objc private func handleClick() {
@@ -35,10 +44,15 @@ final class StatusItemController {
         if panel.isVisible { dismiss(); return }
 
         if let frame = button.window?.convertToScreen(button.convert(button.bounds, to: nil)) {
-            let origin = NSPoint(x: frame.midX - panel.frame.width / 2, y: frame.minY - panel.frame.height - 6)
+            let visible = button.window?.screen?.visibleFrame ?? frame
+            let origin = NSPoint(
+                x: min(max(frame.midX - panel.frame.width / 2, visible.minX + 8), visible.maxX - panel.frame.width - 8),
+                y: max(visible.minY + 8, frame.minY - panel.frame.height - 6)
+            )
             panel.setFrameOrigin(origin)
         }
         panel.makeKeyAndOrderFront(nil)
+        BopifyLog.playback.debug("player panel opened")
 
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             Task { @MainActor in self?.dismiss() }
@@ -49,6 +63,7 @@ final class StatusItemController {
         panel?.orderOut(nil)
         if let monitor = outsideClickMonitor { NSEvent.removeMonitor(monitor) }
         outsideClickMonitor = nil
+        BopifyLog.playback.debug("player panel dismissed")
     }
 
     private func showMenu() {

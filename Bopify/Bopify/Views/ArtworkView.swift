@@ -1,35 +1,38 @@
 import SwiftUI
-import BopifyDomain
 
-/// Async image with a deliberate placeholder when there is no artwork, or
-/// while it loads.
 struct ArtworkView: View {
-    let artwork: Artwork?
+    let image: Image?
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
-        Group {
-            if let artwork {
-                AsyncImage(url: artwork.url) { phase in
-                    if let image = phase.image {
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } else {
-                        placeholder
+        ZStack {
+            Circle()
+                .fill(.primary.opacity(0.025))
+                .overlay(Circle().strokeBorder(.primary.opacity(contrast == .increased ? 0.5 : 0.12)))
+                .frame(width: 188, height: 188)
+            Circle()
+                .strokeBorder(.primary.opacity(contrast == .increased ? 0.4 : 0.08))
+                .frame(width: 170, height: 170)
+            Group {
+                if let image {
+                    image.resizable().scaledToFill()
+                } else {
+                    ZStack {
+                        Circle().fill(.primary.opacity(0.06))
+                        Image(systemName: "music.note")
+                            .font(.system(size: 42, weight: .light))
+                            .foregroundStyle(.secondary)
                     }
                 }
-            } else {
-                placeholder
             }
+            .frame(width: 148, height: 148)
+            .clipShape(Circle())
+            .overlay(Circle().strokeBorder(.primary.opacity(0.1)))
+            .shadow(color: .black.opacity(0.18), radius: 16, y: 8)
         }
-        .frame(width: 64, height: 64)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-    }
-
-    private var placeholder: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 6).fill(.quaternary)
-            Image(systemName: "music.note")
-                .foregroundStyle(.secondary)
-        }
-        .accessibilityLabel(Text("artwork.placeholder"))
+        .frame(maxWidth: .infinity)
+        .frame(height: 188)
+        // The adjacent title and artist already identify this decoration.
+        .accessibilityHidden(true)
     }
 }

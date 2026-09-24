@@ -24,6 +24,36 @@ struct PlayerModelTests {
         #expect(model.state.currentTrack == nil)
     }
 
+    @Test func displayPositionAdvancesOnlyWhilePlayingAndStopsAtDuration() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        await settle(model, engine, [.trackChanged(makeTrack()), .playing(positionMs: 1000)])
+
+        let anchor = model.positionUpdatedAt
+        #expect(model.displayPositionMs(at: anchor.addingTimeInterval(2)) == 3000)
+        #expect(model.displayPositionMs(at: anchor.addingTimeInterval(300)) == 240_000)
+        #expect(model.displayPositionMs(at: anchor.addingTimeInterval(-2)) == 1000)
+        #expect(model.state.positionMs == 1000)
+
+        await settle(model, engine, [.paused(positionMs: 4000)])
+        #expect(model.displayPositionMs(at: model.positionUpdatedAt.addingTimeInterval(20)) == 4000)
+    }
+
+    @Test func positionCorrectionsReanchorTheDisplayClock() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        await settle(model, engine, [.trackChanged(makeTrack()), .playing(positionMs: 1000)])
+        await settle(model, engine, [.positionCorrection(positionMs: 10_000)])
+
+        #expect(model.displayPositionMs(at: model.positionUpdatedAt.addingTimeInterval(2)) == 12_000)
+        await settle(model, engine, [.seeked(positionMs: 30_000)])
+        #expect(model.displayPositionMs(at: model.positionUpdatedAt.addingTimeInterval(1)) == 31_000)
+    }
+
     @Test func trackChangedPopulatesMetadataAndDuration() async {
         let engine = StubPlaybackEngine()
         let model = PlayerModel(engine: engine)
