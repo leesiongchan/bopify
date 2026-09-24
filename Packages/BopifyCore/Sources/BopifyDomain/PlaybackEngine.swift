@@ -24,4 +24,7 @@ public protocol PlaybackEngine: Sendable {
     func previous() async throws
     func seek(to milliseconds: Int64) async throws
     func setVolume(_ value: Double) async throws
+    func selectQueueEntry(_ target: QueueTarget) async throws
+    func setShuffle(_ enabled: Bool) async throws
+    func setRepeat(_ mode: RepeatMode) async throws
 }

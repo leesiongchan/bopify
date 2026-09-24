@@ -120,9 +120,9 @@ pub unsafe extern "C" fn bopify_engine_create(
 
     // SAFETY: both pointers satisfy `str_from`'s contract per the header, and
     // the borrows are consumed inside this call.
-    let (Some(token), Some(name)) =
-        (unsafe { str_from(access_token) }, unsafe { str_from(device_name) })
-    else {
+    let (Some(token), Some(name)) = (unsafe { str_from(access_token) }, unsafe {
+        str_from(device_name)
+    }) else {
         log::error!("ffi: bopify_engine_create rejected, missing token or device name");
         // SAFETY: `out_err` satisfies `write_err`'s contract per the header.
         unsafe { write_err(out_err, BopifyError::InvalidArgument.code()) };
@@ -322,6 +322,46 @@ pub unsafe extern "C" fn bopify_set_volume(handle: *mut BopifyEngine, volume: u1
     unsafe { with_engine(handle, |engine| engine.set_volume(volume)) }
 }
 
+/// Selects one occurrence in the observed queue. Success means enqueued.
+/// # Safety
+/// `handle` must be null or a live handle from `bopify_engine_create`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn bopify_select_queue(
+    handle: *mut BopifyEngine,
+    generation: u64,
+    raw_next_index: u32,
+) -> i32 {
+    log::debug!("ffi: bopify_select_queue generation={generation} index={raw_next_index}");
+    // SAFETY: forwards this function's own contract to `with_engine`.
+    unsafe {
+        with_engine(handle, |engine| {
+            engine.select_queue(generation, raw_next_index)
+        })
+    }
+}
+
+/// # Safety
+/// `handle` must be null or a live handle from `bopify_engine_create`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn bopify_set_shuffle(handle: *mut BopifyEngine, enabled: bool) -> i32 {
+    log::debug!("ffi: bopify_set_shuffle enabled={enabled}");
+    // SAFETY: forwards this function's own contract to `with_engine`.
+    unsafe { with_engine(handle, |engine| engine.set_shuffle(enabled)) }
+}
+
+/// `mode`: 0 off, 1 context, 2 track.
+/// # Safety
+/// `handle` must be null or a live handle from `bopify_engine_create`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn bopify_set_repeat(handle: *mut BopifyEngine, mode: u8) -> i32 {
+    log::debug!("ffi: bopify_set_repeat mode={mode}");
+    if mode > 2 {
+        return BopifyError::InvalidArgument.code();
+    }
+    // SAFETY: forwards this function's own contract to `with_engine`.
+    unsafe { with_engine(handle, |engine| engine.set_repeat(mode)) }
+}
+
 /// Starts playback of a context URI, optionally at a given track.
 ///
 /// # Safety
@@ -343,7 +383,11 @@ pub unsafe extern "C" fn bopify_load(
     };
     let start = unsafe { str_from(start_track_uri) };
     // SAFETY: forwards this function's own contract to `with_engine`.
-    unsafe { with_engine(handle, |engine| engine.load(context, start, start_position_ms)) }
+    unsafe {
+        with_engine(handle, |engine| {
+            engine.load(context, start, start_position_ms)
+        })
+    }
 }
 
 /// Always fails with `SessionLost`: librespot cannot swap credentials in
@@ -416,10 +460,20 @@ mod tests {
             assert_eq!(bopify_play(ptr), lost);
             assert_eq!(bopify_pause(ptr), lost);
             assert_eq!(bopify_next(ptr), lost);
+            assert_eq!(bopify_select_queue(ptr, 1, 0), lost);
+            assert_eq!(bopify_set_shuffle(ptr, true), lost);
+            assert_eq!(bopify_set_repeat(ptr, 2), lost);
+            assert_eq!(
+                bopify_set_repeat(ptr, 3),
+                BopifyError::InvalidArgument.code()
+            );
             assert_eq!(bopify_previous(ptr), lost);
             assert_eq!(bopify_seek(ptr, 1000), lost);
             assert_eq!(bopify_set_volume(ptr, 32767), lost);
-            assert_eq!(bopify_load(ptr, c"spotify:album:x".as_ptr(), std::ptr::null(), 0), lost);
+            assert_eq!(
+                bopify_load(ptr, c"spotify:album:x".as_ptr(), std::ptr::null(), 0),
+                lost
+            );
             assert_eq!(bopify_update_token(ptr, c"token".as_ptr()), lost);
             release(ptr);
         }
@@ -510,14 +564,37 @@ mod tests {
     fn a_null_handle_is_an_invalid_argument_not_a_crash() {
         // SAFETY: null is explicitly allowed by every entry point's contract.
         unsafe {
-            assert_eq!(bopify_play(std::ptr::null_mut()), BopifyError::InvalidArgument.code());
-            assert_eq!(bopify_seek(std::ptr::null_mut(), 0), BopifyError::InvalidArgument.code());
+            assert_eq!(
+                bopify_play(std::ptr::null_mut()),
+                BopifyError::InvalidArgument.code()
+            );
+            assert_eq!(
+                bopify_select_queue(std::ptr::null_mut(), 1, 0),
+                BopifyError::InvalidArgument.code()
+            );
+            assert_eq!(
+                bopify_set_shuffle(std::ptr::null_mut(), true),
+                BopifyError::InvalidArgument.code()
+            );
+            assert_eq!(
+                bopify_set_repeat(std::ptr::null_mut(), 0),
+                BopifyError::InvalidArgument.code()
+            );
+            assert_eq!(
+                bopify_seek(std::ptr::null_mut(), 0),
+                BopifyError::InvalidArgument.code()
+            );
             assert_eq!(
                 bopify_set_volume(std::ptr::null_mut(), 0),
                 BopifyError::InvalidArgument.code()
             );
             assert_eq!(
-                bopify_load(std::ptr::null_mut(), c"spotify:album:x".as_ptr(), std::ptr::null(), 0),
+                bopify_load(
+                    std::ptr::null_mut(),
+                    c"spotify:album:x".as_ptr(),
+                    std::ptr::null(),
+                    0
+                ),
                 BopifyError::InvalidArgument.code()
             );
             bopify_engine_destroy(std::ptr::null_mut());
