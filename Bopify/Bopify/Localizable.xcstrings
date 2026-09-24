@@ -1,12 +1,12 @@
 {
   "sourceLanguage": "en",
   "strings": {
-    "artwork.placeholder": {
+    "app.name": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No artwork"
+            "value": "Bopify"
           }
         }
       }
@@ -81,6 +81,16 @@
         }
       }
     },
+    "menu.options": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Player options"
+          }
+        }
+      }
+    },
     "menu.quit": {
       "localizations": {
         "en": {
@@ -131,6 +141,16 @@
         }
       }
     },
+    "player.idle.contextURI.label": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spotify URI"
+          }
+        }
+      }
+    },
     "player.idle.contextURI.load": {
       "localizations": {
         "en": {
@@ -156,7 +176,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Start playback from Spotify on another device, or paste a Spotify link below."
+            "value": "Choose Bopify in Spotify’s device menu, or paste a Spotify URI below."
           }
         }
       }
@@ -191,6 +211,36 @@
         }
       }
     },
+    "player.nowPlaying": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Now playing"
+          }
+        }
+      }
+    },
+    "player.progress": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback progress"
+          }
+        }
+      }
+    },
+    "player.progress.value": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ of %2$@"
+          }
+        }
+      }
+    },
     "player.unknownTrack": {
       "localizations": {
         "en": {
@@ -211,6 +261,16 @@
         }
       }
     },
+    "signIn.browser": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finish signing in in your browser."
+          }
+        }
+      }
+    },
     "signIn.button": {
       "localizations": {
         "en": {
@@ -227,6 +287,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sign-in failed"
+          }
+        }
+      }
+    },
+    "signIn.premium": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spotify Premium required"
+          }
+        }
+      }
+    },
+    "signIn.subtitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A quiet place for whatever moves you."
+          }
+        }
+      }
+    },
+    "signIn.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your music. A little closer."
           }
         }
       }

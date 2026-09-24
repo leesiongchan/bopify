@@ -14,11 +14,19 @@ import BopifyDomain
 @Observable
 public final class PlayerModel {
     public private(set) var state = PlaybackState()
+    private(set) var positionUpdatedAt = Date.now
 
     @ObservationIgnored private let engine: any PlaybackEngine
     @ObservationIgnored private var consumer: Task<Void, Never>?
 
     public init(engine: any PlaybackEngine) { self.engine = engine }
+
+    /// Interpolate for display without replacing the engine's authoritative position.
+    public func displayPositionMs(at date: Date) -> Int64 {
+        let elapsed = state.phase == .playing ? max(0, date.timeIntervalSince(positionUpdatedAt)) * 1000 : 0
+        let position = min(Double(max(0, state.durationMs)), max(0, Double(state.positionMs) + elapsed))
+        return Int64(position)
+    }
 
     /// One consumer for the model's lifetime. A per-view .task would
     /// resubscribe whenever view identity changed.
@@ -106,6 +114,7 @@ public final class PlayerModel {
         let oldPhase = state.phase
         switch event {
         case let .trackChanged(track):
+            positionUpdatedAt = .now
             BopifyLog.playback.debug("track changed title=\(track.title, privacy: .private)")
             state.currentTrack = track
             state.durationMs = track.durationMs
@@ -114,12 +123,15 @@ public final class PlayerModel {
             state.canPrevious = true
             state.canSeek = true
         case let .playing(position):
+            positionUpdatedAt = .now
             state.phase = .playing; state.positionMs = position
             state.isActiveDevice = true
         case let .paused(position):
+            positionUpdatedAt = .now
             state.phase = .paused; state.positionMs = position
             state.isActiveDevice = true
         case let .seeked(position), let .positionCorrection(position):
+            positionUpdatedAt = .now
             state.positionMs = position
         case let .volumeChanged(volume):
             state.volume = volume
