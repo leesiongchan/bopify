@@ -122,4 +122,122 @@ struct SpotifyAuthServiceTests {
         }
         #expect(store.load() == nil)
     }
+    @Test(arguments: [true, false]) func unsuccessfulAdditionalConsentPreservesStreaming(declined: Bool) async throws {
+        AuthFlowStubProtocol.handler = { _ in (200, Data(self.success.utf8)) }
+        let store = InMemoryTokenStore()
+        let old = TokenSet(accessToken: "OLD_FAKE", refreshToken: "RT", expiresAt: Date().addingTimeInterval(3600), grantedScopes: ["streaming"])
+        try store.save(old)
+        let service = SpotifyAuthService(clientID: "client123", client: makeClient(), store: store, openURL: { url in
+            let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
+            #expect(Set(query["scope"]!.split(separator: " ").map(String.init)) == ["streaming", "user-library-read"])
+            let result = declined ? "error=access_denied" : "code=TESTCODE"
+            let callback = URL(string: "\(query["redirect_uri"]!)?\(result)&state=\(query["state"]!)")!
+            Task { _ = try? await URLSession.shared.data(from: callback) }
+        })
+        do {
+            _ = try await service.authorizeAdditionalScopes(["user-library-read"])
+            Issue.record("Insufficient or declined authorization must fail")
+        } catch {}
+        #expect(store.load() == old)
+        #expect(try await service.validAccessToken() == "OLD_FAKE")
+    }
+
+    @Test func missingScopesNeverOpenBrowserOrRefresh() async throws {
+        let store = InMemoryTokenStore()
+        try store.save(TokenSet(accessToken: "OLD_FAKE", refreshToken: "RT", expiresAt: .distantPast, grantedScopes: ["streaming"]))
+        AuthFlowStubProtocol.handler = { _ in Issue.record("Unexpected refresh"); return (500, Data()) }
+        let service = SpotifyAuthService(clientID: "client123", client: makeClient(), store: store, openURL: { _ in Issue.record("Unexpected browser") })
+        await #expect(throws: LibraryError.authorizationRequired) {
+            _ = try await service.validAccessToken(requiredScopes: ["user-library-read"])
+        }
+    }
+
+    @Test func overlappingConsumersShareRefresh() async throws {
+        let gate = RefreshGate()
+        ControlledRefreshProtocol.gate = gate
+        let store = InMemoryTokenStore()
+        try store.save(TokenSet(accessToken: "OLD", refreshToken: "RT", expiresAt: .distantPast, grantedScopes: ["streaming", "user-library-read"]))
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [ControlledRefreshProtocol.self]
+        let service = SpotifyAuthService(clientID: "test", client: TokenClient(clientID: "test", session: URLSession(configuration: config)), store: store)
+        let results = Task {
+            try await withThrowingTaskGroup(of: String.self) { group in
+                for _ in 0..<20 { group.addTask { try await service.validAccessToken(requiredScopes: ["user-library-read"]) } }
+                var values: [String] = []
+                for try await value in group { values.append(value) }
+                return values
+            }
+        }
+        for await _ in gate.started.stream { break }
+        // The response is explicitly held while the consumers enter the actor.
+        for _ in 0..<100 { await Task.yield() }
+        gate.release()
+        #expect(try await results.value == Array(repeating: "NEW_FAKE", count: 20))
+        #expect(gate.requestCount == 1)
+        #expect(store.load()?.grantedScopes == ["streaming", "user-library-read"])
+    }
+
+    @Test func signOutDuringRefreshCannotRestoreCredentials() async throws {
+        let gate = RefreshGate()
+        ControlledRefreshProtocol.gate = gate
+        let store = InMemoryTokenStore()
+        try store.save(TokenSet(accessToken: "OLD", refreshToken: "RT", expiresAt: .distantPast, grantedScopes: ["streaming"]))
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [ControlledRefreshProtocol.self]
+        let service = SpotifyAuthService(clientID: "test", client: TokenClient(clientID: "test", session: URLSession(configuration: config)), store: store)
+        let request = Task { try await service.validAccessToken() }
+        for await _ in gate.started.stream { break }
+        await service.signOut()
+        gate.release()
+        do { _ = try await request.value; Issue.record("Stale refresh returned a token") } catch {}
+        #expect(store.load() == nil)
+    }
+
+}
+
+private final class RefreshGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var pending: [ControlledRefreshProtocol] = []
+    private var released = false
+    private var count = 0
+    let started = AsyncStream<Void>.makeStream()
+    var requestCount: Int { lock.withLock { count } }
+    func receive(_ request: ControlledRefreshProtocol) {
+        let respond = lock.withLock {
+            count += 1
+            if released { return true }
+            pending.append(request)
+            return false
+        }
+        started.continuation.yield(())
+        if respond { request.respond() }
+    }
+    func release() {
+        let requests = lock.withLock {
+            released = true
+            let result = pending
+            pending = []
+            return result
+        }
+        for request in requests { request.respond() }
+    }
+}
+
+private final class ControlledRefreshProtocol: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var gate = RefreshGate()
+    private let lock = NSLock()
+    private var stopped = false
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() { Self.gate.receive(self) }
+    override func stopLoading() { lock.withLock { stopped = true } }
+    func respond() {
+        lock.withLock {
+            guard !stopped else { return }
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Data(#"{"access_token":"NEW_FAKE","expires_in":3600}"#.utf8))
+            client?.urlProtocolDidFinishLoading(self)
+        }
+    }
 }
