@@ -20,6 +20,7 @@ final class AppEnvironment {
     private(set) var authState: AuthState = .signedOut
     private(set) var player: PlayerModel?
     let artworkStore = ArtworkStore()
+    let presentation = PlayerPresentation()
 
     // A Developer Dashboard client ID is rejected by login5 with HTTP 400
     // (see BopifyAuth's `librespotClientID` doc comment), so the same ID

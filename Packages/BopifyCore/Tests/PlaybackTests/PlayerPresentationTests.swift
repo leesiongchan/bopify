@@ -44,4 +44,15 @@ struct PlayerPresentationTests {
         #expect(seekPosition(progress: 0.5, durationMs: 1) == 1)
     }
 
+    @MainActor @Test func escapeReturnsFromQueueBeforeHiding() {
+        let presentation = PlayerPresentation()
+        presentation.setMode(.queue)
+        #expect(presentation.dismissQueue())
+        #expect(presentation.mode == .expanded)
+        #expect(!presentation.dismissQueue())
+        presentation.setMode(.compact)
+        #expect(!presentation.dismissQueue())
+        #expect(presentation.mode == .compact)
+    }
+
 }
