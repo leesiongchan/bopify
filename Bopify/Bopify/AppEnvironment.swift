@@ -20,7 +20,13 @@ final class AppEnvironment {
     private(set) var authState: AuthState = .signedOut
     private(set) var player: PlayerModel?
     let artworkStore = ArtworkStore()
-    let presentation = PlayerPresentation()
+    let presentation = PlayerPresentation(
+        mode: PlayerMode(rawValue: UserDefaults.standard.string(forKey: "player.mode") ?? "") ?? .expanded,
+        keepOnTop: UserDefaults.standard.bool(forKey: "player.keepOnTop"))
+
+    var playerMode: PlayerMode {
+        authState == .signedIn && player?.state.currentTrack != nil ? presentation.mode : .expanded
+    }
 
     // A Developer Dashboard client ID is rejected by login5 with HTTP 400
     // (see BopifyAuth's `librespotClientID` doc comment), so the same ID

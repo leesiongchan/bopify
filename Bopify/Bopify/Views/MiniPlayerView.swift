@@ -10,7 +10,7 @@ struct MiniPlayerView: View {
     var body: some View {
         let url = environment.player?.state.currentTrack?.artwork?.url
         let image = url.flatMap { environment.artworkStore.images[$0] }.map { Image(nsImage: $0) }
-        let mode = environment.presentation.mode
+        let mode = environment.playerMode
         PlayerSurface(palette: url.flatMap { environment.artworkStore.palettes[$0] } ?? .neutral) {
             if mode == .compact, let player = environment.player, player.state.currentTrack != nil {
                 CompactPlayerView(player: player, state: player.state, store: environment.artworkStore,
@@ -51,7 +51,7 @@ struct MiniPlayerView: View {
 
     private var header: some View {
         HStack {
-            if environment.presentation.mode == .queue {
+            if environment.playerMode == .queue {
                 Button { environment.presentation.setMode(.expanded) } label: {
                     Label("queue.title", systemImage: "chevron.left")
                         .font(.system(size: 15, weight: .medium))
@@ -61,7 +61,7 @@ struct MiniPlayerView: View {
                 Label("app.name", systemImage: "waveform")
                     .font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
             }
-            Spacer()
+            WindowDragRegion().frame(maxWidth: .infinity)
             Menu {
                 if let player = environment.player {
                     Slider(value: Binding(get: { player.state.volume }, set: player.setVolume), in: 0...1) { Text("transport.volume") }

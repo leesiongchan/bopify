@@ -1,31 +1,110 @@
 import AppKit
 import SwiftUI
+import Observation
 import BopifyDomain
 import BopifyPlayback
 import os
 
 @MainActor
-final class StatusItemController {
+final class StatusItemController: NSObject, NSWindowDelegate {
     private let statusItem: NSStatusItem
     private var panel: StatusPanel?
-    private var outsideClickMonitor: Any?
+    private var hasPosition = false
+    private var appliedMode: PlayerMode?
+    private var applyingFrame = false
     private let environment: AppEnvironment
 
     init<Content: View>(content: Content, environment: AppEnvironment) {
         self.environment = environment
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        super.init()
         statusItem.button?.image = NSImage(systemSymbolName: "music.note", accessibilityDescription: "Bopify")
         statusItem.button?.target = self
         statusItem.button?.action = #selector(handleClick)
         statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         panel = StatusPanel(content: content)
+        panel?.delegate = self
         panel?.onDismiss = { [weak self] in self?.dismiss() }
         panel?.onTogglePlayback = { [weak self] in
             guard let player = self?.environment.player, player.state.isActiveDevice,
                   player.state.phase == .playing || player.state.phase == .paused else { return }
             player.togglePlayPause()
         }
+        panel?.onSeek = { [weak self] in self?.environment.player?.seek(by: $0) }
+        panel?.onPrevious = { [weak self] in self?.environment.player?.previous() }
+        panel?.onNext = { [weak self] in self?.environment.player?.next() }
+        panel?.onDismissQueue = { [weak self] in self?.environment.presentation.dismissQueue() ?? false }
+        if let stored = UserDefaults.standard.string(forKey: "player.frame") {
+            let frame = NSRectFromString(stored)
+            if frame.width > 0, frame.height > 0 {
+                panel?.setFrame(frame, display: false)
+                hasPosition = true
+            }
+        }
+        NotificationCenter.default.addObserver(self, selector: #selector(screenChanged),
+                                               name: NSApplication.didChangeScreenParametersNotification, object: nil)
+        observePresentation()
     }
+
+    private func observePresentation() {
+        withObservationTracking {
+            configure(mode: environment.playerMode, keepOnTop: environment.presentation.keepOnTop)
+            UserDefaults.standard.set(environment.presentation.mode.rawValue, forKey: "player.mode")
+        } onChange: { [weak self] in
+            Task { @MainActor in self?.observePresentation() }
+        }
+    }
+
+    private func configure(mode: PlayerMode, keepOnTop: Bool) {
+        guard let panel else { return }
+        panel.level = keepOnTop ? .floating : .normal
+        UserDefaults.standard.set(keepOnTop, forKey: "player.keepOnTop")
+        guard appliedMode != mode else { return }
+        let compact = mode == .compact
+        let oldFrame = panel.frame
+        let crossingCompact = (appliedMode == .compact) != compact
+        let size = appliedMode == nil || !crossingCompact ? oldFrame.size : NSSize(width: compact ? 380 : 410, height: compact ? 88 : 560)
+        appliedMode = mode
+        setReachableFrame(origin: NSPoint(x: oldFrame.minX, y: oldFrame.maxY - size.height), size: size,
+                          animate: panel.isVisible && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+        BopifyLog.playback.debug("player presentation changed mode=\(mode.rawValue, privacy: .public)")
+    }
+
+    private func setReachableFrame(origin: NSPoint, size: NSSize, animate: Bool = false) {
+        guard let panel else { return }
+        let proposed = NSRect(origin: origin, size: size)
+        let screen = NSScreen.screens.max { first, second in
+            let a = first.visibleFrame.intersection(proposed)
+            let b = second.visibleFrame.intersection(proposed)
+            return (a.isNull ? 0 : a.width * a.height) < (b.isNull ? 0 : b.width * b.height)
+        } ?? NSScreen.main
+        guard let visible = screen?.visibleFrame else { return }
+        let compact = appliedMode == .compact
+        let minimum = NSSize(width: compact ? 340 : 390, height: compact ? 88 : 560)
+        let maximum = NSSize(width: compact ? 420 : 430, height: compact ? 88 : 800)
+        let requested = NSSize(width: min(maximum.width, max(minimum.width, size.width)),
+                               height: min(maximum.height, max(minimum.height, size.height)))
+        applyingFrame = true
+        panel.minSize = NSSize(width: min(minimum.width, visible.width), height: min(minimum.height, visible.height))
+        panel.maxSize = NSSize(width: min(maximum.width, visible.width), height: min(maximum.height, visible.height))
+        panel.setFrame(clampedPlayerFrame(origin: origin, size: requested, visibleFrame: visible), display: true, animate: animate)
+        applyingFrame = false
+        if hasPosition { saveFrame() }
+    }
+
+    @objc private func screenChanged() {
+        guard let panel else { return }
+        setReachableFrame(origin: panel.frame.origin, size: panel.frame.size)
+    }
+
+    private func saveFrame() {
+        guard let panel, hasPosition, !applyingFrame else { return }
+        UserDefaults.standard.set(NSStringFromRect(panel.frame), forKey: "player.frame")
+    }
+    func windowDidMove(_ notification: Notification) { saveFrame() }
+    func windowDidResize(_ notification: Notification) { saveFrame() }
+    func windowShouldClose(_ sender: NSWindow) -> Bool { dismiss(); return false }
+
 
     @objc private func handleClick() {
         // LSUIElement plus a non-activating panel means there is no app
@@ -43,27 +122,22 @@ final class StatusItemController {
         guard let panel, let button = statusItem.button else { return }
         if panel.isVisible { dismiss(); return }
 
-        if let frame = button.window?.convertToScreen(button.convert(button.bounds, to: nil)) {
-            let visible = button.window?.screen?.visibleFrame ?? frame
-            let origin = NSPoint(
-                x: min(max(frame.midX - panel.frame.width / 2, visible.minX + 8), visible.maxX - panel.frame.width - 8),
-                y: max(visible.minY + 8, frame.minY - panel.frame.height - 6)
-            )
-            panel.setFrameOrigin(origin)
+        if !hasPosition, let frame = button.window?.convertToScreen(button.convert(button.bounds, to: nil)) {
+            hasPosition = true
+            setReachableFrame(origin: NSPoint(x: frame.midX - panel.frame.width / 2, y: frame.minY - panel.frame.height - 6), size: panel.frame.size)
+        } else {
+            screenChanged()
         }
+        environment.presentation.isVisible = true
         panel.makeKeyAndOrderFront(nil)
         BopifyLog.playback.debug("player panel opened")
-
-        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            Task { @MainActor in self?.dismiss() }
-        }
     }
 
     private func dismiss() {
+        saveFrame()
+        environment.presentation.isVisible = false
         panel?.orderOut(nil)
-        if let monitor = outsideClickMonitor { NSEvent.removeMonitor(monitor) }
-        outsideClickMonitor = nil
-        BopifyLog.playback.debug("player panel dismissed")
+        BopifyLog.playback.debug("player panel hidden")
     }
 
     private func showMenu() {

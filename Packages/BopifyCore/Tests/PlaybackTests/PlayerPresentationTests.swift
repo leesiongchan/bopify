@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import Testing
 import BopifyDomain
 @testable import BopifyPlayback
@@ -53,6 +54,20 @@ struct PlayerPresentationTests {
         presentation.setMode(.compact)
         #expect(!presentation.dismissQueue())
         #expect(presentation.mode == .compact)
+    }
+
+    @Test func windowClampsInsideVisibleScreen() {
+        let screen = CGRect(x: 0, y: 0, width: 1000, height: 700)
+        let frame = clampedPlayerFrame(origin: CGPoint(x: 950, y: 650), size: CGSize(width: 410, height: 560), visibleFrame: screen)
+        #expect(screen.contains(frame))
+        #expect(frame.size == CGSize(width: 410, height: 560))
+    }
+    @Test func removedAndSmallScreensRetainAReachableWindow() {
+        let screen = CGRect(x: -800, y: 100, width: 320, height: 480)
+        let frame = clampedPlayerFrame(origin: CGPoint(x: 5000, y: -900), size: CGSize(width: 410, height: 560), visibleFrame: screen)
+        #expect(frame == screen)
+        let invalid = clampedPlayerFrame(origin: CGPoint(x: CGFloat.nan, y: CGFloat.infinity), size: CGSize(width: 200, height: 88), visibleFrame: screen)
+        #expect(screen.contains(invalid))
     }
 
 }
