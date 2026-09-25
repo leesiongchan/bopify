@@ -5,7 +5,7 @@ import CoreImage.CIFilterBuiltins
 import ImageIO
 import BopifyDomain
 
-struct ArtworkPalette {
+struct ArtworkPalette: Equatable {
     var primary: Color
     var secondary: Color
     static let neutral = ArtworkPalette(primary: Color(white: 0.16), secondary: Color(white: 0.1))
@@ -20,6 +20,15 @@ final class ArtworkStore {
     @ObservationIgnored private var recent: [URL] = []
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private let decoder = ArtworkDecoder()
+
+    init() {}
+
+    #if DEBUG
+    init(previewImages: [URL: NSImage]) {
+        images = previewImages
+        recent = Array(previewImages.keys)
+    }
+    #endif
 
     func load(_ url: URL) async {
         guard url.scheme == "https" || url.scheme == "http" else { return }

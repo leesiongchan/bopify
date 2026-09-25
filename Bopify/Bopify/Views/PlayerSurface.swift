@@ -6,6 +6,7 @@ struct PlayerSurface<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static var canvas: Color { Color(red: 8.0 / 255, green: 9.0 / 255, blue: 13.0 / 255) }
 
@@ -36,6 +37,7 @@ struct PlayerSurface<Content: View>: View {
                     .strokeBorder(.white.opacity(contrast == .increased ? 0.6 : 0.12), lineWidth: 1)
                     .allowsHitTesting(false)
             }
+            .animation(.easeInOut(duration: reduceMotion ? 0.16 : 0.72), value: palette)
             .environment(\.colorScheme, .dark)
     }
 }
