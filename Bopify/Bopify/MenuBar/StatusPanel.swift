@@ -10,8 +10,8 @@ final class StatusPanel: NSPanel {
 
     init<Content: View>(content: Content) {
         super.init(contentRect: NSRect(x: 0, y: 0,
-                                      width: PlayerSurface<EmptyView>.width,
-                                      height: PlayerSurface<EmptyView>.height),
+                                      width: 410,
+                                      height: 560),
                    styleMask: [.borderless, .nonactivatingPanel],
                    backing: .buffered, defer: false)
         isFloatingPanel = true

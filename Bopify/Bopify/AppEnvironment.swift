@@ -19,6 +19,7 @@ import BopifyPlayback
 final class AppEnvironment {
     private(set) var authState: AuthState = .signedOut
     private(set) var player: PlayerModel?
+    let artworkStore = ArtworkStore()
 
     // A Developer Dashboard client ID is rejected by login5 with HTTP 400
     // (see BopifyAuth's `librespotClientID` doc comment), so the same ID
@@ -102,6 +103,7 @@ final class AppEnvironment {
             BopifyLog.auth.info("sign-out starting")
             player?.stop()
             player = nil
+            artworkStore.clear()
             // Set before the teardown `await`, not after: `engine.shutdown()`
             // can take multiple seconds, and leaving `authState` at `.signedIn`
             // across that suspension makes the UI fall through to the
