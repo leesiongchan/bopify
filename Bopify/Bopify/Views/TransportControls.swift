@@ -31,7 +31,6 @@ struct TransportControls: View {
             .disabled(!canControl || !state.canPrevious)
             .accessibilityLabel(Text("transport.previous"))
             .help(Text("transport.previous"))
-            .keyboardShortcut(.leftArrow, modifiers: .command)
 
             Button(action: model.togglePlayPause) {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
@@ -53,7 +52,6 @@ struct TransportControls: View {
             .disabled(!canControl || !state.canNext)
             .accessibilityLabel(Text("transport.next"))
             .help(Text("transport.next"))
-            .keyboardShortcut(.rightArrow, modifiers: .command)
 
             Button { model.setRepeat(nextRepeat) } label: {
                 modeSymbol(state.repeatMode == .track ? "repeat.1" : "repeat", active: state.repeatMode != .off)

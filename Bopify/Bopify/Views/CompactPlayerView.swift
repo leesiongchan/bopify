@@ -28,6 +28,7 @@ struct CompactPlayerView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
             .help(state.currentTrack?.title ?? "")
+            .overlay(WindowDragRegion().accessibilityHidden(true))
             Button(action: player.togglePlayPause) {
                 Image(systemName: state.phase == .playing ? "pause.fill" : "play.fill")
                     .font(.system(size: 17)).frame(width: 32, height: 40)

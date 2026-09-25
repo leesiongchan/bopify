@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import Observation
 import BopifyDomain
 
@@ -61,4 +62,15 @@ public func seekPosition(progress: Double, durationMs: Int64) -> Int64? {
     guard progress.isFinite, durationMs > 0 else { return nil }
     let value = (Double(durationMs) * min(1, max(0, progress))).rounded()
     return min(durationMs, Int64(clamping: UInt64(value)))
+}
+
+public func clampedPlayerFrame(origin: CGPoint, size: CGSize, visibleFrame: CGRect) -> CGRect {
+    guard !visibleFrame.isEmpty else { return .zero }
+    let width = min(visibleFrame.width, max(0, size.width.isFinite ? size.width : 410))
+    let height = min(visibleFrame.height, max(0, size.height.isFinite ? size.height : 560))
+    let x = origin.x.isFinite ? origin.x : visibleFrame.minX
+    let y = origin.y.isFinite ? origin.y : visibleFrame.minY
+    return CGRect(x: min(max(x, visibleFrame.minX), visibleFrame.maxX - width),
+                  y: min(max(y, visibleFrame.minY), visibleFrame.maxY - height),
+                  width: width, height: height)
 }
