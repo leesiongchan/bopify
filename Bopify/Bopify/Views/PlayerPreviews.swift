@@ -47,7 +47,7 @@ private struct PlayerPreview: View {
     }
 
     var body: some View {
-        PlayerSurface(image: artwork) {
+        PlayerSurface(palette: ArtworkPalette(primary: .purple, secondary: .orange)) {
             VStack(spacing: 12) {
                 HStack {
                     Label("app.name", systemImage: "waveform")
@@ -59,7 +59,9 @@ private struct PlayerPreview: View {
                 .frame(height: 24)
                 PlayingView(player: player, image: artwork, state: state, position: { _ in 83_000 })
             }
+            .padding(24)
         }
+        .frame(width: 410, height: 560)
     }
 
     private var state: PlaybackState {

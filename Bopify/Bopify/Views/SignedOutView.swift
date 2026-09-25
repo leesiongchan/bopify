@@ -13,7 +13,7 @@ struct SignedOutView: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            ArtworkView(image: nil)
+            ArtworkView(image: nil, diameter: 156)
             VStack(spacing: 6) {
                 Group {
                     if case .error = presentation {
@@ -22,7 +22,7 @@ struct SignedOutView: View {
                         Text("signIn.title")
                     }
                 }
-                    .font(.system(size: 23, weight: .semibold, design: .rounded))
+                    .font(.system(size: 23, weight: .regular))
                 Text("signIn.subtitle")
                     .font(.callout)
                     .foregroundStyle(.primary.opacity(0.7))

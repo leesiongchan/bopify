@@ -6,8 +6,9 @@ struct MiniPlayerView: View {
     let environment: AppEnvironment
 
     var body: some View {
-        AsyncImage(url: environment.player?.state.currentTrack?.artwork?.url) { phase in
-            PlayerSurface(image: phase.image) {
+        let url = environment.player?.state.currentTrack?.artwork?.url
+        let image = url.flatMap { environment.artworkStore.images[$0] }.map { Image(nsImage: $0) }
+        PlayerSurface(palette: url.flatMap { environment.artworkStore.palettes[$0] } ?? .neutral) {
                 VStack(spacing: 12) {
                     HStack {
                         Label("app.name", systemImage: "waveform")
@@ -46,15 +47,16 @@ struct MiniPlayerView: View {
                         SignedOutView(presentation: .error(error), signIn: requestSignIn)
                     case .signedIn:
                         if let player = environment.player {
-                            PlayingView(player: player, image: phase.image, state: player.state,
+                            PlayingView(player: player, image: image, state: player.state,
                                         position: player.displayPositionMs)
                         } else {
                             SignedOutView(presentation: .authenticating, signIn: requestSignIn)
                         }
                     }
                 }
-            }
+                .padding(24)
         }
+        .task(id: url) { if let url { await environment.artworkStore.load(url) } }
     }
 
     private func requestSignIn() {
@@ -187,5 +189,5 @@ private struct ContextURILoadView: View {
 }
 
 #Preview("Signed out") {
-    MiniPlayerView(environment: AppEnvironment())
+    MiniPlayerView(environment: AppEnvironment()).frame(width: 410, height: 560)
 }

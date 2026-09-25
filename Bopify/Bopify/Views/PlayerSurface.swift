@@ -2,37 +2,30 @@ import SwiftUI
 
 /// Artwork colors stay in the content layer beneath the glass controls.
 struct PlayerSurface<Content: View>: View {
-    let image: Image?
+    var palette: ArtworkPalette = .neutral
     @ViewBuilder let content: () -> Content
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
-    static var width: CGFloat { 360 }
-    static var height: CGFloat { 460 }
+    static var canvas: Color { Color(red: 8.0 / 255, green: 9.0 / 255, blue: 13.0 / 255) }
 
     var body: some View {
         content()
-            .padding(24)
-            .frame(width: Self.width, height: Self.height)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background {
                 ZStack {
-                    Color(nsColor: .windowBackgroundColor)
+                    Self.canvas
                     if !reduceTransparency && contrast != .increased {
-                        if let image {
-                            image.resizable().scaledToFill()
-                                .frame(width: Self.width, height: Self.height)
-                                .blur(radius: 48)
-                                .opacity(colorScheme == .dark ? 0.45 : 0.2)
-                        } else {
-                            Ellipse()
-                                .fill(Color.indigo.opacity(colorScheme == .dark ? 0.28 : 0.12))
-                                .frame(width: 300, height: 260)
-                                .blur(radius: 60)
-                                .offset(x: -80, y: -100)
+                        GeometryReader { geometry in
+                            ZStack {
+                                RadialGradient(colors: [palette.primary.opacity(0.4), .clear], center: .topLeading,
+                                               startRadius: 0, endRadius: geometry.size.width * 0.95)
+                                RadialGradient(colors: [palette.secondary.opacity(0.22), .clear], center: .topTrailing,
+                                               startRadius: 0, endRadius: geometry.size.width * 0.8)
+                            }
+                            .frame(height: geometry.size.height * 0.7)
+                            .mask(LinearGradient(colors: [.white, .white, .clear], startPoint: .top, endPoint: .bottom))
                         }
-                        LinearGradient(colors: [.clear, Color(nsColor: .windowBackgroundColor)],
-                                       startPoint: .top, endPoint: .bottom)
                     }
                 }
                 .accessibilityHidden(true)
@@ -40,9 +33,10 @@ struct PlayerSurface<Content: View>: View {
             .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .strokeBorder(.primary.opacity(contrast == .increased ? 0.6 : 0.1), lineWidth: 1)
+                    .strokeBorder(.white.opacity(contrast == .increased ? 0.6 : 0.12), lineWidth: 1)
                     .allowsHitTesting(false)
             }
+            .environment(\.colorScheme, .dark)
     }
 }
 
