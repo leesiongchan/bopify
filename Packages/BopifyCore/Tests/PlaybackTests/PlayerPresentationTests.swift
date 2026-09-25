@@ -20,4 +20,28 @@ struct PlayerPresentationTests {
         #expect(carouselDirection(old: old, new: replacement) == .fade)
         #expect(carouselDirection(old: nil, new: replacement) == .fade)
     }
+    @Test func radialProgressStartsAtTwelveAndRunsClockwise() {
+        #expect(radialProgress(x: 0, y: -1) == 0)
+        #expect(radialProgress(x: 1, y: 0) == 0.25)
+        #expect(radialProgress(x: 0, y: 1) == 0.5)
+        #expect(radialProgress(x: -1, y: 0) == 0.75)
+        #expect(radialProgress(x: 0, y: 0) == nil)
+        #expect(radialProgress(x: .infinity, y: 1) == nil)
+    }
+    @Test func crossingTwelveDoesNotJumpBetweenStartAndEnd() {
+        var end = RadialScrub(start: 0.99)
+        end.update(0.01)
+        #expect(end.progress == 1)
+        var start = RadialScrub(start: 0.01)
+        start.update(0.99)
+        #expect(start.progress == 0)
+    }
+    @Test func invalidDurationDisablesSeekAndValidProgressClamps() {
+        #expect(seekPosition(progress: 0.5, durationMs: 0) == nil)
+        #expect(seekPosition(progress: .nan, durationMs: 1000) == nil)
+        #expect(seekPosition(progress: -1, durationMs: 1000) == 0)
+        #expect(seekPosition(progress: 2, durationMs: 1000) == 1000)
+        #expect(seekPosition(progress: 0.5, durationMs: 1) == 1)
+    }
+
 }

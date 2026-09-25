@@ -16,6 +16,13 @@ struct MiniPlayerView: View {
                             .foregroundStyle(.primary.opacity(0.7))
                         Spacer()
                         Menu {
+                            if let player = environment.player {
+                                Slider(value: Binding(get: { player.state.volume }, set: player.setVolume), in: 0...1) {
+                                    Text("transport.volume")
+                                }
+                                .disabled(!player.state.isActiveDevice)
+                                Divider()
+                            }
                             Button("menu.signOut") { Task { await environment.signOut() } }
                                 .disabled(environment.authState != .signedIn)
                             Divider()
@@ -70,6 +77,7 @@ struct PlayingView: View {
     let state: PlaybackState
     let position: (Date) -> Int64
     let store: ArtworkStore
+    var isVisible = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -95,7 +103,19 @@ struct PlayingView: View {
                 .contentTransition(.opacity)
                 .animation(.easeInOut(duration: reduceMotion ? 0.16 : 0.72), value: state.currentTrack)
 
-                ArtworkCarouselView(queue: state.queue, currentTrack: state.currentTrack, image: image, store: store)
+                TimelineView(PlaybackClockSchedule(running: state.phase == .playing && isVisible, reducedMotion: reduceMotion)) { context in
+                    ArtworkCarouselView(queue: state.queue, currentTrack: state.currentTrack, image: image, store: store)
+                        .overlay {
+                            GeometryReader { geometry in
+                                let diameter = min(310, geometry.size.width - 68)
+                                RadialProgressView(positionMs: position(context.date), durationMs: state.durationMs,
+                                                   canSeek: state.canSeek && state.isActiveDevice, seek: player.seek(to:))
+                                    .frame(width: diameter, height: diameter)
+                                    .position(x: geometry.size.width / 2, y: 165)
+                                    .id(state.queue?.current?.id ?? state.currentTrack?.uri.rawValue)
+                            }
+                        }
+                }
                 TransportControls(state: state, model: player)
                 status(state: state)
                     .frame(maxWidth: .infinity)
@@ -109,26 +129,10 @@ struct PlayingView: View {
     private func status(state: PlaybackState) -> some View {
         switch state.phase {
         case .playing, .paused:
-            TimelineView(.animation(minimumInterval: 1, paused: state.phase != .playing)) { context in
-                let position = position(context.date)
-                VStack(spacing: 7) {
-                    ProgressView(value: Double(position), total: Double(max(1, state.durationMs)))
-                        .tint(.primary.opacity(0.65))
-                        .accessibilityLabel(Text("player.progress"))
-                        .accessibilityValue(Text(String(format: String(localized: "player.progress.value"),
-                                                        time(position), time(state.durationMs))))
-                    HStack {
-                        Text(time(position))
-                        Spacer()
-                        Text(state.phase == .paused ? "transport.state.paused" : "player.nowPlaying")
-                        Spacer()
-                        Text(time(state.durationMs))
-                    }
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.primary.opacity(0.7))
-                    .accessibilityHidden(true)
-                }
-            }
+            Text(player.commandNotice ?? "")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
         case .loading, .buffering:
             HStack(spacing: 8) {
                 ProgressView().controlSize(.mini)
@@ -156,10 +160,7 @@ struct PlayingView: View {
         }
     }
 
-    private func time(_ milliseconds: Int64) -> String {
-        let seconds = max(0, milliseconds / 1000)
-        return String(format: "%lld:%02lld", seconds / 60, seconds % 60)
-    }
+
 }
 
 private struct ContextURILoadView: View {
