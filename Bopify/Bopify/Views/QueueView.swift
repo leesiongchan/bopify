@@ -38,47 +38,53 @@ struct QueueView: View {
                 CompactPlayerView(player: player, state: state, store: store, presentation: presentation, artworkNamespace: artworkNamespace)
             }
             .padding(.top, 14)
-            .background(LinearGradient(colors: [.clear, Color(red: 8.0 / 255, green: 9.0 / 255, blue: 13.0 / 255)], startPoint: .top, endPoint: .bottom))
+            .background {
+                LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: Color(red: 8.0 / 255, green: 9.0 / 255, blue: 13.0 / 255), location: 0.18)], startPoint: .top, endPoint: .bottom)
+            }
         }
     }
 
     private func row(_ entry: QueueEntry, current: Bool) -> some View {
         let track = entry.track ?? (current && entry.uri == state.currentTrack?.uri ? state.currentTrack : nil)
         let url = track?.artwork?.url
-        return Button {
-            if let target = entry.target { player.selectQueueEntry(target) }
-        } label: {
-            HStack(spacing: 12) {
-                Group {
-                    if let url, let image = store.images[url] {
-                        Image(nsImage: image).resizable().scaledToFill()
-                    } else {
-                        ZStack {
-                            Color(white: 0.12)
-                            Image(systemName: "music.note").foregroundStyle(.secondary)
-                        }
+        let label = HStack(spacing: 12) {
+            Group {
+                if let url, let image = store.images[url] {
+                    Image(nsImage: image).resizable().scaledToFill()
+                } else {
+                    ZStack {
+                        Color(white: 0.12)
+                        Image(systemName: "music.note").foregroundStyle(.secondary)
                     }
                 }
-                .frame(width: 48, height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(track?.title ?? String(localized: entry.metadataFailed ? "queue.unavailable" : "queue.loadingTrack"))
-                        .font(.system(size: 13, weight: current ? .medium : .regular)).lineLimit(1)
-                    Text(track?.artists.map(\.name).joined(separator: ", ") ?? "")
-                        .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                if current { Image(systemName: "waveform").font(.system(size: 12)).accessibilityLabel(Text("player.nowPlaying")) }
-                Text(track.map { playbackTime($0.durationMs) } ?? "—")
-                    .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
             }
-            .padding(.vertical, 8).padding(.horizontal, 8)
-            .contentShape(Rectangle())
-            .background(.white.opacity(current ? 0.045 : 0), in: RoundedRectangle(cornerRadius: 12))
+            .frame(width: 48, height: 48)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(track?.title ?? String(localized: entry.metadataFailed ? "queue.unavailable" : "queue.loadingTrack"))
+                    .font(.system(size: 13, weight: current ? .medium : .regular)).lineLimit(1)
+                Text(track?.artists.map(\.name).joined(separator: ", ") ?? "")
+                    .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if current { Image(systemName: "waveform").font(.system(size: 12)).accessibilityLabel(Text("player.nowPlaying")) }
+            Text(track.map { playbackTime($0.durationMs) } ?? "—")
+                .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 8).padding(.horizontal, 8)
+        .contentShape(Rectangle())
+        .background(.white.opacity(current ? 0.045 : 0), in: RoundedRectangle(cornerRadius: 12))
+        return Group {
+            if current { label }
+            else {
+                Button {
+                    if let target = entry.target { player.selectQueueEntry(target) }
+                } label: { label }
+                .disabled(entry.target == nil || !state.isActiveDevice)
+            }
         }
         .buttonStyle(.plain)
-        .disabled(!current && (entry.target == nil || !state.isActiveDevice))
         .accessibilityElement(children: .combine)
         .task(id: url) { if let url { await store.load(url) } }
     }

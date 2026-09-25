@@ -43,9 +43,13 @@ struct MiniPlayerView: View {
                     }
                 }
                 .padding(16)
+                .modifier(ScrollablePlayerContent(minimumHeight: mode == .queue ? 260 : 560))
             }
         }
+        .modifier(SharedCurrentArtwork(image: image, namespace: artworkNamespace))
         .animation(.spring(duration: reduceMotion ? 0.16 : 0.55, bounce: reduceMotion ? 0 : 0.04), value: mode)
+        .environment(\.favoriteEnvironment, environment)
+        .task(id: environment.player?.state.currentTrack?.uri) { await environment.refreshFavorite() }
         .task(id: url) { if let url { await environment.artworkStore.load(url) } }
     }
 
@@ -62,6 +66,7 @@ struct MiniPlayerView: View {
                     .font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
             }
             WindowDragRegion().frame(maxWidth: .infinity)
+            FavoriteButton()
             Menu {
                 if let player = environment.player {
                     Slider(value: Binding(get: { player.state.volume }, set: player.setVolume), in: 0...1) { Text("transport.volume") }
@@ -219,4 +224,21 @@ private struct ContextURILoadView: View {
 
 #Preview("Signed out") {
     MiniPlayerView(environment: AppEnvironment()).frame(width: 410, height: 560)
+}
+
+private struct ScrollablePlayerContent: ViewModifier {
+    let minimumHeight: CGFloat
+    func body(content: Content) -> some View {
+        GeometryReader { geometry in
+            ScrollView {
+                content.frame(height: max(minimumHeight, geometry.size.height))
+            }
+            .scrollDisabled(geometry.size.height >= minimumHeight)
+            .scrollIndicators(.hidden)
+        }
+    }
+}
+
+#Preview("Small display · sign in") {
+    MiniPlayerView(environment: AppEnvironment()).frame(width: 320, height: 480)
 }
