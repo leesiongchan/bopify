@@ -19,6 +19,8 @@ public final class PlayerModel {
 
     @ObservationIgnored private let engine: any PlaybackEngine
     @ObservationIgnored private var consumer: Task<Void, Never>?
+    @ObservationIgnored private var pendingCommand: Task<Void, Never>?
+    @ObservationIgnored private var commandGeneration: UInt64 = 0
 
     public init(engine: any PlaybackEngine) { self.engine = engine }
 
@@ -46,67 +48,89 @@ public final class PlayerModel {
         BopifyLog.playback.info("player model stopping")
         consumer?.cancel()
         consumer = nil
+        commandGeneration &+= 1
+        pendingCommand?.cancel()
+        pendingCommand = nil
     }
 
     public func togglePlayPause() {
+        guard state.isActiveDevice else { return }
         let shouldPause = state.phase == .playing
-        Task { [engine] in
-            // A failure is reported by the engine as an event; nothing is
-            // assumed here about whether the command took effect.
-            if shouldPause {
-                do { try await engine.pause() }
-                catch {
-                    let description = String(describing: error)
-                    BopifyLog.playback.error("command failed command=pause error=\(description, privacy: .public)")
-                }
-            } else {
-                do { try await engine.resume() }
-                catch {
-                    let description = String(describing: error)
-                    BopifyLog.playback.error("command failed command=resume error=\(description, privacy: .public)")
-                }
-            }
+        enqueue(shouldPause ? "pause" : "resume", requiresActive: true) { [engine] in
+            if shouldPause { try await engine.pause() } else { try await engine.resume() }
         }
     }
 
     public func next() {
-        Task { [engine] in
-            do { try await engine.next() }
-            catch {
-                let description = String(describing: error)
-                BopifyLog.playback.error("command failed command=next error=\(description, privacy: .public)")
-            }
-        }
+        guard state.isActiveDevice, state.canNext else { return }
+        enqueue("next", requiresActive: true) { [engine] in try await engine.next() }
     }
 
     public func previous() {
-        Task { [engine] in
-            do { try await engine.previous() }
-            catch {
-                let description = String(describing: error)
-                BopifyLog.playback.error("command failed command=previous error=\(description, privacy: .public)")
-            }
-        }
+        guard state.isActiveDevice, state.canPrevious else { return }
+        enqueue("previous", requiresActive: true) { [engine] in try await engine.previous() }
     }
 
     public func activate() {
-        Task { [engine] in
-            do { try await engine.activate() }
-            catch {
-                let description = String(describing: error)
-                BopifyLog.playback.error("command failed command=activate error=\(description, privacy: .public)")
-            }
-        }
+        enqueue("activate") { [engine] in try await engine.activate() }
     }
 
-    /// Lets the UI start playback from a known context URI directly, in case
-    /// Spotify Connect handoff to this device does not work.
     public func load(_ request: PlayRequest) {
-        Task { [engine] in
-            do { try await engine.load(request) }
+        enqueue("load") { [engine] in try await engine.load(request) }
+    }
+
+    public func seek(to milliseconds: Int64) {
+        guard state.isActiveDevice, state.canSeek, state.durationMs > 0 else { return }
+        let target = min(max(0, milliseconds), state.durationMs)
+        enqueue("seek", requiresActive: true) { [engine] in try await engine.seek(to: target) }
+    }
+
+    public func seek(by milliseconds: Int64) {
+        let (target, overflow) = displayPositionMs(at: .now).addingReportingOverflow(milliseconds)
+        seek(to: overflow ? (milliseconds > 0 ? state.durationMs : 0) : target)
+    }
+
+    public func selectQueueEntry(_ target: QueueTarget) {
+        guard state.isActiveDevice else { return }
+        guard state.queue?.generation == target.generation,
+              state.queue?.next.contains(where: { $0.target == target }) == true else {
+            commandNotice = String(localized: "queue.changed", defaultValue: "The queue changed. Choose the track again.")
+            return
+        }
+        enqueue("selectQueue", requiresActive: true) { [engine] in try await engine.selectQueueEntry(target) }
+    }
+
+    public func setShuffle(_ enabled: Bool) {
+        guard state.isActiveDevice else { return }
+        enqueue("setShuffle", requiresActive: true) { [engine] in try await engine.setShuffle(enabled) }
+    }
+
+    public func setRepeat(_ mode: RepeatMode) {
+        guard state.isActiveDevice else { return }
+        enqueue("setRepeat", requiresActive: true) { [engine] in try await engine.setRepeat(mode) }
+    }
+
+    public func setVolume(_ value: Double) {
+        guard state.isActiveDevice, value.isFinite else { return }
+        let volume = max(0, min(1, value))
+        enqueue("setVolume", requiresActive: true) { [engine] in try await engine.setVolume(volume) }
+    }
+
+    private func enqueue(_ name: String, requiresActive: Bool = false,
+                         _ operation: @escaping @Sendable () async throws -> Void) {
+        guard consumer != nil else { return }
+        let previous = pendingCommand
+        let generation = commandGeneration
+        pendingCommand = Task { [weak self] in
+            await previous?.value
+            guard let self, !Task.isCancelled, generation == commandGeneration,
+                  !requiresActive || state.isActiveDevice else { return }
+            BopifyLog.playback.debug("command enqueued command=\(name, privacy: .public)")
+            do { try await operation() }
             catch {
-                let description = String(describing: error)
-                BopifyLog.playback.error("command failed command=load error=\(description, privacy: .public)")
+                guard generation == commandGeneration else { return }
+                commandNotice = String(localized: "command.unavailable", defaultValue: "That action is unavailable.")
+                BopifyLog.playback.error("command failed command=\(name, privacy: .public)")
             }
         }
     }
@@ -114,7 +138,18 @@ public final class PlayerModel {
     private func apply(_ event: PlaybackEvent) {
         let oldPhase = state.phase
         switch event {
-        case let .queueChanged(queue):
+        case var .queueChanged(queue):
+            let cached = (state.queue?.previous ?? []) + (state.queue?.current.map { [$0] } ?? []) + (state.queue?.next ?? [])
+            func retainingMetadata(_ entry: QueueEntry) -> QueueEntry {
+                guard let old = cached.first(where: { $0.id == entry.id && $0.uri == entry.uri }) else { return entry }
+                var result = entry
+                result.track = old.track
+                result.metadataFailed = old.metadataFailed
+                return result
+            }
+            queue.previous = queue.previous.map(retainingMetadata)
+            queue.current = queue.current.map(retainingMetadata)
+            queue.next = queue.next.map(retainingMetadata)
             state.queue = queue
             commandNotice = nil
         case let .queueMetadata(generation, entryID, track):
@@ -133,7 +168,9 @@ public final class PlayerModel {
         case let .shuffleChanged(enabled): state.shuffleEnabled = enabled
         case let .repeatChanged(mode): state.repeatMode = mode
         case let .commandRejected(reason):
-            commandNotice = reason == "staleQueue" ? "The queue changed. Choose the track again." : "That action is unavailable."
+            commandNotice = reason == "staleQueue"
+                ? String(localized: "queue.changed", defaultValue: "The queue changed. Choose the track again.")
+                : String(localized: "command.unavailable", defaultValue: "That action is unavailable.")
             BopifyLog.playback.debug("player command rejected")
         case let .trackChanged(track):
             positionUpdatedAt = .now

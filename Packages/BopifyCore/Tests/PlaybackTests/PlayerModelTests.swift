@@ -18,6 +18,59 @@ struct PlayerModelTests {
         try? await Task.sleep(for: .milliseconds(50))
     }
 
+    @Test func seekIsClampedWithoutPretendingItSucceeded() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        await settle(model, engine, [.trackChanged(makeTrack()), .paused(positionMs: 20_000)])
+        model.seek(to: 900_000)
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(engine.recordedCommands == ["seek:240000"])
+        #expect(model.state.positionMs == 20_000)
+        #expect(model.state.phase == .paused)
+    }
+    @Test func modesWaitForEngineEventsAndRapidCommandsKeepOrder() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        await settle(model, engine, [.trackChanged(makeTrack()), .playing(positionMs: 1000)])
+        model.next()
+        model.previous()
+        model.next()
+        model.setShuffle(true)
+        model.setRepeat(.track)
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(engine.recordedCommands == ["next", "previous", "next", "setShuffle:true", "setRepeat:track"])
+        #expect(!model.state.shuffleEnabled)
+        #expect(model.state.repeatMode == .off)
+    }
+    @Test func inactiveAndObsoleteTargetsNeverReachTheEngine() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        model.seek(to: 1000)
+        model.next()
+        let target = QueueTarget(generation: 12, rawNextIndex: 0)
+        await settle(model, engine, [.playing(positionMs: 1000), .queueChanged(PlaybackQueue(generation: 13, previous: [], current: nil, next: []))])
+        model.selectQueueEntry(target)
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(engine.recordedCommands.isEmpty)
+    }
+    @Test func stoppingCancelsCommandsThatHaveNotStarted() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        await settle(model, engine, [.trackChanged(makeTrack()), .playing(positionMs: 0)])
+        model.next()
+        model.previous()
+        model.stop()
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(engine.recordedCommands.isEmpty)
+    }
+
     @Test func obsoleteQueueMetadataCannotReplaceANewerSnapshot() async {
         let engine = StubPlaybackEngine()
         let model = PlayerModel(engine: engine)
