@@ -32,3 +32,33 @@ public func carouselDirection(old: PlaybackQueue?, new: PlaybackQueue) -> Carous
     if old.previous.last?.id == after && new.next.first?.id == before { return .previous }
     return .fade
 }
+
+public func radialProgress(x: Double, y: Double) -> Double? {
+    guard x.isFinite, y.isFinite, x != 0 || y != 0 else { return nil }
+    let turns = (atan2(y, x) + .pi / 2) / (2 * .pi)
+    return turns < 0 ? turns + 1 : turns
+}
+
+public struct RadialScrub {
+    private var previous: Double
+    private var unwrapped: Double
+    public var progress: Double { min(1, max(0, unwrapped)) }
+    public init(start: Double) {
+        previous = start.isFinite ? min(1, max(0, start)) : 0
+        unwrapped = previous
+    }
+    public mutating func update(_ fraction: Double) {
+        guard fraction.isFinite else { return }
+        var delta = fraction - previous
+        if delta > 0.5 { delta -= 1 }
+        if delta < -0.5 { delta += 1 }
+        unwrapped += delta
+        previous = fraction
+    }
+}
+
+public func seekPosition(progress: Double, durationMs: Int64) -> Int64? {
+    guard progress.isFinite, durationMs > 0 else { return nil }
+    let value = (Double(durationMs) * min(1, max(0, progress))).rounded()
+    return min(durationMs, Int64(clamping: UInt64(value)))
+}
