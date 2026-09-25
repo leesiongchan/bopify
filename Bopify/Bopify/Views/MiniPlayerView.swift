@@ -9,7 +9,7 @@ struct MiniPlayerView: View {
         let url = environment.player?.state.currentTrack?.artwork?.url
         let image = url.flatMap { environment.artworkStore.images[$0] }.map { Image(nsImage: $0) }
         PlayerSurface(palette: url.flatMap { environment.artworkStore.palettes[$0] } ?? .neutral) {
-                VStack(spacing: 12) {
+                VStack(spacing: 8) {
                     HStack {
                         Label("app.name", systemImage: "waveform")
                             .font(.system(size: 12, weight: .semibold))
@@ -48,13 +48,13 @@ struct MiniPlayerView: View {
                     case .signedIn:
                         if let player = environment.player {
                             PlayingView(player: player, image: image, state: player.state,
-                                        position: player.displayPositionMs)
+                                        position: player.displayPositionMs, store: environment.artworkStore)
                         } else {
                             SignedOutView(presentation: .authenticating, signIn: requestSignIn)
                         }
                     }
                 }
-                .padding(24)
+                .padding(16)
         }
         .task(id: url) { if let url { await environment.artworkStore.load(url) } }
     }
@@ -69,17 +69,18 @@ struct PlayingView: View {
     let image: Image?
     let state: PlaybackState
     let position: (Date) -> Int64
+    let store: ArtworkStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 12) {
-            ArtworkView(image: image)
+        VStack(spacing: 8) {
             if state.phase == .idle && state.currentTrack == nil {
                 ContextURILoadView(load: player.load)
                     .frame(maxHeight: .infinity)
             } else {
                 VStack(spacing: 4) {
                     Text(state.currentTrack?.title ?? String(localized: "player.unknownTrack"))
-                        .font(.system(size: 22, weight: .semibold, design: .rounded))
+                        .font(.system(size: 20, weight: .regular))
                         .lineLimit(1)
                         .help(state.currentTrack?.title ?? "")
                     Text(state.currentTrack?.artists.map(\.name).joined(separator: ", ") ?? "")
@@ -91,11 +92,14 @@ struct PlayingView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
                 .accessibilityElement(children: .combine)
+                .contentTransition(.opacity)
+                .animation(.easeInOut(duration: reduceMotion ? 0.16 : 0.72), value: state.currentTrack)
 
+                ArtworkCarouselView(queue: state.queue, currentTrack: state.currentTrack, image: image, store: store)
                 TransportControls(state: state, model: player)
                 status(state: state)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 40)
+                    .frame(height: 24)
             }
         }
         .frame(maxHeight: .infinity)
