@@ -4,6 +4,7 @@ import os
 import BopifyAuth
 import BopifyDomain
 import BopifyPlayback
+import BopifyLibrary
 
 /// The only place concrete implementations are chosen.
 ///
@@ -20,6 +21,9 @@ final class AppEnvironment {
     private(set) var authState: AuthState = .signedOut
     private(set) var player: PlayerModel?
     let artworkStore = ArtworkStore()
+    let favorite: FavoriteModel
+    private(set) var isEnablingFavorites = false
+    private(set) var favoriteAuthorizationNotice: String?
     let presentation = PlayerPresentation(
         mode: PlayerMode(rawValue: UserDefaults.standard.string(forKey: "player.mode") ?? "") ?? .expanded,
         keepOnTop: UserDefaults.standard.bool(forKey: "player.keepOnTop"))
@@ -31,7 +35,7 @@ final class AppEnvironment {
     // A Developer Dashboard client ID is rejected by login5 with HTTP 400
     // (see BopifyAuth's `librespotClientID` doc comment), so the same ID
     // used for the librespot session is also the one used here.
-    @ObservationIgnored private let auth = SpotifyAuthService(clientID: librespotClientID)
+    @ObservationIgnored private let auth: SpotifyAuthService
     @ObservationIgnored private var engine: LibrespotEngine?
 
     /// `engine == nil` cannot serve as a lock: it cannot distinguish "torn
@@ -52,6 +56,35 @@ final class AppEnvironment {
     /// `authState` goes back to being purely a description of what the UI
     /// should show.
     @ObservationIgnored private var signInRequested = false
+
+    init() {
+        let auth = SpotifyAuthService(clientID: librespotClientID)
+        self.auth = auth
+        favorite = FavoriteModel(service: SpotifyLibraryClient { scopes in
+            try await auth.validAccessToken(requiredScopes: scopes)
+        })
+    }
+
+    func refreshFavorite() async {
+        guard authState == .signedIn else { favorite.clear(); return }
+        await favorite.select(player?.state.currentTrack?.uri)
+    }
+
+    func enableFavorites() async {
+        guard authState == .signedIn, !isEnablingFavorites else { return }
+        isEnablingFavorites = true
+        favoriteAuthorizationNotice = nil
+        defer { isEnablingFavorites = false }
+        do {
+            _ = try await auth.authorizeAdditionalScopes(["user-library-read", "user-library-modify"])
+            guard authState == .signedIn else { return }
+            await refreshFavorite()
+        } catch {
+            guard authState == .signedIn else { return }
+            favoriteAuthorizationNotice = String(localized: "favorite.consentFailed")
+            BopifyLog.library.notice("favorite authorization did not complete")
+        }
+    }
 
     private func serialize(_ operation: @escaping @MainActor () async -> Void) async {
         let previous = pending
@@ -111,6 +144,8 @@ final class AppEnvironment {
             player?.stop()
             player = nil
             artworkStore.clear()
+            favorite.clear()
+            favoriteAuthorizationNotice = nil
             // Set before the teardown `await`, not after: `engine.shutdown()`
             // can take multiple seconds, and leaving `authState` at `.signedIn`
             // across that suspension makes the UI fall through to the
@@ -132,6 +167,7 @@ final class AppEnvironment {
     func prepareForQuit() async {
         await serialize { [self] in
             BopifyLog.playback.info("prepare for quit starting")
+            favorite.clear()
             player?.stop()
             player = nil
             if let engine {

@@ -101,6 +101,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         guard let panel, hasPosition, !applyingFrame else { return }
         UserDefaults.standard.set(NSStringFromRect(panel.frame), forKey: "player.frame")
     }
+    func windowDidBecomeKey(_ notification: Notification) { Task { await environment.refreshFavorite() } }
     func windowDidMove(_ notification: Notification) { saveFrame() }
     func windowDidResize(_ notification: Notification) { saveFrame() }
     func windowShouldClose(_ sender: NSWindow) -> Bool { dismiss(); return false }

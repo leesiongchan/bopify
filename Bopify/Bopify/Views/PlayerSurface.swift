@@ -19,9 +19,9 @@ struct PlayerSurface<Content: View>: View {
                     if !reduceTransparency && contrast != .increased {
                         GeometryReader { geometry in
                             ZStack {
-                                RadialGradient(colors: [palette.primary.opacity(0.4), .clear], center: .topLeading,
+                                RadialGradient(colors: [palette.primary.opacity(0.32), .clear], center: .topLeading,
                                                startRadius: 0, endRadius: geometry.size.width * 0.95)
-                                RadialGradient(colors: [palette.secondary.opacity(0.22), .clear], center: .topTrailing,
+                                RadialGradient(colors: [palette.secondary.opacity(0.16), .clear], center: .topTrailing,
                                                startRadius: 0, endRadius: geometry.size.width * 0.8)
                             }
                             .frame(height: geometry.size.height * 0.7)

@@ -21,10 +21,13 @@ final class ArtworkStore {
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private let decoder = ArtworkDecoder()
 
-    init() {}
+    @ObservationIgnored private let session: URLSession
+
+    init(session: URLSession = .shared) { self.session = session }
 
     #if DEBUG
     init(previewImages: [URL: NSImage]) {
+        session = .shared
         images = previewImages
         recent = Array(previewImages.keys)
     }
@@ -42,9 +45,9 @@ final class ArtworkStore {
         if let existing = pending[url] {
             task = existing
         } else {
-            task = Task { [decoder] in
+            task = Task { [decoder, session] in
                 do {
-                    let (data, response) = try await URLSession.shared.data(from: url)
+                    let (data, response) = try await session.data(from: url)
                     guard !Task.isCancelled, let response = response as? HTTPURLResponse,
                           (200..<300).contains(response.statusCode) else { return nil }
                     return await decoder.decode(data)

@@ -1,5 +1,6 @@
 #if DEBUG
 import SwiftUI
+import Observation
 import BopifyDomain
 import BopifyPlayback
 
@@ -35,22 +36,41 @@ import BopifyPlayback
     PlayerPreview(phase: .paused, mode: .queue, queueCount: 0)
 }
 
+
+#Preview("Expanded · 390") {
+    PlayerPreview(phase: .playing, width: 390)
+}
+#Preview("Expanded · 430") {
+    PlayerPreview(phase: .playing, width: 430)
+}
+#Preview("Compact · 340") {
+    PlayerPreview(phase: .paused, longTitle: true, mode: .compact, width: 340)
+}
+#Preview("Compact · 420") {
+    PlayerPreview(phase: .paused, longTitle: true, mode: .compact, width: 420)
+}
+#Preview("Increased text · ended") {
+    PlayerPreview(phase: .ended, longTitle: true).environment(\.dynamicTypeSize, .accessibility3)
+}
+
 private struct PlayerPreview: View {
     let phase: PlaybackPhase
     var longTitle = false
     var missingArtwork = false
     var queueCount = 1
+    var width: CGFloat?
     @Namespace private var artworkNamespace
     @State private var presentation: PlayerPresentation
     @State private var store = previewArtworkStore()
     @State private var player = PlayerModel(engine: StubPlaybackEngine())
 
     init(phase: PlaybackPhase, longTitle: Bool = false, missingArtwork: Bool = false,
-         mode: PlayerMode = .expanded, queueCount: Int = 1) {
+         mode: PlayerMode = .expanded, queueCount: Int = 1, width: CGFloat? = nil) {
         self.phase = phase
         self.longTitle = longTitle
         self.missingArtwork = missingArtwork
         self.queueCount = queueCount
+        self.width = width
         _presentation = State(initialValue: PlayerPresentation(mode: mode))
     }
 
@@ -82,7 +102,8 @@ private struct PlayerPreview: View {
                 .padding(16)
             }
         }
-        .frame(width: presentation.mode == .compact ? 380 : 410, height: presentation.mode == .compact ? 88 : 560)
+        .modifier(SharedCurrentArtwork(image: artwork, namespace: artworkNamespace))
+        .frame(width: width ?? (presentation.mode == .compact ? 380 : 410), height: presentation.mode == .compact ? 88 : 560)
         .animation(.spring(duration: 0.55, bounce: 0.04), value: presentation.mode)
     }
 
@@ -143,4 +164,44 @@ private func previewArtworkStore() -> ArtworkStore {
     }
     return ArtworkStore(previewImages: images)
 }
+@MainActor @Observable final class PlayerMotionFixture {
+    var index = 1
+    let presentation = PlayerPresentation()
+    let store = previewArtworkStore()
+    let player = PlayerModel(engine: StubPlaybackEngine())
+    var state: PlaybackState {
+        let tracks = (0..<5).map { n in Track(uri: SpotifyURI("spotify:track:sample\(n)")!, title: "Sample \(n)", artists: [ArtistSummary(name: "Native motion fixture")], albumTitle: nil, artwork: Artwork(url: previewArtworkURL(n % 3)), durationMs: 238000) }
+        func entry(_ n: Int) -> QueueEntry { QueueEntry(id: "occurrence-\(n)", uri: tracks[n].uri, target: QueueTarget(generation: UInt64(index), rawNextIndex: UInt32(max(0, n-index-1))), track: tracks[n], metadataFailed: false) }
+        var value = PlaybackState()
+        value.phase = .paused
+        value.currentTrack = tracks[index]
+        value.durationMs = 238000
+        value.positionMs = 83000
+        value.isActiveDevice = true
+        value.canNext = true
+        value.canPrevious = true
+        value.canSeek = true
+        value.queue = PlaybackQueue(generation: UInt64(index), previous: (0..<index).map(entry), current: entry(index), next: ((index+1)..<5).map(entry))
+        return value
+    }
+}
+struct PlayerMotionScene: View {
+    let fixture: PlayerMotionFixture
+    @Namespace var artwork
+    var body: some View {
+        let state = fixture.state
+        PlayerSurface {
+            if fixture.presentation.mode == .compact {
+                CompactPlayerView(player: fixture.player, state: state, store: fixture.store, presentation: fixture.presentation, artworkNamespace: artwork).padding(8)
+            } else if fixture.presentation.mode == .queue {
+                QueueView(player: fixture.player, state: state, store: fixture.store, presentation: fixture.presentation, artworkNamespace: artwork).padding(16)
+            } else {
+                PlayingView(player: fixture.player, image: state.currentTrack?.artwork.flatMap { fixture.store.images[$0.url] }.map { Image(nsImage: $0) }, state: state, position: { _ in 83000 }, store: fixture.store, presentation: fixture.presentation, artworkNamespace: artwork).padding(16)
+            }
+        }
+        .modifier(SharedCurrentArtwork(image: state.currentTrack?.artwork.flatMap { fixture.store.images[$0.url] }.map { Image(nsImage: $0) }, namespace: artwork))
+        .animation(.spring(duration: 0.55, bounce: 0.04), value: fixture.presentation.mode)
+    }
+}
+
 #endif

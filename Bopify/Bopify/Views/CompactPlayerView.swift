@@ -49,9 +49,18 @@ struct CompactPlayerView: View {
         .padding(12)
         .modifier(PlayerGlass())
         .contextMenu {
+            FavoriteMenuAction()
+            Divider()
             Button("queue.title") { presentation.setMode(.queue) }
             Toggle("window.keepOnTop", isOn: Binding(get: { presentation.keepOnTop }, set: { presentation.keepOnTop = $0 }))
         }
+    }
+}
+
+private struct CurrentArtworkBounds: PreferenceKey {
+    static let defaultValue: [Namespace.ID: Anchor<CGRect>] = [:]
+    static func reduce(value: inout [Namespace.ID: Anchor<CGRect>], nextValue: () -> [Namespace.ID: Anchor<CGRect>]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, next in next })
     }
 }
 
@@ -61,7 +70,27 @@ struct CurrentArtworkMatch: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func body(content: Content) -> some View {
         if active && !reduceMotion {
-            content.matchedGeometryEffect(id: "current-artwork", in: namespace)
+            content.opacity(0)
+                .anchorPreference(key: CurrentArtworkBounds.self, value: .bounds) { [namespace: $0] }
         } else { content }
+    }
+}
+
+// The source views reserve geometry; one image survives every mode transition.
+struct SharedCurrentArtwork: ViewModifier {
+    let image: Image?
+    let namespace: Namespace.ID
+    func body(content: Content) -> some View {
+        content.overlayPreferenceValue(CurrentArtworkBounds.self) { bounds in
+            GeometryReader { geometry in
+                if let anchor = bounds[namespace] {
+                    let rect = geometry[anchor]
+                    ArtworkView(image: image, diameter: rect.width)
+                        .position(x: rect.midX, y: rect.midY)
+                }
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
     }
 }
