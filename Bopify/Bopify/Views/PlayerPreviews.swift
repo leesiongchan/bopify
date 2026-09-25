@@ -23,12 +23,36 @@ import BopifyPlayback
     PlayerPreview(phase: .idle, missingArtwork: true)
 }
 
+#Preview("Compact · long metadata") {
+    PlayerPreview(phase: .playing, longTitle: true, mode: .compact)
+}
+
+#Preview("Up Next · 80 repeated songs") {
+    PlayerPreview(phase: .playing, mode: .queue, queueCount: 80)
+}
+
+#Preview("Up Next · empty") {
+    PlayerPreview(phase: .paused, mode: .queue, queueCount: 0)
+}
+
 private struct PlayerPreview: View {
     let phase: PlaybackPhase
     var longTitle = false
     var missingArtwork = false
+    var queueCount = 1
+    @Namespace private var artworkNamespace
+    @State private var presentation: PlayerPresentation
     @State private var store = previewArtworkStore()
     @State private var player = PlayerModel(engine: StubPlaybackEngine())
+
+    init(phase: PlaybackPhase, longTitle: Bool = false, missingArtwork: Bool = false,
+         mode: PlayerMode = .expanded, queueCount: Int = 1) {
+        self.phase = phase
+        self.longTitle = longTitle
+        self.missingArtwork = missingArtwork
+        self.queueCount = queueCount
+        _presentation = State(initialValue: PlayerPresentation(mode: mode))
+    }
 
     private var artwork: Image? {
         guard !missingArtwork else { return nil }
@@ -37,20 +61,29 @@ private struct PlayerPreview: View {
 
     var body: some View {
         PlayerSurface(palette: ArtworkPalette(primary: .purple, secondary: .orange)) {
-            VStack(spacing: 8) {
-                HStack {
-                    Label("app.name", systemImage: "waveform")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.primary.opacity(0.7))
-                    Spacer()
-                    Image(systemName: "ellipsis")
+            if presentation.mode == .compact {
+                CompactPlayerView(player: player, state: state, store: store, presentation: presentation, artworkNamespace: artworkNamespace).padding(8)
+            } else {
+                VStack(spacing: 8) {
+                    HStack {
+                        Text(presentation.mode == .queue ? "queue.title" : "app.name")
+                            .font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+                        Spacer()
+                        Image(systemName: "ellipsis")
+                    }
+                    .frame(height: 24)
+                    if presentation.mode == .queue {
+                        QueueView(player: player, state: state, store: store, presentation: presentation, artworkNamespace: artworkNamespace)
+                    } else {
+                        PlayingView(player: player, image: artwork, state: state, position: { _ in 83_000 },
+                                    store: store, presentation: presentation, artworkNamespace: artworkNamespace)
+                    }
                 }
-                .frame(height: 24)
-                PlayingView(player: player, image: artwork, state: state, position: { _ in 83_000 }, store: store)
+                .padding(16)
             }
-            .padding(16)
         }
-        .frame(width: 410, height: 560)
+        .frame(width: presentation.mode == .compact ? 380 : 410, height: presentation.mode == .compact ? 88 : 560)
+        .animation(.spring(duration: 0.55, bounce: 0.04), value: presentation.mode)
     }
 
     private var state: PlaybackState {
@@ -69,7 +102,7 @@ private struct PlayerPreview: View {
         state.queue = PlaybackQueue(generation: 1,
             previous: [QueueEntry(id: "previous", uri: previous.uri, target: nil, track: previous, metadataFailed: false)],
             current: QueueEntry(id: "current", uri: state.currentTrack!.uri, target: nil, track: state.currentTrack, metadataFailed: false),
-            next: [QueueEntry(id: "next", uri: next.uri, target: QueueTarget(generation: 1, rawNextIndex: 0), track: next, metadataFailed: false)])
+            next: (0..<queueCount).map { QueueEntry(id: "next-\($0)", uri: next.uri, target: QueueTarget(generation: 1, rawNextIndex: UInt32($0)), track: next, metadataFailed: false) })
         state.canSeek = true
         state.durationMs = 238_000
         state.positionMs = 83_000

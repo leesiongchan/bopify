@@ -7,6 +7,7 @@ struct ArtworkCarouselView: View {
     let currentTrack: Track?
     let image: Image?
     let store: ArtworkStore
+    let artworkNamespace: Namespace.ID
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var layers: [ArtworkLayer] = []
     @State private var previousQueue: PlaybackQueue?
@@ -21,7 +22,9 @@ struct ArtworkCarouselView: View {
             ZStack {
                 DiscView(diameter: 310 * scale).position(center)
                 if layers.isEmpty {
-                    ArtworkView(image: image, diameter: 204 * scale).position(center)
+                    ArtworkView(image: image, diameter: 204 * scale)
+                        .modifier(CurrentArtworkMatch(namespace: artworkNamespace, active: true))
+                        .position(center)
                 }
                 TimelineView(.animation(paused: !animating)) { context in
                     let progress: CGFloat = animating ? fraction(at: context.date) : 1
@@ -30,6 +33,7 @@ struct ArtworkCarouselView: View {
                         let point = layer.point(at: progress)
                         let diameter = layer.fromSize + (layer.toSize - layer.fromSize) * progress
                         ArtworkView(image: artwork(for: layer), diameter: diameter * scale)
+                            .modifier(CurrentArtworkMatch(namespace: artworkNamespace, active: layer.isCurrent))
                             .position(x: center.x + point.x * scale, y: center.y + point.y * scale)
                             .opacity(layer.fromOpacity + (layer.toOpacity - layer.fromOpacity) * progress)
                             .zIndex(layer.isCurrent ? 2 : 1)

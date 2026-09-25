@@ -162,6 +162,16 @@
         }
       }
     },
+    "player.collapse" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collapse player"
+          }
+        }
+      }
+    },
     "player.ended" : {
       "localizations" : {
         "en" : {
@@ -178,6 +188,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Playback error"
+          }
+        }
+      }
+    },
+    "player.expand" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expand player"
           }
         }
       }
@@ -253,7 +273,6 @@
       }
     },
     "player.nowPlaying" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -301,6 +320,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The queue changed. Choose the track again."
+          }
+        }
+      }
+    },
+    "queue.empty" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing up next"
+          }
+        }
+      }
+    },
+    "queue.loading" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading queue…"
+          }
+        }
+      }
+    },
+    "queue.loadingTrack" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading track…"
+          }
+        }
+      }
+    },
+    "queue.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Up Next"
+          }
+        }
+      }
+    },
+    "queue.unavailable" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Track unavailable"
           }
         }
       }
@@ -481,6 +552,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Volume"
+          }
+        }
+      }
+    },
+    "window.keepOnTop" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep on Top"
           }
         }
       }
