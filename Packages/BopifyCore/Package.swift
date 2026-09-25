@@ -7,6 +7,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "BopifyDomain", targets: ["BopifyDomain"]),
+        .library(name: "BopifyLibrary", targets: ["BopifyLibrary"]),
         .library(name: "BopifyAuth", targets: ["BopifyAuth"]),
         .library(name: "BopifyPlayback", targets: ["BopifyPlayback"]),
     ],
@@ -35,6 +36,8 @@ let package = Package(
             ]
         ),
         .target(name: "BopifyPlayback", dependencies: ["BopifyDomain", "CBopifyCore"], swiftSettings: [.swiftLanguageMode(.v6)]),
+        .target(name: "BopifyLibrary", dependencies: ["BopifyDomain"], swiftSettings: [.swiftLanguageMode(.v6)]),
+        .testTarget(name: "LibraryTests", dependencies: ["BopifyLibrary"], swiftSettings: [.swiftLanguageMode(.v6)]),
         .testTarget(name: "DomainTests", dependencies: ["BopifyDomain"], swiftSettings: [.swiftLanguageMode(.v6)]),
         .testTarget(name: "AuthTests", dependencies: ["BopifyAuth"], swiftSettings: [.swiftLanguageMode(.v6)]),
         .testTarget(name: "PlaybackTests", dependencies: ["BopifyPlayback", "CBopifyCore"], swiftSettings: [.swiftLanguageMode(.v6)]),
