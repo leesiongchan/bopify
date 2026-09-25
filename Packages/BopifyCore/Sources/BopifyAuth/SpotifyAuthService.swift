@@ -16,18 +16,9 @@ public actor SpotifyAuthService {
     private let store: any TokenStoring
     private let openURL: @Sendable (URL) -> Void
     private var tokens: TokenSet?
-    /// Actors are reentrant across `await`: `signOut()` can finish while
-    /// `signIn()`/`validAccessToken()` are suspended mid-flight. `signOut()`
-    /// and `signIn()` bump this on entry and both check it before persisting,
-    /// so a sign-out (or a fresher sign-in) discards stale in-flight work.
-    /// `validAccessToken()` only checks it, guarding against a `signOut()`
-    /// mid-refresh -- not against two overlapping refreshes.
-    ///
-    /// This defends the actor's own contract, for any caller. Bopify's app
-    /// additionally serialises every auth operation through
-    /// `AppEnvironment.serialize`, so in-app the interleaving this guards
-    /// against cannot arise; only the tests construct it directly.
+    // Sign-out and new consent invalidate suspended work before it can persist credentials.
     private var generation = 0
+    private var refresh: (id: UUID, generation: Int, task: Task<TokenSet, Error>)?
 
     public init(
         clientID: String,
@@ -49,6 +40,18 @@ public actor SpotifyAuthService {
     }
 
     public func signIn() async throws -> TokenSet {
+        try await authorize(scopes: ["streaming"], validateGrant: false)
+    }
+
+    public func authorizeAdditionalScopes(_ additionalScopes: Set<String>) async throws -> TokenSet {
+        guard let current = tokens ?? restore() else { throw LibraryError.authorizationRequired }
+        let required = Set(["streaming"]).union(current.grantedScopes).union(additionalScopes)
+        return try await authorize(scopes: required, validateGrant: true)
+    }
+
+    private func authorize(scopes: Set<String>, validateGrant: Bool) async throws -> TokenSet {
+        refresh?.task.cancel()
+        refresh = nil
         generation += 1
         let myGeneration = generation
         BopifyLog.auth.info("signIn starting generation=\(myGeneration, privacy: .public)")
@@ -61,7 +64,7 @@ public actor SpotifyAuthService {
 
         let redirectURI = "http://127.0.0.1:\(port)/login"
         let request = AuthorizationRequest(clientID: clientID, redirectURI: redirectURI,
-                                           scopes: ["streaming"], pkce: pkce, state: state)
+                                           scopes: scopes.sorted(), pkce: pkce, state: state)
         openURL(request.url)
         BopifyLog.auth.info("opened system browser for authorization")
 
@@ -87,42 +90,57 @@ public actor SpotifyAuthService {
             BopifyLog.auth.notice("stale sign-in discarded generation=\(currentGeneration, privacy: .public) myGeneration=\(myGeneration, privacy: .public)")
             throw PlayerError.authDenied
         }
+        if validateGrant && !scopes.isSubset(of: tokens.grantedScopes) {
+            throw LibraryError.authorizationRequired
+        }
         try store.save(tokens)
         BopifyLog.auth.debug("saved token set to store")
         self.tokens = tokens
         return tokens
     }
 
-    /// Refreshes ahead of expiry: an expired token silently kills the
-    /// Spirc session rather than failing loudly.
     public func validAccessToken() async throws -> String {
-        guard let current = tokens ?? restore() else { throw PlayerError.authExpired }
-        guard current.needsRefresh() else {
-            BopifyLog.auth.debug("using cached access token")
-            return current.accessToken
-        }
-        BopifyLog.auth.debug("access token needs refresh")
-        guard let refreshToken = current.refreshToken else {
-            BopifyLog.auth.error("no refresh token available")
+        try await validAccessToken(requiredScopes: [])
+    }
+
+    public func validAccessToken(requiredScopes: Set<String>) async throws -> String {
+        guard let current = tokens ?? restore() else {
+            if !requiredScopes.isEmpty { throw LibraryError.authorizationRequired }
             throw PlayerError.authExpired
         }
+        guard requiredScopes.isSubset(of: current.grantedScopes) else { throw LibraryError.authorizationRequired }
+        if !current.needsRefresh() { return current.accessToken }
+        guard let refreshToken = current.refreshToken else { throw PlayerError.authExpired }
         let myGeneration = generation
-        let refreshed = try await client.refresh(refreshToken: refreshToken)
-        // Same reentrancy hazard as signIn(): a signOut() during the refresh
-        // must not have its result written back over the cleared session.
-        guard generation == myGeneration else {
-            let currentGeneration = generation
-            BopifyLog.auth.notice("stale refresh discarded generation=\(currentGeneration, privacy: .public) myGeneration=\(myGeneration, privacy: .public)")
-            throw PlayerError.authExpired
+        let pending: (id: UUID, generation: Int, task: Task<TokenSet, Error>)
+        if let refresh, refresh.generation == myGeneration {
+            pending = refresh
+        } else {
+            let task = Task { [client] in
+                try await client.refresh(refreshToken: refreshToken, grantedScopes: current.grantedScopes)
+            }
+            pending = (UUID(), myGeneration, task)
+            refresh = pending
+            BopifyLog.auth.debug("token refresh started")
         }
-        try store.save(refreshed)
-        tokens = refreshed
-        BopifyLog.auth.info("token refresh succeeded")
+        defer { if refresh?.id == pending.id { refresh = nil } }
+        let refreshed = try await pending.task.value
+        guard generation == myGeneration else { throw PlayerError.authExpired }
+        // Only the first waiter writes; other waiters consume the same result.
+        if refresh?.id == pending.id {
+            try store.save(refreshed)
+            tokens = refreshed
+            BopifyLog.auth.info("token refresh succeeded")
+        }
+        try Task.checkCancellation()
+        guard requiredScopes.isSubset(of: refreshed.grantedScopes) else { throw LibraryError.authorizationRequired }
         return refreshed.accessToken
     }
 
     public func signOut() {
         generation += 1
+        refresh?.task.cancel()
+        refresh = nil
         BopifyLog.auth.info("signOut")
         do {
             try store.clear()

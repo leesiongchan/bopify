@@ -95,4 +95,16 @@ struct TokenClientTests {
             _ = try await makeClient().refresh(refreshToken: "RT")
         }
     }
+    @Test func omittedRefreshScopePreservesExistingGrant() async throws {
+        StubProtocol.handler = { _ in (200, Data(#"{"access_token":"NEW_FAKE","expires_in":3600}"#.utf8)) }
+        let tokens = try await makeClient().refresh(refreshToken: "OLD_FAKE", grantedScopes: ["streaming", "user-library-read"])
+        #expect(tokens.grantedScopes == ["streaming", "user-library-read"])
+    }
+
+    @Test func explicitRefreshScopeReplacesExistingGrant() async throws {
+        StubProtocol.handler = { _ in (200, Data(#"{"access_token":"NEW_FAKE","expires_in":3600,"scope":"streaming"}"#.utf8)) }
+        let tokens = try await makeClient().refresh(refreshToken: "OLD_FAKE", grantedScopes: ["streaming", "user-library-read"])
+        #expect(tokens.grantedScopes == ["streaming"])
+    }
+
 }

@@ -21,12 +21,12 @@ public struct TokenClient: Sendable {
         ], fallbackRefreshToken: nil)
     }
 
-    public func refresh(refreshToken: String) async throws -> TokenSet {
+    public func refresh(refreshToken: String, grantedScopes: Set<String> = []) async throws -> TokenSet {
         try await post([
             "grant_type": "refresh_token",
             "refresh_token": refreshToken,
             "client_id": clientID,
-        ], fallbackRefreshToken: refreshToken)
+        ], fallbackRefreshToken: refreshToken, fallbackScopes: grantedScopes)
     }
 
     private struct Response: Decodable {
@@ -36,7 +36,7 @@ public struct TokenClient: Sendable {
         let scope: String?
     }
 
-    private func post(_ fields: [String: String], fallbackRefreshToken: String?) async throws -> TokenSet {
+    private func post(_ fields: [String: String], fallbackRefreshToken: String?, fallbackScopes: Set<String> = []) async throws -> TokenSet {
         var request = URLRequest(url: Self.endpoint)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
@@ -56,7 +56,7 @@ public struct TokenClient: Sendable {
                 // one when the response omits it.
                 refreshToken: decoded.refresh_token ?? fallbackRefreshToken,
                 expiresAt: Date().addingTimeInterval(TimeInterval(decoded.expires_in)),
-                grantedScopes: Set(decoded.scope?.split(separator: " ").map(String.init) ?? [])
+                grantedScopes: decoded.scope.map { Set($0.split(separator: " ").map(String.init)) } ?? fallbackScopes
             )
         case 400, 401:
             throw PlayerError.authExpired
