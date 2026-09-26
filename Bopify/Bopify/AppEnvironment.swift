@@ -192,7 +192,8 @@ final class AppEnvironment {
             let engine = try await LibrespotEngine(accessToken: token, deviceName: "Bopify")
             let model = PlayerModel(engine: engine)
             model.start()
-            model.activate()
+            // No activate(): the engine restores the last session or loads Liked Songs itself,
+            // and stays inactive when another device is playing so it is not interrupted.
             // Today the UI and `serialize` make a second connect unreachable,
             // so this teardown is structural rather than load-bearing: the
             // cost of being wrong is a leaked Rust runtime and audio thread
