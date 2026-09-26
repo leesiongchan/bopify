@@ -114,5 +114,16 @@ struct PlayerPresentationTests {
         state.phase = .error(.playbackSessionLost)
         #expect(PlayerContent(state) == .player)
     }
-
+    @Test func aNothingOutcomeOutsideIdleKeepsThePlayer() {
+        var state = PlaybackState()
+        state.startup = .resolved(.nothing)
+        state.phase = .paused
+        #expect(PlayerContent(state) == .player)
+    }
+    @Test func errorsSurfaceOverARemoteOutcome() {
+        var state = PlaybackState()
+        state.startup = .resolved(.remote(deviceName: "iPhone"))
+        state.phase = .error(.playbackSessionLost)
+        #expect(PlayerContent(state) == .player)
+    }
 }
