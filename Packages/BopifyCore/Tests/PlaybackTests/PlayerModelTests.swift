@@ -118,6 +118,28 @@ struct PlayerModelTests {
         #expect(model.displayPositionMs(at: model.positionUpdatedAt.addingTimeInterval(20)) == 4000)
     }
 
+    @Test(arguments: [PlaybackEvent.activeDeviceChanged(isActive: false), .loading, .failed(.networkUnavailable)])
+    func interruptionFreezesTheDisplayedPositionUntilAnAuthoritativeUpdate(_ event: PlaybackEvent) async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        await settle(model, engine, [.trackChanged(makeTrack()), .playing(positionMs: 1000)])
+        let before = model.displayPositionMs(at: .now)
+        #expect(before > 1000)
+
+        await settle(model, engine, [event])
+        let frozen = model.displayPositionMs(at: .now)
+        #expect(frozen >= before)
+        #expect(model.displayPositionMs(at: .now.addingTimeInterval(60)) == frozen)
+        #expect(model.state.positionMs == 1000)
+
+        await settle(model, engine, [.positionCorrection(positionMs: 4000)])
+        #expect(model.displayPositionMs(at: .now) == 4000)
+        await settle(model, engine, [.playing(positionMs: 5000)])
+        #expect(model.displayPositionMs(at: model.positionUpdatedAt.addingTimeInterval(2)) == 7000)
+    }
+
     @Test func positionCorrectionsReanchorTheDisplayClock() async {
         let engine = StubPlaybackEngine()
         let model = PlayerModel(engine: engine)

@@ -12,10 +12,10 @@ index ba00aa4..14025a8 100644
  pub use model::*;
 diff --git a/connect/src/queue.rs b/connect/src/queue.rs
 new file mode 100644
-index 0000000..a630e8e
+index 0000000..1e7dd3d
 --- /dev/null
 +++ b/connect/src/queue.rs
-@@ -0,0 +1,255 @@
+@@ -0,0 +1,267 @@
 +use crate::{
 +    playback::player::QueueTrack, protocol::player::ProvidedTrack, state::provider::IsProvider,
 +};
@@ -49,6 +49,18 @@ index 0000000..a630e8e
 +}
 +
 +impl crate::state::ConnectState {
++    pub(crate) fn publish_repeat(
++        &self,
++        observed: &mut Option<(bool, bool)>,
++        publish: impl FnOnce(bool, bool),
++    ) {
++        let current = (self.repeat_context(), self.repeat_track());
++        if *observed != Some(current) {
++            *observed = Some(current);
++            publish(current.0, current.1);
++        }
++    }
++
 +    pub(crate) fn queue_snapshot(&mut self, tracker: &mut QueueTracker) -> Option<Snapshot> {
 +        let movement = self.queue_movement.take();
 +        let replaced = std::mem::take(&mut self.queue_replaced);
@@ -272,7 +284,7 @@ index 0000000..a630e8e
 +    }
 +}
 diff --git a/connect/src/spirc.rs b/connect/src/spirc.rs
-index c7c195b..642c8e4 100644
+index c7c195b..ec3b8b4 100644
 --- a/connect/src/spirc.rs
 +++ b/connect/src/spirc.rs
 @@ -14,7 +14,7 @@ use crate::{
@@ -284,15 +296,16 @@ index c7c195b..642c8e4 100644
      },
      protocol::{
          connect::{Cluster, ClusterUpdate, LogoutCommand, SetVolumeCommand},
-@@ -70,6 +70,7 @@ impl From<SpircError> for Error {
+@@ -70,6 +70,8 @@ impl From<SpircError> for Error {
  }
  
  struct SpircTask {
 +    queue_tracker: crate::queue::QueueTracker,
++    observed_repeat: Option<(bool, bool)>,
      player: Arc<Player>,
      mixer: Arc<dyn Mixer>,
  
-@@ -123,6 +124,10 @@ enum SpircCommand {
+@@ -123,6 +125,10 @@ enum SpircCommand {
      Pause,
      Prev,
      Next,
@@ -303,7 +316,7 @@ index c7c195b..642c8e4 100644
      VolumeUp,
      VolumeDown,
      Shutdown,
-@@ -139,6 +144,56 @@ enum SpircCommand {
+@@ -139,6 +145,56 @@ enum SpircCommand {
      ClearQueue,
  }
  
@@ -360,15 +373,16 @@ index c7c195b..642c8e4 100644
  const CONTEXT_FETCH_THRESHOLD: usize = 2;
  
  // delay to update volume after a certain amount of time, instead on each update request
-@@ -230,6 +285,7 @@ impl Spirc {
+@@ -230,6 +286,8 @@ impl Spirc {
          let player_events = player.get_player_event_channel();
  
          let mut task = SpircTask {
 +            queue_tracker: Default::default(),
++            observed_repeat: None,
              player,
              mixer,
  
-@@ -329,6 +385,17 @@ impl Spirc {
+@@ -329,6 +387,17 @@ impl Spirc {
          Ok(self.commands.send(SpircCommand::Next)?)
      }
  
@@ -386,7 +400,7 @@ index c7c195b..642c8e4 100644
      /// Increases the volume by configured steps of [ConnectConfig].
      ///
      /// Does nothing if we are not the active device.
-@@ -599,6 +666,7 @@ impl SpircTask {
+@@ -599,6 +668,7 @@ impl SpircTask {
                  },
                  else => break
              }
@@ -394,14 +408,18 @@ index c7c195b..642c8e4 100644
          }
  
          if !self.shutdown && self.connect_state.is_active() {
-@@ -662,41 +730,20 @@ impl SpircTask {
+@@ -662,41 +732,24 @@ impl SpircTask {
          update_state
      }
  
 -    /// Emit set queue event via PlayerEvent
 -    fn emit_set_queue_event(&self) {
-+    /// Publish only changed structure; called after every event-loop mutation.
++    /// Observe implicit repeat changes (including skips) after every event-loop mutation.
 +    fn emit_set_queue_event(&mut self) {
++        self.connect_state
++            .publish_repeat(&mut self.observed_repeat, |context, track| {
++                self.player.emit_repeat_changed_event(context, track);
++            });
          if !self.emit_set_queue_events {
              return;
          }
@@ -447,7 +465,7 @@ index c7c195b..642c8e4 100644
      }
  
      // todo: is the time_delta still necessary?
-@@ -711,6 +758,27 @@ impl SpircTask {
+@@ -711,6 +764,27 @@ impl SpircTask {
      async fn handle_command(&mut self, cmd: SpircCommand) -> Result<(), Error> {
          trace!("Received SpircCommand::{cmd:?}");
          match cmd {
@@ -475,7 +493,7 @@ index c7c195b..642c8e4 100644
              SpircCommand::Shutdown => {
                  trace!("Received SpircCommand::Shutdown");
                  self.handle_pause();
-@@ -1181,6 +1249,7 @@ impl SpircTask {
+@@ -1181,6 +1255,7 @@ impl SpircTask {
      }
  
      fn handle_transfer(&mut self, mut transfer: TransferState) -> Result<(), Error> {
@@ -483,7 +501,7 @@ index c7c195b..642c8e4 100644
          let mut ctx_uri = match transfer.current_session.context.uri {
              None => Err(SpircError::NoUri("transfer context"))?,
              // can apparently happen when a state is transferred and was started with "uris" via the api
-@@ -1363,6 +1432,7 @@ impl SpircTask {
+@@ -1363,6 +1438,7 @@ impl SpircTask {
          page: Option<ContextPage>,
          fallback_index: Option<usize>,
      ) -> Result<(), Error> {
@@ -491,7 +509,7 @@ index c7c195b..642c8e4 100644
          self.connect_state
              .reset_context(if let PlayContext::Uri(ref uri) = cmd.context {
                  ResetContext::WhenDifferent(uri)
-@@ -1621,6 +1691,7 @@ impl SpircTask {
+@@ -1621,6 +1697,7 @@ impl SpircTask {
      }
  
      fn handle_shuffle(&mut self, shuffle: bool) -> Result<(), Error> {
@@ -499,7 +517,7 @@ index c7c195b..642c8e4 100644
          self.player.emit_shuffle_changed_event(shuffle);
          self.connect_state.handle_shuffle(shuffle)
      }
-@@ -1896,7 +1967,11 @@ impl SpircTask {
+@@ -1896,7 +1973,11 @@ impl SpircTask {
          let current_uri = self.connect_state.current_track(|t| &t.uri);
          let id = SpotifyUri::from_uri(current_uri)?;
          self.player.load(id, start_playing, position_ms);
@@ -511,7 +529,7 @@ index c7c195b..642c8e4 100644
          self.connect_state
              .update_position(position_ms, self.now_ms());
          if start_playing {
-@@ -1905,11 +1980,10 @@ impl SpircTask {
+@@ -1905,11 +1986,10 @@ impl SpircTask {
              self.play_status = SpircPlayStatus::LoadingPause { position_ms };
          }
          self.connect_state.set_status(&self.play_status);
@@ -567,7 +585,7 @@ index efb8376..dd526dd 100644
      pub seed: u64,
      pub initial_track: String,
 diff --git a/connect/src/state/tracks.rs b/connect/src/state/tracks.rs
-index 0ecfde2..172530c 100644
+index 0ecfde2..a7b6c61 100644
 --- a/connect/src/state/tracks.rs
 +++ b/connect/src/state/tracks.rs
 @@ -38,15 +38,6 @@ impl<'ct> ConnectState {
@@ -718,7 +736,7 @@ index 0ecfde2..172530c 100644
          self.player_mut().prev_tracks = tracks;
      }
  
-@@ -448,3 +480,245 @@ impl<'ct> ConnectState {
+@@ -448,3 +480,286 @@ impl<'ct> ConnectState {
          self.update_restrictions();
      }
  }
@@ -943,6 +961,47 @@ index 0ecfde2..172530c 100644
 +        assert!(previous.generation > next.generation);
 +        assert!(state.queue_snapshot(&mut tracker).is_none());
 +    }
++    #[test]
++    fn navigation_publishes_repeat_one_cleared_and_context_retained() {
++        for select in [false, true] {
++            for repeat_context in [false, true] {
++                let mut state = fixture();
++                state.set_repeat_context(repeat_context);
++                state.set_repeat_track(true);
++                let mut tracker = crate::queue::QueueTracker::default();
++                state.queue_snapshot(&mut tracker).unwrap();
++                let mut observed = None;
++                let mut events = Vec::new();
++                state.publish_repeat(&mut observed, |context, track| {
++                    events.push((context, track))
++                });
++                assert_eq!(events, [(repeat_context, true)]);
++                if select {
++                    crate::spirc::dispatch_selection(
++                        &mut state,
++                        tracker.generation,
++                        QueueSelection {
++                            generation: tracker.generation,
++                            raw_next_index: 1,
++                        },
++                        |_| {},
++                    )
++                    .unwrap();
++                } else {
++                    state.next_track().unwrap();
++                }
++                state.publish_repeat(&mut observed, |context, track| {
++                    events.push((context, track))
++                });
++                assert_eq!(events, [(repeat_context, true), (repeat_context, false)]);
++                state.publish_repeat(&mut observed, |context, track| {
++                    events.push((context, track))
++                });
++                assert_eq!(events.len(), 2);
++            }
++        }
++    }
++
 +    #[test]
 +    fn rapid_second_selection_rejects_the_obsolete_snapshot() {
 +        let mut state = fixture();

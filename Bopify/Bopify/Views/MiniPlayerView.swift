@@ -43,7 +43,7 @@ struct MiniPlayerView: View {
                     }
                 }
                 .padding(16)
-                .modifier(ScrollablePlayerContent(minimumHeight: mode == .queue ? 260 : 560))
+                .modifier(ScrollablePlayerContent(mode: mode))
             }
         }
         .modifier(SharedCurrentArtwork(image: image, namespace: artworkNamespace))
@@ -227,14 +227,18 @@ private struct ContextURILoadView: View {
 }
 
 private struct ScrollablePlayerContent: ViewModifier {
-    let minimumHeight: CGFloat
+    let mode: PlayerMode
     func body(content: Content) -> some View {
-        GeometryReader { geometry in
-            ScrollView {
-                content.frame(height: max(minimumHeight, geometry.size.height))
+        if mode == .queue {
+            content
+        } else {
+            GeometryReader { geometry in
+                ScrollView {
+                    content.frame(height: max(560, geometry.size.height))
+                }
+                .scrollDisabled(geometry.size.height >= 560)
+                .scrollIndicators(.hidden)
             }
-            .scrollDisabled(geometry.size.height >= minimumHeight)
-            .scrollIndicators(.hidden)
         }
     }
 }
