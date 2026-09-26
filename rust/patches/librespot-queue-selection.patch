@@ -285,7 +285,7 @@ index 0000000..1e7dd3d
 +    }
 +}
 diff --git a/connect/src/spirc.rs b/connect/src/spirc.rs
-index c7c195b..3c21a06 100644
+index c7c195b..8f47957 100644
 --- a/connect/src/spirc.rs
 +++ b/connect/src/spirc.rs
 @@ -14,7 +14,7 @@ use crate::{
@@ -543,7 +543,7 @@ index c7c195b..3c21a06 100644
          let same_session = cluster.player_state.session_id == self.session.session_id()
              || cluster.player_state.session_id.is_empty();
          if !cluster.active_device_id.is_empty() || !same_session {
-@@ -953,6 +1041,47 @@ impl SpircTask {
+@@ -953,6 +1041,56 @@ impl SpircTask {
          Ok(())
      }
  
@@ -554,10 +554,19 @@ index c7c195b..3c21a06 100644
 +            StartupDecision::Remote { device_name } => {
 +                return StartupOutcome::Remote { device_name };
 +            }
-+            StartupDecision::Restore(transfer) => match self.handle_transfer(transfer) {
-+                Ok(()) => return StartupOutcome::Restored,
-+                Err(why) => warn!("startup: restoring the last session failed: {why}"),
-+            },
++            StartupDecision::Restore(transfer) => {
++                match self.handle_transfer(transfer) {
++                    // handle_transfer returns Ok without loading when the session names no
++                    // playable track, so only a paused load counts as restored.
++                    Ok(()) if matches!(self.play_status, SpircPlayStatus::LoadingPause { .. }) => {
++                        return StartupOutcome::Restored;
++                    }
++                    Ok(()) => warn!("startup: the last session had no track to restore"),
++                    Err(why) => warn!("startup: restoring the last session failed: {why}"),
++                }
++                // A half-applied transfer must not be finished later on top of Liked Songs.
++                self.transfer_state = None;
++            }
 +            StartupDecision::Fallback => {}
 +        }
 +        self.load_liked_songs().await
@@ -591,7 +600,7 @@ index c7c195b..3c21a06 100644
      fn handle_user_attributes_update(&mut self, update: UserAttributesUpdate) {
          trace!("Received attributes update: {update:#?}");
          let attributes: UserAttributes = update
-@@ -1181,6 +1310,7 @@ impl SpircTask {
+@@ -1181,6 +1319,7 @@ impl SpircTask {
      }
  
      fn handle_transfer(&mut self, mut transfer: TransferState) -> Result<(), Error> {
@@ -599,7 +608,7 @@ index c7c195b..3c21a06 100644
          let mut ctx_uri = match transfer.current_session.context.uri {
              None => Err(SpircError::NoUri("transfer context"))?,
              // can apparently happen when a state is transferred and was started with "uris" via the api
-@@ -1363,6 +1493,7 @@ impl SpircTask {
+@@ -1363,6 +1502,7 @@ impl SpircTask {
          page: Option<ContextPage>,
          fallback_index: Option<usize>,
      ) -> Result<(), Error> {
@@ -607,7 +616,7 @@ index c7c195b..3c21a06 100644
          self.connect_state
              .reset_context(if let PlayContext::Uri(ref uri) = cmd.context {
                  ResetContext::WhenDifferent(uri)
-@@ -1621,6 +1752,7 @@ impl SpircTask {
+@@ -1621,6 +1761,7 @@ impl SpircTask {
      }
  
      fn handle_shuffle(&mut self, shuffle: bool) -> Result<(), Error> {
@@ -615,7 +624,7 @@ index c7c195b..3c21a06 100644
          self.player.emit_shuffle_changed_event(shuffle);
          self.connect_state.handle_shuffle(shuffle)
      }
-@@ -1896,7 +2028,11 @@ impl SpircTask {
+@@ -1896,7 +2037,11 @@ impl SpircTask {
          let current_uri = self.connect_state.current_track(|t| &t.uri);
          let id = SpotifyUri::from_uri(current_uri)?;
          self.player.load(id, start_playing, position_ms);
@@ -627,7 +636,7 @@ index c7c195b..3c21a06 100644
          self.connect_state
              .update_position(position_ms, self.now_ms());
          if start_playing {
-@@ -1905,11 +2041,10 @@ impl SpircTask {
+@@ -1905,11 +2050,10 @@ impl SpircTask {
              self.play_status = SpircPlayStatus::LoadingPause { position_ms };
          }
          self.connect_state.set_status(&self.play_status);
@@ -642,10 +651,10 @@ index c7c195b..3c21a06 100644
          if self.connect_state.is_playing() {
 diff --git a/connect/src/startup.rs b/connect/src/startup.rs
 new file mode 100644
-index 0000000..b2533ff
+index 0000000..a545f71
 --- /dev/null
 +++ b/connect/src/startup.rs
-@@ -0,0 +1,171 @@
+@@ -0,0 +1,195 @@
 +//! Bopify: the connect-time decision behind `ConnectConfig::startup_restore`.
 +
 +use crate::protocol::{connect::Cluster, transfer_state::TransferState};
@@ -684,6 +693,9 @@ index 0000000..b2533ff
 +            // Set before handle_transfer, never as a pause after it: it also stops
 +            // handle_transfer extrapolating a stale timestamp past where playback was.
 +            transfer.playback.mut_or_insert_default().is_paused = Some(true);
++            // handle_transfer rejects a missing context uri but restores a track-only session from "-".
++            let context = transfer.current_session.mut_or_insert_default().context.mut_or_insert_default();
++            context.uri.get_or_insert_with(|| "-".into());
 +            StartupDecision::Restore(transfer)
 +        }
 +        _ => StartupDecision::Fallback,
@@ -783,7 +795,13 @@ index 0000000..b2533ff
 +
 +    #[test]
 +    fn an_empty_or_missing_session_falls_back() {
-+        for data in [session("", "", true), session("-", "", true), Vec::new()] {
++        assert!(TransferState::parse_from_bytes(&[0xFF]).is_err());
++        for data in [
++            session("", "", true),
++            session("-", "", true),
++            Vec::new(),
++            vec![0xFF],
++        ] {
 +            let decision = startup_decision(&cluster("", "", data), OWN);
 +            assert!(matches!(decision, StartupDecision::Fallback), "{decision:?}");
 +        }
@@ -812,9 +830,24 @@ index 0000000..b2533ff
 +    }
 +
 +    #[test]
++    fn a_track_without_a_context_uri_is_restored_as_a_track_only_session() {
++        let mut transfer = TransferState::new();
++        transfer
++            .playback
++            .mut_or_insert_default()
++            .current_track
++            .mut_or_insert_default()
++            .uri = Some("spotify:track:x".into());
++        let data = transfer.write_to_bytes().unwrap();
++        let transfer = restored(startup_decision(&cluster("", "", data), OWN));
++        assert_eq!(transfer.current_session.context.uri.as_deref(), Some("-"));
++        assert_eq!(transfer.playback.is_paused, Some(true));
++    }
++
++    #[test]
 +    fn this_device_is_never_mirrored() {
 +        let decision = startup_decision(&cluster(OWN, "spotify:track:x", Vec::new()), OWN);
-+        assert!(!matches!(decision, StartupDecision::Remote { .. }), "{decision:?}");
++        assert!(matches!(decision, StartupDecision::Fallback), "{decision:?}");
 +    }
 +}
 diff --git a/connect/src/state.rs b/connect/src/state.rs
