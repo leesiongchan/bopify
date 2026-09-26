@@ -26,7 +26,7 @@ final class StatusPanel: NSPanel {
     }
 
     override var canBecomeKey: Bool { true }
-    override func animationResizeTime(_ newFrame: NSRect) -> TimeInterval { 0.55 }
+    override func animationResizeTime(_ newFrame: NSRect) -> TimeInterval { 0.36 }
 
     override func cancelOperation(_ sender: Any?) {
         if onDismissQueue?() != true { onDismiss?() }

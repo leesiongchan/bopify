@@ -1,14 +1,22 @@
 import SwiftUI
+import os
+import BopifyDomain
 import BopifyPlayback
 
 struct RadialProgressView: View {
     let positionMs: Int64
     let durationMs: Int64
     let canSeek: Bool
+    var remainingTimeOffset: CGFloat = 18
     let seek: (Int64) -> Void
     @State private var scrub: RadialScrub?
+    @State private var lastScrubProgress = 0.0
+    @State private var holdTask: Task<Void, Never>?
+    @State private var pressOrigin: CGPoint?
     @State private var rejectedGesture = false
     @GestureState private var gestureActive = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
 
     private var progress: Double {
         scrub?.progress ?? (durationMs > 0 ? min(1, max(0, Double(positionMs) / Double(durationMs))) : 0)
@@ -18,17 +26,20 @@ struct RadialProgressView: View {
     var body: some View {
         GeometryReader { geometry in
             let radius = geometry.size.width / 2
-            let angle = progress * .pi * 2 - .pi / 2
+            let angle = (scrub?.progress ?? lastScrubProgress) * .pi * 2 + .pi / 2
             ZStack {
+                Circle().stroke(.primary.opacity(contrast == .increased ? 0.45 : 0.12), lineWidth: 1)
                 Circle().trim(from: 0, to: progress)
-                    .stroke(.white.opacity(0.46), style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                if durationMs > 0 {
-                    Circle().fill(Color(red: 0.79, green: 0.9, blue: 1))
-                        .frame(width: 8, height: 8)
-                        .shadow(color: .cyan.opacity(0.55), radius: 5)
-                        .position(x: radius + cos(angle) * radius, y: radius + sin(angle) * radius)
-                }
+                    .stroke(.primary.opacity(0.65), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                    .rotationEffect(.degrees(90))
+                Circle().fill(.white)
+                    .frame(width: 22, height: 22)
+                    .shadow(color: .black.opacity(0.16), radius: 5, y: 2)
+                    .scaleEffect(scrub == nil ? 0.35 : 1)
+                    .opacity(scrub == nil ? 0 : 1)
+                    .animation(.spring(duration: reduceMotion ? 0.12 : 0.2, bounce: 0.12), value: scrub != nil)
+                    .position(x: radius + cos(angle) * radius, y: radius + sin(angle) * radius)
+                    .allowsHitTesting(false)
             }
             .contentShape(RingHitShape(), eoFill: true)
             .gesture(DragGesture(minimumDistance: 0)
@@ -37,40 +48,65 @@ struct RadialProgressView: View {
                     guard canSeek, durationMs > 0, !rejectedGesture else { return }
                     let x = value.location.x - radius, y = value.location.y - radius
                     guard let fraction = radialProgress(x: x, y: y) else { return }
-                    if scrub == nil {
+                    if scrub != nil {
+                        scrub?.update(fraction)
+                    } else if let origin = pressOrigin {
+                        if hypot(value.location.x - origin.x, value.location.y - origin.y) > 10 {
+                            cancelScrub()
+                            rejectedGesture = true
+                        }
+                    } else {
                         guard abs(hypot(x, y) - radius) <= 18 else { rejectedGesture = true; return }
-                        scrub = RadialScrub(start: fraction)
-                    } else { scrub?.update(fraction) }
+                        pressOrigin = value.location
+                        holdTask = Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(250))
+                            guard !Task.isCancelled else { return }
+                            scrub = RadialScrub(start: fraction)
+                            BopifyLog.playback.debug("radial scrub activated")
+                        }
+                    }
                 }
                 .onEnded { _ in
-                    if canSeek, let scrub, let target = seekPosition(progress: scrub.progress, durationMs: durationMs) { seek(target) }
-                    scrub = nil
+                    if canSeek, let scrub, let target = seekPosition(progress: scrub.progress, durationMs: durationMs) {
+                        seek(target)
+                        BopifyLog.playback.debug("radial scrub committed")
+                    }
+                    cancelScrub()
                     rejectedGesture = false
                 })
             .overlay(alignment: .bottom) {
-                HStack {
-                    Text(playbackTime(displayedPosition))
-                    Spacer()
-                    Text("−" + playbackTime(max(0, durationMs - displayedPosition)))
-                }
-                .font(.system(size: 10, weight: .regular, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.55))
-                .padding(.horizontal, 20)
-                .offset(y: 18)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
+                Text("−" + playbackTime(max(0, durationMs - displayedPosition)))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .offset(y: remainingTimeOffset + 18)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text("player.progress"))
-        .accessibilityValue(Text("\(playbackTime(displayedPosition)) of \(playbackTime(durationMs))"))
+        .accessibilityValue(Text("−" + playbackTime(max(0, durationMs - displayedPosition))))
         .accessibilityAdjustableAction { direction in
-            guard canSeek else { return }
+            guard canSeek, durationMs > 0 else { return }
             let delta: Int64 = direction == .increment ? 5_000 : -5_000
             seek(min(max(0, positionMs + delta), durationMs))
         }
-        .onChange(of: canSeek) { _, enabled in if !enabled { scrub = nil; rejectedGesture = true } }
-        .onChange(of: gestureActive) { _, active in if !active { scrub = nil; rejectedGesture = false } }
+        .onChange(of: canSeek) { _, enabled in
+            if !enabled { cancelScrub(); rejectedGesture = gestureActive }
+        }
+        .onChange(of: durationMs) { _, _ in cancelScrub(); rejectedGesture = gestureActive }
+        .onChange(of: gestureActive) { _, active in
+            if !active { cancelScrub(); rejectedGesture = false }
+        }
+        .onDisappear { cancelScrub() }
+    }
+
+    private func cancelScrub() {
+        holdTask?.cancel()
+        holdTask = nil
+        pressOrigin = nil
+        if let scrub { lastScrubProgress = scrub.progress }
+        scrub = nil
     }
 }
 

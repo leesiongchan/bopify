@@ -19,7 +19,6 @@ struct ArtworkView: View {
         }
         .frame(width: diameter, height: diameter)
         .clipShape(Circle())
-        .overlay(Circle().strokeBorder(.white.opacity(0.12)))
         .accessibilityHidden(true)
     }
 }

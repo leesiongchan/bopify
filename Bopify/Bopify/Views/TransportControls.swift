@@ -69,9 +69,9 @@ struct TransportControls: View {
     private func modeSymbol(_ name: String, active: Bool) -> some View {
         Image(systemName: name)
             .font(.system(size: 15, weight: .medium))
-            .foregroundStyle(.white.opacity(active ? 1 : 0.48))
+            .foregroundStyle(.primary.opacity(active ? 1 : 0.48))
             .frame(width: 32, height: 40)
-            .overlay(alignment: .bottom) { if active { Circle().fill(.white).frame(width: 3, height: 3).padding(.bottom, 2) } }
+            .overlay(alignment: .bottom) { if active { Circle().fill(.primary).frame(width: 3, height: 3).padding(.bottom, 2) } }
     }
 
 }

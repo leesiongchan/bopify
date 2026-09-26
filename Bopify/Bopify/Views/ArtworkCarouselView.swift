@@ -1,4 +1,5 @@
 import SwiftUI
+import os
 import BopifyDomain
 import BopifyPlayback
 
@@ -8,6 +9,11 @@ struct ArtworkCarouselView: View {
     let image: Image?
     let store: ArtworkStore
     let artworkNamespace: Namespace.ID
+    var canNext = false
+    var next: () -> Void = {}
+    @GestureState private var albumDrag = AlbumDragState()
+    @State private var dragOccurrenceID: [String?]?
+    @State private var rejectedAlbumGesture = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var layers: [ArtworkLayer] = []
     @State private var previousQueue: PlaybackQueue?
@@ -22,34 +28,40 @@ struct ArtworkCarouselView: View {
             ZStack {
                 DiscView(diameter: 310 * scale).position(center)
                 if layers.isEmpty {
-                    ArtworkView(image: image, diameter: 204 * scale)
+                    ArtworkView(image: image, diameter: 204 * scale * albumScale)
                         .modifier(CurrentArtworkMatch(namespace: artworkNamespace, active: true))
-                        .position(center)
+                        .position(x: center.x + albumOffset.width, y: center.y + albumOffset.height)
                 }
                 TimelineView(.animation(paused: !animating)) { context in
                     let progress: CGFloat = animating ? fraction(at: context.date) : 1
                     ZStack {
                     ForEach(layers) { layer in
-                        let point = layer.point(at: progress)
-                        let diameter = layer.fromSize + (layer.toSize - layer.fromSize) * progress
-                        ArtworkView(image: artwork(for: layer), diameter: diameter * scale)
-                            .modifier(CurrentArtworkMatch(namespace: artworkNamespace, active: layer.isCurrent))
-                            .position(x: center.x + point.x * scale, y: center.y + point.y * scale)
-                            .opacity(layer.fromOpacity + (layer.toOpacity - layer.fromOpacity) * progress)
-                            .zIndex(layer.isCurrent ? 2 : 1)
+                        artworkLayer(layer, progress: progress, scale: scale, center: center)
                     }
                     }
                     .frame(width: geometry.size.width, height: geometry.size.height)
                 }
+                Color.clear.frame(width: 204 * scale, height: 204 * scale)
+                    .contentShape(Circle())
+                    .gesture(albumGesture(diameter: 204 * scale))
+                    .position(center)
+                    .accessibilityHidden(true)
             }
+            .animation(.spring(duration: reduceMotion ? 0.12 : 0.24, bounce: 0.16), value: albumHeld)
         }
-        .frame(height: 330)
+        .frame(height: 340)
         .onAppear { retarget() }
+        .onChange(of: albumDrag.isHeld) { _, held in
+            if !held { dragOccurrenceID = nil; rejectedAlbumGesture = false }
+        }
+        .onChange(of: canNext) { _, enabled in
+            if !enabled && albumDrag.isHeld { rejectedAlbumGesture = true }
+        }
         .onChange(of: queue) { _, _ in retarget() }
         .onChange(of: currentTrack) { _, _ in retarget() }
         .task(id: generation) {
             let version = generation
-            try? await Task.sleep(for: .milliseconds(reduceMotion ? 160 : 720))
+            try? await Task.sleep(for: .milliseconds(reduceMotion ? 160 : 420))
             guard !Task.isCancelled, version == generation else { return }
             layers.removeAll { $0.toOpacity == 0 }
             animating = false
@@ -61,6 +73,55 @@ struct ArtworkCarouselView: View {
         }
     }
 
+    private func artworkLayer(_ layer: ArtworkLayer, progress: CGFloat, scale: CGFloat, center: CGPoint) -> some View {
+        let point = layer.point(at: progress)
+        let size = layer.fromSize + (layer.toSize - layer.fromSize) * progress
+        let diameter = size * scale * (layer.isCurrent ? albumScale : 1)
+        let offset = layer.isCurrent ? albumOffset : .zero
+        let position = CGPoint(x: center.x + point.x * scale + offset.width,
+                               y: center.y + point.y * scale + offset.height)
+        return ArtworkView(image: artwork(for: layer), diameter: diameter)
+            .modifier(SideArtworkGlass(active: !layer.isCurrent))
+            .modifier(CurrentArtworkMatch(namespace: artworkNamespace, active: layer.isCurrent))
+            .position(position)
+            .opacity(layer.fromOpacity + (layer.toOpacity - layer.fromOpacity) * progress)
+            .zIndex(layer.isCurrent ? 2 : 1)
+    }
+
+    private var occurrenceID: [String?] { [currentTrack?.uri.rawValue, queue?.current?.id] }
+    private var albumHeld: Bool { canNext && !rejectedAlbumGesture && albumDrag.isHeld && dragOccurrenceID == occurrenceID }
+    private var albumScale: CGFloat { albumHeld ? 0.94 : 1 }
+    private var albumOffset: CGSize {
+        guard albumHeld else { return .zero }
+        let x = albumDrag.translation.width
+        return CGSize(width: 120 * tanh(x / 120), height: albumDrag.translation.height * 0.15)
+    }
+
+    private func albumGesture(diameter: CGFloat) -> some Gesture {
+        LongPressGesture(minimumDuration: 0.25, maximumDistance: 10)
+            .sequenced(before: DragGesture(minimumDistance: 0))
+            .updating($albumDrag) { value, state, _ in
+                if case let .second(true, drag) = value {
+                    state.isHeld = true
+                    state.translation = drag?.translation ?? .zero
+                }
+            }
+            .onChanged { value in
+                if case .second(true, _) = value, dragOccurrenceID == nil, canNext {
+                    dragOccurrenceID = occurrenceID
+                    BopifyLog.playback.debug("album drag activated")
+                }
+            }
+            .onEnded { value in
+                defer { dragOccurrenceID = nil; rejectedAlbumGesture = false }
+                guard canNext, !rejectedAlbumGesture, dragOccurrenceID == occurrenceID,
+                      case let .second(true, drag?) = value,
+                      shouldAdvanceAlbum(translation: drag.translation, diameter: diameter) else { return }
+                BopifyLog.playback.debug("album drag advancing to next")
+                next()
+            }
+    }
+
     private var artworkURLs: [URL] { layers.compactMap { $0.entry.track?.artwork?.url } }
 
     private func artwork(for layer: ArtworkLayer) -> Image? {
@@ -69,7 +130,7 @@ struct ArtworkCarouselView: View {
     }
 
     private func fraction(at date: Date) -> CGFloat {
-        let t = min(1, max(0, date.timeIntervalSince(started) / (reduceMotion ? 0.16 : 0.72)))
+        let t = min(1, max(0, date.timeIntervalSince(started) / (reduceMotion ? 0.16 : 0.42)))
         return reduceMotion ? t : (1 - (1 + 8 * t) * exp(-8 * t)) / (1 - 9 * exp(-8))
     }
 
@@ -79,9 +140,9 @@ struct ArtworkCarouselView: View {
         if current.track == nil { current.track = currentTrack }
         let initial = layers.isEmpty && previousQueue == nil
         let desired: [(QueueEntry, CGPoint, CGFloat)] = [
-            queue.previous.last.map { ($0, CGPoint(x: -126, y: -112), 80) },
+            queue.previous.last.map { ($0, CGPoint(x: -96, y: 0), 80) },
             (current, .zero, 204),
-            queue.next.first.map { ($0, CGPoint(x: 126, y: 112), 80) }
+            queue.next.first.map { ($0, CGPoint(x: 96, y: 0), 80) }
         ].compactMap { $0 }
         let ids = desired.map { $0.0.id }
         if layers.filter({ $0.toOpacity == 1 }).map(\.id) == ids {
@@ -130,28 +191,48 @@ private struct ArtworkLayer: Identifiable {
     var id: String { entry.id }
 
     func point(at progress: CGFloat) -> CGPoint {
-        let t = min(1, max(0, progress)), u = 1 - t
-        let control = CGPoint(x: (from.x + to.x) / 2 - (to.y - from.y) * 0.13,
-                              y: (from.y + to.y) / 2 + (to.x - from.x) * 0.13)
-        return CGPoint(x: u*u*from.x + 2*u*t*control.x + t*t*to.x,
-                       y: u*u*from.y + 2*u*t*control.y + t*t*to.y)
+        let t = min(1, max(0, progress))
+        return CGPoint(x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t)
+    }
+}
+
+private struct AlbumDragState {
+    var isHeld = false
+    var translation = CGSize.zero
+}
+
+private struct SideArtworkGlass: ViewModifier {
+    let active: Bool
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    func body(content: Content) -> some View {
+        if active && !reduceTransparency {
+            if #available(macOS 26.0, *) {
+                content.opacity(0.6).glassEffect(.clear, in: Circle())
+            } else {
+                content.opacity(0.6).background(.ultraThinMaterial, in: Circle())
+            }
+        } else { content }
     }
 }
 
 struct DiscView: View {
     let diameter: CGFloat
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     var body: some View {
-        ZStack {
-            Circle().fill(LinearGradient(colors: [Color(white: 0.105), Color(white: 0.045)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            ForEach([0.82, 0.91, 0.98], id: \.self) { scale in
-                Circle().strokeBorder(.white.opacity(contrast == .increased ? 0.4 : 0.07), lineWidth: 0.6)
-                    .padding(diameter * (1 - scale) / 2)
+        Group {
+            if reduceTransparency || contrast == .increased {
+                Circle().fill(Color(nsColor: .controlBackgroundColor))
+                    .overlay(Circle().strokeBorder(.primary.opacity(0.5), lineWidth: 1))
+            } else if #available(macOS 26.0, *) {
+                Color.clear.glassEffect(.clear, in: Circle())
+            } else {
+                Circle().fill(.ultraThinMaterial)
+                    .overlay(Circle().strokeBorder(.primary.opacity(0.18), lineWidth: 1))
             }
-            Circle().strokeBorder(LinearGradient(colors: [.white.opacity(0.3), .white.opacity(0.03), .white.opacity(0.13)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
         }
         .frame(width: diameter, height: diameter)
-        .shadow(color: .black.opacity(0.35), radius: 20, y: 12)
         .accessibilityHidden(true)
+        .allowsHitTesting(false)
     }
 }
