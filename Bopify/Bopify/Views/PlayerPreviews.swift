@@ -80,7 +80,7 @@ private struct PlayerPreview: View {
     }
 
     var body: some View {
-        PlayerSurface(palette: ArtworkPalette(primary: .purple, secondary: .orange)) {
+        PlayerSurface {
             if presentation.mode == .compact {
                 CompactPlayerView(player: player, state: state, store: store, presentation: presentation, artworkNamespace: artworkNamespace).padding(8)
             } else {
@@ -104,7 +104,7 @@ private struct PlayerPreview: View {
         }
         .modifier(SharedCurrentArtwork(image: artwork, namespace: artworkNamespace))
         .frame(width: width ?? (presentation.mode == .compact ? 380 : 410), height: presentation.mode == .compact ? 88 : 560)
-        .animation(.spring(duration: 0.55, bounce: 0.04), value: presentation.mode)
+        .animation(.spring(duration: 0.36, bounce: 0.04), value: presentation.mode)
     }
 
     private var state: PlaybackState {
@@ -200,7 +200,37 @@ struct PlayerMotionScene: View {
             }
         }
         .modifier(SharedCurrentArtwork(image: state.currentTrack?.artwork.flatMap { fixture.store.images[$0.url] }.map { Image(nsImage: $0) }, namespace: artwork))
-        .animation(.spring(duration: 0.55, bounce: 0.04), value: fixture.presentation.mode)
+        .animation(.spring(duration: 0.36, bounce: 0.04), value: fixture.presentation.mode)
+    }
+}
+
+@MainActor @Observable final class GlassProbeState {
+    var seeks: [Int64] = []
+    var skips = 0
+    var canSeek = true
+    var canNext = true
+    var occurrence = "current"
+    var durationMs: Int64 = 100_000
+    var replacementTrack: Track?
+}
+struct GlassGestureScene: View {
+    let state: GlassProbeState
+    let fixture: PlayerMotionFixture
+    @Namespace private var artwork
+    var body: some View {
+        let track = state.replacementTrack ?? fixture.state.currentTrack
+        ArtworkCarouselView(queue: fixture.state.queue, currentTrack: track,
+                            image: track?.artwork.flatMap { fixture.store.images[$0.url] }.map { Image(nsImage: $0) },
+                            store: fixture.store, artworkNamespace: artwork,
+                            canNext: state.canNext, next: { state.skips += 1 })
+            .overlay {
+                RadialProgressView(positionMs: 50_000, durationMs: state.durationMs,
+                                   canSeek: state.canSeek, seek: { state.seeks.append($0) })
+                    .frame(width: 274, height: 274).position(x: 205, y: 165)
+                    .id([track?.uri.rawValue, fixture.state.queue?.current?.id, state.occurrence])
+            }
+            .modifier(SharedCurrentArtwork(image: track?.artwork.flatMap { fixture.store.images[$0.url] }.map { Image(nsImage: $0) }, namespace: artwork))
+            .frame(width: 410, height: 340)
     }
 }
 

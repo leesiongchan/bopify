@@ -42,21 +42,21 @@ private final class ArtworkProtocol: URLProtocol, @unchecked Sendable {
             for _ in 0..<10 { group.addTask { await store.load(url) } }
         }
         precondition(ArtworkProtocol.requestCount == 1, "Duplicate artwork fetch")
-        precondition(store.images.count == 1 && store.palettes.count == 1)
+        precondition(store.images.count == 1)
         precondition(store.images[url]!.size.width <= 640, "Image not downsampled")
         for path in ["failure", "invalid"] {
             let failed = URL(string: "https://artwork.invalid/\(path)")!
             await store.load(failed)
             await store.load(failed)
-            precondition(store.images[failed] == nil && store.palettes[failed] == nil)
+            precondition(store.images[failed] == nil)
         }
         precondition(ArtworkProtocol.requestCount == 3, "Failure retried without an explicit reset")
         for index in 0..<115 { await store.load(URL(string: "https://artwork.invalid/cache/\(index)")!) }
-        precondition(store.images.count == 112 && store.palettes.count == 112, "Unbounded cache")
+        precondition(store.images.count == 112, "Unbounded cache")
         store.clear()
-        precondition(store.images.isEmpty && store.palettes.isEmpty)
+        precondition(store.images.isEmpty)
         await store.load(url)
         precondition(store.images.count == 1, "Cache did not recover after clear")
-        print("PASS: coalescing, palette publication, 640px downsampling, HTTP/decode failure caching, 112-entry cap, clear/reload")
+        print("PASS: coalescing, image publication, 640px downsampling, HTTP/decode failure caching, 112-entry cap, clear/reload")
     }
 }

@@ -30,6 +30,11 @@ struct QueueView: View {
             .padding(.bottom, 98)
         }
         .scrollIndicators(.hidden)
+        .mask(alignment: .bottom) {
+            LinearGradient(stops: [.init(color: .white, location: 0), .init(color: .white, location: 0.8),
+                                   .init(color: .clear, location: 0.87)], startPoint: .top, endPoint: .bottom)
+        }
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
         .overlay(alignment: .bottom) {
             VStack(spacing: 6) {
                 if let notice = player.commandNotice {
@@ -38,9 +43,6 @@ struct QueueView: View {
                 CompactPlayerView(player: player, state: state, store: store, presentation: presentation, artworkNamespace: artworkNamespace)
             }
             .padding(.top, 14)
-            .background {
-                LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: Color(red: 8.0 / 255, green: 9.0 / 255, blue: 13.0 / 255), location: 0.18)], startPoint: .top, endPoint: .bottom)
-            }
         }
     }
 

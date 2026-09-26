@@ -11,7 +11,7 @@ struct MiniPlayerView: View {
         let url = environment.player?.state.currentTrack?.artwork?.url
         let image = url.flatMap { environment.artworkStore.images[$0] }.map { Image(nsImage: $0) }
         let mode = environment.playerMode
-        PlayerSurface(palette: url.flatMap { environment.artworkStore.palettes[$0] } ?? .neutral) {
+        PlayerSurface {
             if mode == .compact, let player = environment.player, player.state.currentTrack != nil {
                 CompactPlayerView(player: player, state: player.state, store: environment.artworkStore,
                                   presentation: environment.presentation, artworkNamespace: artworkNamespace)
@@ -47,7 +47,7 @@ struct MiniPlayerView: View {
             }
         }
         .modifier(SharedCurrentArtwork(image: image, namespace: artworkNamespace))
-        .animation(.spring(duration: reduceMotion ? 0.16 : 0.55, bounce: reduceMotion ? 0 : 0.04), value: mode)
+        .animation(.spring(duration: reduceMotion ? 0.16 : 0.36, bounce: reduceMotion ? 0 : 0.04), value: mode)
         .environment(\.favoriteEnvironment, environment)
         .task(id: environment.player?.state.currentTrack?.uri) { await environment.refreshFavorite() }
         .task(id: url) { if let url { await environment.artworkStore.load(url) } }
@@ -121,18 +121,19 @@ struct PlayingView: View {
                 .frame(height: 48)
                 .accessibilityElement(children: .combine)
                 .contentTransition(.opacity)
-                .animation(.easeInOut(duration: reduceMotion ? 0.16 : 0.72), value: state.currentTrack)
+                .animation(.easeInOut(duration: reduceMotion ? 0.16 : 0.42), value: state.currentTrack)
 
                 TimelineView(PlaybackClockSchedule(running: state.phase == .playing && isVisible, reducedMotion: reduceMotion)) { context in
-                    ArtworkCarouselView(queue: state.queue, currentTrack: state.currentTrack, image: image, store: store, artworkNamespace: artworkNamespace)
+                    ArtworkCarouselView(queue: state.queue, currentTrack: state.currentTrack, image: image, store: store, artworkNamespace: artworkNamespace, canNext: state.isActiveDevice && state.canNext, next: player.next)
                         .overlay {
                             GeometryReader { geometry in
-                                let diameter = min(310, geometry.size.width - 68)
+                                let scale = min(1, (geometry.size.width - 68) / 310)
+                                let diameter = 274 * scale
                                 RadialProgressView(positionMs: position(context.date), durationMs: state.durationMs,
-                                                   canSeek: state.canSeek && state.isActiveDevice, seek: player.seek(to:))
+                                                   canSeek: state.canSeek && state.isActiveDevice, remainingTimeOffset: 18 * scale, seek: player.seek(to:))
                                     .frame(width: diameter, height: diameter)
                                     .position(x: geometry.size.width / 2, y: 165)
-                                    .id(state.queue?.current?.id ?? state.currentTrack?.uri.rawValue)
+                                    .id([state.currentTrack?.uri.rawValue, state.queue?.current?.id])
                             }
                         }
                 }
