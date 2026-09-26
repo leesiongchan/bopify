@@ -1,7 +1,7 @@
 # Bopify startup: always have something loaded
 
 Date: 2026-09-26
-Status: design approved section by section by the user on 2026-09-26; this written spec awaits their review. Implementation is not approved or started.
+Status: approved by the user on 2026-09-26 for implementation planning, including resuming at the last reported position rather than extrapolating. Implementation is not yet approved or started.
 
 ## Intent and scope
 
@@ -78,7 +78,7 @@ The changes extend `rust/patches/librespot-queue-selection.patch`, because `scri
   3. `startup` is `.resolved(.remote(name))`: "Playing on <name>" (phase 1 only);
   4. otherwise, that is `.resolved(.nothing)`: the existing `ContextURILoadView`, now the last resort.
 - **Phase 1 remote state has no in-app action.** Bopify is inactive, so `load` does nothing, and "play here" arrives only in phase 2. In phase 1, the user can still hand playback to Bopify from the phone's Connect device picker. If phase 2's transfer check fails, this state stays as it is until the design is revisited.
-- **Compact mode.** `AppEnvironment.playerMode` honours the saved mode when a track exists *or* startup is `.pending`. Without this, compact users would see the window resize to expanded and back on every launch. `CompactPlayerView` shows the existing `player.loading` string in place of the title when there is no track. Remote and last-resort states still force expanded.
+- **Compact mode is unchanged.** `playerMode` stays expanded until a track exists. Signing in already forces the expanded layout at launch (`StatusItemController.configure` clamps the first frame to it), so honouring compact while startup is pending would only move the single launch resize earlier, not remove it. The user dropped that rule on 2026-09-26.
 - **Strings.** Adding the remote title with the device name changes `Localizable.xcstrings`, which currently has the user's own uncommitted edits. Those edits must be preserved.
 
 ## Phase 2: mirror
@@ -106,7 +106,7 @@ Tests come first, one unit at a time.
 - **Swift** (`swift test`):
   - `PlaybackEventTests` decodes each outcome and rejects a malformed one;
   - `PlayerModelTests` checks the fold: `.pending` until the event, then stable;
-  - content-selection tests cover every precedence rule, including an error while `.pending` and a `.restored` outcome that arrives before `Loading`, plus the compact-while-pending rule.
+  - content-selection tests cover every precedence rule, including an error while `.pending` and a `.restored` outcome that arrives before `Loading`.
 - **Build:** `./scripts/build-rust.sh`, then `xcodebuild -project Bopify/Bopify.xcodeproj -scheme Bopify -destination 'platform=macOS,arch=arm64' build`.
 
 ## Live verification
@@ -118,7 +118,7 @@ These scenarios repeat the spike on the real build. Logs are captured with `/usr
 3. No usable session: Liked Songs, paused.
 4. Phone actively playing: the phone keeps playing, and Bopify shows it. Phase 2: a skip on the phone updates the mirror, and Play moves playback to Bopify.
 5. Normal quit and relaunch: Bopify's own session resumes.
-6. No frame of "Nothing playing" between connect and the track, and compact stays compact.
+6. No frame of "Nothing playing" between connect and the track.
 
 UI changes get before/after screenshots and previews for the loading, remote and last-resort states. This shell lacks Screen Recording permission, so either the user grants it to the terminal or takes the screenshots.
 
