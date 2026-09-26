@@ -7,7 +7,6 @@ struct RadialProgressView: View {
     let positionMs: Int64
     let durationMs: Int64
     let canSeek: Bool
-    var remainingTimeOffset: CGFloat = 18
     let seek: (Int64) -> Void
     @State private var scrub: RadialScrub?
     @State private var lastScrubProgress = 0.0
@@ -28,8 +27,10 @@ struct RadialProgressView: View {
             let radius = geometry.size.width / 2
             let angle = (scrub?.progress ?? lastScrubProgress) * .pi * 2 + .pi / 2
             ZStack {
-                Circle().stroke(.primary.opacity(contrast == .increased ? 0.45 : 0.12), lineWidth: 1)
-                Circle().trim(from: 0, to: progress)
+                Circle().trim(from: 0.035, to: 0.965)
+                    .stroke(.primary.opacity(contrast == .increased ? 0.45 : 0.12), lineWidth: 1)
+                    .rotationEffect(.degrees(90))
+                Circle().trim(from: 0.035, to: max(0.035, min(0.965, progress)))
                     .stroke(.primary.opacity(0.65), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
                     .rotationEffect(.degrees(90))
                 Circle().fill(.white)
@@ -39,6 +40,20 @@ struct RadialProgressView: View {
                     .opacity(scrub == nil ? 0 : 1)
                     .animation(.spring(duration: reduceMotion ? 0.12 : 0.2, bounce: 0.12), value: scrub != nil)
                     .position(x: radius + cos(angle) * radius, y: radius + sin(angle) * radius)
+                    .allowsHitTesting(false)
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .background {
+                Circle()
+                    .fill(RadialGradient(stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: .white.opacity(0.32), location: 0.28),
+                        .init(color: .cyan.opacity(0.16), location: 0.65),
+                        .init(color: .clear, location: 1)
+                    ], center: .center, startRadius: radius * 204 / 274, endRadius: radius * 310 / 274))
+                    .frame(width: radius * 2 * 310 / 274, height: radius * 2 * 310 / 274)
+                    .opacity(scrub == nil ? 0 : 1)
+                    .animation(.easeOut(duration: reduceMotion ? 0.12 : 0.2), value: scrub != nil)
                     .allowsHitTesting(false)
             }
             .contentShape(RingHitShape(), eoFill: true)
@@ -78,7 +93,7 @@ struct RadialProgressView: View {
                 Text("−" + playbackTime(max(0, durationMs - displayedPosition)))
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundStyle(.secondary)
-                    .offset(y: remainingTimeOffset + 18)
+                    .offset(y: 6)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }

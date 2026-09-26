@@ -67,9 +67,8 @@ private struct CurrentArtworkBounds: PreferenceKey {
 struct CurrentArtworkMatch: ViewModifier {
     let namespace: Namespace.ID
     let active: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func body(content: Content) -> some View {
-        if active && !reduceMotion {
+        if active {
             content.opacity(0)
                 .anchorPreference(key: CurrentArtworkBounds.self, value: .bounds) { [namespace: $0] }
         } else { content }
@@ -85,7 +84,7 @@ struct SharedCurrentArtwork: ViewModifier {
             GeometryReader { geometry in
                 if let anchor = bounds[namespace] {
                     let rect = geometry[anchor]
-                    ArtworkView(image: image, diameter: rect.width)
+                    MorphingArtworkView(image: image, diameter: rect.width)
                         .position(x: rect.midX, y: rect.midY)
                 }
             }

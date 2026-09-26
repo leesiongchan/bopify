@@ -11,7 +11,7 @@ struct MiniPlayerView: View {
         let url = environment.player?.state.currentTrack?.artwork?.url
         let image = url.flatMap { environment.artworkStore.images[$0] }.map { Image(nsImage: $0) }
         let mode = environment.playerMode
-        PlayerSurface {
+        PlayerSurface(mode: mode) {
             if mode == .compact, let player = environment.player, player.state.currentTrack != nil {
                 CompactPlayerView(player: player, state: player.state, store: environment.artworkStore,
                                   presentation: environment.presentation, artworkNamespace: artworkNamespace)
@@ -130,7 +130,7 @@ struct PlayingView: View {
                                 let scale = min(1, (geometry.size.width - 68) / 310)
                                 let diameter = 274 * scale
                                 RadialProgressView(positionMs: position(context.date), durationMs: state.durationMs,
-                                                   canSeek: state.canSeek && state.isActiveDevice, remainingTimeOffset: 18 * scale, seek: player.seek(to:))
+                                                   canSeek: state.canSeek && state.isActiveDevice, seek: player.seek(to:))
                                     .frame(width: diameter, height: diameter)
                                     .position(x: geometry.size.width / 2, y: 165)
                                     .id([state.currentTrack?.uri.rawValue, state.queue?.current?.id])
