@@ -61,4 +61,17 @@ struct PlaybackEventTests {
         // yields exactly 0.5 and fails here.
         #expect(volume == 32768.0 / 65535.0)
     }
+
+    @Test func decodesEveryStartupOutcome() throws {
+        #expect(try decode(#"{"type":"startupResolved","outcome":"restored"}"#) == .startupResolved(.restored))
+        #expect(try decode(#"{"type":"startupResolved","outcome":"likedSongs"}"#) == .startupResolved(.likedSongs))
+        #expect(try decode(#"{"type":"startupResolved","outcome":"nothing"}"#) == .startupResolved(.nothing))
+        #expect(try decode(#"{"type":"startupResolved","outcome":"remote","deviceName":"iPhone"}"#)
+                == .startupResolved(.remote(deviceName: "iPhone")))
+    }
+
+    @Test func rejectsAnUnknownOutcomeAndARemoteWithoutADevice() {
+        #expect(throws: (any Error).self) { try decode(#"{"type":"startupResolved","outcome":"teleported"}"#) }
+        #expect(throws: (any Error).self) { try decode(#"{"type":"startupResolved","outcome":"remote"}"#) }
+    }
 }

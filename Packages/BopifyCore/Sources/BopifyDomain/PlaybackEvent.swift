@@ -16,6 +16,7 @@ public enum PlaybackEvent: Hashable, Sendable {
     case endOfTrack
     case activeDeviceChanged(isActive: Bool)
     case failed(PlayerError)
+    case startupResolved(StartupOutcome)
 }
 
 extension PlaybackEvent: Decodable {
@@ -23,6 +24,7 @@ extension PlaybackEvent: Decodable {
         case type, positionMs, volume, isActive, code
         case generation, entryID, track, enabled, mode, reason
         case trackUri, title, artists, albumTitle, artworkUrl, durationMs
+        case outcome, deviceName
     }
 
     public init(from decoder: any Decoder) throws {
@@ -51,6 +53,15 @@ extension PlaybackEvent: Decodable {
             self = .volumeChanged(volume: raw / Double(UInt16.max))
         case "trackChanged":
             self = .trackChanged(try Self.decodeTrack(from: decoder))
+        case "startupResolved":
+            switch try c.decode(String.self, forKey: .outcome) {
+            case "restored": self = .startupResolved(.restored)
+            case "likedSongs": self = .startupResolved(.likedSongs)
+            case "nothing": self = .startupResolved(.nothing)
+            case "remote": self = .startupResolved(.remote(deviceName: try c.decode(String.self, forKey: .deviceName)))
+            case let other:
+                throw DecodingError.dataCorruptedError(forKey: .outcome, in: c, debugDescription: "unrecognised startup outcome \(other)")
+            }
         default:
             throw DecodingError.dataCorruptedError(forKey: .type, in: c, debugDescription: "unrecognised event type \(type)")
         }
