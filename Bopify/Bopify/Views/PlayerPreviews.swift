@@ -20,8 +20,16 @@ import BopifyPlayback
     PlayerPreview(phase: .error(.networkUnavailable))
 }
 
-#Preview("Ready to play") {
+#Preview("Startup · loading") {
     PlayerPreview(phase: .idle, missingArtwork: true)
+}
+
+#Preview("Startup · playing on another device") {
+    PlayerPreview(phase: .idle, missingArtwork: true, startup: .resolved(.remote(deviceName: "iPhone")))
+}
+
+#Preview("Last resort · paste a link") {
+    PlayerPreview(phase: .idle, missingArtwork: true, startup: .resolved(.nothing))
 }
 
 #Preview("Compact · long metadata") {
@@ -59,18 +67,21 @@ private struct PlayerPreview: View {
     var missingArtwork = false
     var queueCount = 1
     var width: CGFloat?
+    var startup: StartupPhase = .pending
     @Namespace private var artworkNamespace
     @State private var presentation: PlayerPresentation
     @State private var store = previewArtworkStore()
     @State private var player = PlayerModel(engine: StubPlaybackEngine())
 
     init(phase: PlaybackPhase, longTitle: Bool = false, missingArtwork: Bool = false,
-         mode: PlayerMode = .expanded, queueCount: Int = 1, width: CGFloat? = nil) {
+         mode: PlayerMode = .expanded, queueCount: Int = 1, width: CGFloat? = nil,
+         startup: StartupPhase = .pending) {
         self.phase = phase
         self.longTitle = longTitle
         self.missingArtwork = missingArtwork
         self.queueCount = queueCount
         self.width = width
+        self.startup = startup
         _presentation = State(initialValue: PlayerPresentation(mode: mode))
     }
 
@@ -110,6 +121,7 @@ private struct PlayerPreview: View {
     private var state: PlaybackState {
         var state = PlaybackState()
         state.phase = phase
+        state.startup = startup
         guard phase != .idle else { return state }
         state.currentTrack = Track(
             uri: SpotifyURI("spotify:track:preview")!,
