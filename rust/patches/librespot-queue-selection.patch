@@ -1,12 +1,13 @@
 diff --git a/connect/src/lib.rs b/connect/src/lib.rs
-index ba00aa4..14025a8 100644
+index ba00aa4..dcefba6 100644
 --- a/connect/src/lib.rs
 +++ b/connect/src/lib.rs
-@@ -12,6 +12,7 @@ mod context_resolver;
+@@ -12,6 +12,8 @@ mod context_resolver;
  mod model;
  mod shuffle_vec;
  mod spirc;
 +mod queue;
++mod startup;
  mod state;
  
  pub use model::*;
@@ -284,7 +285,7 @@ index 0000000..1e7dd3d
 +    }
 +}
 diff --git a/connect/src/spirc.rs b/connect/src/spirc.rs
-index c7c195b..ec3b8b4 100644
+index c7c195b..8f47957 100644
 --- a/connect/src/spirc.rs
 +++ b/connect/src/spirc.rs
 @@ -14,7 +14,7 @@ use crate::{
@@ -292,11 +293,19 @@ index c7c195b..ec3b8b4 100644
      playback::{
          mixer::Mixer,
 -        player::{Player, PlayerEvent, PlayerEventChannel, QueueTrack},
-+        player::{Player, PlayerEvent, PlayerEventChannel},
++        player::{Player, PlayerEvent, PlayerEventChannel, StartupOutcome},
      },
      protocol::{
          connect::{Cluster, ClusterUpdate, LogoutCommand, SetVolumeCommand},
-@@ -70,6 +70,8 @@ impl From<SpircError> for Error {
+@@ -26,6 +26,7 @@ use crate::{
+         transfer_state::TransferState,
+         user_attributes::UserAttributesMutation,
+     },
++    startup::{StartupDecision, startup_decision},
+     state::{
+         context::{ContextType, ResetContext},
+         provider::IsProvider,
+@@ -70,6 +71,8 @@ impl From<SpircError> for Error {
  }
  
  struct SpircTask {
@@ -305,7 +314,17 @@ index c7c195b..ec3b8b4 100644
      player: Arc<Player>,
      mixer: Arc<dyn Mixer>,
  
-@@ -123,6 +125,10 @@ enum SpircCommand {
+@@ -96,6 +99,9 @@ struct SpircTask {
+     context_resolver: ContextResolver,
+ 
+     emit_set_queue_events: bool,
++    startup_restore: bool,
++    /// The startup decision runs on the first connection id only; later ones are dealer reconnects.
++    startup_resolved: bool,
+ 
+     shutdown: bool,
+     session: Session,
+@@ -123,6 +129,10 @@ enum SpircCommand {
      Pause,
      Prev,
      Next,
@@ -316,7 +335,7 @@ index c7c195b..ec3b8b4 100644
      VolumeUp,
      VolumeDown,
      Shutdown,
-@@ -139,6 +145,56 @@ enum SpircCommand {
+@@ -139,6 +149,56 @@ enum SpircCommand {
      ClearQueue,
  }
  
@@ -373,7 +392,15 @@ index c7c195b..ec3b8b4 100644
  const CONTEXT_FETCH_THRESHOLD: usize = 2;
  
  // delay to update volume after a certain amount of time, instead on each update request
-@@ -230,6 +286,8 @@ impl Spirc {
+@@ -177,6 +237,7 @@ impl Spirc {
+         debug!("new Spirc[{spirc_id}]");
+ 
+         let emit_set_queue_events = config.emit_set_queue_events;
++        let startup_restore = config.startup_restore;
+         let connect_state = ConnectState::new(config, &session);
+ 
+         let connection_id_update = session
+@@ -230,6 +291,8 @@ impl Spirc {
          let player_events = player.get_player_event_channel();
  
          let mut task = SpircTask {
@@ -382,7 +409,16 @@ index c7c195b..ec3b8b4 100644
              player,
              mixer,
  
-@@ -329,6 +387,17 @@ impl Spirc {
+@@ -254,6 +317,8 @@ impl Spirc {
+             context_resolver: ContextResolver::new(session.clone()),
+ 
+             emit_set_queue_events,
++            startup_restore,
++            startup_resolved: false,
+ 
+             shutdown: false,
+             session,
+@@ -329,6 +394,17 @@ impl Spirc {
          Ok(self.commands.send(SpircCommand::Next)?)
      }
  
@@ -400,7 +436,7 @@ index c7c195b..ec3b8b4 100644
      /// Increases the volume by configured steps of [ConnectConfig].
      ///
      /// Does nothing if we are not the active device.
-@@ -599,6 +668,7 @@ impl SpircTask {
+@@ -599,6 +675,7 @@ impl SpircTask {
                  },
                  else => break
              }
@@ -408,7 +444,7 @@ index c7c195b..ec3b8b4 100644
          }
  
          if !self.shutdown && self.connect_state.is_active() {
-@@ -662,41 +732,24 @@ impl SpircTask {
+@@ -662,41 +739,24 @@ impl SpircTask {
          update_state
      }
  
@@ -465,7 +501,7 @@ index c7c195b..ec3b8b4 100644
      }
  
      // todo: is the time_delta still necessary?
-@@ -711,6 +764,27 @@ impl SpircTask {
+@@ -711,6 +771,27 @@ impl SpircTask {
      async fn handle_command(&mut self, cmd: SpircCommand) -> Result<(), Error> {
          trace!("Received SpircCommand::{cmd:?}");
          match cmd {
@@ -493,7 +529,78 @@ index c7c195b..ec3b8b4 100644
              SpircCommand::Shutdown => {
                  trace!("Received SpircCommand::Shutdown");
                  self.handle_pause();
-@@ -1181,6 +1255,7 @@ impl SpircTask {
+@@ -925,6 +1006,13 @@ impl SpircTask {
+ 
+         self.connect_established = true;
+ 
++        if self.startup_restore && !self.startup_resolved {
++            self.startup_resolved = true;
++            let outcome = self.resolve_startup(&cluster).await;
++            self.player.emit_startup_resolved_event(outcome);
++            return Ok(());
++        }
++
+         let same_session = cluster.player_state.session_id == self.session.session_id()
+             || cluster.player_state.session_id.is_empty();
+         if !cluster.active_device_id.is_empty() || !same_session {
+@@ -953,6 +1041,56 @@ impl SpircTask {
+         Ok(())
+     }
+ 
++    /// Bopify: never returns an error, because an `Err` from the connection-id
++    /// handler ends the Spirc task, and Swift would see a lost session.
++    async fn resolve_startup(&mut self, cluster: &Cluster) -> StartupOutcome {
++        match startup_decision(cluster, self.session.device_id()) {
++            StartupDecision::Remote { device_name } => {
++                return StartupOutcome::Remote { device_name };
++            }
++            StartupDecision::Restore(transfer) => {
++                match self.handle_transfer(transfer) {
++                    // handle_transfer returns Ok without loading when the session names no
++                    // playable track, so only a paused load counts as restored.
++                    Ok(()) if matches!(self.play_status, SpircPlayStatus::LoadingPause { .. }) => {
++                        return StartupOutcome::Restored;
++                    }
++                    Ok(()) => warn!("startup: the last session had no track to restore"),
++                    Err(why) => warn!("startup: restoring the last session failed: {why}"),
++                }
++                // A half-applied transfer must not be finished later on top of Liked Songs.
++                self.transfer_state = None;
++            }
++            StartupDecision::Fallback => {}
++        }
++        self.load_liked_songs().await
++    }
++
++    /// Mirrors the Activate and Load command paths, but keeps the load's
++    /// result, which the command path only debug-logs.
++    async fn load_liked_songs(&mut self) -> StartupOutcome {
++        self.handle_activate();
++        let uri = format!("spotify:user:{}:collection", self.session.username());
++        let request = LoadRequest::from_context_uri(
++            uri,
++            LoadRequestOptions {
++                start_playing: false,
++                ..Default::default()
++            },
++        );
++        let outcome = match self.handle_load(request, None, None).await {
++            Ok(()) => StartupOutcome::LikedSongs,
++            Err(why) => {
++                warn!("startup: loading liked songs failed: {why}");
++                StartupOutcome::Nothing
++            }
++        };
++        if let Err(why) = self.notify().await {
++            warn!("startup: state update failed: {why}");
++        }
++        outcome
++    }
++
+     fn handle_user_attributes_update(&mut self, update: UserAttributesUpdate) {
+         trace!("Received attributes update: {update:#?}");
+         let attributes: UserAttributes = update
+@@ -1181,6 +1319,7 @@ impl SpircTask {
      }
  
      fn handle_transfer(&mut self, mut transfer: TransferState) -> Result<(), Error> {
@@ -501,7 +608,7 @@ index c7c195b..ec3b8b4 100644
          let mut ctx_uri = match transfer.current_session.context.uri {
              None => Err(SpircError::NoUri("transfer context"))?,
              // can apparently happen when a state is transferred and was started with "uris" via the api
-@@ -1363,6 +1438,7 @@ impl SpircTask {
+@@ -1363,6 +1502,7 @@ impl SpircTask {
          page: Option<ContextPage>,
          fallback_index: Option<usize>,
      ) -> Result<(), Error> {
@@ -509,7 +616,7 @@ index c7c195b..ec3b8b4 100644
          self.connect_state
              .reset_context(if let PlayContext::Uri(ref uri) = cmd.context {
                  ResetContext::WhenDifferent(uri)
-@@ -1621,6 +1697,7 @@ impl SpircTask {
+@@ -1621,6 +1761,7 @@ impl SpircTask {
      }
  
      fn handle_shuffle(&mut self, shuffle: bool) -> Result<(), Error> {
@@ -517,7 +624,7 @@ index c7c195b..ec3b8b4 100644
          self.player.emit_shuffle_changed_event(shuffle);
          self.connect_state.handle_shuffle(shuffle)
      }
-@@ -1896,7 +1973,11 @@ impl SpircTask {
+@@ -1896,7 +2037,11 @@ impl SpircTask {
          let current_uri = self.connect_state.current_track(|t| &t.uri);
          let id = SpotifyUri::from_uri(current_uri)?;
          self.player.load(id, start_playing, position_ms);
@@ -529,7 +636,7 @@ index c7c195b..ec3b8b4 100644
          self.connect_state
              .update_position(position_ms, self.now_ms());
          if start_playing {
-@@ -1905,11 +1986,10 @@ impl SpircTask {
+@@ -1905,11 +2050,10 @@ impl SpircTask {
              self.play_status = SpircPlayStatus::LoadingPause { position_ms };
          }
          self.connect_state.set_status(&self.play_status);
@@ -542,11 +649,227 @@ index c7c195b..ec3b8b4 100644
          self.connect_state.set_status(&self.play_status);
  
          if self.connect_state.is_playing() {
+diff --git a/connect/src/startup.rs b/connect/src/startup.rs
+new file mode 100644
+index 0000000..a545f71
+--- /dev/null
++++ b/connect/src/startup.rs
+@@ -0,0 +1,195 @@
++//! Bopify: the connect-time decision behind `ConnectConfig::startup_restore`.
++
++use crate::protocol::{connect::Cluster, transfer_state::TransferState};
++use protobuf::Message;
++
++#[derive(Debug)]
++pub(crate) enum StartupDecision {
++    Remote { device_name: String },
++    Restore(TransferState),
++    Fallback,
++}
++
++pub(crate) fn startup_decision(cluster: &Cluster, own_device_id: &str) -> StartupDecision {
++    let active = cluster.active_device_id.as_str();
++    if !active.is_empty() {
++        let has_track = cluster
++            .player_state
++            .track
++            .as_ref()
++            .is_some_and(|track| !track.uri.is_empty());
++        return if active != own_device_id && has_track {
++            let device_name = cluster
++                .device
++                .get(active)
++                .map(|device| device.name.clone())
++                .unwrap_or_default();
++            StartupDecision::Remote { device_name }
++        } else {
++            // A trackless active device has nothing to mirror, and while any device is
++            // active the transfer data is a stub that would pull its context over.
++            StartupDecision::Fallback
++        };
++    }
++    match TransferState::parse_from_bytes(&cluster.transfer_data) {
++        Ok(mut transfer) if is_usable(&transfer) => {
++            // Set before handle_transfer, never as a pause after it: it also stops
++            // handle_transfer extrapolating a stale timestamp past where playback was.
++            transfer.playback.mut_or_insert_default().is_paused = Some(true);
++            // handle_transfer rejects a missing context uri but restores a track-only session from "-".
++            let context = transfer.current_session.mut_or_insert_default().context.mut_or_insert_default();
++            context.uri.get_or_insert_with(|| "-".into());
++            StartupDecision::Restore(transfer)
++        }
++        _ => StartupDecision::Fallback,
++    }
++}
++
++/// Checks content, not byte length: an empty Bopify session still serialises
++/// to 66 bytes of transfer data.
++fn is_usable(transfer: &TransferState) -> bool {
++    let context = transfer.current_session.context.uri.as_deref().unwrap_or_default();
++    let track = transfer.playback.current_track.uri.as_deref().unwrap_or_default();
++    (!context.is_empty() && context != "-") || !track.is_empty()
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::protocol::connect::DeviceInfo;
++
++    const OWN: &str = "own-device";
++
++    /// A serialised last session, shaped like the spike's `transfer_data`.
++    fn session(context: &str, track: &str, paused: bool) -> Vec<u8> {
++        let mut transfer = TransferState::new();
++        transfer
++            .current_session
++            .mut_or_insert_default()
++            .context
++            .mut_or_insert_default()
++            .uri = Some(context.into());
++        let playback = transfer.playback.mut_or_insert_default();
++        playback.current_track.mut_or_insert_default().uri = Some(track.into());
++        playback.is_paused = Some(paused);
++        playback.position_as_of_timestamp = Some(203);
++        transfer.write_to_bytes().unwrap()
++    }
++
++    fn cluster(active: &str, playing_track: &str, transfer_data: Vec<u8>) -> Cluster {
++        let mut cluster = Cluster::new();
++        cluster.active_device_id = active.into();
++        if !active.is_empty() {
++            let mut device = DeviceInfo::new();
++            device.name = "iPhone".into();
++            cluster.device.insert(active.into(), device);
++        }
++        cluster
++            .player_state
++            .mut_or_insert_default()
++            .track
++            .mut_or_insert_default()
++            .uri = playing_track.into();
++        cluster.transfer_data = transfer_data;
++        cluster
++    }
++
++    fn restored(decision: StartupDecision) -> TransferState {
++        match decision {
++            StartupDecision::Restore(transfer) => transfer,
++            other => panic!("expected Restore, got {other:?}"),
++        }
++    }
++
++    #[test]
++    fn restores_the_last_session_paused_when_no_device_is_active() {
++        let data = session(
++            "spotify:playlist:37i9dQZF1E8NDRt5R5oIbG",
++            "spotify:track:3WvM2dIR9iIxMGNMP7WsNw",
++            true,
++        );
++        let transfer = restored(startup_decision(&cluster("", "", data), OWN));
++        assert_eq!(
++            transfer.current_session.context.uri.as_deref(),
++            Some("spotify:playlist:37i9dQZF1E8NDRt5R5oIbG")
++        );
++        assert_eq!(transfer.playback.is_paused, Some(true));
++    }
++
++    #[test]
++    fn a_session_left_playing_by_a_vanished_device_resumes_paused_at_its_reported_position() {
++        let data = session(
++            "spotify:user:121047766:collection",
++            "spotify:track:22Tmr1R5TVgtLOSYrgMWdu",
++            false,
++        );
++        let transfer = restored(startup_decision(&cluster("", "", data), OWN));
++        assert_eq!(transfer.playback.is_paused, Some(true));
++        assert_eq!(transfer.playback.position_as_of_timestamp, Some(203));
++    }
++
++    #[test]
++    fn a_session_started_from_bare_uris_is_restored_from_its_track() {
++        restored(startup_decision(
++            &cluster("", "", session("-", "spotify:track:x", true)),
++            OWN,
++        ));
++    }
++
++    #[test]
++    fn an_empty_or_missing_session_falls_back() {
++        assert!(TransferState::parse_from_bytes(&[0xFF]).is_err());
++        for data in [
++            session("", "", true),
++            session("-", "", true),
++            Vec::new(),
++            vec![0xFF],
++        ] {
++            let decision = startup_decision(&cluster("", "", data), OWN);
++            assert!(matches!(decision, StartupDecision::Fallback), "{decision:?}");
++        }
++    }
++
++    #[test]
++    fn another_device_playing_a_track_is_mirrored_never_restored() {
++        // Run 4: while a device is active, transfer_data is a stub that still names a context.
++        let data = session("spotify:user:121047766:collection", "", false);
++        let decision = startup_decision(
++            &cluster("6dce37", "spotify:track:0phqiLIH4JYk4jPissBOQE", data),
++            OWN,
++        );
++        assert!(
++            matches!(&decision, StartupDecision::Remote { device_name } if device_name == "iPhone"),
++            "{decision:?}"
++        );
++    }
++
++    #[test]
++    fn an_active_device_without_a_track_falls_back_never_restores() {
++        // Run 0: a crashed Bopify stayed "active" with an empty session.
++        let data = session("spotify:user:121047766:collection", "", true);
++        let decision = startup_decision(&cluster("ghost", "", data), OWN);
++        assert!(matches!(decision, StartupDecision::Fallback), "{decision:?}");
++    }
++
++    #[test]
++    fn a_track_without_a_context_uri_is_restored_as_a_track_only_session() {
++        let mut transfer = TransferState::new();
++        transfer
++            .playback
++            .mut_or_insert_default()
++            .current_track
++            .mut_or_insert_default()
++            .uri = Some("spotify:track:x".into());
++        let data = transfer.write_to_bytes().unwrap();
++        let transfer = restored(startup_decision(&cluster("", "", data), OWN));
++        assert_eq!(transfer.current_session.context.uri.as_deref(), Some("-"));
++        assert_eq!(transfer.playback.is_paused, Some(true));
++    }
++
++    #[test]
++    fn this_device_is_never_mirrored() {
++        let decision = startup_decision(&cluster(OWN, "spotify:track:x", Vec::new()), OWN);
++        assert!(matches!(decision, StartupDecision::Fallback), "{decision:?}");
++    }
++}
 diff --git a/connect/src/state.rs b/connect/src/state.rs
-index f810d85..2988f8f 100644
+index f810d85..4b4d778 100644
 --- a/connect/src/state.rs
 +++ b/connect/src/state.rs
-@@ -108,8 +108,10 @@ impl Default for ConnectConfig {
+@@ -92,6 +92,9 @@ pub struct ConnectConfig {
+     pub volume_steps: u16,
+     /// Emit `SetQueue` player events when the queue changes (default: false)
+     pub emit_set_queue_events: bool,
++    /// Bopify: on the first connect cluster, restore the last session paused, else
++    /// load Liked Songs paused, unless another device is playing (default: false)
++    pub startup_restore: bool,
+ }
+ 
+ impl Default for ConnectConfig {
+@@ -104,12 +107,15 @@ impl Default for ConnectConfig {
+             disable_volume: false,
+             volume_steps: 64,
+             emit_set_queue_events: false,
++            startup_restore: false,
+         }
      }
  }
  
@@ -1024,10 +1347,10 @@ index 0ecfde2..a7b6c61 100644
 +    }
 +}
 diff --git a/playback/src/player.rs b/playback/src/player.rs
-index f3d803d..425b7d7 100644
+index f3d803d..28436a9 100644
 --- a/playback/src/player.rs
 +++ b/playback/src/player.rs
-@@ -139,6 +139,7 @@ enum PlayerCommand {
+@@ -139,11 +139,13 @@ enum PlayerCommand {
      },
      EmitAutoPlayChangedEvent(bool),
      EmitSetQueueEvent {
@@ -1035,17 +1358,40 @@ index f3d803d..425b7d7 100644
          context_uri: String,
          current_track: Option<QueueTrack>,
          next_tracks: Vec<QueueTrack>,
-@@ -151,6 +152,9 @@ enum PlayerCommand {
+         prev_tracks: Vec<QueueTrack>,
+     },
++    EmitStartupResolvedEvent(StartupOutcome),
+ }
+ 
+ /// Represents a track in the queue with its URI and provider.
+@@ -151,6 +153,26 @@ enum PlayerCommand {
  pub struct QueueTrack {
      pub uri: String,
      pub provider: String,
 +    pub uid: String,
 +    pub id: u64,
 +    pub raw_next_index: Option<u32>,
++}
++
++/// What `Spirc` did with the account's last session when its first connect
++/// cluster arrived. Emitted once, and only when `ConnectConfig::startup_restore` is set.
++#[derive(Clone, Debug, PartialEq, Eq)]
++pub enum StartupOutcome {
++    /// The last session was taken over, paused.
++    Restored,
++    /// Nothing was restorable, so the user's Liked Songs were loaded, paused.
++    LikedSongs,
++    /// Another device is playing; this device stayed inactive.
++    Remote {
++        /// That device's name, as Spotify's device picker shows it.
++        device_name: String,
++    },
++    /// Liked Songs could not be loaded either; the device is active and empty.
++    Nothing,
  }
  
  #[derive(Debug, Clone)]
-@@ -263,6 +267,7 @@ pub enum PlayerEvent {
+@@ -263,11 +285,16 @@ pub enum PlayerEvent {
      },
      /// Fired when the queue is set or context is loaded with its track list.
      SetQueue {
@@ -1053,7 +1399,16 @@ index f3d803d..425b7d7 100644
          context_uri: String,
          current_track: Option<QueueTrack>,
          next_tracks: Vec<QueueTrack>,
-@@ -670,12 +675,14 @@ impl Player {
+         prev_tracks: Vec<QueueTrack>,
+     },
++    /// Fired once, after the connect-time startup decision.
++    StartupResolved {
++        outcome: StartupOutcome,
++    },
+ }
+ 
+ impl PlayerEvent {
+@@ -670,18 +697,24 @@ impl Player {
  
      pub fn emit_set_queue_event(
          &self,
@@ -1068,7 +1423,17 @@ index f3d803d..425b7d7 100644
              context_uri,
              current_track,
              next_tracks,
-@@ -2371,11 +2378,13 @@ impl PlayerInternal {
+             prev_tracks,
+         });
+     }
++
++    pub fn emit_startup_resolved_event(&self, outcome: StartupOutcome) {
++        self.command(PlayerCommand::EmitStartupResolvedEvent(outcome));
++    }
+ }
+ 
+ impl Drop for Player {
+@@ -2371,17 +2404,23 @@ impl PlayerInternal {
              }
  
              PlayerCommand::EmitSetQueueEvent {
@@ -1082,7 +1447,17 @@ index f3d803d..425b7d7 100644
                  context_uri,
                  current_track,
                  next_tracks,
-@@ -2584,12 +2593,14 @@ impl fmt::Debug for PlayerCommand {
+                 prev_tracks,
+             }),
+ 
++            PlayerCommand::EmitStartupResolvedEvent(outcome) => {
++                self.send_event(PlayerEvent::StartupResolved { outcome })
++            }
++
+             PlayerCommand::EmitFilterExplicitContentChangedEvent(filter) => {
+                 self.send_event(PlayerEvent::FilterExplicitContentChanged { filter });
+ 
+@@ -2584,16 +2623,22 @@ impl fmt::Debug for PlayerCommand {
                  .field(&auto_play)
                  .finish(),
              PlayerCommand::EmitSetQueueEvent {
@@ -1097,3 +1472,11 @@ index f3d803d..425b7d7 100644
                  .field(&context_uri)
                  .field(&next_tracks.len())
                  .field(&prev_tracks.len())
+                 .finish(),
++            PlayerCommand::EmitStartupResolvedEvent(outcome) => f
++                .debug_tuple("EmitStartupResolvedEvent")
++                .field(&outcome)
++                .finish(),
+         }
+     }
+ }

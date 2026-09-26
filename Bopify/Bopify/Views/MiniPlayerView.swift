@@ -102,8 +102,9 @@ struct PlayingView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            if state.phase == .idle && state.currentTrack == nil {
-                ContextURILoadView(load: player.load)
+            let content = PlayerContent(state)
+            if content != .player {
+                StartupContent(content: content, load: player.load)
                     .frame(maxHeight: .infinity)
             } else {
                 VStack(spacing: 4) {
@@ -220,6 +221,32 @@ private struct ContextURILoadView: View {
     private func submit() {
         guard let uri = SpotifyURI(contextURIText) else { return }
         load(PlayRequest(contextURI: uri))
+    }
+}
+
+private struct StartupContent: View {
+    let content: PlayerContent
+    let load: (PlayRequest) -> Void
+
+    var body: some View {
+        switch content {
+        case .chooseContext:
+            ContextURILoadView(load: load)
+        case let .remote(deviceName):
+            placeholder { Text("player.remote.title \(deviceName)") }
+        // .player never reaches here; PlayingView renders it directly.
+        case .loading, .player:
+            placeholder { ProgressView { Text("player.loading") }.controlSize(.small) }
+        }
+    }
+
+    private func placeholder(@ViewBuilder _ label: () -> some View) -> some View {
+        VStack(spacing: 18) {
+            ArtworkView(image: nil, diameter: 156)
+            label()
+                .font(.callout)
+                .foregroundStyle(.primary.opacity(0.7))
+        }
     }
 }
 
