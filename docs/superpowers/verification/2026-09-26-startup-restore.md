@@ -29,6 +29,10 @@ Times are local. Track titles and device IDs are left out on purpose; the user c
 
 The scenario 3 edit was removed by hand, not with `git checkout`. After that, `prepare-librespot.sh` printed `Pinned librespot queue patch verified.`, and `build-rust.sh` and the app build were run again.
 
+## Recheck after the final-review fix
+
+`b084c8e` makes `resolve_startup` report `restored` only when the transfer ended in a paused load, and otherwise falls back to Liked Songs. The app was rebuilt with that change, with no diagnostic logging, and relaunched on a last session left by Bopify itself (a Liked Songs track, paused at 0:00). At 22:53:02 `connect succeeded`, 0.46 s later `startup resolved outcome=restored`, then `idle → loading → paused` at 22:53:03.540. The user confirmed the same track, paused. Pass.
+
 ## Preview renders
 
 [Loading](assets/startup-loading.png), [another device playing](assets/startup-remote.png), [last resort paste view](assets/startup-last-resort.png), [control: playing](assets/startup-control-playing.png). Rendered with Xcode's RenderPreview from this worktree's project. The control differs from the older `expanded-final.png` because of `2016578` (two-ring glass player), which predates this branch.
