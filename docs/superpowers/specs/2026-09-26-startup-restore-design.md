@@ -52,8 +52,10 @@ The changes extend `rust/patches/librespot-queue-selection.patch`, because `scri
 - **Once per engine.** `handle_connection_id_update` runs again whenever the dealer reconnects and delivers a new connection id. A `SpircTask` field records that the startup decision has run. Later connection-id updates follow the upstream path. Without this, a reconnect mid-playback could restore over the current session or mirror Bopify itself.
 - **Pure decision function.** `startup_decision(cluster: &Cluster, own_device_id: &str) -> StartupDecision`, where the result is one of `Remote { device_name }`, `Restore(TransferState)` or `Fallback`. It holds no session and makes no I/O, so unit tests can use hand-built protobufs.
 - **Forced pause.** The `Restore` branch sets `playback.is_paused = Some(true)` before `handle_transfer`. This must stay a pre-transfer flag, not a pause issued after loading, because it does two jobs:
-  1. `handle_transfer` ends with `load_track(is_playing, …)`, so without the flag a session whose device died mid-song autoplays.
-  2. When a session is not paused, `handle_transfer` extrapolates the position by `now - timestamp`. Run 3's stale state was 203 ms at a timestamp minutes old, so it would have resumed minutes into the track.
+  1. **It prevents autoplay.** `handle_transfer` ends with `load_track(is_playing, …)`, so without the flag a session whose device died mid-song would start playing.
+  2. **It resumes at the last reported position without extrapolating.** For a session that was not paused, `handle_transfer` otherwise adds `now - timestamp` to the position. That is only right if the device really kept playing until now. After a crash or kill, the timestamp is stale; after a next-morning launch, extrapolation would run past the end of the track.
+
+  The trade-off is deliberate and deterministic: a session that was killed while playing resumes at its last state change, often near the start of the track. In run 3 that meant 203 ms, where extrapolation would have given about 25 s. A graceful quit is unaffected, because shutdown pauses, disconnects and reports the current position (run 2).
 - **Errors are never fatal.** The run loop `break`s on an `Err` from `handle_connection_id_update`, which ends the Spirc task and reaches Swift as SessionLost. Both `handle_transfer` and the Liked Songs `handle_load` are `match`ed:
   - a failed restore logs a warning and falls through to Liked Songs;
   - a failed Liked Songs load logs a warning and reports `Nothing`.
@@ -72,9 +74,10 @@ The changes extend `rust/patches/librespot-queue-selection.patch`, because `scri
 - **State.** Two new types: `StartupOutcome`, with cases `.restored`, `.likedSongs`, `.remote(deviceName: String)` and `.nothing`, and `StartupPhase`, with cases `.pending` and `.resolved(StartupOutcome)`. `PlaybackState.startup` starts as `.pending`. `PlayerModel.apply` folds `.startupResolved` into it and logs the outcome at info. No later event resets it.
 - **Content selection.** The inline `if` in `PlayingView` becomes a small enum next to `PlayerPresentation`, so its precedence is unit-tested. With a current track, the content is always the player. Without one, the first matching rule wins:
   1. `phase` is `.error`: the existing player/error UI, so a SessionLost during startup still surfaces;
-  2. `startup` is `.pending`, `.resolved(.restored)` or `.resolved(.likedSongs)`, or `phase` is `.loading` or `.buffering`: a new **loading** presentation with the empty artwork disc and a spinner, styled like `SignedOutView`'s authenticating state. A restore or Liked Songs outcome means a track load is already in flight. If that load fails, an error event takes rule 1, so there is no need to wait for `Loading` and no flash of the paste view in between;
+  2. `startup` is `.pending`, `.resolved(.restored)` or `.resolved(.likedSongs)`, or `phase` is `.loading` or `.buffering`: a new **loading** presentation with the empty artwork disc and a spinner, styled like `SignedOutView`'s authenticating state. A restore or Liked Songs outcome means a track load is already in flight, so there is no need to wait for `Loading` and no flash of the paste view in between. A single unavailable track is skipped by Spirc, and the next one reaches Swift. See Risks for a context in which nothing can play;
   3. `startup` is `.resolved(.remote(name))`: "Playing on <name>" (phase 1 only);
   4. otherwise, that is `.resolved(.nothing)`: the existing `ContextURILoadView`, now the last resort.
+- **Phase 1 remote state has no in-app action.** Bopify is inactive, so `load` does nothing, and "play here" arrives only in phase 2. In phase 1, the user can still hand playback to Bopify from the phone's Connect device picker. If phase 2's transfer check fails, this state stays as it is until the design is revisited.
 - **Compact mode.** `AppEnvironment.playerMode` honours the saved mode when a track exists *or* startup is `.pending`. Without this, compact users would see the window resize to expanded and back on every launch. `CompactPlayerView` shows the existing `player.loading` string in place of the title when there is no track. Remote and last-resort states still force expanded.
 - **Strings.** Adding the remote title with the device name changes `Localizable.xcstrings`, which currently has the user's own uncommitted edits. Those edits must be preserved.
 
@@ -111,7 +114,7 @@ Tests come first, one unit at a time.
 These scenarios repeat the spike on the real build. Logs are captured with `/usr/bin/log stream --level debug --predicate 'subsystem == "my.snsoft.bopify"'`; zsh's builtin `log` shadows the binary.
 
 1. No active device and a real last session: restored paused, with the right track, position and queue.
-2. Kill Bopify mid-song, then relaunch: paused at the right position, not minutes ahead.
+2. Kill Bopify mid-song, then relaunch: paused, not playing, at the last position the killed session reported. That is often near the start of the track, and that counts as a **pass** (see Forced pause). A position beyond where playback actually was is a failure.
 3. No usable session: Liked Songs, paused.
 4. Phone actively playing: the phone keeps playing, and Bopify shows it. Phase 2: a skip on the phone updates the mirror, and Play moves playback to Bopify.
 5. Normal quit and relaunch: Bopify's own session resumes.
@@ -124,6 +127,7 @@ UI changes get before/after screenshots and previews for the loading, remote and
 - **`Spirc::transfer` for "play here" is untested.** Phase 2 starts by verifying it.
 - **How long Spotify keeps a session with no active device is unknown.** The spike restored sessions minutes old, not a "next morning" gap. When the session is gone, the decision falls through to Liked Songs.
 - **An empty Liked Songs has not been observed live.** It is covered by the `handle_load` error path and a unit test.
+- **Unverified: a restored or Liked Songs context in which no track can play.** `translate` drops `Unavailable` and `Stopped` (`event.rs`). If Spirc exhausts the context, Swift receives nothing further, and the panel could stay on the loading presentation. This is not handled in phase 1. If it is observed, surfacing `Stopped` is the first candidate fix.
 - **The patch grows,** and every librespot bump must carry it. The flag keeps upstream behaviour intact when it is off.
 - **Inferred, not observed:** today's content-less `activate()` probably replaces the account's resume point on every launch, because run 0 reported the active Bopify's empty session as `transfer_data`. The new startup never activates without content, except in the `Nothing` branch.
 
@@ -136,7 +140,7 @@ Setup: pinned librespot `939dc5e` plus the queue patch; temporary `warn!` lines 
 | 0 | Accidental: a second Bopify (started from Xcode, activated with no content) was the active device | `active=<that Bopify>`, `ps.ctx=""`, no track, `transfer_data` 66 bytes (context `""`, no track). When the spike instance connected, the other instance's session ended with "unexpected shutdown". |
 | 1 | No active device; last session was a playlist paused on Spotify desktop; forced paused takeover | `active=""`, `same_session=false`, `ps.ctx=spotify:playlist:37i9dQZF1E8NDRt5R5oIbG`, track `3WvM2dIR9iIxMGNMP7WsNw`, paused at 1545 ms, `transfer_data` 19,947 bytes. `idle → loading → paused`. The user confirmed the track and a populated queue. |
 | 2 | No active device; `activate` and `load("spotify:user:121047766:collection", start_playing: false)` | The cluster showed run 1's Bopify session as the last session (it outlived SIGTERM). `idle → loading → paused`. The user confirmed a Liked Songs track. |
-| 3 | The phone pressed play while run 2's Bopify was still active, so it acted as a remote; that Bopify was then killed | `active=""` with `ps.playing=true`, `paused=false`, 203 ms at a timestamp minutes old: a stale "playing" state from a vanished device. |
+| 3 | The phone pressed play while run 2's Bopify was still active, so it acted as a remote; that Bopify was then killed | `active=""` with `ps.playing=true`, `paused=false`, 203 ms at timestamp `1790418322113`. That is about 18:25:22, derived from run 3b's iPhone update at 18:27:07.98 carrying `1790418427830`, so the state was about 25 s old when the cluster arrived at 18:25:47.6. This is a stale "playing" state left by a vanished device. |
 | 3b | Same inactive instance; the phone switched to "This iPhone" and skipped a track | Cluster updates arrived while Bopify was inactive: `active=<iPhone id>`, `name="iPhone"`, the track changed from `22Tmr1R5TVgtLOSYrgMWdu` to `0phqiLIH4JYk4jPissBOQE`, each with a position and timestamp. |
 | 4 | Relaunch while the phone was actively playing, without `activate()` | `active=<iPhone id>`, `name="iPhone"`, `player_state` with context, track `0phqiLIH4JYk4jPissBOQE`, playing, position and duration. `transfer_data` was 1,156 bytes with an empty track. |
 
