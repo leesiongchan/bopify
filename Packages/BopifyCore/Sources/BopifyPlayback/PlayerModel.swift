@@ -72,10 +72,6 @@ public final class PlayerModel {
         enqueue("previous", requiresActive: true) { [engine] in try await engine.previous() }
     }
 
-    public func activate() {
-        enqueue("activate") { [engine] in try await engine.activate() }
-    }
-
     public func load(_ request: PlayRequest) {
         enqueue("load") { [engine] in try await engine.load(request) }
     }

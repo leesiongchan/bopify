@@ -33,7 +33,7 @@ Each decision records the alternative rejected and why, so a future reader can t
 
 This is corroborated by outcome, not only by signature: Speck wrapped raw `Player`, still lists next/previous, queue and autoplay as unimplemented, and has been dormant since Nov 2024. The two healthiest Swift+librespot projects (Spotifly, Spotty) both depend on `librespot-connect`.
 
-`Spirc::activate()` makes the app the active Connect device without requiring a second Spotify client to be running.
+`Spirc::activate()` makes the app the active Connect device without requiring a second Spotify client to be running. Since 2026-09-26 Bopify no longer calls it directly: the patched connect handler activates only when it has content to load (see `2026-09-26-startup-restore-design.md`).
 
 **Rejected:** raw `Player` only — strictly narrower for no structural gain; a helper-process/IPC design around `go-librespot` — credible (very active, has an AudioToolbox macOS backend) but adds a second binary and process supervision, and no project in this ecosystem does it.
 
@@ -144,7 +144,6 @@ bopify/
 public protocol PlaybackEngine: Sendable {
     var events: AsyncStream<PlaybackEvent> { get }
 
-    func activate() async throws              // become the active Connect device
     func load(_ request: PlayRequest) async throws
     func resume() async throws
     func pause() async throws
@@ -186,7 +185,6 @@ BopifyEngine *bopify_engine_create(const char *access_token,
                                    bopify_event_cb cb, void *ctx,
                                    int32_t *out_err);
 void    bopify_engine_destroy(BopifyEngine *);
-int32_t bopify_activate(BopifyEngine *);            /* Spirc::activate() */
 int32_t bopify_play(BopifyEngine *);
 int32_t bopify_pause(BopifyEngine *);
 int32_t bopify_next(BopifyEngine *);
@@ -200,7 +198,7 @@ int32_t bopify_update_token(BopifyEngine *, const char *access_token);
 const char *bopify_error_message(int32_t code);
 ```
 
-`bopify_activate` backs `PlaybackEngine.activate()`. `bopify_load` carries all three `PlayRequest` fields — `contextURI`, `uri` (as the starting track, mapping to `PlayingTrack::Uri`) and `startPositionMs` — so the protocol and the ABI express the same thing. Earlier drafts of this section omitted both, which would have forced the implementer to invent a resolution mid-slice.
+`bopify_activate` was removed on 2026-09-26 with the startup-restore change. `bopify_load` carries all three `PlayRequest` fields — `contextURI`, `uri` (as the starting track, mapping to `PlayingTrack::Uri`) and `startPositionMs` — so the protocol and the ABI express the same thing. Earlier drafts of this section omitted both, which would have forced the implementer to invent a resolution mid-slice.
 
 **Audio output** uses librespot's default `rodio` backend (cpal → CoreAudio), which needs no Homebrew packages on macOS. `Player::new` takes a `sink_builder`, so replacing it with a proxy sink feeding `AVAudioEngine` later — as Spotty does, to work around librespot #547 (output-device changes not honoured on macOS) and #1057 — is a localised change behind an existing seam. Accepted for now: changing output device mid-playback may not take effect.
 

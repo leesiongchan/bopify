@@ -34,7 +34,7 @@ Rust crate (`rust/crates/bopify-core`, the librespot integration):
 
 Run `./scripts/prepare-librespot.sh` before direct Cargo commands on a fresh
 checkout. It verifies the pinned revision and applies our exact queue-occurrence
-selection patch in `.build/`; unexpected local modifications are rejected.
+selection and startup-restore patch in `.build/`; unexpected local modifications are rejected.
 The normal build script runs this preparation automatically.
 
 ```sh

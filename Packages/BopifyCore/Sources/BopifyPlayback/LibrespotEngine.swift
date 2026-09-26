@@ -117,7 +117,6 @@ public final class LibrespotEngine: PlaybackEngine, @unchecked Sendable {
     // the `alive` flag before taking the read lock, so one that passes that
     // check just as `bopify_engine_destroy` takes the write lock waits out the
     // whole teardown. None of them may issue from the event callback.
-    @concurrent public func activate() async throws { try perform("activate") { bopify_activate(handle) } }
     // Logged under the domain's name, not the C function's, so a log grep
     // matches PlayerModel's line for the same action; the Rust side logs
     // `ffi: bopify_play` for the other half.

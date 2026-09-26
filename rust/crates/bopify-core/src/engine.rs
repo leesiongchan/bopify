@@ -101,6 +101,9 @@ impl Engine {
                 ConnectConfig {
                     name: device_name.to_string(),
                     emit_set_queue_events: true,
+                    // Decides from the first connect cluster what to load, so the
+                    // device is never active without content (see the startup-restore spec).
+                    startup_restore: true,
                     ..Default::default()
                 },
                 session.clone(),
@@ -132,9 +135,6 @@ impl Engine {
         })
     }
 
-    pub fn activate(&self) -> Result<(), BopifyError> {
-        self.spirc.activate().map_err(command_failed)
-    }
     pub fn play(&self) -> Result<(), BopifyError> {
         self.spirc.play().map_err(command_failed)
     }
