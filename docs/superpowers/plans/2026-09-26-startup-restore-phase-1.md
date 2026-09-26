@@ -66,6 +66,16 @@ xcodebuild -project Bopify/Bopify.xcodeproj -scheme Bopify -destination 'platfor
 
 ---
 
+### Before Task 1: prepare the tree
+
+`.build/` and `artifacts/` are gitignored. A fresh checkout or an isolated worktree therefore has neither the librespot checkout that Tasks 1–3 edit nor the xcframework that `swift test` needs in order to configure.
+
+- [ ] Run `./scripts/build-rust.sh`. It clones and patches `.build/librespot-939dc5e` when absent, then builds the xcframework. Expected: `Pinned librespot queue patch verified.` and `xcframework successfully written out`.
+- [ ] Run `git -C .build/librespot-939dc5e rev-parse HEAD`. Expected: `939dc5ee9d833e1980f9495241219d9d4868a061`.
+- [ ] Run `cargo test --manifest-path rust/Cargo.toml && cargo test --manifest-path rust/Cargo.toml -p librespot-connect && (cd Packages/BopifyCore && swift test)`. Expected: all green. This is the baseline, so any later failure belongs to this plan's changes.
+
+---
+
 ### Task 1: `StartupResolved` crosses from librespot into Swift state
 
 `event.rs` requires the wire contract and `BopifyDomain.PlaybackEvent` to change in the same commit, so this task covers the whole contract: the librespot event, the wire JSON, Swift decoding and the state fold.
@@ -1108,8 +1118,12 @@ Launch with `/private/tmp/bopify-startup-restore/Build/Products/Debug/Bopify.app
 For each scenario, record the `startup resolved outcome=` line, the phase transitions, and what the user sees.
 
 1. **Restore.** The user plays something on another device, pauses, then closes Spotify everywhere. Launch Bopify. Expect `outcome=restored`, then `loading → paused`, with the user confirming the right track, position and a populated Up Next.
-2. **Killed mid-song.** Press play in Bopify, wait about 20 s, `kill` the process, and relaunch. Expect `outcome=restored` and paused, not playing. The position may be near the track start: that is the last reported position, and it's a **pass**. A position beyond where playback was is a failure.
-3. **Liked Songs.** This needs no usable last session, which is hard to arrange on a real account. If it can't be produced, record "not reproduced" and rely on Task 2's unit tests. Don't fake it.
+2. **Killed mid-song.** Press play in Bopify, wait about 20 s, `kill` the process, and relaunch. Record the connect `outcome=` line explicitly. Expect `outcome=restored` and paused, not playing. The position may be near the track start: that is the last reported position, and it's a **pass**. A position beyond where playback was is a failure. So is `outcome=remote` naming "Bopify": the killed instance is still listed as active with a track (see the spec's ghost-instance risk). Record that as a failure, and don't fix it in this plan.
+3. **Liked Songs, forced.** A real account rarely lacks a usable last session, and Task 2's unit tests cover only the pure decision, not `load_liked_songs`. That handler's order (activate, load, then one `notify` inside the connection-id handler) also differs from the spike, which ran activate and load as separate commands. So force the branch with a throwaway edit, using the spike's method:
+   1. In `.build/librespot-939dc5e/connect/src/spirc.rs`, make `resolve_startup`'s first line `return self.load_liked_songs().await;`.
+   2. Build without the prepare check: `env MACOSX_DEPLOYMENT_TARGET=14.0 cargo build --release --manifest-path rust/Cargo.toml --target aarch64-apple-darwin`. Then `rm -rf artifacts/BopifyCoreFFI.xcframework && xcodebuild -create-xcframework -library rust/target/aarch64-apple-darwin/release/libbopify_core.a -headers artifacts/include -output artifacts/BopifyCoreFFI.xcframework`. Then rebuild the app with the Step 1 `xcodebuild` command.
+   3. Launch. Expect `outcome=likedSongs`, then `loading → paused`, with the user confirming a Liked Songs track.
+   4. Remove the edit by hand; never use `git checkout` in that checkout. Run `./scripts/prepare-librespot.sh` (it must print verified), then `./scripts/build-rust.sh`, then the Step 1 `xcodebuild` again.
 4. **Another device playing.** The user plays on "This iPhone". Launch Bopify. Expect `outcome=remote`, the panel showing "Playing on <name>", and the user confirming the phone never paused.
 5. **Normal quit.** Quit Bopify while paused mid-track, then relaunch. Expect `outcome=restored` at the same position.
 6. **No flash.** In scenario 1 or 5, the user watches the panel during launch: after sign-in they should see the loading disc, then the track, and never the "Nothing playing" paste view.
