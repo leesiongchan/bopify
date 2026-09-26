@@ -1,7 +1,7 @@
 # Bopify startup: always have something loaded
 
 Date: 2026-09-26
-Status: approved by the user on 2026-09-26 for implementation planning, including resuming at the last reported position rather than extrapolating. Implementation is not yet approved or started.
+Status: approved by the user on 2026-09-26 for implementation planning, including resuming at the last reported position rather than extrapolating. Phase 1 was implemented and live-verified on 2026-09-26 (see `docs/superpowers/verification/2026-09-26-startup-restore.md`); phase 2 (mirroring) is not started.
 
 ## Intent and scope
 
