@@ -7,7 +7,7 @@ app.
 ## Requirements
 
 - Rust 1.85+
-- Xcode 27
+- Xcode 27 with the Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`)
 - `MACOSX_DEPLOYMENT_TARGET=14.0`
 - A Spotify **Premium** account (librespot is Premium-only)
 

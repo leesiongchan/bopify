@@ -80,7 +80,7 @@ private struct PlayerPreview: View {
     }
 
     var body: some View {
-        PlayerSurface {
+        PlayerSurface(mode: presentation.mode) {
             if presentation.mode == .compact {
                 CompactPlayerView(player: player, state: state, store: store, presentation: presentation, artworkNamespace: artworkNamespace).padding(8)
             } else {
@@ -190,7 +190,7 @@ struct PlayerMotionScene: View {
     @Namespace var artwork
     var body: some View {
         let state = fixture.state
-        PlayerSurface {
+        PlayerSurface(mode: fixture.presentation.mode) {
             if fixture.presentation.mode == .compact {
                 CompactPlayerView(player: fixture.player, state: state, store: fixture.store, presentation: fixture.presentation, artworkNamespace: artwork).padding(8)
             } else if fixture.presentation.mode == .queue {

@@ -1,11 +1,29 @@
 import SwiftUI
+import BopifyPlayback
 
 struct PlayerSurface<Content: View>: View {
+    var mode: PlayerMode = .expanded
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
     @ViewBuilder let content: () -> Content
 
     var body: some View {
         content()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                if mode != .compact {
+                    let shape = RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    if reduceTransparency || contrast == .increased {
+                        shape.fill(Color(nsColor: .windowBackgroundColor))
+                            .overlay(shape.strokeBorder(.primary.opacity(0.4), lineWidth: 1))
+                    } else if #available(macOS 26.0, *) {
+                        Color.clear.glassEffect(.regular, in: shape)
+                    } else {
+                        shape.fill(.ultraThinMaterial)
+                            .overlay(shape.strokeBorder(.primary.opacity(0.15), lineWidth: 0.5))
+                    }
+                }
+            }
     }
 }
 

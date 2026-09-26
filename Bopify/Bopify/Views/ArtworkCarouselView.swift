@@ -77,7 +77,8 @@ struct ArtworkCarouselView: View {
         let point = layer.point(at: progress)
         let size = layer.fromSize + (layer.toSize - layer.fromSize) * progress
         let diameter = size * scale * (layer.isCurrent ? albumScale : 1)
-        let offset = layer.isCurrent ? albumOffset : .zero
+        let offset = layer.isCurrent ? albumOffset : CGSize(
+            width: point.x < 0 ? min(0, albumOffset.width) : max(0, albumOffset.width), height: 0)
         let position = CGPoint(x: center.x + point.x * scale + offset.width,
                                y: center.y + point.y * scale + offset.height)
         return ArtworkView(image: artwork(for: layer), diameter: diameter)
@@ -140,9 +141,9 @@ struct ArtworkCarouselView: View {
         if current.track == nil { current.track = currentTrack }
         let initial = layers.isEmpty && previousQueue == nil
         let desired: [(QueueEntry, CGPoint, CGFloat)] = [
-            queue.previous.last.map { ($0, CGPoint(x: -96, y: 0), 80) },
+            queue.previous.last.map { ($0, CGPoint(x: -140, y: 0), 64) },
             (current, .zero, 204),
-            queue.next.first.map { ($0, CGPoint(x: 96, y: 0), 80) }
+            queue.next.first.map { ($0, CGPoint(x: 140, y: 0), 64) }
         ].compactMap { $0 }
         let ids = desired.map { $0.0.id }
         if layers.filter({ $0.toOpacity == 1 }).map(\.id) == ids {
@@ -157,15 +158,15 @@ struct ArtworkCarouselView: View {
         let direction = carouselDirection(old: previousQueue, new: queue)
         let travel = !reduceMotion && direction != .fade
         var result: [ArtworkLayer] = desired.map { entry, target, size in
-            let old = layers.first { $0.id == entry.id }
-            let start = travel ? old?.point(at: progress) ?? target : target
+            let old = layers.first { $0.id == entry.id && $0.isCurrent == (entry.id == current.id) }
+            let start = travel && old?.to == target ? old?.point(at: progress) ?? target : target
             let oldSize = old.map { $0.fromSize + ($0.toSize - $0.fromSize) * progress }
             return ArtworkLayer(entry: entry, from: start, to: target,
                 fromSize: travel ? oldSize ?? size : size, toSize: size,
                 fromOpacity: old == nil ? (initial ? 1 : 0) : old!.fromOpacity + (old!.toOpacity - old!.fromOpacity) * progress,
                 toOpacity: 1, isCurrent: entry.id == current.id)
         }
-        for old in layers where !ids.contains(old.id) {
+        for old in layers where !ids.contains(old.id) && !old.isCurrent {
             result.append(ArtworkLayer(entry: old.entry, from: old.point(at: progress), to: old.point(at: progress),
                 fromSize: old.fromSize + (old.toSize - old.fromSize) * progress,
                 toSize: old.toSize, fromOpacity: old.fromOpacity + (old.toOpacity - old.fromOpacity) * progress,
