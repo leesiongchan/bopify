@@ -122,6 +122,146 @@
         }
       }
     },
+    "favorite.consentFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Favorites permission was not granted. Your streaming session is unchanged."
+          }
+        }
+      }
+    },
+    "favorite.enable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable Spotify favorites"
+          }
+        }
+      }
+    },
+    "favorite.forbidden" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotify denied library access for this account or app."
+          }
+        }
+      }
+    },
+    "favorite.pending" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updating"
+          }
+        }
+      }
+    },
+    "favorite.permission" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow Bopify to read and change your saved tracks. Playback will continue."
+          }
+        }
+      }
+    },
+    "favorite.rateLimited" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotify is receiving too many requests. Try again later."
+          }
+        }
+      }
+    },
+    "favorite.remove" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove from Spotify"
+          }
+        }
+      }
+    },
+    "favorite.retry" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry saved status"
+          }
+        }
+      }
+    },
+    "favorite.save" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save to Spotify"
+          }
+        }
+      }
+    },
+    "favorite.saved" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved to Spotify"
+          }
+        }
+      }
+    },
+    "favorite.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotify favorite"
+          }
+        }
+      }
+    },
+    "favorite.unavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not confirm saved status. Try again."
+          }
+        }
+      }
+    },
+    "favorite.unknown" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved status is unknown."
+          }
+        }
+      }
+    },
+    "favorite.unsaved" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not saved to Spotify"
+          }
+        }
+      }
+    },
     "menu.options" : {
       "localizations" : {
         "en" : {
@@ -293,6 +433,7 @@
       }
     },
     "player.progress.value" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -561,146 +702,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Keep on Top"
-          }
-        }
-      }
-    },
-    "favorite.title" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Spotify favorite"
-          }
-        }
-      }
-    },
-    "favorite.pending" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Updating"
-          }
-        }
-      }
-    },
-    "favorite.saved" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saved to Spotify"
-          }
-        }
-      }
-    },
-    "favorite.unsaved" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not saved to Spotify"
-          }
-        }
-      }
-    },
-    "favorite.unknown" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saved status is unknown."
-          }
-        }
-      }
-    },
-    "favorite.save" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Save to Spotify"
-          }
-        }
-      }
-    },
-    "favorite.remove" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Remove from Spotify"
-          }
-        }
-      }
-    },
-    "favorite.enable" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enable Spotify favorites"
-          }
-        }
-      }
-    },
-    "favorite.retry" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Retry saved status"
-          }
-        }
-      }
-    },
-    "favorite.permission" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Allow Bopify to read and change your saved tracks. Playback will continue."
-          }
-        }
-      }
-    },
-    "favorite.forbidden" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Spotify denied library access for this account or app."
-          }
-        }
-      }
-    },
-    "favorite.rateLimited" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Spotify is receiving too many requests. Try again later."
-          }
-        }
-      }
-    },
-    "favorite.unavailable" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Could not confirm saved status. Try again."
-          }
-        }
-      }
-    },
-    "favorite.consentFailed" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Favorites permission was not granted. Your streaming session is unchanged."
           }
         }
       }
