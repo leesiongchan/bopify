@@ -443,6 +443,16 @@
         }
       }
     },
+    "player.remote.title %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playing on %@"
+          }
+        }
+      }
+    },
     "player.unknownTrack" : {
       "localizations" : {
         "en" : {
