@@ -16,6 +16,7 @@ public final class PlayerModel {
     public private(set) var state = PlaybackState()
     public private(set) var commandNotice: String?
     private(set) var positionUpdatedAt = Date.now
+    private var frozenDisplayPositionMs: Int64?
 
     @ObservationIgnored private let engine: any PlaybackEngine
     @ObservationIgnored private var consumer: Task<Void, Never>?
@@ -27,7 +28,7 @@ public final class PlayerModel {
     /// Interpolate for display without replacing the engine's authoritative position.
     public func displayPositionMs(at date: Date) -> Int64 {
         let elapsed = state.phase == .playing ? max(0, date.timeIntervalSince(positionUpdatedAt)) * 1000 : 0
-        let position = min(Double(max(0, state.durationMs)), max(0, Double(state.positionMs) + elapsed))
+        let position = min(Double(max(0, state.durationMs)), max(0, Double(frozenDisplayPositionMs ?? state.positionMs) + elapsed))
         return Int64(position)
     }
 
@@ -135,6 +136,10 @@ public final class PlayerModel {
         }
     }
 
+    private func freezeDisplayPosition() {
+        if state.phase == .playing { frozenDisplayPositionMs = displayPositionMs(at: .now) }
+    }
+
     private func apply(_ event: PlaybackEvent) {
         let oldPhase = state.phase
         switch event {
@@ -173,6 +178,7 @@ public final class PlayerModel {
                 : String(localized: "command.unavailable", defaultValue: "That action is unavailable.")
             BopifyLog.playback.debug("player command rejected")
         case let .trackChanged(track):
+            frozenDisplayPositionMs = nil
             positionUpdatedAt = .now
             BopifyLog.playback.debug("track changed title=\(track.title, privacy: .private)")
             state.currentTrack = track
@@ -182,27 +188,36 @@ public final class PlayerModel {
             state.canPrevious = true
             state.canSeek = true
         case let .playing(position):
+            frozenDisplayPositionMs = nil
             positionUpdatedAt = .now
             state.phase = .playing; state.positionMs = position
             state.isActiveDevice = true
         case let .paused(position):
+            frozenDisplayPositionMs = nil
             positionUpdatedAt = .now
             state.phase = .paused; state.positionMs = position
             state.isActiveDevice = true
         case let .seeked(position), let .positionCorrection(position):
+            frozenDisplayPositionMs = nil
             positionUpdatedAt = .now
             state.positionMs = position
         case let .volumeChanged(volume):
             state.volume = volume
         case .loading:
-            // Metadata is preserved deliberately (PRD PLAY-07).
+            // Keep metadata and the displayed position until the engine supplies new values.
+            freezeDisplayPosition()
             state.phase = .loading
         case .endOfTrack:
+            frozenDisplayPositionMs = nil
             state.phase = .ended; state.positionMs = state.durationMs
         case let .activeDeviceChanged(isActive):
             state.isActiveDevice = isActive
-            if !isActive { state.phase = .idle }
+            if !isActive {
+                freezeDisplayPosition()
+                state.phase = .idle
+            }
         case let .failed(error):
+            freezeDisplayPosition()
             state.phase = .error(error)
             let description = String(describing: error)
             BopifyLog.playback.error("playback failed error=\(description, privacy: .public)")
