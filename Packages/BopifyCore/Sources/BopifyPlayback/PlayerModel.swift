@@ -72,10 +72,6 @@ public final class PlayerModel {
         enqueue("previous", requiresActive: true) { [engine] in try await engine.previous() }
     }
 
-    public func activate() {
-        enqueue("activate") { [engine] in try await engine.activate() }
-    }
-
     public func load(_ request: PlayRequest) {
         enqueue("load") { [engine] in try await engine.load(request) }
     }
@@ -222,6 +218,15 @@ public final class PlayerModel {
             let description = String(describing: error)
             BopifyLog.playback.error("playback failed error=\(description, privacy: .public)")
             if error == .playbackSessionLost { state.isActiveDevice = false }
+        case let .startupResolved(outcome):
+            state.startup = .resolved(outcome)
+            let kind = switch outcome {
+            case .restored: "restored"
+            case .likedSongs: "likedSongs"
+            case .remote: "remote"
+            case .nothing: "nothing"
+            }
+            BopifyLog.playback.info("startup resolved outcome=\(kind, privacy: .public)")
         }
         if state.phase != oldPhase {
             let old = String(describing: oldPhase)

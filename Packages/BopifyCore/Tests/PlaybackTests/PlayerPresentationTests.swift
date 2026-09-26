@@ -78,4 +78,52 @@ struct PlayerPresentationTests {
         #expect(screen.contains(invalid))
     }
 
+    private func track() -> Track {
+        Track(uri: SpotifyURI("spotify:track:t")!, title: "T", artists: [], albumTitle: nil, artwork: nil, durationMs: 1)
+    }
+    @Test func aTrackAlwaysShowsThePlayer() {
+        var state = PlaybackState()
+        state.currentTrack = track()
+        #expect(PlayerContent(state) == .player)
+        state.startup = .resolved(.nothing)
+        #expect(PlayerContent(state) == .player)
+    }
+    @Test func startupLoadsInsteadOfOfferingThePasteView() {
+        var state = PlaybackState()
+        #expect(PlayerContent(state) == .loading)
+        // Restored or Liked Songs may be reported before the engine's Loading event.
+        state.startup = .resolved(.restored)
+        #expect(PlayerContent(state) == .loading)
+        state.startup = .resolved(.likedSongs)
+        #expect(PlayerContent(state) == .loading)
+    }
+    @Test func onlyANothingOutcomeOffersThePasteView() {
+        var state = PlaybackState()
+        state.startup = .resolved(.nothing)
+        #expect(PlayerContent(state) == .chooseContext)
+        state.phase = .loading
+        #expect(PlayerContent(state) == .loading)
+    }
+    @Test func aRemoteOutcomeNamesTheDevice() {
+        var state = PlaybackState()
+        state.startup = .resolved(.remote(deviceName: "iPhone"))
+        #expect(PlayerContent(state) == .remote(deviceName: "iPhone"))
+    }
+    @Test func errorsSurfaceEvenWhileStartupIsPending() {
+        var state = PlaybackState()
+        state.phase = .error(.playbackSessionLost)
+        #expect(PlayerContent(state) == .player)
+    }
+    @Test func aNothingOutcomeOutsideIdleKeepsThePlayer() {
+        var state = PlaybackState()
+        state.startup = .resolved(.nothing)
+        state.phase = .paused
+        #expect(PlayerContent(state) == .player)
+    }
+    @Test func errorsSurfaceOverARemoteOutcome() {
+        var state = PlaybackState()
+        state.startup = .resolved(.remote(deviceName: "iPhone"))
+        state.phase = .error(.playbackSessionLost)
+        #expect(PlayerContent(state) == .player)
+    }
 }

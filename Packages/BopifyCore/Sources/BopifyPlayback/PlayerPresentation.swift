@@ -78,3 +78,23 @@ public func clampedPlayerFrame(origin: CGPoint, size: CGSize, visibleFrame: CGRe
                   y: min(max(y, visibleFrame.minY), visibleFrame.maxY - height),
                   width: width, height: height)
 }
+
+/// What the expanded player shows. It lives here, not in the view, so its
+/// precedence is tested: startup must never flash the paste view.
+public enum PlayerContent: Equatable, Sendable {
+    case player, loading, remote(deviceName: String), chooseContext
+
+    public init(_ state: PlaybackState) {
+        guard state.currentTrack == nil else { self = .player; return }
+        switch state.phase {
+        case .error: self = .player
+        case .loading, .buffering: self = .loading
+        default:
+            switch state.startup {
+            case .pending, .resolved(.restored), .resolved(.likedSongs): self = .loading
+            case let .resolved(.remote(deviceName)): self = .remote(deviceName: deviceName)
+            case .resolved(.nothing): self = state.phase == .idle ? .chooseContext : .player
+            }
+        }
+    }
+}

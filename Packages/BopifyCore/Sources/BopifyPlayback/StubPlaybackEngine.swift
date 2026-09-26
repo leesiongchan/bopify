@@ -22,7 +22,6 @@ public final class StubPlaybackEngine: PlaybackEngine, @unchecked Sendable {
 
     private func record(_ name: String) { lock.withLock { commands.append(name) } }
 
-    public func activate() async throws { record("activate") }
     public func load(_ request: PlayRequest) async throws { record("load:\(request.contextURI.rawValue)") }
     public func resume() async throws { record("resume") }
     public func pause() async throws { record("pause") }

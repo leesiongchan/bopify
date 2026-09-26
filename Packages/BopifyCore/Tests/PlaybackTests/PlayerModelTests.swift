@@ -270,4 +270,18 @@ struct PlayerModelTests {
         #expect(model.state.phase == .error(.networkUnavailable))
         #expect(model.state.currentTrack?.title == "Title")
     }
+
+    @Test func startupStaysPendingUntilTheEngineResolvesIt() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        #expect(model.state.startup == .pending)
+        model.start()
+        defer { model.stop() }
+        await settle(model, engine, [.loading])
+        #expect(model.state.startup == .pending)
+        await settle(model, engine, [.startupResolved(.restored), .trackChanged(makeTrack()), .paused(positionMs: 1545)])
+        #expect(model.state.startup == .resolved(.restored))
+        #expect(model.state.phase == .paused)
+        #expect(model.state.positionMs == 1545)
+    }
 }

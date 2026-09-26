@@ -16,7 +16,6 @@ public struct PlayRequest: Hashable, Sendable {
 public protocol PlaybackEngine: Sendable {
     var events: AsyncStream<PlaybackEvent> { get }
 
-    func activate() async throws
     func load(_ request: PlayRequest) async throws
     func resume() async throws
     func pause() async throws

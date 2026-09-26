@@ -1,5 +1,5 @@
 use librespot_metadata::audio::{AudioItem, UniqueFields};
-use librespot_playback::player::PlayerEvent;
+use librespot_playback::player::{PlayerEvent, StartupOutcome};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -88,6 +88,12 @@ pub enum WireEvent {
         code: i32,
         message: String,
     },
+    #[serde(rename_all = "camelCase")]
+    StartupResolved {
+        outcome: &'static str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        device_name: Option<String>,
+    },
 }
 
 /// Maps librespot's player events onto the wire format.
@@ -143,6 +149,7 @@ pub fn translate(event: PlayerEvent) -> Option<WireEvent> {
             current: current_track.and_then(queue_entry),
             next: next_tracks.into_iter().filter_map(queue_entry).collect(),
         }),
+        PlayerEvent::StartupResolved { outcome } => Some(startup_resolved(outcome)),
         PlayerEvent::ShuffleChanged { shuffle } => {
             Some(WireEvent::ShuffleChanged { enabled: shuffle })
         }
@@ -163,6 +170,21 @@ pub fn translate(event: PlayerEvent) -> Option<WireEvent> {
 fn dropped(kind: &str) -> Option<WireEvent> {
     log::debug!("event: dropping unmodelled player event kind={kind}");
     None
+}
+
+fn startup_resolved(outcome: StartupOutcome) -> WireEvent {
+    let (outcome, device_name) = match outcome {
+        StartupOutcome::Restored => ("restored", None),
+        StartupOutcome::LikedSongs => ("likedSongs", None),
+        StartupOutcome::Remote { device_name } => ("remote", Some(device_name)),
+        StartupOutcome::Nothing => ("nothing", None),
+    };
+    // The outcome only: a device name is whatever the user called their phone.
+    log::info!("event: startup resolved outcome={outcome}");
+    WireEvent::StartupResolved {
+        outcome,
+        device_name,
+    }
 }
 
 fn queue_entry(track: librespot_playback::player::QueueTrack) -> Option<WireQueueEntry> {
@@ -457,5 +479,29 @@ mod tests {
             json,
             serde_json::json!({"type":"repeatChanged", "mode":"track"})
         );
+    }
+
+    #[test]
+    fn startup_outcomes_carry_a_device_name_only_when_remote() {
+        let remote = translate(PlayerEvent::StartupResolved {
+            outcome: StartupOutcome::Remote {
+                device_name: "iPhone".into(),
+            },
+        });
+        assert_eq!(
+            serde_json::to_string(&remote.unwrap()).unwrap(),
+            r#"{"type":"startupResolved","outcome":"remote","deviceName":"iPhone"}"#
+        );
+        for (outcome, wire) in [
+            (StartupOutcome::Restored, "restored"),
+            (StartupOutcome::LikedSongs, "likedSongs"),
+            (StartupOutcome::Nothing, "nothing"),
+        ] {
+            let event = translate(PlayerEvent::StartupResolved { outcome }).unwrap();
+            assert_eq!(
+                serde_json::to_string(&event).unwrap(),
+                format!(r#"{{"type":"startupResolved","outcome":"{wire}"}}"#)
+            );
+        }
     }
 }
