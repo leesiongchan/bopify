@@ -1,12 +1,13 @@
 diff --git a/connect/src/lib.rs b/connect/src/lib.rs
-index ba00aa4..14025a8 100644
+index ba00aa4..dcefba6 100644
 --- a/connect/src/lib.rs
 +++ b/connect/src/lib.rs
-@@ -12,6 +12,7 @@ mod context_resolver;
+@@ -12,6 +12,8 @@ mod context_resolver;
  mod model;
  mod shuffle_vec;
  mod spirc;
 +mod queue;
++mod startup;
  mod state;
  
  pub use model::*;
@@ -542,6 +543,183 @@ index c7c195b..ec3b8b4 100644
          self.connect_state.set_status(&self.play_status);
  
          if self.connect_state.is_playing() {
+diff --git a/connect/src/startup.rs b/connect/src/startup.rs
+new file mode 100644
+index 0000000..b2533ff
+--- /dev/null
++++ b/connect/src/startup.rs
+@@ -0,0 +1,171 @@
++//! Bopify: the connect-time decision behind `ConnectConfig::startup_restore`.
++
++use crate::protocol::{connect::Cluster, transfer_state::TransferState};
++use protobuf::Message;
++
++#[derive(Debug)]
++pub(crate) enum StartupDecision {
++    Remote { device_name: String },
++    Restore(TransferState),
++    Fallback,
++}
++
++pub(crate) fn startup_decision(cluster: &Cluster, own_device_id: &str) -> StartupDecision {
++    let active = cluster.active_device_id.as_str();
++    if !active.is_empty() {
++        let has_track = cluster
++            .player_state
++            .track
++            .as_ref()
++            .is_some_and(|track| !track.uri.is_empty());
++        return if active != own_device_id && has_track {
++            let device_name = cluster
++                .device
++                .get(active)
++                .map(|device| device.name.clone())
++                .unwrap_or_default();
++            StartupDecision::Remote { device_name }
++        } else {
++            // A trackless active device has nothing to mirror, and while any device is
++            // active the transfer data is a stub that would pull its context over.
++            StartupDecision::Fallback
++        };
++    }
++    match TransferState::parse_from_bytes(&cluster.transfer_data) {
++        Ok(mut transfer) if is_usable(&transfer) => {
++            // Set before handle_transfer, never as a pause after it: it also stops
++            // handle_transfer extrapolating a stale timestamp past where playback was.
++            transfer.playback.mut_or_insert_default().is_paused = Some(true);
++            StartupDecision::Restore(transfer)
++        }
++        _ => StartupDecision::Fallback,
++    }
++}
++
++/// Checks content, not byte length: an empty Bopify session still serialises
++/// to 66 bytes of transfer data.
++fn is_usable(transfer: &TransferState) -> bool {
++    let context = transfer.current_session.context.uri.as_deref().unwrap_or_default();
++    let track = transfer.playback.current_track.uri.as_deref().unwrap_or_default();
++    (!context.is_empty() && context != "-") || !track.is_empty()
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::protocol::connect::DeviceInfo;
++
++    const OWN: &str = "own-device";
++
++    /// A serialised last session, shaped like the spike's `transfer_data`.
++    fn session(context: &str, track: &str, paused: bool) -> Vec<u8> {
++        let mut transfer = TransferState::new();
++        transfer
++            .current_session
++            .mut_or_insert_default()
++            .context
++            .mut_or_insert_default()
++            .uri = Some(context.into());
++        let playback = transfer.playback.mut_or_insert_default();
++        playback.current_track.mut_or_insert_default().uri = Some(track.into());
++        playback.is_paused = Some(paused);
++        playback.position_as_of_timestamp = Some(203);
++        transfer.write_to_bytes().unwrap()
++    }
++
++    fn cluster(active: &str, playing_track: &str, transfer_data: Vec<u8>) -> Cluster {
++        let mut cluster = Cluster::new();
++        cluster.active_device_id = active.into();
++        if !active.is_empty() {
++            let mut device = DeviceInfo::new();
++            device.name = "iPhone".into();
++            cluster.device.insert(active.into(), device);
++        }
++        cluster
++            .player_state
++            .mut_or_insert_default()
++            .track
++            .mut_or_insert_default()
++            .uri = playing_track.into();
++        cluster.transfer_data = transfer_data;
++        cluster
++    }
++
++    fn restored(decision: StartupDecision) -> TransferState {
++        match decision {
++            StartupDecision::Restore(transfer) => transfer,
++            other => panic!("expected Restore, got {other:?}"),
++        }
++    }
++
++    #[test]
++    fn restores_the_last_session_paused_when_no_device_is_active() {
++        let data = session(
++            "spotify:playlist:37i9dQZF1E8NDRt5R5oIbG",
++            "spotify:track:3WvM2dIR9iIxMGNMP7WsNw",
++            true,
++        );
++        let transfer = restored(startup_decision(&cluster("", "", data), OWN));
++        assert_eq!(
++            transfer.current_session.context.uri.as_deref(),
++            Some("spotify:playlist:37i9dQZF1E8NDRt5R5oIbG")
++        );
++        assert_eq!(transfer.playback.is_paused, Some(true));
++    }
++
++    #[test]
++    fn a_session_left_playing_by_a_vanished_device_resumes_paused_at_its_reported_position() {
++        let data = session(
++            "spotify:user:121047766:collection",
++            "spotify:track:22Tmr1R5TVgtLOSYrgMWdu",
++            false,
++        );
++        let transfer = restored(startup_decision(&cluster("", "", data), OWN));
++        assert_eq!(transfer.playback.is_paused, Some(true));
++        assert_eq!(transfer.playback.position_as_of_timestamp, Some(203));
++    }
++
++    #[test]
++    fn a_session_started_from_bare_uris_is_restored_from_its_track() {
++        restored(startup_decision(
++            &cluster("", "", session("-", "spotify:track:x", true)),
++            OWN,
++        ));
++    }
++
++    #[test]
++    fn an_empty_or_missing_session_falls_back() {
++        for data in [session("", "", true), session("-", "", true), Vec::new()] {
++            let decision = startup_decision(&cluster("", "", data), OWN);
++            assert!(matches!(decision, StartupDecision::Fallback), "{decision:?}");
++        }
++    }
++
++    #[test]
++    fn another_device_playing_a_track_is_mirrored_never_restored() {
++        // Run 4: while a device is active, transfer_data is a stub that still names a context.
++        let data = session("spotify:user:121047766:collection", "", false);
++        let decision = startup_decision(
++            &cluster("6dce37", "spotify:track:0phqiLIH4JYk4jPissBOQE", data),
++            OWN,
++        );
++        assert!(
++            matches!(&decision, StartupDecision::Remote { device_name } if device_name == "iPhone"),
++            "{decision:?}"
++        );
++    }
++
++    #[test]
++    fn an_active_device_without_a_track_falls_back_never_restores() {
++        // Run 0: a crashed Bopify stayed "active" with an empty session.
++        let data = session("spotify:user:121047766:collection", "", true);
++        let decision = startup_decision(&cluster("ghost", "", data), OWN);
++        assert!(matches!(decision, StartupDecision::Fallback), "{decision:?}");
++    }
++
++    #[test]
++    fn this_device_is_never_mirrored() {
++        let decision = startup_decision(&cluster(OWN, "spotify:track:x", Vec::new()), OWN);
++        assert!(!matches!(decision, StartupDecision::Remote { .. }), "{decision:?}");
++    }
++}
 diff --git a/connect/src/state.rs b/connect/src/state.rs
 index f810d85..2988f8f 100644
 --- a/connect/src/state.rs
