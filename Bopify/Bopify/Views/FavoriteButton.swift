@@ -26,7 +26,7 @@ struct FavoriteButton: View {
                 .frame(width: 28, height: 28)
             }
             .buttonStyle(PlayerControlStyle())
-            .disabled(model.isPending || environment.isEnablingFavorites)
+            .disabled(model.isPending || environment.isEnablingFavorites || model.uri != environment.player?.state.currentTrack?.uri)
             .accessibilityLabel(Text("favorite.title"))
             .accessibilityValue(Text(model.isPending ? "favorite.pending" : model.saved == true ? "favorite.saved" : model.saved == false ? "favorite.unsaved" : "favorite.unknown"))
             .help(Text(model.saved == true ? "favorite.remove" : "favorite.save"))
@@ -35,6 +35,7 @@ struct FavoriteButton: View {
                     Text(environment.favoriteAuthorizationNotice ?? favoriteNotice(model.error))
                         .font(.callout).fixedSize(horizontal: false, vertical: true)
                     FavoriteMenuAction()
+                        .disabled(model.uri != environment.player?.state.currentTrack?.uri)
                 }
                 .padding(16).frame(width: 260)
                 .onExitCommand { showsDetails = false }

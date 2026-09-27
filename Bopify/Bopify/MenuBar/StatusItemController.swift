@@ -77,6 +77,9 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                 environment.presentation.sendAttention(.visibility(panel.isVisible))
                 if panel.isKeyWindow { environment.presentation.sendAttention(.keyboardFocus(true)) }
                 isMonolithApplied = true
+                // The new composition has no rendered Monolith geometry to animate from yet.
+                environment.monolithWindow.apply(mode: environment.presentation.mode, reduceMotion: true)
+                BopifyLog.playback.debug("Monolith listening geometry initialized")
             }
             environment.monolithWindow.apply(mode: environment.presentation.mode,
                                               reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)

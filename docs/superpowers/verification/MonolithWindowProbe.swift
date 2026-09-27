@@ -165,6 +165,18 @@ private struct WindowScene: View {
         controller.setDragging(false)
         try await settle()
         try check(panel.frame.size == controller.layout.contentSize, "drag during queue recession settles to tight bounds")
+        let boundary = CGRect(x: 0, y: 0, width: 1000, height: 700)
+        let bottomDefaults = UserDefaults(suiteName: "monolith.bottom.\(UUID())")!
+        bottomDefaults.set("{300, 132}", forKey: "player.recordCenter")
+        let bottomController = MonolithWindowController(defaults: bottomDefaults)
+        let bottomPanel = StatusPanel(content: WindowScene(controller: bottomController))
+        bottomController.attach(to: bottomPanel)
+        bottomController.apply(mode: .expanded, reduceMotion: true, visibleFrame: boundary)
+        bottomController.apply(mode: .queue, reduceMotion: true, visibleFrame: boundary)
+        try check(bottomController.layout.queueFrame.height >= 80, "bottom-edge queue retains a usable viewport")
+        try check(boundary.contains(bottomPanel.frame), "bottom-edge queue stays inside screen")
+        bottomController.apply(mode: .compact, reduceMotion: true, visibleFrame: boundary)
+        try check(bottomPanel.frame.size == CGSize(width: 142, height: 142), "bottom-edge queue collapses tightly")
     }
     @MainActor static func mouse(_ type: CGEventType, at point: CGPoint) {
         let height = NSScreen.screens.first!.frame.maxY

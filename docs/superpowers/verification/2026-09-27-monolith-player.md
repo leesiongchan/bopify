@@ -26,6 +26,7 @@ xcodebuild -quiet -project Bopify/Bopify.xcodeproj -scheme Bopify -destination '
 python3 docs/superpowers/verification/run-monolith-probe.py --derived-data /private/tmp/bopify-monolith-build --output /private/tmp/bopify-monolith-window-final --probe window
 python3 docs/superpowers/verification/run-monolith-probe.py --derived-data /private/tmp/bopify-monolith-build --output /private/tmp/bopify-monolith-visual-final --probe visual
 python3 docs/superpowers/verification/run-monolith-probe.py --derived-data /private/tmp/bopify-monolith-build --output /private/tmp/bopify-monolith-artwork-final --probe artwork
+python3 docs/superpowers/verification/run-monolith-probe.py --derived-data /private/tmp/bopify-monolith-build --output /private/tmp/bopify-monolith-composition-green --probe composition
 git diff --check
 ```
 
@@ -34,6 +35,7 @@ git diff --check
 - Native window probe: exit 0, `MONOLITH WINDOW PASS`.
 - Native visual probe: exit 0, `MONOLITH VISUAL PASS`.
 - Artwork probe: exit 0, all assertions passed.
+- Production composition probe: exit 0, `MONOLITH COMPOSITION PASS`.
 
 ## Evidence
 
@@ -43,6 +45,15 @@ A native regression first failed when dragging interrupted queue recession: the 
 
 The integrated visual probe verifies paused startup restoration at 1545 ms, remote/error classification, and no playback command on reveal/focus/center click. It checks quick-ring-click suppression, one committed seek after the 250 ms hold, cancellation on capability loss/occurrence replacement/hide, exact queue occurrence confirmation, tight native bounds after queue closure, and protection against a late result closing a reopened queue. Native accessibility-tree inspection shows only the record button at rest and transport controls when revealed.
 
+The independent whole-branch review identified four Important code issues, each reproduced before fixing:
+
+- First metadata arrival could leave the original startup window envelope open. The actual `StatusItemController` composition now initializes its first listening geometry synchronously; subsequent interactions animate normally.
+- Opening the queue at the screen bottom could leave zero height for rows. The controller now preserves at least an 80 pt queue viewport when the display has room, translating upward as necessary. Native checks cover opening, screen containment, and tight collapse.
+- Queue-first metadata could show the next track while the favorite action still targeted the previous track. The heart stays disabled until displayed/current/favorite identities agree. A distinct-URI native AX-action test verifies no mutation of the previous song and successful mutation after identities match.
+- Direction lagged one occurrence because the parent updated it after the child consumed the new track. Direction is now derived from the previous queue snapshot during rendering. Temporary fixture instrumentation verifies `.next` followed by `.previous` in the production composition.
+
+The composition probe also verifies the actual status-item observer, keep-on-top native level, queue → panel Escape ordering, and focused reopening. Its favorite service is an isolated actor; it cannot mutate a Spotify account. Direction instrumentation is compiled into a temporary record-source copy, not the production app.
+
 Artwork checks cover same-cover duplicate occurrences, missing/late artwork, interruption continuity, and 100 retargets with no more than two live artwork frames. Captures sample next/previous interruption and Reduced Motion. These establish state/geometry behavior and sampled appearance, not a frame-by-frame video assessment of every simultaneous input combination.
 
 Temporary fixture-only instrumentation measures the production reflection TimelineView. Run with `--probe visual --measure-ambient`. After settling, a 300 ms sample produced 10 updates while playing and 0 while paused, hidden, or using Reduced Motion. The runner compiles a temporary instrumented copy and removes it; production rendering contains no per-frame logging/counter.
@@ -50,8 +61,8 @@ Temporary fixture-only instrumentation measures the production reflection Timeli
 ## Acceptance checks still requiring a live session
 
 - VoiceOver spoken output and focus traversal across every control; native AX tree/action checks are narrower evidence.
-- Full keyboard traversal and native slider arrow handling; favorite popover → queue → panel Escape ordering; volume drag outside the window and overlapping popover/seek holds. The pure attention tests cover independent holds and clearing on hide/reset, but do not prove every native control lifecycle.
-- Sign-out during a native gesture, live keep-on-top behavior, and external-display disconnection. Negative-origin and constrained geometry are tested without disconnecting hardware.
+- Full keyboard traversal and native slider arrow handling; favorite popover dismissal before queue/panel Escape; volume drag outside the window and overlapping popover/seek holds. The pure attention tests cover independent holds and clearing on hide/reset, but do not prove every native control lifecycle.
+- Sign-out during a native gesture and external-display disconnection. Negative-origin and constrained geometry are tested without disconnecting hardware.
 - Live Reduce Transparency/Reduce Motion/Increase Contrast preference notifications and material appearance over multiple actual wallpapers. The Reduced Motion fixture injects the preference. Requesting a high-contrast NSAppearance did not visibly select the opaque SwiftUI fallback; that capture is not evidence that the system contrast setting works. SwiftUI's contrast environment value is read-only, so the attempted direct fixture injection could not compile and was removed.
 - Continuous video inspection of concurrent reveal/recede, track replacement, and screen-edge relocation. Current evidence consists of native geometry assertions and sampled captures.
 
@@ -61,3 +72,10 @@ Temporary fixture-only instrumentation measures the production reflection Timeli
 - The Reduced Motion fixture supplies an explicit override because the native environment value is read-only. Cost: this does not verify live system-preference notification delivery.
 - Superseded carousel/compact preview fixtures were removed with their production views. Historical glass probe sources and reports remain; `run-monolith-probe.py` is the current runner. Cost: old glass probe scripts require migration to run on this branch.
 - The window controller accepts an optional visible-frame boundary for the constrained native fixture; production uses the current screen. Cost: injected bounds do not establish physical monitor-disconnection behavior.
+- Unchanged authentication, Spotify protocol, and Rust backend correctness remain outside this redesign review. Cost: unrelated backend defects could remain undetected.
+- The final reviewer accepted replacing old glass probes with current Monolith probes. Cost: the old UI-specific coverage is not preserved unchanged.
+- Unresolved live acceptance checks stay open; the branch is not declared fully accepted or ready to merge. Cost: untested native interactions may still fail in everyday use.
+
+## Deferred minor from review
+
+The resting accessibility value still treats loading/error/inactive states as paused; an active-device playback error lacks a quiet rim indication unless there is a command notice. This status-feedback issue remains deferred. Focused error text is retained.
