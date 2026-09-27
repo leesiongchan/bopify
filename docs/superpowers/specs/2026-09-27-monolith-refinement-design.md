@@ -2,7 +2,7 @@
 
 Date: 2026-09-27
 
-Status: Interaction layout approved in conversation; written spec awaiting review.
+Status: Written spec approved on 2026-09-27; implementation planning authorized.
 
 ## Intent and approved scope
 
