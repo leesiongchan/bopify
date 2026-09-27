@@ -86,7 +86,7 @@ The changes extend `rust/patches/librespot-queue-selection.patch`, because `scri
 1. **Verify first.** Check that `Spirc::transfer(None)` moves an actively playing phone session onto Bopify. If it fails, stop and revisit the design before building the mirror UI. Verified on 2026-09-26 (appendix run 5): playback moved, but the HTTP call returned 410 and took 3.2 s. So "play here" judges success by the incoming transfer and `Playing` event, not the reply, and sends the request without blocking the Spirc loop.
 Revised on 2026-09-27 for the Monolith player (record and sleeve, no compact mode) and the run 5 findings; approved by the user.
 
-2. **One "play here" command.** `SpircCommand::PlayHere` (`Spirc::play_here()`, behind `startup_restore`) decides from the most recent cluster, which `SpircTask` now keeps, using `startup_decision`:
+2. **One "play here" command.** `SpircCommand::PlayHere` (`Spirc::play_here()`, behind `startup_restore`) decides from a fresh cluster, the reply to the same state PUT the startup decision reads (`notify_new_device_appeared`), using `startup_decision`. Cluster updates are not known to carry the full last session:
    - another device active with a track: send the transfer request (`spclient().transfer(own, own, None)`) on a spawned task, so the Spirc loop keeps answering the dealer. The reply, including a 410, is only logged. Success is the server's incoming transfer and the `Playing` event that follows;
    - no active device and a usable last session: restore it exactly as at startup (forced paused, no extrapolation), then resume playback;
    - otherwise: load Liked Songs with `start_playing: true`.
