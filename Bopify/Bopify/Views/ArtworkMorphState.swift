@@ -1,4 +1,5 @@
 import SwiftUI
+import BopifyPlayback
 
 struct ArtworkMorphFrame: Identifiable {
     let id: UUID
@@ -12,8 +13,11 @@ struct ArtworkMorphFrame: Identifiable {
     private var phaseStart = 0.0
     var duration = 0.42
     private(set) var generation = 0
+    private(set) var occurrenceID: String
+    private(set) var navigationDirection: CarouselDirection = .fade
 
-    init(image: Image?) {
+    init(image: Image?, occurrenceID: String = "") {
+        self.occurrenceID = occurrenceID
         retained = [ArtworkMorphFrame(id: UUID(), image: image, opacity: 1)]
     }
 
@@ -34,8 +38,11 @@ struct ArtworkMorphFrame: Identifiable {
         phaseStart + (1 - phaseStart) * progress(at: date)
     }
 
-    mutating func transition(to image: Image?, at date: Date, diameter: CGFloat = 204) {
-        guard retained.last?.image != image else { return }
+    mutating func transition(to image: Image?, occurrenceID: String = "", direction: CarouselDirection = .fade,
+                             at date: Date, diameter: CGFloat = 204) {
+        guard retained.last?.image != image || self.occurrenceID != occurrenceID else { return }
+        navigationDirection = self.occurrenceID == occurrenceID ? .fade : direction
+        self.occurrenceID = occurrenceID
         let nextPhase = progress(at: date) < 1 ? phase(at: date) : 0
         // Flatten only interrupted blends, preserving their visible colors with at most two live layers.
         retained = frames(at: date)

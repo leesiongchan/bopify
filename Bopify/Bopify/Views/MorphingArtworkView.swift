@@ -1,58 +1,59 @@
 import SwiftUI
 import os
 import BopifyDomain
+import BopifyPlayback
 
 struct MorphingArtworkView: View {
     let image: Image?
     let diameter: CGFloat
+    let occurrenceID: String
+    let direction: CarouselDirection
+    var isVisible = true
+    var reduceMotionOverride = false
     @State private var morph: ArtworkMorphState
     @State private var animating = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    private var reduceMotion: Bool { systemReduceMotion || reduceMotionOverride }
 
-    init(image: Image?, diameter: CGFloat) {
+    init(image: Image?, diameter: CGFloat, occurrenceID: String = "", direction: CarouselDirection = .fade, isVisible: Bool = true, reduceMotionOverride: Bool = false) {
         self.image = image
         self.diameter = diameter
-        _morph = State(initialValue: ArtworkMorphState(image: image))
+        self.occurrenceID = occurrenceID
+        self.direction = direction
+        self.isVisible = isVisible
+        self.reduceMotionOverride = reduceMotionOverride
+        _morph = State(initialValue: ArtworkMorphState(image: image, occurrenceID: occurrenceID))
     }
 
     var body: some View {
-        TimelineView(.animation(paused: !animating)) { context in
-            let progress = morph.phase(at: context.date)
-            let strength = reduceMotion ? 0 : sin(progress * .pi)
+        TimelineView(.animation(paused: !animating || !isVisible)) { context in
             ZStack {
                 ForEach(morph.frames(at: context.date)) { frame in
-                    ArtworkView(image: frame.image, diameter: diameter)
-                        .opacity(frame.opacity)
+                    ArtworkView(image: frame.image, diameter: diameter).opacity(frame.opacity)
                 }
             }
-            .drawingGroup()
-            .distortionEffect(ShaderLibrary.artworkLens(.float(diameter), .float(strength), .float(progress)),
-                              maxSampleOffset: CGSize(width: diameter * 0.12, height: diameter * 0.12),
-                              isEnabled: !reduceMotion && animating)
-            .overlay {
-                LinearGradient(colors: [.clear, .white.opacity(0.28), .clear],
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
-                    .offset(x: diameter * (progress - 0.5))
-                    .opacity(reduceTransparency ? 0 : strength)
-            }
             .clipShape(Circle())
-            .scaleEffect(x: 1 - 0.06 * strength, y: 1 - 0.025 * strength)
         }
         .frame(width: diameter, height: diameter)
-        .onChange(of: image) { _, next in
-            morph.duration = reduceMotion ? 0.16 : 0.42
-            morph.transition(to: next, at: .now, diameter: diameter)
-            animating = true
-            BopifyLog.playback.debug("artwork morph retargeted")
+        .onChange(of: image) { _, _ in retarget() }
+        .onChange(of: occurrenceID) { _, _ in retarget() }
+        .onChange(of: isVisible) { _, visible in
+            if !visible { morph.finish(); animating = false }
         }
         .task(id: morph.generation) {
             guard animating else { return }
-            try? await Task.sleep(for: .seconds(morph.duration))
-            guard !Task.isCancelled else { return }
+            do { try await Task.sleep(for: .seconds(morph.duration)) } catch { return }
             morph.finish()
             animating = false
         }
         .accessibilityHidden(true)
+    }
+
+    private func retarget() {
+        morph.duration = reduceMotion ? 0.16 : 0.65
+        morph.transition(to: image, occurrenceID: occurrenceID, direction: direction, at: .now, diameter: diameter)
+        animating = isVisible
+        if !isVisible { morph.finish() }
+        BopifyLog.playback.debug("artwork blend retargeted")
     }
 }

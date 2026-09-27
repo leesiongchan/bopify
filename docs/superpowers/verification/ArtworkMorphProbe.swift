@@ -1,4 +1,5 @@
 import SwiftUI
+import BopifyPlayback
 
 // Compile alongside ArtworkMorphState.swift and ArtworkView.swift; this exercises the state used by the visible overlay.
 @main struct ArtworkMorphProbe {
@@ -26,6 +27,23 @@ import SwiftUI
         let b = Image(nsImage: ImageRenderer(content: Color.green.frame(width: 204, height: 204)).nsImage!)
         let c = Image(nsImage: ImageRenderer(content: Color.blue.frame(width: 204, height: 204)).nsImage!)
         let start = Date(timeIntervalSinceReferenceDate: 0)
+        var occurrences = ArtworkMorphState(image: a)
+        occurrences.transition(to: a, occurrenceID: "first", direction: .next, at: start, diameter: 118)
+        let generation = occurrences.generation
+        occurrences.transition(to: a, occurrenceID: "duplicate", direction: .next, at: start.addingTimeInterval(0.1), diameter: 182)
+        precondition(occurrences.generation == generation + 1, "same-cover occurrences still transition")
+        let phaseBeforeHydration = occurrences.phase(at: start.addingTimeInterval(0.2))
+        occurrences.transition(to: b, occurrenceID: "duplicate", direction: .next, at: start.addingTimeInterval(0.2), diameter: 182)
+        precondition(occurrences.navigationDirection == .fade, "hydration does not replay navigation")
+        precondition(abs(occurrences.phase(at: start.addingTimeInterval(0.2)) - phaseBeforeHydration) < 0.001)
+        for n in 0..<100 {
+            occurrences.transition(to: n.isMultiple(of: 2) ? a : b, occurrenceID: "id-\(n)",
+                                   direction: n.isMultiple(of: 2) ? .next : .previous,
+                                   at: start.addingTimeInterval(1 + Double(n) * 0.01), diameter: 182)
+            precondition(occurrences.frames(at: start.addingTimeInterval(1 + Double(n) * 0.01)).count <= 2)
+        }
+        occurrences.finish()
+        precondition(occurrences.occurrenceID == "id-99" && occurrences.frames(at: start.addingTimeInterval(3)).count == 1)
         var morph = ArtworkMorphState(image: a)
         morph.transition(to: b, at: start)
         let first = morph.frames(at: start)
