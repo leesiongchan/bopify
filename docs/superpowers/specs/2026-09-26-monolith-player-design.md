@@ -2,7 +2,7 @@
 
 Date: 2026-09-26
 
-Status: Visual direction approved; written spec awaiting review.
+Status: Written spec approved on 2026-09-27; implementation planning authorized.
 
 ## Intent and approved direction
 
@@ -32,7 +32,7 @@ The sleeve is the single main glass surface. Use native regular Liquid Glass on 
 
 ## Controls and queue
 
-The sleeve contains track and artist, favorite status, previous/play-pause/next, elapsed and total time, then shuffle, repeat, volume/mute, and queue. Keep-on-top, sign-out, and quit remain in the existing status-item menu; keep-on-top is independent of focus retention.
+The sleeve contains track and artist, favorite status, previous/play-pause/next, elapsed and total time, then shuffle, repeat, volume/mute, and queue. Keep-on-top, sign-out, and quit remain available from the status-item menu; move keep-on-top there from the existing player header menu when removing that header. Keep-on-top is independent of focus retention.
 
 All playback actions use existing `PlayerModel` commands and authoritative playback events. Preserve disabled states for inactive devices, unavailable next/previous, buffering, and nonseekable content. Repeat retains all three existing states: off, context, track. Preserve `FavoriteButton` authorization, loading, retry, and unavailable-media behavior rather than replacing it with an optimistic heart toggle.
 
