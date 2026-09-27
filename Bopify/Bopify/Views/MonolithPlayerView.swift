@@ -13,14 +13,19 @@ struct MonolithPlayerView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var engaged: Bool { presentation.mode != .compact }
+    // Bopify's queue says nothing about which way a mirrored device moved.
     private var direction: CarouselDirection {
-        player.state.queue.map { carouselDirection(old: previousQueue, new: $0) } ?? .fade
+        guard player.state.mirror == nil else { return .fade }
+        return player.state.queue.map { carouselDirection(old: previousQueue, new: $0) } ?? .fade
     }
     private var track: Track? {
+        if let mirror = player.state.mirror { return mirror.track }
         guard let current = player.state.queue?.current else { return player.state.currentTrack }
         return current.uri == player.state.currentTrack?.uri ? player.state.currentTrack : current.track
     }
-    private var occurrenceID: String { player.state.queue?.current?.id ?? player.state.currentTrack?.uri.rawValue ?? "missing" }
+    private var occurrenceID: String {
+        player.state.mirror?.trackURI.rawValue ?? player.state.queue?.current?.id ?? player.state.currentTrack?.uri.rawValue ?? "missing"
+    }
     private var image: Image? { track?.artwork.flatMap { store.images[$0.url] }.map { Image(nsImage: $0) } }
     private var recordStatus: Text {
         if let notice = player.commandNotice { return Text(notice) }
@@ -28,7 +33,7 @@ struct MonolithPlayerView: View {
     }
     private var needsAttention: Bool {
         if case .error = player.state.phase { return true }
-        return player.commandNotice != nil || !player.state.isActiveDevice
+        return player.commandNotice != nil
     }
 
     var body: some View {
@@ -94,8 +99,8 @@ struct MonolithPlayerView: View {
             }
             .overlay {
                 if engaged {
-                    TimelineView(PlaybackClockSchedule(running: player.state.phase == .playing && presentation.isVisible, reducedMotion: reduceMotion)) { context in
-                        RadialProgressView(positionMs: player.displayPositionMs(at: context.date), durationMs: player.state.durationMs,
+                    TimelineView(PlaybackClockSchedule(running: player.isPositionAdvancing && presentation.isVisible, reducedMotion: reduceMotion)) { context in
+                        RadialProgressView(positionMs: player.displayPositionMs(at: context.date), durationMs: player.displayDurationMs,
                                            canSeek: player.state.canSeek && player.state.isActiveDevice,
                                            seek: player.seek(to:), interactionChanged: { presentation.sendAttention(.interaction(.seek, $0)) },
                                            isVisible: presentation.isVisible, showsTime: false)
@@ -121,15 +126,15 @@ struct MonolithPlayerView: View {
                         .help(track?.artists.map(\.name).joined(separator: ", ") ?? "")
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 FavoriteButton(detailsChanged: { presentation.sendAttention(.interaction(.popover, $0)) })
-                    .disabled(track?.uri != player.state.currentTrack?.uri)
+                    .disabled(player.state.mirror != nil || track?.uri != player.state.currentTrack?.uri)
             }
             TransportControls(state: player.state, model: player)
                 .frame(maxWidth: .infinity)
-            TimelineView(PlaybackClockSchedule(running: player.state.phase == .playing && presentation.isVisible, reducedMotion: true)) { context in
+            TimelineView(PlaybackClockSchedule(running: player.isPositionAdvancing && presentation.isVisible, reducedMotion: true)) { context in
                 HStack {
                     Text(playbackTime(player.displayPositionMs(at: context.date)))
                     Spacer()
-                    Text(playbackTime(player.state.durationMs))
+                    Text(playbackTime(player.displayDurationMs))
                 }.font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
             }
             HStack(spacing: 4) {
@@ -151,6 +156,7 @@ struct MonolithPlayerView: View {
                 Button { presentation.requestQueue(presentation.mode != .queue) } label: {
                     Image(systemName: "music.note.list").frame(width: 28, height: 28)
                 }.accessibilityLabel(Text("queue.title"))
+                    .disabled(player.state.mirror != nil)
             }
             HStack(spacing: 8) {
                 Button(action: player.toggleMute) {
@@ -174,7 +180,7 @@ struct MonolithPlayerView: View {
             case .loading, .buffering:
                 HStack(spacing: 5) { ProgressView().controlSize(.mini); Text(player.state.phase == .loading ? "player.loading" : "player.buffering") }
             case let .error(error): error.localizedText
-            case .idle: Text("player.inactiveDevice.title")
+            case .idle: player.state.localizedStatusText
             case .ended: Text("player.ended")
             default: EmptyView()
             }

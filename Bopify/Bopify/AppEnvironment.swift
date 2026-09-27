@@ -28,7 +28,9 @@ final class AppEnvironment {
         mode: .compact,
         keepOnTop: UserDefaults.standard.bool(forKey: "player.keepOnTop"))
     let monolithWindow = MonolithWindowController(defaults: .standard)
-    var isListening: Bool { authState == .signedIn && player?.state.currentTrack != nil }
+    var isListening: Bool {
+        authState == .signedIn && (player?.state.currentTrack != nil || player?.state.mirror != nil)
+    }
 
     var playerMode: PlayerMode {
         isListening ? presentation.mode : .expanded
