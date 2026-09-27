@@ -17,6 +17,7 @@ public enum PlaybackEvent: Hashable, Sendable {
     case activeDeviceChanged(isActive: Bool)
     case failed(PlayerError)
     case startupResolved(StartupOutcome)
+    case remotePlayback(RemotePlayback?)
 }
 
 extension PlaybackEvent: Decodable {
@@ -24,7 +25,7 @@ extension PlaybackEvent: Decodable {
         case type, positionMs, volume, isActive, code
         case generation, entryID, track, enabled, mode, reason
         case trackUri, title, artists, albumTitle, artworkUrl, durationMs
-        case outcome, deviceName
+        case outcome, deviceName, remote, isPlaying
     }
 
     public init(from decoder: any Decoder) throws {
@@ -62,6 +63,8 @@ extension PlaybackEvent: Decodable {
             case let other:
                 throw DecodingError.dataCorruptedError(forKey: .outcome, in: c, debugDescription: "unrecognised startup outcome \(other)")
             }
+        case "remotePlayback":
+            self = .remotePlayback(try c.decodeNil(forKey: .remote) ? nil : Self.decodeRemote(from: c.superDecoder(forKey: .remote)))
         default:
             throw DecodingError.dataCorruptedError(forKey: .type, in: c, debugDescription: "unrecognised event type \(type)")
         }
@@ -79,6 +82,22 @@ extension PlaybackEvent: Decodable {
             artists: try c.decode([String].self, forKey: .artists).map(ArtistSummary.init(name:)),
             albumTitle: try c.decodeIfPresent(String.self, forKey: .albumTitle),
             artwork: try c.decodeIfPresent(String.self, forKey: .artworkUrl).flatMap(URL.init(string:)).map(Artwork.init(url:)),
+            durationMs: try c.decode(Int64.self, forKey: .durationMs)
+        )
+    }
+
+    private static func decodeRemote(from decoder: any Decoder) throws -> RemotePlayback {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let raw = try c.decode(String.self, forKey: .trackUri)
+        guard let uri = SpotifyURI(raw) else {
+            throw DecodingError.dataCorruptedError(forKey: .trackUri, in: c, debugDescription: "malformed Spotify URI")
+        }
+        return RemotePlayback(
+            deviceName: try c.decode(String.self, forKey: .deviceName),
+            trackURI: uri,
+            track: try c.decodeNil(forKey: .track) ? nil : Self.decodeTrack(from: c.superDecoder(forKey: .track)),
+            isPlaying: try c.decode(Bool.self, forKey: .isPlaying),
+            positionMs: try c.decode(Int64.self, forKey: .positionMs),
             durationMs: try c.decode(Int64.self, forKey: .durationMs)
         )
     }

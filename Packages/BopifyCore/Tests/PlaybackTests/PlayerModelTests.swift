@@ -125,6 +125,11 @@ struct PlayerModelTests {
               artwork: nil, durationMs: 240_000)
     }
 
+    private func makeRemote(isPlaying: Bool = true, positionMs: Int64 = 1000) -> RemotePlayback {
+        RemotePlayback(deviceName: "iPhone", trackURI: SpotifyURI("spotify:track:remote")!, track: nil,
+                       isPlaying: isPlaying, positionMs: positionMs, durationMs: 200_000)
+    }
+
     /// Emits events and waits for the model's consumer task to fold them in.
     private func settle(_ model: PlayerModel, _ engine: StubPlaybackEngine, _ events: [PlaybackEvent]) async {
         for event in events { engine.emit(event) }
@@ -396,6 +401,30 @@ struct PlayerModelTests {
         #expect(model.state.startup == .resolved(.restored))
         #expect(model.state.phase == .paused)
         #expect(model.state.positionMs == 1545)
+    }
+
+    @Test(arguments: [PlaybackEvent.playing(positionMs: 0), .paused(positionMs: 0)])
+    func theMirrorClearsWhenBopifyBecomesActiveAndStaysCleared(_ takeover: PlaybackEvent) async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        await settle(model, engine, [.remotePlayback(makeRemote())])
+        #expect(model.state.remote == makeRemote())
+        #expect(model.state.mirror == makeRemote())
+        await settle(model, engine, [.remotePlayback(nil)])
+        #expect(model.state.remote == nil)
+        // The stopped device's last state stays on the record, no longer playing.
+        #expect(model.state.staleRemote == makeRemote(isPlaying: false))
+        #expect(model.state.mirror == makeRemote(isPlaying: false))
+        await settle(model, engine, [.remotePlayback(makeRemote()), takeover])
+        #expect(model.state.remote == nil)
+        #expect(model.state.mirror == nil)
+        // A lookup that finishes after the takeover must not bring the mirror back.
+        await settle(model, engine, [.remotePlayback(makeRemote())])
+        #expect(model.state.mirror == nil)
+        await settle(model, engine, [.activeDeviceChanged(isActive: false), .remotePlayback(makeRemote(isPlaying: false))])
+        #expect(model.state.remote == makeRemote(isPlaying: false))
     }
 }
 

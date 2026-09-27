@@ -224,11 +224,13 @@ public final class PlayerModel {
             positionUpdatedAt = .now
             state.phase = .playing; state.positionMs = position
             state.isActiveDevice = true
+            state.remote = nil; state.staleRemote = nil
         case let .paused(position):
             frozenDisplayPositionMs = nil
             positionUpdatedAt = .now
             state.phase = .paused; state.positionMs = position
             state.isActiveDevice = true
+            state.remote = nil; state.staleRemote = nil
         case let .seeked(position), let .positionCorrection(position):
             frozenDisplayPositionMs = nil
             positionUpdatedAt = .now
@@ -265,6 +267,15 @@ public final class PlayerModel {
             case .nothing: "nothing"
             }
             BopifyLog.playback.info("startup resolved outcome=\(kind, privacy: .public)")
+        case let .remotePlayback(remote):
+            // A lookup still in flight when Bopify took over must not bring the mirror back.
+            guard !state.isActiveDevice else { break }
+            if remote == nil, let last = state.remote {
+                state.staleRemote = RemotePlayback(deviceName: last.deviceName, trackURI: last.trackURI, track: last.track,
+                                                   isPlaying: false, positionMs: last.positionMs, durationMs: last.durationMs)
+            }
+            state.remote = remote
+            BopifyLog.playback.debug("remote playback present=\(remote != nil, privacy: .public)")
         }
         if state.phase != oldPhase {
             let old = String(describing: oldPhase)
