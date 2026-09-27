@@ -6,6 +6,11 @@ import BopifyDomain
 
 @Suite("Player presentation")
 struct PlayerPresentationTests {
+    @Test(arguments: [PlayerMode.expanded, .compact, .queue])
+    func savedModesStillDecode(_ mode: PlayerMode) throws {
+        let data = Data("\"\(mode.rawValue)\"".utf8)
+        #expect(try JSONDecoder().decode(PlayerMode.self, from: data) == mode)
+    }
     private func entry(_ id: String) -> QueueEntry {
         QueueEntry(id: id, uri: SpotifyURI("spotify:track:same"), target: nil, track: nil, metadataFailed: false)
     }
