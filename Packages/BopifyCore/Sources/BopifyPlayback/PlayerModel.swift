@@ -25,6 +25,7 @@ public final class PlayerModel {
     public private(set) var queueSelection: QueueSelectionStatus = .idle
     private var lastPositiveVolume: Double?
     private(set) var positionUpdatedAt = Date.now
+    private(set) var remoteUpdatedAt = Date.now
     private var frozenDisplayPositionMs: Int64?
 
     @ObservationIgnored private let engine: any PlaybackEngine
@@ -35,11 +36,23 @@ public final class PlayerModel {
     public init(engine: any PlaybackEngine) { self.engine = engine }
 
     /// Interpolate for display without replacing the engine's authoritative position.
+    /// A mirrored device's own clock takes precedence while Bopify is inactive.
     public func displayPositionMs(at date: Date) -> Int64 {
+        if let remote = state.mirror {
+            let elapsed = remote.isPlaying ? max(0, date.timeIntervalSince(remoteUpdatedAt)) * 1000 : 0
+            let position = Double(remote.positionMs) + elapsed
+            // Clamped only to a reported duration, as the Rust extraction is.
+            return Int64(remote.durationMs > 0 ? min(Double(remote.durationMs), position) : position)
+        }
         let elapsed = state.phase == .playing ? max(0, date.timeIntervalSince(positionUpdatedAt)) * 1000 : 0
         let position = min(Double(max(0, state.durationMs)), max(0, Double(frozenDisplayPositionMs ?? state.positionMs) + elapsed))
         return Int64(position)
     }
+
+    public var displayDurationMs: Int64 { state.mirror?.durationMs ?? state.durationMs }
+
+    /// Views run a display clock only while this is true.
+    public var isPositionAdvancing: Bool { state.mirror?.isPlaying ?? (state.phase == .playing) }
 
     /// One consumer for the model's lifetime. A per-view .task would
     /// resubscribe whenever view identity changed.
@@ -287,6 +300,7 @@ public final class PlayerModel {
                                                    isPlaying: false, positionMs: last.positionMs, durationMs: last.durationMs)
             }
             state.remote = remote
+            remoteUpdatedAt = .now
             BopifyLog.playback.debug("remote playback present=\(remote != nil, privacy: .public)")
         }
         if state.phase != oldPhase {

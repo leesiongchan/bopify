@@ -463,6 +463,32 @@ struct PlayerModelTests {
         await settle(model, engine, [.failed(.playbackSessionLost)])
         #expect(!model.canPlayHere)
     }
+
+    @Test func theMirrorAdvancesFromItsReceiptTimeAndOwnsTheDisplayedDuration() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        await settle(model, engine, [.trackChanged(makeTrack()), .paused(positionMs: 4000),
+                                     .activeDeviceChanged(isActive: false), .remotePlayback(makeRemote(positionMs: 1000))])
+        let anchor = model.remoteUpdatedAt
+        #expect(model.displayPositionMs(at: anchor.addingTimeInterval(2)) == 3000)
+        #expect(model.displayPositionMs(at: anchor.addingTimeInterval(600)) == 200_000)
+        #expect(model.displayPositionMs(at: anchor.addingTimeInterval(-2)) == 1000)
+        #expect(model.displayDurationMs == 200_000)
+        #expect(model.isPositionAdvancing)
+        await settle(model, engine, [.remotePlayback(makeRemote(isPlaying: false, positionMs: 5000))])
+        #expect(model.displayPositionMs(at: model.remoteUpdatedAt.addingTimeInterval(20)) == 5000)
+        #expect(!model.isPositionAdvancing)
+        await settle(model, engine, [.remotePlayback(nil)])
+        // The stopped device's last state stays on the record, frozen.
+        #expect(model.displayPositionMs(at: .now.addingTimeInterval(20)) == 5000)
+        #expect(model.displayDurationMs == 200_000)
+        #expect(!model.isPositionAdvancing)
+        await settle(model, engine, [.paused(positionMs: 4000)])
+        #expect(model.displayPositionMs(at: .now) == 4000)
+        #expect(model.displayDurationMs == 240_000)
+    }
 }
 
 private struct FailingSelectionEngine: PlaybackEngine {
