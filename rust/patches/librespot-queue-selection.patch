@@ -1347,7 +1347,7 @@ index 0ecfde2..a7b6c61 100644
 +    }
 +}
 diff --git a/playback/src/player.rs b/playback/src/player.rs
-index f3d803d..f285453 100644
+index f3d803d..a6b2427 100644
 --- a/playback/src/player.rs
 +++ b/playback/src/player.rs
 @@ -139,11 +139,14 @@ enum PlayerCommand {
@@ -1429,7 +1429,7 @@ index f3d803d..f285453 100644
  }
  
  impl PlayerEvent {
-@@ -670,18 +718,28 @@ impl Player {
+@@ -670,18 +718,29 @@ impl Player {
  
      pub fn emit_set_queue_event(
          &self,
@@ -1452,13 +1452,14 @@ index f3d803d..f285453 100644
 +        self.command(PlayerCommand::EmitStartupResolvedEvent(outcome));
 +    }
 +
++    /// Emits the mirrored device's playback, or `None` once no other device plays.
 +    pub fn emit_remote_playback_event(&self, remote: Option<RemoteState>) {
 +        self.command(PlayerCommand::EmitRemotePlaybackEvent(remote));
 +    }
  }
  
  impl Drop for Player {
-@@ -2371,17 +2429,27 @@ impl PlayerInternal {
+@@ -2371,17 +2430,27 @@ impl PlayerInternal {
              }
  
              PlayerCommand::EmitSetQueueEvent {
@@ -1486,7 +1487,7 @@ index f3d803d..f285453 100644
              PlayerCommand::EmitFilterExplicitContentChangedEvent(filter) => {
                  self.send_event(PlayerEvent::FilterExplicitContentChanged { filter });
  
-@@ -2584,16 +2652,27 @@ impl fmt::Debug for PlayerCommand {
+@@ -2584,16 +2653,27 @@ impl fmt::Debug for PlayerCommand {
                  .field(&auto_play)
                  .finish(),
              PlayerCommand::EmitSetQueueEvent {
