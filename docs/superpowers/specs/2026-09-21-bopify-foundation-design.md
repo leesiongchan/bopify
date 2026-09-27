@@ -146,6 +146,7 @@ public protocol PlaybackEngine: Sendable {
 
     func load(_ request: PlayRequest) async throws
     func resume() async throws
+    func playHere() async throws
     func pause() async throws
     func next() async throws
     func previous() async throws
@@ -186,6 +187,7 @@ BopifyEngine *bopify_engine_create(const char *access_token,
                                    int32_t *out_err);
 void    bopify_engine_destroy(BopifyEngine *);
 int32_t bopify_play(BopifyEngine *);
+int32_t bopify_play_here(BopifyEngine *);
 int32_t bopify_pause(BopifyEngine *);
 int32_t bopify_next(BopifyEngine *);
 int32_t bopify_previous(BopifyEngine *);

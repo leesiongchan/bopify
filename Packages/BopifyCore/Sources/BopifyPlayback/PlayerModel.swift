@@ -65,8 +65,20 @@ public final class PlayerModel {
         pendingCommand = nil
     }
 
+    /// Play takes the session over while Bopify is inactive, from a mirror or a stale track.
+    public var canPlayHere: Bool {
+        guard !state.isActiveDevice, state.mirror != nil || state.currentTrack != nil else { return false }
+        if case .error = state.phase { return false }
+        return true
+    }
+
+    public func playHere() {
+        guard canPlayHere else { return }
+        enqueue("playHere") { [engine] in try await engine.playHere() }
+    }
+
     public func togglePlayPause() {
-        guard state.isActiveDevice else { return }
+        guard state.isActiveDevice else { playHere(); return }
         let shouldPause = state.phase == .playing
         enqueue(shouldPause ? "pause" : "resume", requiresActive: true) { [engine] in
             if shouldPause { try await engine.pause() } else { try await engine.resume() }

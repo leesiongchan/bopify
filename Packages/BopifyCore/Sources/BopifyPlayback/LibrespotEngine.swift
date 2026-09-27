@@ -121,6 +121,7 @@ public final class LibrespotEngine: PlaybackEngine, @unchecked Sendable {
     // matches PlayerModel's line for the same action; the Rust side logs
     // `ffi: bopify_play` for the other half.
     @concurrent public func resume() async throws { try perform("resume") { bopify_play(handle) } }
+    @concurrent public func playHere() async throws { try perform("playHere") { bopify_play_here(handle) } }
     @concurrent public func pause() async throws { try perform("pause") { bopify_pause(handle) } }
     @concurrent public func next() async throws { try perform("next") { bopify_next(handle) } }
     @concurrent public func previous() async throws { try perform("previous") { bopify_previous(handle) } }

@@ -24,6 +24,7 @@ public final class StubPlaybackEngine: PlaybackEngine, @unchecked Sendable {
 
     public func load(_ request: PlayRequest) async throws { record("load:\(request.contextURI.rawValue)") }
     public func resume() async throws { record("resume") }
+    public func playHere() async throws { record("playHere") }
     public func pause() async throws { record("pause") }
     public func next() async throws { record("next") }
     public func previous() async throws { record("previous") }

@@ -138,6 +138,9 @@ impl Engine {
     pub fn play(&self) -> Result<(), BopifyError> {
         self.spirc.play().map_err(command_failed)
     }
+    pub fn play_here(&self) -> Result<(), BopifyError> {
+        self.spirc.play_here().map_err(command_failed)
+    }
     pub fn pause(&self) -> Result<(), BopifyError> {
         self.spirc.pause().map_err(command_failed)
     }
