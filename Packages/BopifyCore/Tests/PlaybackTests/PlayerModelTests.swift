@@ -426,6 +426,43 @@ struct PlayerModelTests {
         await settle(model, engine, [.activeDeviceChanged(isActive: false), .remotePlayback(makeRemote(isPlaying: false))])
         #expect(model.state.remote == makeRemote(isPlaying: false))
     }
+
+    @Test func playWhileInactiveAsksTheEngineToPlayHereWithoutAssumingItWorked() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        model.togglePlayPause()
+        await settle(model, engine, [])
+        #expect(engine.recordedCommands.isEmpty)  // nothing to take over yet
+        await settle(model, engine, [.remotePlayback(makeRemote())])
+        #expect(model.canPlayHere)
+        model.togglePlayPause()
+        await settle(model, engine, [])
+        #expect(engine.recordedCommands == ["playHere"])
+        // Only the engine's events may change the state.
+        #expect(model.state.phase == .idle)
+        #expect(model.state.remote == makeRemote())
+        // At launch Bopify has no track, so the stopped device's stale mirror is what Play resumes.
+        await settle(model, engine, [.remotePlayback(nil)])
+        #expect(model.canPlayHere)
+    }
+
+    @Test func aStaleTrackCanBePlayedHereButNotAfterAFailure() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        await settle(model, engine, [.trackChanged(makeTrack()), .paused(positionMs: 0)])
+        #expect(!model.canPlayHere)  // while active, Play is resume
+        await settle(model, engine, [.activeDeviceChanged(isActive: false)])
+        #expect(model.canPlayHere)
+        model.playHere()
+        await settle(model, engine, [])
+        #expect(engine.recordedCommands == ["playHere"])
+        await settle(model, engine, [.failed(.playbackSessionLost)])
+        #expect(!model.canPlayHere)
+    }
 }
 
 private struct FailingSelectionEngine: PlaybackEngine {
@@ -440,6 +477,7 @@ private struct FailingSelectionEngine: PlaybackEngine {
     }
     func load(_ request: PlayRequest) async throws { try await stub.load(request) }
     func resume() async throws { try await stub.resume() }
+    func playHere() async throws { try await stub.playHere() }
     func pause() async throws { try await stub.pause() }
     func next() async throws { try await stub.next() }
     func previous() async throws { try await stub.previous() }

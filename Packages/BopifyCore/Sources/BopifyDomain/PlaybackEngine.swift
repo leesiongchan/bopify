@@ -18,6 +18,8 @@ public protocol PlaybackEngine: Sendable {
 
     func load(_ request: PlayRequest) async throws
     func resume() async throws
+    /// Plays on this Mac while another device, or none, owns the session.
+    func playHere() async throws
     func pause() async throws
     func next() async throws
     func previous() async throws
