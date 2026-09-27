@@ -38,6 +38,11 @@ import BopifyDomain
             @MainActor func enabled(_ label: String) -> Bool? { element(label).map { booleanAction($0, "isAccessibilityEnabled") } }
             @MainActor func recordStatus(_ title: String) -> String? { element(title, role: "AXButton").flatMap { attribute($0, "accessibilityValue") as? String } }
             @MainActor func pressPlay() { _ = element("Play").map { booleanAction($0, "accessibilityPerformPress") } }
+            @MainActor func pressSpace() {
+                panel.keyDown(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                                                      windowNumber: panel.windowNumber, context: nil, characters: " ",
+                                                      charactersIgnoringModifiers: " ", isARepeat: false, keyCode: 49)!)
+            }
             status.perform(NSSelectorFromString("handleClick"))
             await settle()
             // Holds the reveal as VoiceOver focus does: the probe checks what the controls show, and window focus is outside its control.
@@ -80,6 +85,9 @@ import BopifyDomain
             pressPlay()
             await settle()
             check(engine.recordedCommands == ["playHere", "playHere"], "Play on the stale mirror asks the engine to play here")
+            pressSpace()
+            await settle()
+            check(engine.recordedCommands == ["playHere", "playHere", "playHere"], "Space on the stale mirror plays here like Play")
 
             let stale = Track(uri: SpotifyURI("spotify:track:stale")!, title: "Stale track", artists: [], albumTitle: nil, artwork: nil, durationMs: 240_000)
             engine.emit(.trackChanged(stale))
@@ -96,7 +104,7 @@ import BopifyDomain
             let idle = await capture(panel, "stale-own")
             pressPlay()
             await settle()
-            check(engine.recordedCommands == ["playHere", "playHere", "playHere"], "Play in the stale state asks the engine to play here")
+            check(engine.recordedCommands == ["playHere", "playHere", "playHere", "playHere"], "Play in the stale state asks the engine to play here")
 
             engine.emit(.failed(.networkUnavailable))
             await settle()
