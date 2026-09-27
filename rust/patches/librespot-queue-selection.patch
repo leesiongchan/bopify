@@ -1,3 +1,16 @@
+diff --git a/connect/Cargo.toml b/connect/Cargo.toml
+index bc5267f..650640d 100644
+--- a/connect/Cargo.toml
++++ b/connect/Cargo.toml
+@@ -28,7 +28,7 @@ protobuf = "3.7"
+ rand = { version = "0.9", default-features = false, features = ["small_rng"] }
+ serde_json = "1.0"
+ thiserror = "2"
+-tokio = { version = "1", features = ["macros", "sync"] }
++tokio = { version = "1", features = ["macros", "sync", "rt"] }
+ tokio-stream = { version = "0.1", default-features = false }
+ uuid = { version = "1.18", default-features = false, features = ["v4"] }
+ 
 diff --git a/connect/src/lib.rs b/connect/src/lib.rs
 index ba00aa4..dcefba6 100644
 --- a/connect/src/lib.rs
@@ -285,7 +298,7 @@ index 0000000..1e7dd3d
 +    }
 +}
 diff --git a/connect/src/spirc.rs b/connect/src/spirc.rs
-index c7c195b..a56a55d 100644
+index c7c195b..e3394ed 100644
 --- a/connect/src/spirc.rs
 +++ b/connect/src/spirc.rs
 @@ -14,7 +14,7 @@ use crate::{
@@ -327,7 +340,12 @@ index c7c195b..a56a55d 100644
  
      shutdown: bool,
      session: Session,
-@@ -123,6 +132,10 @@ enum SpircCommand {
+@@ -119,10 +128,15 @@ static SPIRC_COUNTER: AtomicUsize = AtomicUsize::new(0);
+ #[derive(Debug)]
+ enum SpircCommand {
+     Play,
++    PlayHere,
+     PlayPause,
      Pause,
      Prev,
      Next,
@@ -338,7 +356,7 @@ index c7c195b..a56a55d 100644
      VolumeUp,
      VolumeDown,
      Shutdown,
-@@ -139,6 +152,56 @@ enum SpircCommand {
+@@ -139,6 +153,56 @@ enum SpircCommand {
      ClearQueue,
  }
  
@@ -395,7 +413,7 @@ index c7c195b..a56a55d 100644
  const CONTEXT_FETCH_THRESHOLD: usize = 2;
  
  // delay to update volume after a certain amount of time, instead on each update request
-@@ -177,6 +240,7 @@ impl Spirc {
+@@ -177,6 +241,7 @@ impl Spirc {
          debug!("new Spirc[{spirc_id}]");
  
          let emit_set_queue_events = config.emit_set_queue_events;
@@ -403,7 +421,7 @@ index c7c195b..a56a55d 100644
          let connect_state = ConnectState::new(config, &session);
  
          let connection_id_update = session
-@@ -230,6 +294,8 @@ impl Spirc {
+@@ -230,6 +295,8 @@ impl Spirc {
          let player_events = player.get_player_event_channel();
  
          let mut task = SpircTask {
@@ -412,7 +430,7 @@ index c7c195b..a56a55d 100644
              player,
              mixer,
  
-@@ -254,6 +320,9 @@ impl Spirc {
+@@ -254,6 +321,9 @@ impl Spirc {
              context_resolver: ContextResolver::new(session.clone()),
  
              emit_set_queue_events,
@@ -422,7 +440,7 @@ index c7c195b..a56a55d 100644
  
              shutdown: false,
              session,
-@@ -329,6 +398,17 @@ impl Spirc {
+@@ -329,6 +399,17 @@ impl Spirc {
          Ok(self.commands.send(SpircCommand::Next)?)
      }
  
@@ -440,7 +458,22 @@ index c7c195b..a56a55d 100644
      /// Increases the volume by configured steps of [ConnectConfig].
      ///
      /// Does nothing if we are not the active device.
-@@ -599,6 +679,7 @@ impl SpircTask {
+@@ -447,6 +528,14 @@ impl Spirc {
+             .commands
+             .send(SpircCommand::Transfer(transfer_request))?)
+     }
++
++    /// Bopify: plays on this device from wherever the account's session is. It
++    /// takes over another device, resumes the last session, or plays Liked Songs.
++    ///
++    /// Needs `ConnectConfig::startup_restore`. While this device is active it is [Spirc::play].
++    pub fn play_here(&self) -> Result<(), Error> {
++        Ok(self.commands.send(SpircCommand::PlayHere)?)
++    }
+ }
+ 
+ impl SpircTask {
+@@ -599,6 +688,7 @@ impl SpircTask {
                  },
                  else => break
              }
@@ -448,7 +481,7 @@ index c7c195b..a56a55d 100644
          }
  
          if !self.shutdown && self.connect_state.is_active() {
-@@ -662,41 +743,24 @@ impl SpircTask {
+@@ -662,41 +752,24 @@ impl SpircTask {
          update_state
      }
  
@@ -505,7 +538,7 @@ index c7c195b..a56a55d 100644
      }
  
      // todo: is the time_delta still necessary?
-@@ -711,6 +775,27 @@ impl SpircTask {
+@@ -711,6 +784,27 @@ impl SpircTask {
      async fn handle_command(&mut self, cmd: SpircCommand) -> Result<(), Error> {
          trace!("Received SpircCommand::{cmd:?}");
          match cmd {
@@ -533,7 +566,27 @@ index c7c195b..a56a55d 100644
              SpircCommand::Shutdown => {
                  trace!("Received SpircCommand::Shutdown");
                  self.handle_pause();
-@@ -925,6 +1010,13 @@ impl SpircTask {
+@@ -733,6 +827,10 @@ impl SpircTask {
+                 self.handle_activate();
+                 return self.notify().await;
+             }
++            SpircCommand::PlayHere if self.startup_restore && !self.connect_state.is_active() => {
++                self.handle_play_here().await;
++                return Ok(());
++            }
+             SpircCommand::Transfer(..) | SpircCommand::Activate => {
+                 warn!("SpircCommand::{cmd:?} will be ignored while already active")
+             }
+@@ -745,7 +843,7 @@ impl SpircTask {
+                 }
+                 return self.handle_disconnect().await;
+             }
+-            SpircCommand::Play => self.handle_play(),
++            SpircCommand::Play | SpircCommand::PlayHere => self.handle_play(),
+             SpircCommand::PlayPause => self.handle_play_pause(),
+             SpircCommand::Pause => self.handle_pause(),
+             SpircCommand::Prev => self.handle_prev()?,
+@@ -925,6 +1023,13 @@ impl SpircTask {
  
          self.connect_established = true;
  
@@ -547,7 +600,7 @@ index c7c195b..a56a55d 100644
          let same_session = cluster.player_state.session_id == self.session.session_id()
              || cluster.player_state.session_id.is_empty();
          if !cluster.active_device_id.is_empty() || !same_session {
-@@ -953,6 +1045,65 @@ impl SpircTask {
+@@ -953,6 +1058,130 @@ impl SpircTask {
          Ok(())
      }
  
@@ -562,44 +615,109 @@ index c7c195b..a56a55d 100644
 +                return StartupOutcome::Remote { device_name };
 +            }
 +            StartupDecision::Restore(transfer) => {
-+                match self.handle_transfer(transfer) {
-+                    // handle_transfer returns Ok without loading when the session names no
-+                    // playable track, so only a paused load counts as restored.
-+                    Ok(()) if matches!(self.play_status, SpircPlayStatus::LoadingPause { .. }) => {
-+                        return StartupOutcome::Restored;
-+                    }
-+                    Ok(()) => warn!("startup: the last session had no track to restore"),
-+                    Err(why) => warn!("startup: restoring the last session failed: {why}"),
++                if self.restore_session(transfer) {
++                    return StartupOutcome::Restored;
 +                }
-+                // A half-applied transfer must not be finished later on top of Liked Songs.
-+                self.transfer_state = None;
 +            }
 +            StartupDecision::Fallback => {}
 +        }
-+        self.load_liked_songs().await
++        self.load_liked_songs(false).await
++    }
++
++    /// Takes the last session over paused, as `startup_decision` prepared it.
++    /// Returns false, with nothing left half-applied, when no track was loaded.
++    fn restore_session(&mut self, transfer: TransferState) -> bool {
++        match self.handle_transfer(transfer) {
++            // handle_transfer returns Ok without loading when the session names no
++            // playable track, so only a paused load counts as restored.
++            Ok(()) if matches!(self.play_status, SpircPlayStatus::LoadingPause { .. }) => {
++                return true;
++            }
++            Ok(()) => warn!("restore: the last session had no track to restore"),
++            Err(why) => warn!("restore: restoring the last session failed: {why}"),
++        }
++        // A half-applied transfer must not be finished later on top of Liked Songs.
++        self.transfer_state = None;
++        false
++    }
++
++    /// Bopify: logs its own failures, because the command loop only debug-logs
++    /// an error. The cluster comes from the same PUT whose reply the startup
++    /// decision reads, since cluster updates are not known to carry the full last session.
++    async fn handle_play_here(&mut self) {
++        use protobuf::Message as _;
++        let cluster = match self
++            .connect_state
++            .notify_new_device_appeared(&self.session)
++            .await
++        {
++            Ok(bytes) => Cluster::parse_from_bytes(&bytes).ok(),
++            Err(why) => {
++                warn!("play here: state update failed: {why}");
++                return;
++            }
++        };
++        let Some(cluster) = cluster else {
++            warn!("play here: the state update returned no cluster");
++            return;
++        };
++        let decision = startup_decision(&cluster, self.session.device_id());
++        let kind = match &decision {
++            StartupDecision::Remote(_) => "remote",
++            StartupDecision::Restore(_) => "restore",
++            StartupDecision::Fallback => "fallback",
++        };
++        // Visible in a diagnostic build: tells a Liked Songs fallback from a thin reply.
++        debug!("play here: decision={kind} transfer_data={} bytes", cluster.transfer_data.len());
++        match decision {
++            StartupDecision::Remote(_) => {
++                // Spawned, so this loop can answer the transfer request the server sends
++                // before it replies; awaiting here dropped the dealer connection (run 5).
++                let spclient = self.session.spclient().clone();
++                let device_id = self.session.device_id().to_owned();
++                tokio::spawn(async move {
++                    // Run 5 moved playback despite a 410, so the reply is only logged.
++                    if let Err(why) = spclient.transfer(&device_id, &device_id, None).await {
++                        warn!("play here: transfer replied {why}");
++                    }
++                });
++                return;
++            }
++            StartupDecision::Restore(transfer) => {
++                if self.restore_session(transfer) {
++                    self.handle_play();
++                    if let Err(why) = self.notify().await {
++                        warn!("play here: state update failed: {why}");
++                    }
++                    return;
++                }
++            }
++            StartupDecision::Fallback => {}
++        }
++        self.load_liked_songs(true).await;
 +    }
 +
 +    /// Mirrors the Activate and Load command paths, but keeps the load's
 +    /// result, which the command path only debug-logs.
-+    async fn load_liked_songs(&mut self) -> StartupOutcome {
++    async fn load_liked_songs(&mut self, start_playing: bool) -> StartupOutcome {
 +        self.handle_activate();
 +        let uri = format!("spotify:user:{}:collection", self.session.username());
 +        let request = LoadRequest::from_context_uri(
 +            uri,
 +            LoadRequestOptions {
-+                start_playing: false,
++                start_playing,
 +                ..Default::default()
 +            },
 +        );
 +        let outcome = match self.handle_load(request, None, None).await {
 +            Ok(()) => StartupOutcome::LikedSongs,
 +            Err(why) => {
-+                warn!("startup: loading liked songs failed: {why}");
++                warn!("liked songs: loading failed: {why}");
 +                StartupOutcome::Nothing
 +            }
 +        };
 +        if let Err(why) = self.notify().await {
-+            warn!("startup: state update failed: {why}");
++            warn!("liked songs: state update failed: {why}");
 +        }
 +        outcome
 +    }
@@ -613,7 +731,7 @@ index c7c195b..a56a55d 100644
      fn handle_user_attributes_update(&mut self, update: UserAttributesUpdate) {
          trace!("Received attributes update: {update:#?}");
          let attributes: UserAttributes = update
-@@ -1024,6 +1175,12 @@ impl SpircTask {
+@@ -1024,6 +1253,12 @@ impl SpircTask {
                  //  tried: providing session_id, playback_id, track-metadata "track_player"
                  self.update_state = true;
              }
@@ -626,7 +744,7 @@ index c7c195b..a56a55d 100644
          } else if self.connect_state.is_active() {
              self.connect_state.became_inactive(&self.session).await?;
          }
-@@ -1181,6 +1338,7 @@ impl SpircTask {
+@@ -1181,6 +1416,7 @@ impl SpircTask {
      }
  
      fn handle_transfer(&mut self, mut transfer: TransferState) -> Result<(), Error> {
@@ -634,7 +752,7 @@ index c7c195b..a56a55d 100644
          let mut ctx_uri = match transfer.current_session.context.uri {
              None => Err(SpircError::NoUri("transfer context"))?,
              // can apparently happen when a state is transferred and was started with "uris" via the api
-@@ -1329,6 +1487,9 @@ impl SpircTask {
+@@ -1329,6 +1565,9 @@ impl SpircTask {
      }
  
      fn handle_activate(&mut self) {
@@ -644,7 +762,7 @@ index c7c195b..a56a55d 100644
          self.connect_state.set_active(true);
          self.player
              .emit_session_connected_event(self.session.connection_id(), self.session.username());
-@@ -1363,6 +1524,7 @@ impl SpircTask {
+@@ -1363,6 +1602,7 @@ impl SpircTask {
          page: Option<ContextPage>,
          fallback_index: Option<usize>,
      ) -> Result<(), Error> {
@@ -652,7 +770,7 @@ index c7c195b..a56a55d 100644
          self.connect_state
              .reset_context(if let PlayContext::Uri(ref uri) = cmd.context {
                  ResetContext::WhenDifferent(uri)
-@@ -1621,6 +1783,7 @@ impl SpircTask {
+@@ -1621,6 +1861,7 @@ impl SpircTask {
      }
  
      fn handle_shuffle(&mut self, shuffle: bool) -> Result<(), Error> {
@@ -660,7 +778,7 @@ index c7c195b..a56a55d 100644
          self.player.emit_shuffle_changed_event(shuffle);
          self.connect_state.handle_shuffle(shuffle)
      }
-@@ -1896,7 +2059,11 @@ impl SpircTask {
+@@ -1896,7 +2137,11 @@ impl SpircTask {
          let current_uri = self.connect_state.current_track(|t| &t.uri);
          let id = SpotifyUri::from_uri(current_uri)?;
          self.player.load(id, start_playing, position_ms);
@@ -672,7 +790,7 @@ index c7c195b..a56a55d 100644
          self.connect_state
              .update_position(position_ms, self.now_ms());
          if start_playing {
-@@ -1905,11 +2072,10 @@ impl SpircTask {
+@@ -1905,11 +2150,10 @@ impl SpircTask {
              self.play_status = SpircPlayStatus::LoadingPause { position_ms };
          }
          self.connect_state.set_status(&self.play_status);
