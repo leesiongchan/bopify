@@ -123,4 +123,21 @@ struct PlayerPresentationTests {
         state.phase = .error(.playbackSessionLost)
         #expect(PlayerContent(state) == .player)
     }
+
+    private func remote(isPlaying: Bool) -> RemotePlayback {
+        RemotePlayback(deviceName: "iPhone", trackURI: SpotifyURI("spotify:track:r")!, track: nil,
+                       isPlaying: isPlaying, positionMs: 0, durationMs: 1)
+    }
+    @Test func anInactiveStatusNamesTheMirroredDeviceOrSaysNothingPlays() {
+        var state = PlaybackState()
+        #expect(InactiveStatus(state) == .notPlaying)
+        state.remote = remote(isPlaying: true)
+        #expect(InactiveStatus(state) == .playingOn(deviceName: "iPhone"))
+        state.remote = remote(isPlaying: false)
+        #expect(InactiveStatus(state) == .pausedOn(deviceName: "iPhone"))
+        // A stale mirror's device has stopped, so it is not named.
+        state.remote = nil
+        state.staleRemote = remote(isPlaying: false)
+        #expect(InactiveStatus(state) == .notPlaying)
+    }
 }

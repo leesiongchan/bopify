@@ -141,3 +141,13 @@ public enum PlayerContent: Equatable, Sendable {
         }
     }
 }
+
+/// What the status line says while Bopify is not the active device.
+public enum InactiveStatus: Equatable, Sendable {
+    case playingOn(deviceName: String), pausedOn(deviceName: String), notPlaying
+
+    public init(_ state: PlaybackState) {
+        guard let remote = state.remote else { self = .notPlaying; return }
+        self = remote.isPlaying ? .playingOn(deviceName: remote.deviceName) : .pausedOn(deviceName: remote.deviceName)
+    }
+}
