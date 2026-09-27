@@ -30,7 +30,7 @@ struct TransportControls: View {
             }
             .disabled(!canControl || state.phase == .loading || state.phase == .buffering)
             .accessibilityLabel(Text(isPlaying ? "transport.pause" : "transport.play"))
-            .accessibilityValue(Text(isPlaying ? "transport.state.playing" : "transport.state.paused"))
+            .accessibilityValue(state.localizedStatusText)
             .help(Text(isPlaying ? "transport.pause" : "transport.play"))
 
             Button(action: model.next) {

@@ -76,6 +76,8 @@ Temporary fixture-only instrumentation measures the production reflection Timeli
 - The final reviewer accepted replacing old glass probes with current Monolith probes. Cost: the old UI-specific coverage is not preserved unchanged.
 - Unresolved live acceptance checks stay open; the branch is not declared fully accepted or ready to merge. Cost: untested native interactions may still fail in everyday use.
 
-## Deferred minor from review
+## Status feedback follow-up
 
-The resting accessibility value still treats loading/error/inactive states as paused; an active-device playback error lacks a quiet rim indication unless there is a command notice. This status-feedback issue remains deferred. Focused error text is retained.
+The initially deferred status-feedback finding is fixed. The record and play control now share localized descriptions for the actual playback phase, including loading, buffering, completion, inactivity, and specific errors. The record also exposes command notices. Active-device playback errors display the [quiet error rim](assets/monolith/player-resting-error.png).
+
+The native visual probe first reproduced incorrect accessibility values and a missing error rim. It now passes playing/loading/finished/inactive/session-loss/paused/network-error/command-notice assertions, verifies the focused play control's error description, and checks the orange rim in captured pixels. Status changes remain compact and issue no playback commands. The complete visual probe, all 135 Swift tests, and the app build pass after the correction. Live VoiceOver delivery and the other acceptance checks listed above remain open.
