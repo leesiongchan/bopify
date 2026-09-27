@@ -3,6 +3,13 @@ import Observation
 import os
 import BopifyDomain
 
+public enum QueueSelectionStatus: Equatable, Sendable {
+    case idle
+    case pending(entryID: String, target: QueueTarget)
+    case confirmed(entryID: String, target: QueueTarget)
+    case failed
+}
+
 /// Folds engine events into observable state on the main actor.
 ///
 /// Deliberately not an actor: this folds events into state that SwiftUI
@@ -15,6 +22,8 @@ import BopifyDomain
 public final class PlayerModel {
     public private(set) var state = PlaybackState()
     public private(set) var commandNotice: String?
+    public private(set) var queueSelection: QueueSelectionStatus = .idle
+    private var lastPositiveVolume: Double?
     private(set) var positionUpdatedAt = Date.now
     private var frozenDisplayPositionMs: Int64?
 
@@ -45,6 +54,8 @@ public final class PlayerModel {
     }
 
     public func stop() {
+        queueSelection = .idle
+        lastPositiveVolume = nil
         guard consumer != nil else { return }
         BopifyLog.playback.info("player model stopping")
         consumer?.cancel()
@@ -88,13 +99,18 @@ public final class PlayerModel {
     }
 
     public func selectQueueEntry(_ target: QueueTarget) {
-        guard state.isActiveDevice else { return }
+        guard consumer != nil, state.isActiveDevice else { return }
         guard state.queue?.generation == target.generation,
-              state.queue?.next.contains(where: { $0.target == target }) == true else {
+              let entry = state.queue?.next.first(where: { $0.target == target }) else {
+            queueSelection = .failed
             commandNotice = String(localized: "queue.changed", defaultValue: "The queue changed. Choose the track again.")
             return
         }
-        enqueue("selectQueue", requiresActive: true) { [engine] in try await engine.selectQueueEntry(target) }
+        let selection = QueueSelectionStatus.pending(entryID: entry.id, target: target)
+        guard queueSelection != selection else { return }
+        queueSelection = selection
+        commandNotice = nil
+        enqueue("selectQueue", requiresActive: true, selection: selection) { [engine] in try await engine.selectQueueEntry(target) }
     }
 
     public func setShuffle(_ enabled: Bool) {
@@ -113,7 +129,12 @@ public final class PlayerModel {
         enqueue("setVolume", requiresActive: true) { [engine] in try await engine.setVolume(volume) }
     }
 
+    public func toggleMute() {
+        setVolume(state.volume > 0 ? 0 : (lastPositiveVolume ?? 0.5))
+    }
+
     private func enqueue(_ name: String, requiresActive: Bool = false,
+                         selection: QueueSelectionStatus? = nil,
                          _ operation: @escaping @Sendable () async throws -> Void) {
         guard consumer != nil else { return }
         let previous = pendingCommand
@@ -126,6 +147,10 @@ public final class PlayerModel {
             do { try await operation() }
             catch {
                 guard generation == commandGeneration else { return }
+                if let selection {
+                    guard queueSelection == selection else { return }
+                    queueSelection = .failed
+                }
                 commandNotice = String(localized: "command.unavailable", defaultValue: "That action is unavailable.")
                 BopifyLog.playback.error("command failed command=\(name, privacy: .public)")
             }
@@ -153,6 +178,16 @@ public final class PlayerModel {
             queue.next = queue.next.map(retainingMetadata)
             state.queue = queue
             commandNotice = nil
+            if case let .pending(entryID, target) = queueSelection, queue.generation > target.generation {
+                if queue.current?.id == entryID {
+                    queueSelection = .confirmed(entryID: entryID, target: target)
+                    BopifyLog.playback.debug("queue selection confirmed")
+                } else {
+                    queueSelection = .failed
+                    commandNotice = String(localized: "queue.changed", defaultValue: "The queue changed. Choose the track again.")
+                    BopifyLog.playback.debug("queue selection invalidated by replacement")
+                }
+            }
         case let .queueMetadata(generation, entryID, track):
             guard var queue = state.queue, queue.generation == generation else { return }
             func hydrated(_ entry: QueueEntry) -> QueueEntry {
@@ -169,6 +204,7 @@ public final class PlayerModel {
         case let .shuffleChanged(enabled): state.shuffleEnabled = enabled
         case let .repeatChanged(mode): state.repeatMode = mode
         case let .commandRejected(reason):
+            if case .pending = queueSelection { queueSelection = .failed }
             commandNotice = reason == "staleQueue"
                 ? String(localized: "queue.changed", defaultValue: "The queue changed. Choose the track again.")
                 : String(localized: "command.unavailable", defaultValue: "That action is unavailable.")
@@ -199,6 +235,7 @@ public final class PlayerModel {
             state.positionMs = position
         case let .volumeChanged(volume):
             state.volume = volume
+            if volume.isFinite, volume > 0 { lastPositiveVolume = min(1, volume) }
         case .loading:
             // Keep metadata and the displayed position until the engine supplies new values.
             freezeDisplayPosition()
@@ -209,6 +246,7 @@ public final class PlayerModel {
         case let .activeDeviceChanged(isActive):
             state.isActiveDevice = isActive
             if !isActive {
+                if case .pending = queueSelection { queueSelection = .failed }
                 freezeDisplayPosition()
                 state.phase = .idle
             }

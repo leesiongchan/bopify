@@ -6,6 +6,119 @@ import BopifyDomain
 @MainActor
 @Suite("PlayerModel")
 struct PlayerModelTests {
+    @Test func muteRestoresOnlyConfirmedSessionVolume() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        await settle(model, engine, [.playing(positionMs: 0), .volumeChanged(volume: 0.65)])
+        model.toggleMute()
+        await settle(model, engine, [])
+        #expect(engine.recordedCommands == ["setVolume:0.0"])
+        #expect(model.state.volume == 0.65)
+        await settle(model, engine, [.volumeChanged(volume: 0)])
+        model.toggleMute()
+        await settle(model, engine, [])
+        #expect(engine.recordedCommands.last == "setVolume:0.65")
+        #expect(model.state.volume == 0)
+        await settle(model, engine, [.volumeChanged(volume: 0.3), .volumeChanged(volume: 0)])
+        model.toggleMute()
+        await settle(model, engine, [])
+        #expect(engine.recordedCommands.last == "setVolume:0.3")
+        await settle(model, engine, [.activeDeviceChanged(isActive: false)])
+        let count = engine.recordedCommands.count
+        model.toggleMute()
+        await settle(model, engine, [])
+        #expect(engine.recordedCommands.count == count)
+    }
+
+    @Test func unmuteWithoutHistoryUsesHalfVolumeAndStopClearsMemory() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        await settle(model, engine, [.playing(positionMs: 0), .volumeChanged(volume: 0)])
+        model.toggleMute()
+        await settle(model, engine, [])
+        #expect(engine.recordedCommands == ["setVolume:0.5"])
+        await settle(model, engine, [.volumeChanged(volume: 0.9), .volumeChanged(volume: 0)])
+        model.stop()
+        model.start()
+        model.toggleMute()
+        await settle(model, engine, [])
+        #expect(engine.recordedCommands.last == "setVolume:0.5")
+        model.stop()
+    }
+
+    private func selectionQueue() -> PlaybackQueue {
+        PlaybackQueue(generation: 10, previous: [], current: nil, next: (0..<2).map {
+            QueueEntry(id: "duplicate-\($0)", uri: makeTrack().uri,
+                       target: QueueTarget(generation: 10, rawNextIndex: UInt32($0)), track: nil, metadataFailed: false)
+        })
+    }
+
+    @Test func queueSelectionWaitsForTheExactOccurrence() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        let queue = selectionQueue()
+        let entry = queue.next[1]
+        await settle(model, engine, [.playing(positionMs: 0), .queueChanged(queue)])
+        model.selectQueueEntry(entry.target!)
+        await settle(model, engine, [.trackChanged(makeTrack())])
+        #expect(model.queueSelection == .pending(entryID: entry.id, target: entry.target!))
+        let current = QueueEntry(id: entry.id, uri: entry.uri, target: nil, track: nil, metadataFailed: false)
+        await settle(model, engine, [.queueChanged(PlaybackQueue(generation: 11, previous: [], current: current, next: []))])
+        #expect(model.queueSelection == .confirmed(entryID: entry.id, target: entry.target!))
+        model.stop()
+        #expect(model.queueSelection == .idle)
+        #expect(PlayerModel(engine: StubPlaybackEngine()).queueSelection == .idle)
+    }
+
+    @Test func anotherSameURIQueueOccurrenceFailsSelection() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        let queue = selectionQueue()
+        await settle(model, engine, [.playing(positionMs: 0), .queueChanged(queue)])
+        model.selectQueueEntry(queue.next[1].target!)
+        await settle(model, engine, [.queueChanged(PlaybackQueue(generation: 11, previous: [], current: queue.next[0], next: []))])
+        #expect(model.queueSelection == .failed)
+        #expect(model.commandNotice != nil)
+        model.selectQueueEntry(queue.next[1].target!)
+        #expect(model.queueSelection == .failed)
+    }
+
+    @Test func rejectionCannotLaterBecomeSelectionSuccess() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        let queue = selectionQueue()
+        await settle(model, engine, [.playing(positionMs: 0), .queueChanged(queue)])
+        model.selectQueueEntry(queue.next[1].target!)
+        await settle(model, engine, [.commandRejected("staleQueue")])
+        #expect(model.queueSelection == .failed)
+        await settle(model, engine, [.queueChanged(PlaybackQueue(generation: 11, previous: [], current: queue.next[1], next: []))])
+        #expect(model.queueSelection == .failed)
+    }
+
+    @Test(arguments: [false, true])
+    func queueOperationFailureDoesNotOverwriteAReplacement(_ replace: Bool) async {
+        let engine = FailingSelectionEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        let queue = selectionQueue()
+        await settle(model, engine.stub, [.playing(positionMs: 0), .queueChanged(queue)])
+        model.selectQueueEntry(queue.next[0].target!)
+        await settle(model, engine.stub, [])
+        if replace { model.selectQueueEntry(queue.next[1].target!) }
+        try? await Task.sleep(for: .milliseconds(180))
+        #expect(model.queueSelection == (replace ? .pending(entryID: queue.next[1].id, target: queue.next[1].target!) : .failed))
+    }
+
     private func makeTrack() -> Track {
         Track(uri: SpotifyURI("spotify:track:abc")!, title: "Title",
               artists: [ArtistSummary(name: "Artist")], albumTitle: "Album",
@@ -284,4 +397,25 @@ struct PlayerModelTests {
         #expect(model.state.phase == .paused)
         #expect(model.state.positionMs == 1545)
     }
+}
+
+private struct FailingSelectionEngine: PlaybackEngine {
+    let stub = StubPlaybackEngine()
+    var events: AsyncStream<PlaybackEvent> { stub.events }
+    func selectQueueEntry(_ target: QueueTarget) async throws {
+        if target.rawNextIndex == 0 {
+            try await Task.sleep(for: .milliseconds(150))
+            throw NSError(domain: "Test rejection", code: 1)
+        }
+        try await stub.selectQueueEntry(target)
+    }
+    func load(_ request: PlayRequest) async throws { try await stub.load(request) }
+    func resume() async throws { try await stub.resume() }
+    func pause() async throws { try await stub.pause() }
+    func next() async throws { try await stub.next() }
+    func previous() async throws { try await stub.previous() }
+    func seek(to milliseconds: Int64) async throws { try await stub.seek(to: milliseconds) }
+    func setVolume(_ value: Double) async throws { try await stub.setVolume(value) }
+    func setShuffle(_ enabled: Bool) async throws { try await stub.setShuffle(enabled) }
+    func setRepeat(_ mode: RepeatMode) async throws { try await stub.setRepeat(mode) }
 }
