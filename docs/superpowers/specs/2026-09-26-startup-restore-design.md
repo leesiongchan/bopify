@@ -87,7 +87,7 @@ The changes extend `rust/patches/librespot-queue-selection.patch`, because `scri
 Revised on 2026-09-27 for the Monolith player (record and sleeve, no compact mode) and the run 5 findings; approved by the user.
 
 2. **One "play here" command.** `SpircCommand::PlayHere` (`Spirc::play_here()`, behind `startup_restore`) decides from a fresh cluster, the reply to the same state PUT the startup decision reads (`notify_new_device_appeared`), using `startup_decision`. Cluster updates are not known to carry the full last session:
-   - another device active with a track: send the transfer request (`spclient().transfer(own, own, None)`) on a spawned task, so the Spirc loop keeps answering the dealer. The reply, including a 410, is only logged. Success is the server's incoming transfer and the `Playing` event that follows. That transfer plays even when the other device was paused;
+   - another device active with a track: send the transfer request (`spclient().transfer(own, own, None)`) on a spawned task, so the Spirc loop keeps answering the dealer. The reply, including a 410, is only logged. Success is the server's incoming transfer and the `Playing` event that follows. That transfer plays even when the other device was paused. It resumes where that device is: a playing session reported at 0:00 (just after a skip) still counts the time since its report;
    - no active device and a usable last session: restore it exactly as at startup (forced paused, no extrapolation), then resume playback;
    - otherwise: load Liked Songs with `start_playing: true`.
    This covers both the mirror's Play and the stale state after a takeover whose device later stopped (the user chose "resume that session here" on 2026-09-27).
