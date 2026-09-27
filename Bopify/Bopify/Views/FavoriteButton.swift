@@ -8,6 +8,7 @@ extension EnvironmentValues {
 }
 
 struct FavoriteButton: View {
+    var detailsChanged: (Bool) -> Void = { _ in }
     @Environment(\.favoriteEnvironment) private var environment
     @State private var showsDetails = false
 
@@ -22,7 +23,7 @@ struct FavoriteButton: View {
                     if model.isPending || environment.isEnablingFavorites { ProgressView().controlSize(.mini) }
                     else { Image(systemName: model.saved == true ? "heart.fill" : model.saved == nil ? "heart.slash" : "heart") }
                 }
-                .frame(width: 28, height: 24)
+                .frame(width: 28, height: 28)
             }
             .buttonStyle(PlayerControlStyle())
             .disabled(model.isPending || environment.isEnablingFavorites)
@@ -36,7 +37,10 @@ struct FavoriteButton: View {
                     FavoriteMenuAction()
                 }
                 .padding(16).frame(width: 260)
+                .onExitCommand { showsDetails = false }
             }
+            .onChange(of: showsDetails) { _, value in detailsChanged(value) }
+            .onDisappear { showsDetails = false; detailsChanged(false) }
         }
     }
 }

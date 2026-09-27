@@ -8,6 +8,9 @@ struct RadialProgressView: View {
     let durationMs: Int64
     let canSeek: Bool
     let seek: (Int64) -> Void
+    var interactionChanged: (Bool) -> Void = { _ in }
+    var isVisible = true
+    var showsTime = true
     @State private var scrub: RadialScrub?
     @State private var lastScrubProgress = 0.0
     @State private var holdTask: Task<Void, Never>?
@@ -25,14 +28,14 @@ struct RadialProgressView: View {
     var body: some View {
         GeometryReader { geometry in
             let radius = geometry.size.width / 2
-            let angle = (scrub?.progress ?? lastScrubProgress) * .pi * 2 + .pi / 2
+            let angle = (scrub?.progress ?? lastScrubProgress) * .pi * 2 - .pi / 2
             ZStack {
                 Circle().trim(from: 0.035, to: 0.965)
                     .stroke(.primary.opacity(contrast == .increased ? 0.45 : 0.12), lineWidth: 1)
-                    .rotationEffect(.degrees(90))
+                    .rotationEffect(.degrees(-90))
                 Circle().trim(from: 0.035, to: max(0.035, min(0.965, progress)))
                     .stroke(.primary.opacity(0.65), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
-                    .rotationEffect(.degrees(90))
+                    .rotationEffect(.degrees(-90))
                 Circle().fill(.white)
                     .frame(width: 22, height: 22)
                     .shadow(color: .black.opacity(0.16), radius: 5, y: 2)
@@ -60,7 +63,7 @@ struct RadialProgressView: View {
             .gesture(DragGesture(minimumDistance: 0)
                 .updating($gestureActive) { _, state, _ in state = true }
                 .onChanged { value in
-                    guard canSeek, durationMs > 0, !rejectedGesture else { return }
+                    guard canSeek, isVisible, durationMs > 0, !rejectedGesture else { return }
                     let x = value.location.x - radius, y = value.location.y - radius
                     guard let fraction = radialProgress(x: x, y: y) else { return }
                     if scrub != nil {
@@ -73,6 +76,7 @@ struct RadialProgressView: View {
                     } else {
                         guard abs(hypot(x, y) - radius) <= 18 else { rejectedGesture = true; return }
                         pressOrigin = value.location
+                        interactionChanged(true)
                         holdTask = Task { @MainActor in
                             try? await Task.sleep(for: .milliseconds(250))
                             guard !Task.isCancelled else { return }
@@ -82,7 +86,7 @@ struct RadialProgressView: View {
                     }
                 }
                 .onEnded { _ in
-                    if canSeek, let scrub, let target = seekPosition(progress: scrub.progress, durationMs: durationMs) {
+                    if canSeek, isVisible, let scrub, let target = seekPosition(progress: scrub.progress, durationMs: durationMs) {
                         seek(target)
                         BopifyLog.playback.debug("radial scrub committed")
                     }
@@ -90,12 +94,12 @@ struct RadialProgressView: View {
                     rejectedGesture = false
                 })
             .overlay(alignment: .bottom) {
-                Text("−" + playbackTime(max(0, durationMs - displayedPosition)))
+                if showsTime { Text("−" + playbackTime(max(0, durationMs - displayedPosition)))
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .offset(y: 6)
                     .allowsHitTesting(false)
-                    .accessibilityHidden(true)
+                    .accessibilityHidden(true) }
             }
         }
         .accessibilityElement(children: .ignore)
@@ -113,10 +117,12 @@ struct RadialProgressView: View {
         .onChange(of: gestureActive) { _, active in
             if !active { cancelScrub(); rejectedGesture = false }
         }
+        .onChange(of: isVisible) { _, visible in if !visible { cancelScrub(); rejectedGesture = gestureActive } }
         .onDisappear { cancelScrub() }
     }
 
     private func cancelScrub() {
+        if pressOrigin != nil || scrub != nil { interactionChanged(false) }
         holdTask?.cancel()
         holdTask = nil
         pressOrigin = nil

@@ -25,11 +25,13 @@ final class AppEnvironment {
     private(set) var isEnablingFavorites = false
     private(set) var favoriteAuthorizationNotice: String?
     let presentation = PlayerPresentation(
-        mode: PlayerMode(rawValue: UserDefaults.standard.string(forKey: "player.mode") ?? "") ?? .expanded,
+        mode: .compact,
         keepOnTop: UserDefaults.standard.bool(forKey: "player.keepOnTop"))
+    let monolithWindow = MonolithWindowController(defaults: .standard)
+    var isListening: Bool { authState == .signedIn && player?.state.currentTrack != nil }
 
     var playerMode: PlayerMode {
-        authState == .signedIn && player?.state.currentTrack != nil ? presentation.mode : .expanded
+        isListening ? presentation.mode : .expanded
     }
 
     // A Developer Dashboard client ID is rejected by login5 with HTTP 400
@@ -64,6 +66,15 @@ final class AppEnvironment {
             try await auth.validAccessToken(requiredScopes: scopes)
         })
     }
+
+    #if DEBUG
+    init(previewPlayer: PlayerModel, favoriteService: any LibraryService) {
+        auth = SpotifyAuthService(clientID: librespotClientID)
+        favorite = FavoriteModel(service: favoriteService)
+        player = previewPlayer
+        authState = .signedIn
+    }
+    #endif
 
     func refreshFavorite() async {
         guard authState == .signedIn else { favorite.clear(); return }
@@ -141,6 +152,8 @@ final class AppEnvironment {
     func signOut() async {
         await serialize { [self] in
             BopifyLog.auth.info("sign-out starting")
+            presentation.resetEngagement()
+            monolithWindow.invalidateTransition()
             player?.stop()
             player = nil
             artworkStore.clear()
