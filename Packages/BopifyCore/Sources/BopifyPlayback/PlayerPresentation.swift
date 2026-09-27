@@ -2,6 +2,7 @@ import Foundation
 import CoreGraphics
 import Observation
 import BopifyDomain
+import os
 
 public enum PlayerMode: String, Codable, Sendable { case expanded, compact, queue }
 
@@ -10,15 +11,61 @@ public enum PlayerMode: String, Codable, Sendable { case expanded, compact, queu
 public final class PlayerPresentation {
     public private(set) var mode: PlayerMode
     public var keepOnTop: Bool
-    public var isVisible = false
+    public var isVisible: Bool {
+        get { attention.isVisible }
+        set { sendAttention(.visibility(newValue)) }
+    }
+    private var attention = PlayerAttentionState()
+    private var queueRequested = false
+    @ObservationIgnored private var collapseTask: Task<Void, Never>?
+    @ObservationIgnored private var generation = 0
 
     public init(mode: PlayerMode = .expanded, keepOnTop: Bool = false) {
         self.mode = mode
         self.keepOnTop = keepOnTop
     }
-    public func setMode(_ mode: PlayerMode) { self.mode = mode }
+    public func setMode(_ mode: PlayerMode) {
+        queueRequested = mode == .queue
+        self.mode = mode
+    }
+    public func sendAttention(_ event: PlayerAttentionEvent) {
+        attention.update(event, at: ProcessInfo.processInfo.systemUptime)
+        updateMode()
+        scheduleCollapse()
+    }
+    public func requestQueue(_ open: Bool) {
+        queueRequested = open && attention.isRevealed
+        updateMode()
+    }
+    public func resetEngagement() { sendAttention(.reset) }
+    func advanceAttention(to now: TimeInterval) {
+        attention.advance(to: now)
+        updateMode()
+        scheduleCollapse()
+    }
+    private func updateMode() {
+        if !attention.isRevealed { queueRequested = false }
+        let next: PlayerMode = attention.isRevealed ? (queueRequested ? .queue : .expanded) : .compact
+        guard next != mode else { return }
+        mode = next
+        BopifyLog.playback.debug("Player presentation: \(next.rawValue, privacy: .public)")
+    }
+    private func scheduleCollapse() {
+        collapseTask?.cancel()
+        collapseTask = nil
+        generation += 1
+        guard let deadline = attention.collapseDeadline else { return }
+        let expectedGeneration = generation
+        let delay = max(0, deadline - ProcessInfo.processInfo.systemUptime)
+        collapseTask = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(delay)) } catch { return }
+            guard let self, self.generation == expectedGeneration else { return }
+            self.advanceAttention(to: ProcessInfo.processInfo.systemUptime)
+        }
+    }
     public func dismissQueue() -> Bool {
         guard mode == .queue else { return false }
+        queueRequested = false
         mode = .expanded
         return true
     }
