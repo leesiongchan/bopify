@@ -125,8 +125,11 @@ struct MonolithPlayerView: View {
                         .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                         .help(track?.artists.map(\.name).joined(separator: ", ") ?? "")
                 }.frame(maxWidth: .infinity, alignment: .leading)
-                FavoriteButton(detailsChanged: { presentation.sendAttention(.interaction(.popover, $0)) })
-                    .disabled(player.state.mirror != nil || track?.uri != player.state.currentTrack?.uri)
+                // Hidden while mirroring: Bopify still has its own track, and the heart would show that track's saved state.
+                if player.state.mirror == nil {
+                    FavoriteButton(detailsChanged: { presentation.sendAttention(.interaction(.popover, $0)) })
+                        .disabled(track?.uri != player.state.currentTrack?.uri)
+                }
             }
             TransportControls(state: player.state, model: player)
                 .frame(maxWidth: .infinity)
@@ -156,7 +159,7 @@ struct MonolithPlayerView: View {
                 Button { presentation.requestQueue(presentation.mode != .queue) } label: {
                     Image(systemName: "music.note.list").frame(width: 28, height: 28)
                 }.accessibilityLabel(Text("queue.title"))
-                    .disabled(player.state.mirror != nil)
+                    .disabled(player.state.mirror != nil && presentation.mode != .queue)
             }
             HStack(spacing: 8) {
                 Button(action: player.toggleMute) {

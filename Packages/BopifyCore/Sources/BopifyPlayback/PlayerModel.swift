@@ -186,6 +186,12 @@ public final class PlayerModel {
         if state.phase == .playing { frozenDisplayPositionMs = displayPositionMs(at: .now) }
     }
 
+    /// A stopped device's last state, frozen: the record shows it, but the ring stops advancing.
+    private func stalled(_ remote: RemotePlayback) -> RemotePlayback {
+        RemotePlayback(deviceName: remote.deviceName, trackURI: remote.trackURI, track: remote.track,
+                       isPlaying: false, positionMs: remote.positionMs, durationMs: remote.durationMs)
+    }
+
     private func apply(_ event: PlaybackEvent) {
         let oldPhase = state.phase
         switch event {
@@ -276,6 +282,10 @@ public final class PlayerModel {
                 if case .pending = queueSelection { queueSelection = .failed }
                 freezeDisplayPosition()
                 state.phase = .idle
+            } else {
+                // Always nil while active: a mirror from just before the takeover must not linger.
+                state.remote = nil
+                state.staleRemote = nil
             }
         case let .failed(error):
             freezeDisplayPosition()
@@ -283,6 +293,11 @@ public final class PlayerModel {
             let description = String(describing: error)
             BopifyLog.playback.error("playback failed error=\(description, privacy: .public)")
             if error == .playbackSessionLost { state.isActiveDevice = false }
+            // A live mirror must stop advancing under the error, same as a device that stopped.
+            if let remote = state.remote {
+                state.staleRemote = stalled(remote)
+                state.remote = nil
+            }
         case let .startupResolved(outcome):
             state.startup = .resolved(outcome)
             let kind = switch outcome {
@@ -296,8 +311,7 @@ public final class PlayerModel {
             // A lookup still in flight when Bopify took over must not bring the mirror back.
             guard !state.isActiveDevice else { break }
             if remote == nil, let last = state.remote {
-                state.staleRemote = RemotePlayback(deviceName: last.deviceName, trackURI: last.trackURI, track: last.track,
-                                                   isPlaying: false, positionMs: last.positionMs, durationMs: last.durationMs)
+                state.staleRemote = stalled(last)
             }
             state.remote = remote
             remoteUpdatedAt = .now

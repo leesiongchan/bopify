@@ -427,6 +427,28 @@ struct PlayerModelTests {
         #expect(model.state.remote == makeRemote(isPlaying: false))
     }
 
+    @Test func aFailureMovesALiveMirrorIntoTheStaleRecordAndStopsTheRing() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        await settle(model, engine, [.activeDeviceChanged(isActive: false), .remotePlayback(makeRemote())])
+        await settle(model, engine, [.failed(.playbackSessionLost)])
+        #expect(model.state.remote == nil)
+        #expect(model.state.staleRemote == makeRemote(isPlaying: false))
+        #expect(!model.isPositionAdvancing)
+    }
+
+    @Test func becomingActiveAlwaysClearsTheMirrorEvenWithoutATakeoverEvent() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        await settle(model, engine, [.remotePlayback(makeRemote())])
+        await settle(model, engine, [.activeDeviceChanged(isActive: true)])
+        #expect(model.state.mirror == nil)
+    }
+
     @Test func playWhileInactiveAsksTheEngineToPlayHereWithoutAssumingItWorked() async {
         let engine = StubPlaybackEngine()
         let model = PlayerModel(engine: engine)

@@ -463,6 +463,16 @@
         }
       }
     },
+    "player.remote.pausedUnnamed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paused on another device"
+          }
+        }
+      }
+    },
     "player.remote.title %@" : {
       "localizations" : {
         "en" : {
