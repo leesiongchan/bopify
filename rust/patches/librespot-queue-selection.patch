@@ -869,10 +869,10 @@ index c7c195b..473324b 100644
          if self.connect_state.is_playing() {
 diff --git a/connect/src/startup.rs b/connect/src/startup.rs
 new file mode 100644
-index 0000000..b5f204e
+index 0000000..c36abc2
 --- /dev/null
 +++ b/connect/src/startup.rs
-@@ -0,0 +1,375 @@
+@@ -0,0 +1,388 @@
 +//! Bopify: the connect-time decision behind `ConnectConfig::startup_restore`,
 +//! and the mirror of another device's playback.
 +
@@ -1240,6 +1240,19 @@ index 0000000..b5f204e
 +            ..Default::default()
 +        };
 +        assert_eq!(transfer_position(&playback, 1_000_000 - 5_000), 0);
++    }
++
++    #[test]
++    fn a_playing_transfer_without_a_timestamp_keeps_its_reported_position() {
++        for timestamp in [None, Some(0)] {
++            let playback = Playback {
++                position_as_of_timestamp: Some(68_188),
++                timestamp,
++                is_paused: Some(false),
++                ..Default::default()
++            };
++            assert_eq!(transfer_position(&playback, 1_000_000), 68_188);
++        }
 +    }
 +
 +    #[test]
