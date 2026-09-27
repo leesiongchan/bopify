@@ -5,6 +5,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--derived-data", required=True)
 parser.add_argument("--output", required=True)
 parser.add_argument("--probe", choices=["window", "visual", "artwork"], required=True)
+parser.add_argument("--measure-ambient", action="store_true")
 options = parser.parse_args()
 root = Path(__file__).resolve().parents[3]
 products = Path(options.derived_data).resolve() / 'Build/Products/Debug'
@@ -13,12 +14,23 @@ app = probe / 'MonolithProbe.app/Contents'
 (app / 'MacOS').mkdir(parents=True, exist_ok=True)
 (app / 'Resources').mkdir(exist_ok=True)
 sources = [str(p) for p in (root / 'Bopify/Bopify').rglob('*.swift') if p.name != 'BopifyApp.swift']
+instrumented = None
+if options.measure_ambient:
+    original = root / 'Bopify/Bopify/Views/VinylRecordView.swift'
+    instrumented = probe / 'InstrumentedVinylRecordView.swift'
+    source = original.read_text().replace('paused: !isPlaying || !isVisible || reduceMotion)) { context in',
+        'paused: !isPlaying || !isVisible || reduceMotion)) { context in\n                let _ = MonolithAmbientProbe.tick()')
+    source += '\n@MainActor enum MonolithAmbientProbe { static var ticks = 0; static func tick() { ticks += 1 } }\n'
+    instrumented.write_text(source)
+    sources[sources.index(str(original))] = str(instrumented)
 args = ['swiftc', '-parse-as-library', '-D', 'DEBUG', '-swift-version', '6', '-default-isolation', 'MainActor', '-target', 'arm64-apple-macos26.0', '-I', str(products), '-I', str(root / 'Packages/BopifyCore/Sources/CBopifyCore/include'), '-L', str(products), '-lbopify_core', '-liconv', '-lobjc']
+if options.measure_ambient: args += ['-D', 'MONOLITH_MEASURE']
 for framework in ['AudioToolbox', 'CoreAudio', 'IOKit', 'CoreFoundation', 'Foundation', 'SystemConfiguration', 'Security']:
     args += ['-framework', framework]
 args += sources + [str(root / 'docs/superpowers/verification' / {'window': 'MonolithWindowProbe.swift', 'visual': 'MonolithVisualProbe.swift', 'artwork': 'ArtworkMorphProbe.swift'}[options.probe])] + [str(products / (name + '.o')) for name in ['BopifyDomain', 'BopifyPlayback', 'BopifyAuth', 'BopifyLibrary', 'CBopifyCore']]
 args += ['-o', str(app / 'MacOS/MonolithProbe')]
 subprocess.run(args, check=True)
+if instrumented: instrumented.unlink()
 for source in (products / 'Bopify.app/Contents/Resources').iterdir():
     if source.is_file(): shutil.copy2(source, app / 'Resources' / source.name)
     elif source.is_dir(): shutil.copytree(source, app / 'Resources' / source.name, dirs_exist_ok=True)

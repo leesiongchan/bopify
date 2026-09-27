@@ -80,7 +80,7 @@ struct MonolithPlayerView: View {
                     .accessibilityLabel(Text(track?.title ?? String(localized: "player.unknownTrack")))
                     .accessibilityValue(Text(player.state.phase == .playing ? "transport.state.playing" : "transport.state.paused"))
                     .accessibilityAddTraits(.isButton)
-                    .accessibilityAction { presentation.sendAttention(.keyboardFocus(true)) }
+                    .accessibilityAction { window.focus() }
                     .accessibilityFocused($accessibilityFocus)
             }
             .overlay {
@@ -102,7 +102,7 @@ struct MonolithPlayerView: View {
     }
 
     private var controls: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .top, spacing: 4) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(track?.title ?? String(localized: "player.unknownTrack"))

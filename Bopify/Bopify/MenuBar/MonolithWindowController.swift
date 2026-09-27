@@ -16,6 +16,7 @@ final class MonolithWindowController {
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var anchor: CGPoint?
     @ObservationIgnored private var pendingMode: (PlayerMode, Bool)?
+    @ObservationIgnored private var lastRequest: (PlayerMode, Bool) = (.compact, false)
     @ObservationIgnored private var targetFrame: CGRect = .zero
 
     init(defaults: UserDefaults) { self.defaults = defaults }
@@ -28,6 +29,8 @@ final class MonolithWindowController {
         panel.styleMask.remove(.resizable)
         panel.containsPlayerPoint = { [weak self] in self?.contains($0) ?? false }
     }
+
+    func focus() { panel?.makeKey() }
 
     static func restoredAnchor(defaults: UserDefaults) -> CGPoint? {
         if let stored = defaults.string(forKey: "player.recordCenter"), stored.hasPrefix("{"), stored.hasSuffix("}") {
@@ -44,12 +47,12 @@ final class MonolithWindowController {
         return nil
     }
 
-    func apply(mode: PlayerMode, reduceMotion: Bool) {
+    func apply(mode: PlayerMode, reduceMotion: Bool, visibleFrame: CGRect? = nil) {
         guard let panel else { return }
         if isDragging { pendingMode = (mode, reduceMotion); return }
         let desiredAnchor = anchor ?? CGPoint(x: panel.frame.midX, y: panel.frame.midY)
         let screen = NSScreen.screens.first { $0.visibleFrame.contains(desiredAnchor) } ?? panel.screen ?? NSScreen.main
-        guard let visible = screen?.visibleFrame else { return }
+        guard let visible = visibleFrame ?? screen?.visibleFrame else { return }
         var available = visible.size
         // Extend the queue into available space before translating the whole player.
         if mode == .queue {
@@ -57,7 +60,8 @@ final class MonolithWindowController {
         }
         let next = monolithLayout(mode: mode, availableSize: available)
         let target = monolithFrame(recordCenter: desiredAnchor, layout: next, visibleFrame: visible)
-        guard next != layout || target != targetFrame else { return }
+        guard next != layout || target != targetFrame || (!isTransitioning && panel.frame != target) else { return }
+        lastRequest = (mode, reduceMotion)
         let adjusted = CGPoint(x: target.minX + next.recordCenter.x, y: target.maxY - next.recordCenter.y)
         if adjusted != desiredAnchor { BopifyLog.playback.debug("Monolith anchor clamped to visible screen") }
         anchor = adjusted
@@ -113,7 +117,9 @@ final class MonolithWindowController {
         if active { transitionID &+= 1; isTransitioning = false }
         else {
             persistAnchor()
-            if let (mode, reduceMotion) = pendingMode { pendingMode = nil; apply(mode: mode, reduceMotion: reduceMotion) }
+            let (mode, reduceMotion) = pendingMode ?? lastRequest
+            pendingMode = nil
+            apply(mode: mode, reduceMotion: reduceMotion)
         }
     }
 
