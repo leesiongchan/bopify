@@ -22,6 +22,14 @@ struct MonolithPlayerView: View {
     }
     private var occurrenceID: String { player.state.queue?.current?.id ?? player.state.currentTrack?.uri.rawValue ?? "missing" }
     private var image: Image? { track?.artwork.flatMap { store.images[$0.url] }.map { Image(nsImage: $0) } }
+    private var recordStatus: Text {
+        if let notice = player.commandNotice { return Text(notice) }
+        return player.state.localizedStatusText
+    }
+    private var needsAttention: Bool {
+        if case .error = player.state.phase { return true }
+        return player.commandNotice != nil || !player.state.isActiveDevice
+    }
 
     var body: some View {
         let layout = window.layout
@@ -79,7 +87,7 @@ struct MonolithPlayerView: View {
                 RecordDragRegion().clipShape(Circle()).padding(18)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(Text(track?.title ?? String(localized: "player.unknownTrack")))
-                    .accessibilityValue(Text(player.state.phase == .playing ? "transport.state.playing" : "transport.state.paused"))
+                    .accessibilityValue(recordStatus)
                     .accessibilityAddTraits(.isButton)
                     .accessibilityAction { window.focus() }
                     .accessibilityFocused($accessibilityFocus)
@@ -96,7 +104,7 @@ struct MonolithPlayerView: View {
                 }
             }
             .overlay {
-                if player.commandNotice != nil || !player.state.isActiveDevice {
+                if needsAttention {
                     Circle().strokeBorder(.orange.opacity(0.7), lineWidth: 1).allowsHitTesting(false)
                 }
             }
