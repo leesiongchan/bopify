@@ -56,7 +56,7 @@ final class MonolithWindowController {
         var available = visible.size
         // Extend the queue into available space before translating the whole player.
         if mode == .queue {
-            available.height = min(available.height, max(264, desiredAnchor.y + 132 - visible.minY))
+            available.height = min(available.height, max(344, desiredAnchor.y + 132 - visible.minY))
         }
         let next = monolithLayout(mode: mode, availableSize: available)
         let target = monolithFrame(recordCenter: desiredAnchor, layout: next, visibleFrame: visible)

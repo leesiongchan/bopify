@@ -7,12 +7,15 @@ struct MonolithPlayerView: View {
     let store: ArtworkStore
     let presentation: PlayerPresentation
     let window: MonolithWindowController
-    @State private var direction: CarouselDirection = .fade
+    @State private var previousQueue: PlaybackQueue?
     @State private var pendingSelection: QueueSelectionStatus?
     @AccessibilityFocusState private var accessibilityFocus: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var engaged: Bool { presentation.mode != .compact }
+    private var direction: CarouselDirection {
+        player.state.queue.map { carouselDirection(old: previousQueue, new: $0) } ?? .fade
+    }
     private var track: Track? {
         guard let current = player.state.queue?.current else { return player.state.currentTrack }
         return current.uri == player.state.currentTrack?.uri ? player.state.currentTrack : current.track
@@ -52,9 +55,7 @@ struct MonolithPlayerView: View {
         .frame(width: layout.contentSize.width, height: layout.contentSize.height, alignment: .topLeading)
         .offset(x: window.contentOffset.x, y: window.contentOffset.y)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .onChange(of: player.state.queue) { old, next in
-            direction = next.map { carouselDirection(old: old, new: $0) } ?? .fade
-        }
+        .onChange(of: player.state.queue, initial: true) { _, next in previousQueue = next }
         .onChange(of: player.queueSelection) { _, selection in
             guard case let .confirmed(id, target) = selection,
                   pendingSelection == .pending(entryID: id, target: target) else { return }
@@ -112,6 +113,7 @@ struct MonolithPlayerView: View {
                         .help(track?.artists.map(\.name).joined(separator: ", ") ?? "")
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 FavoriteButton(detailsChanged: { presentation.sendAttention(.interaction(.popover, $0)) })
+                    .disabled(track?.uri != player.state.currentTrack?.uri)
             }
             TransportControls(state: player.state, model: player)
                 .frame(maxWidth: .infinity)
