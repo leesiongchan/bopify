@@ -59,7 +59,7 @@ import BopifyDomain
             for label in ["Previous", "Next", "Shuffle", "Repeat", "Up Next", "Mute"] {
                 check(enabled(label) == false, "\(label) is disabled while mirroring")
             }
-            check(element("Spotify favorite") == nil, "the favourite is hidden while mirroring with no track of Bopify's own")
+            check(element("Spotify favorite") == nil, "the favourite is hidden while mirroring")
             let playing = await capture(panel, "mirror-playing")
             pressPlay()
             await settle()
