@@ -47,18 +47,15 @@ impl MetadataRequest {
     }
 }
 
+/// Looks a track or episode up for display; `None` when it cannot be resolved.
+pub(crate) async fn lookup(session: Session, raw: String) -> Option<WireTrack> {
+    let uri = SpotifyUri::from_uri(&raw).ok()?;
+    AudioItem::get_file(&session, uri).await.ok().map(track_metadata)
+}
+
 pub(crate) fn start(session: Session, sink: EventSink) -> watch::Sender<Option<MetadataRequest>> {
     let (sender, receiver) = watch::channel(None);
-    tokio::spawn(run(receiver, sink, move |raw| {
-        let session = session.clone();
-        async move {
-            let uri = SpotifyUri::from_uri(&raw).ok()?;
-            AudioItem::get_file(&session, uri)
-                .await
-                .ok()
-                .map(track_metadata)
-        }
-    }));
+    tokio::spawn(run(receiver, sink, move |raw| lookup(session.clone(), raw)));
     sender
 }
 
