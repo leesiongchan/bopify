@@ -3,6 +3,19 @@ import ScreenCaptureKit
 import BopifyPlayback
 import BopifyDomain
 
+private struct ProbePlayerScene: View {
+    let player: PlayerModel
+    let environment: AppEnvironment
+    let presentation: PlayerPresentation
+    let controller: MonolithWindowController
+    let store = previewArtworkStore()
+    var body: some View {
+        MonolithPlayerView(player: player, store: store, presentation: presentation, window: controller)
+            .environment(\.favoriteEnvironment, environment)
+            .onChange(of: presentation.mode) { _, mode in controller.apply(mode: mode, reduceMotion: false) }
+    }
+}
+
 @main struct MonolithVisualProbe {
     static var output: URL { URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true) }
     @MainActor static func main() {
@@ -23,11 +36,14 @@ import BopifyDomain
         let presentation = PlayerPresentation()
         let controller = MonolithWindowController(defaults: UserDefaults(suiteName: "monolith.visual.\(UUID())")!)
         let environment = AppEnvironment(previewPlayer: player, favoriteService: PreviewLibrary())
-        let panel = StatusPanel(content: MonolithPlayerView(player: player, store: previewArtworkStore(), presentation: presentation, window: controller)
-            .environment(\.favoriteEnvironment, environment)
-            .onChange(of: presentation.mode) { _, mode in controller.apply(mode: mode, reduceMotion: false) })
+        let panel = StatusPanel(content: ProbePlayerScene(player: player, environment: environment, presentation: presentation, controller: controller))
+        let backdrop = StatusPanel(content: Color.clear)
+        backdrop.setFrame(CGRect(x: 0, y: 0, width: 1000, height: 800), display: false)
+        backdrop.backgroundColor = NSColor(calibratedRed: 0.12, green: 0.22, blue: 0.20, alpha: 1)
+        backdrop.orderFrontRegardless()
         controller.attach(to: panel)
-        defer { panel.orderOut(nil) }
+        panel.onKeyChanged = { presentation.sendAttention(.keyboardFocus($0)) }
+        defer { panel.orderOut(nil); backdrop.orderOut(nil) }
         precondition(PlayerContent(player.state) == .loading)
         engine.emit(.startupResolved(.restored))
         try await settle(70)
@@ -43,10 +59,29 @@ import BopifyDomain
         panel.orderFrontRegardless()
         try await settle()
         try await capture(panel, "player-resting")
+        let restingButtons = accessibilityTree(panel.contentView!).filter { attribute($0, "accessibilityRole") as? String == "AXButton" }
+        print("resting AX buttons: \(restingButtons.map { attribute($0, "accessibilityLabel") as? String ?? "" })")
+        precondition(!restingButtons.contains { attribute($0, "accessibilityLabel") as? String == "Next" || attribute($0, "accessibilityLabel") as? String == "Play" }, "hidden controls leave accessibility navigation")
+        let recordButton = restingButtons.first { attribute($0, "accessibilityLabel") as? String == "Afterglow" }!
+        let press = NSSelectorFromString("accessibilityPerformPress")
+        typealias AccessibilityPress = @convention(c) (AnyObject, Selector) -> Bool
+        let performPress = unsafeBitCast(recordButton.method(for: press), to: AccessibilityPress.self)
+        precondition(performPress(recordButton, press), "record exposes its accessibility action")
+        try await settle()
+        precondition(panel.isKeyWindow, "accessibility activation acquires native keyboard focus")
+        backdrop.makeKeyAndOrderFront(nil)
+        try await settle()
+        precondition(presentation.mode == .compact, "native focus loss releases accessibility activation hold")
         presentation.sendAttention(.keyboardFocus(true))
         controller.apply(mode: presentation.mode, reduceMotion: false)
+        panel.makeKeyAndOrderFront(nil)
         try await settle()
+        precondition(panel.isKeyWindow && presentation.mode == .expanded, "native focus reveals controls")
         try await capture(panel, "player-focused")
+        let focusedButtons = accessibilityTree(panel.contentView!).filter { attribute($0, "accessibilityRole") as? String == "AXButton" }
+        print("focused AX buttons: \(focusedButtons.map { attribute($0, "accessibilityLabel") as? String ?? "" })")
+        fflush(nil)
+        precondition(focusedButtons.contains { attribute($0, "accessibilityLabel") as? String == "Play" }, "focused controls enter accessibility navigation")
         presentation.requestQueue(true)
         controller.apply(mode: presentation.mode, reduceMotion: false)
         try await settle()
@@ -103,6 +138,61 @@ import BopifyDomain
         mouse(.leftMouseUp, at: center)
         try await settle(80)
         precondition(engine.recordedCommands == ["seek:60000"], "center click has no playback command")
+        let current = QueueEntry(id: "a", uri: track.uri, target: nil, track: track, metadataFailed: false)
+        let next = QueueEntry(id: "b", uri: track.uri, target: QueueTarget(generation: 2, rawNextIndex: 0), track: track, metadataFailed: false)
+        engine.emit(.queueChanged(PlaybackQueue(generation: 2, previous: [], current: current, next: [next])))
+        try await settle(80)
+        presentation.requestQueue(true)
+        try await settle()
+        try await capture(panel, "player-queue")
+        let rowPoint = CGPoint(x: controller.layout.queueFrame.midX, y: controller.layout.queueFrame.minY + 98)
+        mouse(.leftMouseDown, at: rowPoint)
+        mouse(.leftMouseUp, at: rowPoint)
+        try await settle(100)
+        precondition(player.queueSelection == .pending(entryID: next.id, target: next.target!), "row selects exact occurrence")
+        precondition(presentation.mode == .queue, "dispatch alone keeps queue open")
+        engine.emit(.queueChanged(PlaybackQueue(generation: 3, previous: [current], current: QueueEntry(id: next.id, uri: track.uri, target: nil, track: track, metadataFailed: false), next: [])))
+        try await settle()
+        precondition(presentation.mode == .expanded, "confirmed occurrence closes the queue extension")
+        precondition(controller.layout.contentSize.height == 264 && panel.frame.height == 264, "confirmed selection tightens native queue geometry")
+        try await capture(panel, "player-confirmed-selection")
+        let delayed = QueueEntry(id: "c", uri: track.uri, target: QueueTarget(generation: 4, rawNextIndex: 0), track: track, metadataFailed: false)
+        engine.emit(.queueChanged(PlaybackQueue(generation: 4, previous: [], current: current, next: [delayed])))
+        try await settle(80)
+        presentation.requestQueue(true)
+        try await settle()
+        mouse(.leftMouseDown, at: rowPoint)
+        mouse(.leftMouseUp, at: rowPoint)
+        try await settle(80)
+        precondition(player.queueSelection == .pending(entryID: delayed.id, target: delayed.target!))
+        presentation.requestQueue(false)
+        try await settle()
+        presentation.requestQueue(true)
+        try await settle()
+        engine.emit(.queueChanged(PlaybackQueue(generation: 5, previous: [], current: QueueEntry(id: delayed.id, uri: track.uri, target: nil, track: track, metadataFailed: false), next: [])))
+        try await settle()
+        precondition(presentation.mode == .queue, "late confirmation cannot close a reopened queue")
+        try await capture(panel, "player-queue-empty")
+        engine.emit(.commandRejected("staleQueue"))
+        try await settle(80)
+        try await capture(panel, "player-queue-rejected")
+        presentation.requestQueue(false)
+        try await settle()
+        backdrop.backgroundColor = NSColor(calibratedRed: 0.83, green: 0.81, blue: 0.73, alpha: 1)
+        panel.appearance = NSAppearance(named: .aqua)
+        try await settle()
+        try await capture(panel, "player-light")
+        panel.appearance = NSAppearance(named: .accessibilityHighContrastAqua)
+        try await settle()
+        try await capture(panel, "player-high-contrast")
+        controller.apply(mode: .expanded, reduceMotion: true, visibleFrame: CGRect(x: 200, y: 100, width: 320, height: 480))
+        try await settle()
+        precondition(panel.frame.width == 320 && controller.layout.controlsFrame.width >= 144)
+        try await capture(panel, "player-narrow")
+        engine.emit(.queueChanged(PlaybackQueue(generation: 6, previous: [], current: nil, next: [])))
+        engine.emit(.trackChanged(Track(uri: track.uri, title: "宇宙の静寂 — A Very Long Track Title Across the Evening Sky", artists: [ArtistSummary(name: "An Artist with an Equally Long Name")], albumTitle: nil, artwork: nil, durationMs: 240_000)))
+        try await settle()
+        try await capture(panel, "player-narrow-long-metadata")
         let remoteEngine = StubPlaybackEngine()
         let remote = PlayerModel(engine: remoteEngine)
         remote.start()
@@ -114,6 +204,16 @@ import BopifyDomain
         try await settle(70)
         precondition(PlayerContent(remote.state) == .player && remote.state.currentTrack == nil)
         precondition(remoteEngine.recordedCommands.isEmpty)
+    }
+
+    @MainActor static func attribute(_ value: NSObject, _ name: String) -> Any? {
+        let selector = NSSelectorFromString(name)
+        guard value.responds(to: selector) else { return nil }
+        return value.perform(selector)?.takeUnretainedValue()
+    }
+    @MainActor static func accessibilityTree(_ value: Any) -> [NSObject] {
+        guard let element = value as? NSObject else { return [] }
+        return [element] + ((attribute(element, "accessibilityChildren") as? [Any]) ?? []).flatMap { accessibilityTree($0) }
     }
 
     private struct PreviewLibrary: LibraryService {
@@ -131,9 +231,18 @@ import BopifyDomain
         defer { panel.orderOut(nil) }
         try await settle()
         try await capture(panel, "record-playing")
+        #if MONOLITH_MEASURE
+        let playingTicks = MonolithAmbientProbe.ticks
+        try await settle(300)
+        precondition(MonolithAmbientProbe.ticks > playingTicks, "playing reflection advances")
+        print("ambient playing ticks in 300 ms: \(MonolithAmbientProbe.ticks - playingTicks)")
+        #endif
         fixture.playing = false
         try await settle()
         try await capture(panel, "record-paused")
+        #if MONOLITH_MEASURE
+        try await verifyAmbientStopped("paused")
+        #endif
         fixture.missing = true
         try await settle()
         try await capture(panel, "record-missing")
@@ -157,13 +266,31 @@ import BopifyDomain
         try await settle()
         try await capture(panel, "record-settled")
         fixture.reducedMotion = true
+        fixture.playing = true
         fixture.index = 1
         fixture.occurrenceID = "reduced"
         try await settle(80)
         try await capture(panel, "record-reduced-motion")
+        #if MONOLITH_MEASURE
+        try await settle(300)
+        try await verifyAmbientStopped("reduced-motion")
+        #endif
+        fixture.reducedMotion = false
         fixture.visible = false
         try await settle()
+        #if MONOLITH_MEASURE
+        try await verifyAmbientStopped("hidden")
+        #endif
     }
+
+    #if MONOLITH_MEASURE
+    @MainActor static func verifyAmbientStopped(_ name: String) async throws {
+        let ticks = MonolithAmbientProbe.ticks
+        try await settle(300)
+        print("ambient \(name) ticks in 300 ms: \(MonolithAmbientProbe.ticks - ticks)")
+        precondition(MonolithAmbientProbe.ticks == ticks, "settled \(name) reflection has no timer updates")
+    }
+    #endif
 
     @MainActor static func settle(_ milliseconds: Int = 800) async throws {
         try await Task.sleep(for: .milliseconds(milliseconds))

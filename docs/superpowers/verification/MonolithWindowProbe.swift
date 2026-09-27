@@ -154,6 +154,17 @@ private struct WindowScene: View {
         try check(abs(spindle().x - original.x - 30) < 1 && abs(spindle().y - original.y - 20) < 1, "center drag translates the record")
         try check(!controller.isDragging, "drag releases attention hold")
         try check(MonolithWindowController.restoredAnchor(defaults: defaults) == spindle(), "dragged anchor persists")
+        panel.onPointerChanged = nil
+        controller.apply(mode: .queue, reduceMotion: false)
+        try await settle()
+        try check(panel.frame.height > 264, "queue is extended before drag interruption")
+        controller.apply(mode: .expanded, reduceMotion: false)
+        try await settle(60)
+        controller.setDragging(true)
+        panel.setFrameOrigin(CGPoint(x: panel.frame.minX + 10, y: panel.frame.minY))
+        controller.setDragging(false)
+        try await settle()
+        try check(panel.frame.size == controller.layout.contentSize, "drag during queue recession settles to tight bounds")
     }
     @MainActor static func mouse(_ type: CGEventType, at point: CGPoint) {
         let height = NSScreen.screens.first!.frame.maxY
