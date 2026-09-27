@@ -9,7 +9,7 @@
 - a usable last session → restore it and play;
 - otherwise → Liked Songs, playing.
 
-On the Rust side, bopify-core adds the track's metadata on a latest-wins worker before the event reaches Swift, and exposes `bopify_play_here`. On the Swift side, `PlaybackState.remote` holds the mirror. `PlayerModel` interpolates the mirror's position and routes an inactive Play to `playHere()`. The Monolith view shows the mirror or the stale state without the attention rim.
+On the Rust side, bopify-core adds the track's metadata on a latest-wins worker before the event reaches Swift, and exposes `bopify_play_here`. On the Swift side, `PlaybackState.remote` holds the live mirror. When that device stops, its last state stays, not playing, in `staleRemote`, because Play resumes that session. `PlaybackState.mirror` is whichever of the two applies. `PlayerModel` interpolates the mirror's position and routes an inactive Play to `playHere()`. The Monolith view shows the mirror or the stale state without the attention rim.
 
 **Tech Stack:** Rust (librespot `939dc5e` plus `rust/patches/librespot-queue-selection.patch`, rust-protobuf 3, tokio, serde), a C ABI, Swift 6 with Swift Testing, SwiftUI and AppKit on macOS (arm64), and native probe apps built by `docs/superpowers/verification/run-monolith-probe.py`.
 
@@ -64,7 +64,7 @@ xcodebuild -quiet -project Bopify/Bopify.xcodeproj -scheme Bopify -destination '
 | `rust/crates/bopify-core/src/lib.rs` | modify | `mod remote;` |
 | `rust/crates/bopify-core/src/engine.rs` | modify | Route the mirror through `remote.rs`; `Engine::play_here` |
 | `rust/crates/bopify-core/src/ffi.rs` | modify | `bopify_play_here` |
-| `Packages/BopifyCore/Sources/BopifyDomain/PlaybackState.swift` | modify | `RemotePlayback`, `PlaybackState.remote` |
+| `Packages/BopifyCore/Sources/BopifyDomain/PlaybackState.swift` | modify | `RemotePlayback`, `PlaybackState.remote`, `staleRemote`, `mirror` |
 | `Packages/BopifyCore/Sources/BopifyDomain/PlaybackEvent.swift` | modify | `.remotePlayback` decoding |
 | `Packages/BopifyCore/Sources/BopifyDomain/PlaybackEngine.swift` | modify | `playHere()` |
 | `Packages/BopifyCore/Sources/BopifyPlayback/PlayerModel.swift` | modify | Fold the mirror; `playHere()`, `canPlayHere`; mirror-aware display clock |
@@ -105,6 +105,7 @@ The wire rule makes this one commit: the librespot event, its JSON, Swift decodi
 - Modify: `Packages/BopifyCore/Sources/BopifyDomain/PlaybackState.swift`, `PlaybackEvent.swift`
 - Modify: `Packages/BopifyCore/Sources/BopifyPlayback/PlayerModel.swift`
 - Test: `rust/crates/bopify-core/src/event.rs` tests, `Packages/BopifyCore/Tests/DomainTests/PlaybackEventTests.swift`, `Packages/BopifyCore/Tests/PlaybackTests/PlayerModelTests.swift`
+- Modify: `docs/superpowers/specs/2026-09-26-startup-restore-design.md` (Phase 2 item 6, the stale state)
 - Regenerate: `rust/patches/librespot-queue-selection.patch`
 
 **Interfaces:**
@@ -116,7 +117,11 @@ The wire rule makes this one commit: the librespot event, its JSON, Swift decodi
 - Produces, in Swift:
   - `public struct RemotePlayback: Hashable, Sendable` with `deviceName: String`, `trackURI: SpotifyURI`, `track: Track?`, `isPlaying: Bool`, `positionMs: Int64` and `durationMs: Int64`, plus a memberwise `public init` in that order;
   - `PlaybackEvent.remotePlayback(RemotePlayback?)`;
-  - `PlaybackState.remote: RemotePlayback?`, which is always `nil` while `isActiveDevice` is true.
+  - `PlaybackState.remote: RemotePlayback?`, the live mirror;
+  - `PlaybackState.staleRemote: RemotePlayback?`, the last live mirror, with `isPlaying: false`, once its device stopped;
+  - `PlaybackState.mirror: RemotePlayback?`, computed as `remote ?? staleRemote`. It is what the record shows while inactive.
+
+  All three are always `nil` while `isActiveDevice` is true. `.playing` and `.paused` clear both stored values.
 - The wire JSON is `{"type":"remotePlayback","remote":null}` or `{"type":"remotePlayback","remote":{"deviceName":…,"trackUri":…,"track":<WireTrack object>|null,"isPlaying":…,"positionMs":…,"durationMs":…}}`.
 
 - [ ] **Step 1: Write the failing Rust wire test**
@@ -342,13 +347,18 @@ Then add this test after `startupStaysPendingUntilTheEngineResolvesIt`:
         defer { model.stop() }
         await settle(model, engine, [.remotePlayback(makeRemote())])
         #expect(model.state.remote == makeRemote())
+        #expect(model.state.mirror == makeRemote())
         await settle(model, engine, [.remotePlayback(nil)])
         #expect(model.state.remote == nil)
+        // The stopped device's last state stays on the record, no longer playing.
+        #expect(model.state.staleRemote == makeRemote(isPlaying: false))
+        #expect(model.state.mirror == makeRemote(isPlaying: false))
         await settle(model, engine, [.remotePlayback(makeRemote()), takeover])
         #expect(model.state.remote == nil)
+        #expect(model.state.mirror == nil)
         // A lookup that finishes after the takeover must not bring the mirror back.
         await settle(model, engine, [.remotePlayback(makeRemote())])
-        #expect(model.state.remote == nil)
+        #expect(model.state.mirror == nil)
         await settle(model, engine, [.activeDeviceChanged(isActive: false), .remotePlayback(makeRemote(isPlaying: false))])
         #expect(model.state.remote == makeRemote(isPlaying: false))
     }
@@ -388,8 +398,13 @@ public struct RemotePlayback: Hashable, Sendable {
 2. In `PlaybackState`, after `public var startup: StartupPhase = .pending`, add:
 
 ```swift
-    /// Another device's playback. Always nil while Bopify is the active device.
+    /// Another device's live playback. Always nil while Bopify is the active device.
     public var remote: RemotePlayback?
+    /// The last live mirror, no longer playing, once its device stopped. The record
+    /// keeps it because Play resumes that session. Always nil while Bopify is active.
+    public var staleRemote: RemotePlayback?
+    /// What the record shows while Bopify is inactive, if another device was mirrored.
+    public var mirror: RemotePlayback? { remote ?? staleRemote }
 ```
 
 In `Packages/BopifyCore/Sources/BopifyDomain/PlaybackEvent.swift`:
@@ -426,14 +441,27 @@ In `Packages/BopifyCore/Sources/BopifyDomain/PlaybackEvent.swift`:
 
 In `Packages/BopifyCore/Sources/BopifyPlayback/PlayerModel.swift`, inside `apply`:
 
-1. In both the `.playing` and `.paused` arms, add `state.remote = nil` after `state.isActiveDevice = true`.
+1. In both the `.playing` and `.paused` arms, add `state.remote = nil; state.staleRemote = nil` after `state.isActiveDevice = true`.
 2. After the `.startupResolved` arm, and before the closing `}` of the `switch`, add:
 
 ```swift
         case let .remotePlayback(remote):
             // A lookup still in flight when Bopify took over must not bring the mirror back.
-            state.remote = state.isActiveDevice ? nil : remote
-            BopifyLog.playback.debug("remote playback present=\(state.remote != nil, privacy: .public)")
+            guard !state.isActiveDevice else { break }
+            if remote == nil, let last = state.remote {
+                state.staleRemote = RemotePlayback(deviceName: last.deviceName, trackURI: last.trackURI, track: last.track,
+                                                   isPlaying: false, positionMs: last.positionMs, durationMs: last.durationMs)
+            }
+            state.remote = remote
+            BopifyLog.playback.debug("remote playback present=\(remote != nil, privacy: .public)")
+```
+
+- [ ] **Step 8b: Record the stale-state ruling in the spec**
+
+The user decided this on 2026-09-27. In `docs/superpowers/specs/2026-09-26-startup-restore-design.md`, Phase 2 item 6, replace the sentence `When Bopify is inactive and no other device is active, the record keeps Bopify's last track.` with:
+
+```
+When Bopify is inactive and no other device is active, the record keeps the last track it showed: the stopped device's last mirrored track at its last reported position, or Bopify's own last track when nothing was mirrored. Play resumes the account's last session, which is that mirrored track's session (the user chose this on 2026-09-27 over keeping Bopify's own track; at launch Bopify has none).
 ```
 
 - [ ] **Step 9: Run the tests and confirm they pass**
@@ -443,8 +471,8 @@ Run `swift test --package-path Packages/BopifyCore`. Expected: PASS, including `
 - [ ] **Step 10: Commit**
 
 ```bash
-git add rust/patches/librespot-queue-selection.patch rust/crates/bopify-core/src/event.rs Packages/BopifyCore/Sources/BopifyDomain/PlaybackState.swift Packages/BopifyCore/Sources/BopifyDomain/PlaybackEvent.swift Packages/BopifyCore/Sources/BopifyPlayback/PlayerModel.swift Packages/BopifyCore/Tests/DomainTests/PlaybackEventTests.swift Packages/BopifyCore/Tests/PlaybackTests/PlayerModelTests.swift
-git commit -m "Carry another device's playback from librespot into Swift" -m "Phase 2 mirrors the active Connect device while Bopify is inactive. This adds the event end to end so the wire contract and the Swift fold change together; nothing emits it yet. The fold drops a mirror while Bopify is active, because a metadata lookup can finish after a takeover."
+git add rust/patches/librespot-queue-selection.patch rust/crates/bopify-core/src/event.rs Packages/BopifyCore/Sources/BopifyDomain/PlaybackState.swift Packages/BopifyCore/Sources/BopifyDomain/PlaybackEvent.swift Packages/BopifyCore/Sources/BopifyPlayback/PlayerModel.swift Packages/BopifyCore/Tests/DomainTests/PlaybackEventTests.swift Packages/BopifyCore/Tests/PlaybackTests/PlayerModelTests.swift docs/superpowers/specs/2026-09-26-startup-restore-design.md
+git commit -m "Carry another device's playback from librespot into Swift" -m "Phase 2 mirrors the active Connect device while Bopify is inactive. This adds the event end to end so the wire contract and the Swift fold change together; nothing emits it yet. The fold drops a mirror while Bopify is active, because a metadata lookup can finish after a takeover, and keeps a stopped device's last state as the stale record, because Play resumes that session."
 ```
 
 ---
@@ -1233,7 +1261,7 @@ git commit -m "Emit the mirror while Bopify is inactive" -m "Upstream ignores cl
 - Modify: `.build/librespot-939dc5e/connect/src/spirc.rs`: `enum SpircCommand` (~126), `impl Spirc` after `pub fn transfer` (~521), `handle_command` (~771–850), `resolve_startup` and `load_liked_songs` (~1046–1092)
 - Modify: `.build/librespot-939dc5e/connect/Cargo.toml`: the tokio line (31)
 - Modify: `README.md` (line 37)
-- Modify: `docs/superpowers/specs/2026-09-26-startup-restore-design.md` (Phase 2 items 2 and 7)
+- Modify: `docs/superpowers/specs/2026-09-26-startup-restore-design.md` (Phase 2 item 2)
 - Regenerate: `rust/patches/librespot-queue-selection.patch`
 
 **Interfaces:**
@@ -1331,11 +1359,15 @@ After `fn restore_session`, add:
 ```rust
 
     /// Bopify: logs its own failures, because the command loop only debug-logs
-    /// an error. The cluster comes from a fresh state PUT, since cluster updates
-    /// are not known to carry the full last session.
+    /// an error. The cluster comes from the same PUT whose reply the startup
+    /// decision reads, since cluster updates are not known to carry the full last session.
     async fn handle_play_here(&mut self) {
         use protobuf::Message as _;
-        let cluster = match self.connect_state.send_state(&self.session).await {
+        let cluster = match self
+            .connect_state
+            .notify_new_device_appeared(&self.session)
+            .await
+        {
             Ok(bytes) => Cluster::parse_from_bytes(&bytes).ok(),
             Err(why) => {
                 warn!("play here: state update failed: {why}");
@@ -1346,7 +1378,15 @@ After `fn restore_session`, add:
             warn!("play here: the state update returned no cluster");
             return;
         };
-        match startup_decision(&cluster, self.session.device_id()) {
+        let decision = startup_decision(&cluster, self.session.device_id());
+        let kind = match &decision {
+            StartupDecision::Remote(_) => "remote",
+            StartupDecision::Restore(_) => "restore",
+            StartupDecision::Fallback => "fallback",
+        };
+        // Visible in a diagnostic build: tells a Liked Songs fallback from a thin reply.
+        debug!("play here: decision={kind} transfer_data={} bytes", cluster.transfer_data.len());
+        match decision {
             StartupDecision::Remote(_) => {
                 // Spawned, so this loop can answer the transfer request the server sends
                 // before it replies; awaiting here dropped the dealer connection (run 5).
@@ -1379,9 +1419,17 @@ After `fn restore_session`, add:
 
 In `README.md`, change `selection and startup-restore patch in` to `selection, startup-restore and remote-mirror patch in`.
 
-In `docs/superpowers/specs/2026-09-26-startup-restore-design.md`, Phase 2 item 2, change `decides from the most recent cluster, which `SpircTask` now keeps, using `startup_decision`:` to `decides from a fresh cluster, returned by a state PUT when the command runs, using `startup_decision`. Cluster updates are not known to carry the full last session:`.
+In `docs/superpowers/specs/2026-09-26-startup-restore-design.md`, Phase 2 item 2, replace this text:
 
-In item 7, change `- Previews: mirror, paused remote, and stale.` to `- Native probe captures (the Monolith player replaced previews with probes): mirror, paused remote, and stale.`
+```
+decides from the most recent cluster, which `SpircTask` now keeps, using `startup_decision`:
+```
+
+with:
+
+```
+decides from a fresh cluster, the reply to the same state PUT the startup decision reads (`notify_new_device_appeared`), using `startup_decision`. Cluster updates are not known to carry the full last session:
+```
 
 - [ ] **Step 5: Build, test and regenerate**
 
@@ -1407,7 +1455,7 @@ git commit -m "Add a play-here command that takes the session over" -m "Play on 
 - Modify: `docs/superpowers/specs/2026-09-21-bopify-foundation-design.md` (lines 148 and 188)
 
 **Interfaces:**
-- Consumes: `Spirc::play_here` from Task 5, and `PlaybackState.remote` from Task 1.
+- Consumes: `Spirc::play_here` from Task 5, and `PlaybackState.remote` and `mirror` from Task 1.
 - Produces:
   - `Engine::play_here(&self) -> Result<(), BopifyError>`;
   - `int32_t bopify_play_here(BopifyEngine *)`;
@@ -1467,6 +1515,9 @@ In `PlayerModelTests.swift`, add after `theMirrorClearsWhenBopifyBecomesActiveAn
         // Only the engine's events may change the state.
         #expect(model.state.phase == .idle)
         #expect(model.state.remote == makeRemote())
+        // At launch Bopify has no track, so the stopped device's stale mirror is what Play resumes.
+        await settle(model, engine, [.remotePlayback(nil)])
+        #expect(model.canPlayHere)
     }
 
     @Test func aStaleTrackCanBePlayedHereButNotAfterAFailure() async {
@@ -1519,7 +1570,7 @@ with:
 ```swift
     /// Play takes the session over while Bopify is inactive, from a mirror or a stale track.
     public var canPlayHere: Bool {
-        guard !state.isActiveDevice, state.remote != nil || state.currentTrack != nil else { return false }
+        guard !state.isActiveDevice, state.mirror != nil || state.currentTrack != nil else { return false }
         if case .error = state.phase { return false }
         return true
     }
@@ -1558,10 +1609,10 @@ git commit -m "Route Play to play-here while Bopify is inactive" -m "Play did no
 - Test: `Packages/BopifyCore/Tests/PlaybackTests/PlayerModelTests.swift`, `PlayerPresentationTests.swift`
 
 **Interfaces:**
-- Consumes: `PlaybackState.remote` from Task 1.
+- Consumes: `PlaybackState.remote`, `staleRemote` and `mirror` from Task 1.
 - Produces:
   - `PlayerModel.remoteUpdatedAt: Date` (`private(set)`, internal, for tests);
-  - `displayPositionMs(at:)`, which prefers the mirror;
+  - `displayPositionMs(at:)`, which prefers `state.mirror`. A stale mirror has `isPlaying: false`, so it holds still;
   - `PlayerModel.displayDurationMs: Int64` and `PlayerModel.isPositionAdvancing: Bool`;
   - `public enum InactiveStatus: Equatable, Sendable { case playingOn(deviceName: String), pausedOn(deviceName: String), notPlaying }`, with `public init(_ state: PlaybackState)`.
 
@@ -1587,9 +1638,13 @@ In `PlayerModelTests.swift`, add after `aStaleTrackCanBePlayedHereButNotAfterAFa
         #expect(model.displayPositionMs(at: model.remoteUpdatedAt.addingTimeInterval(20)) == 5000)
         #expect(!model.isPositionAdvancing)
         await settle(model, engine, [.remotePlayback(nil)])
+        // The stopped device's last state stays on the record, frozen.
+        #expect(model.displayPositionMs(at: .now.addingTimeInterval(20)) == 5000)
+        #expect(model.displayDurationMs == 200_000)
+        #expect(!model.isPositionAdvancing)
+        await settle(model, engine, [.paused(positionMs: 4000)])
         #expect(model.displayPositionMs(at: .now) == 4000)
         #expect(model.displayDurationMs == 240_000)
-        #expect(!model.isPositionAdvancing)
     }
 ```
 
@@ -1607,6 +1662,10 @@ In `PlayerPresentationTests.swift`, add after `errorsSurfaceOverARemoteOutcome`:
         #expect(InactiveStatus(state) == .playingOn(deviceName: "iPhone"))
         state.remote = remote(isPlaying: false)
         #expect(InactiveStatus(state) == .pausedOn(deviceName: "iPhone"))
+        // A stale mirror's device has stopped, so it is not named.
+        state.remote = nil
+        state.staleRemote = remote(isPlaying: false)
+        #expect(InactiveStatus(state) == .notPlaying)
     }
 ```
 
@@ -1623,22 +1682,24 @@ In `PlayerModel.swift`:
     /// Interpolate for display without replacing the engine's authoritative position.
     /// A mirrored device's own clock takes precedence while Bopify is inactive.
     public func displayPositionMs(at date: Date) -> Int64 {
-        if let remote = state.remote {
+        if let remote = state.mirror {
             let elapsed = remote.isPlaying ? max(0, date.timeIntervalSince(remoteUpdatedAt)) * 1000 : 0
-            return Int64(min(Double(max(0, remote.durationMs)), Double(remote.positionMs) + elapsed))
+            let position = Double(remote.positionMs) + elapsed
+            // Clamped only to a reported duration, as the Rust extraction is.
+            return Int64(remote.durationMs > 0 ? min(Double(remote.durationMs), position) : position)
         }
         let elapsed = state.phase == .playing ? max(0, date.timeIntervalSince(positionUpdatedAt)) * 1000 : 0
         let position = min(Double(max(0, state.durationMs)), max(0, Double(frozenDisplayPositionMs ?? state.positionMs) + elapsed))
         return Int64(position)
     }
 
-    public var displayDurationMs: Int64 { state.remote?.durationMs ?? state.durationMs }
+    public var displayDurationMs: Int64 { state.mirror?.durationMs ?? state.durationMs }
 
     /// Views run a display clock only while this is true.
-    public var isPositionAdvancing: Bool { state.remote?.isPlaying ?? (state.phase == .playing) }
+    public var isPositionAdvancing: Bool { state.mirror?.isPlaying ?? (state.phase == .playing) }
 ```
 
-3. In `apply`'s `.remotePlayback` arm, add `remoteUpdatedAt = .now` after the `state.remote = …` line.
+3. In `apply`'s `.remotePlayback` arm, add `remoteUpdatedAt = .now` after the `state.remote = remote` line.
 
 - [ ] **Step 3: Implement the status**
 
@@ -1680,9 +1741,10 @@ git commit -m "Advance the mirror's position and name its device" -m "The mirror
 - Modify: `Bopify/Bopify/Localizable.xcstrings`
 - Create: `docs/superpowers/verification/MonolithMirrorProbe.swift`
 - Modify: `docs/superpowers/verification/run-monolith-probe.py`, `docs/superpowers/verification/MonolithVisualProbe.swift:68`
+- Modify: `docs/superpowers/specs/2026-09-26-startup-restore-design.md` (Phase 2 item 7, previews)
 
 **Interfaces:**
-- Consumes: `PlaybackState.remote`, `PlayerModel.canPlayHere`, `displayPositionMs(at:)`, `displayDurationMs`, `isPositionAdvancing` and `InactiveStatus`.
+- Consumes: `PlaybackState.mirror`, `PlayerModel.canPlayHere`, `displayPositionMs(at:)`, `displayDurationMs`, `isPositionAdvancing` and `InactiveStatus`. Views read `mirror`, never `remote` or `staleRemote` directly.
 - Produces:
   - the UI rules from spec Phase 2 item 6;
   - `python3 docs/superpowers/verification/run-monolith-probe.py --derived-data <dir> --output <dir> --probe mirror`, which prints `MONOLITH MIRROR PASS` and exits 0 on success.
@@ -1763,29 +1825,41 @@ import BopifyDomain
             check(recordStatus("Remote track") == "Paused on iPhone", "a paused device is named as paused")
             let paused = await capture(panel, "mirror-paused")
 
+            // At launch Bopify has no track of its own, so the stopped device's track stays.
+            engine.emit(.remotePlayback(nil))
+            await settle()
+            check(environment.isListening && recordStatus("Remote track") == "Not playing",
+                  "a stopped device's last track stays on the record and says nothing plays")
+            check(enabled("Play") == true && enabled("Up Next") == false, "the stale mirror offers only Play")
+            let staleMirror = await capture(panel, "stale-mirror")
+            pressPlay()
+            await settle()
+            check(engine.recordedCommands == ["playHere", "playHere"], "Play on the stale mirror asks the engine to play here")
+
             let stale = Track(uri: SpotifyURI("spotify:track:stale")!, title: "Stale track", artists: [], albumTitle: nil, artwork: nil, durationMs: 240_000)
             engine.emit(.trackChanged(stale))
             engine.emit(.paused(positionMs: 1545))
             await settle()
-            check(recordStatus("Stale track") == "Paused" && player.state.remote == nil, "becoming active drops the mirror")
+            check(recordStatus("Stale track") == "Paused" && player.state.mirror == nil, "becoming active drops the mirror")
             let baseline = await capture(panel, "active-paused")
+            // A takeover by a device that never reported a track leaves Bopify's own track.
             engine.emit(.activeDeviceChanged(isActive: false))
             engine.emit(.remotePlayback(nil))
             await settle()
-            check(recordStatus("Stale track") == "Not playing", "with no device playing, the last track stays and says so")
+            check(recordStatus("Stale track") == "Not playing", "with nothing mirrored, Bopify's own last track stays and says so")
             check(enabled("Play") == true, "Play is enabled in the stale state")
-            let idle = await capture(panel, "stale")
+            let idle = await capture(panel, "stale-own")
             pressPlay()
             await settle()
-            check(engine.recordedCommands == ["playHere", "playHere"], "Play in the stale state asks the engine to play here")
+            check(engine.recordedCommands == ["playHere", "playHere", "playHere"], "Play in the stale state asks the engine to play here")
 
             engine.emit(.failed(.networkUnavailable))
             await settle()
             let error = await capture(panel, "error")
-            if let playing, let paused, let baseline, let idle, let error {
+            if let playing, let paused, let staleMirror, let baseline, let idle, let error {
                 let limit = orangePixels(baseline) + 80
                 check(orangePixels(error) > limit, "the rim detector sees an error rim")
-                check(orangePixels(playing) <= limit && orangePixels(paused) <= limit && orangePixels(idle) <= limit,
+                check([playing, paused, staleMirror, idle].allSatisfy { orangePixels($0) <= limit },
                       "neither the mirror nor the stale state draws the attention rim")
             }
             player.stop()
@@ -1863,7 +1937,7 @@ In `AppEnvironment.swift`, replace `var isListening: Bool { authState == .signed
 
 ```swift
     var isListening: Bool {
-        authState == .signedIn && (player?.state.currentTrack != nil || player?.state.remote != nil)
+        authState == .signedIn && (player?.state.currentTrack != nil || player?.state.mirror != nil)
     }
 ```
 
@@ -1874,24 +1948,24 @@ In `MonolithPlayerView.swift`:
 ```swift
     // Bopify's queue says nothing about which way a mirrored device moved.
     private var direction: CarouselDirection {
-        guard player.state.remote == nil else { return .fade }
+        guard player.state.mirror == nil else { return .fade }
         return player.state.queue.map { carouselDirection(old: previousQueue, new: $0) } ?? .fade
     }
     private var track: Track? {
-        if let remote = player.state.remote { return remote.track }
+        if let mirror = player.state.mirror { return mirror.track }
         guard let current = player.state.queue?.current else { return player.state.currentTrack }
         return current.uri == player.state.currentTrack?.uri ? player.state.currentTrack : current.track
     }
     private var occurrenceID: String {
-        player.state.remote?.trackURI.rawValue ?? player.state.queue?.current?.id ?? player.state.currentTrack?.uri.rawValue ?? "missing"
+        player.state.mirror?.trackURI.rawValue ?? player.state.queue?.current?.id ?? player.state.currentTrack?.uri.rawValue ?? "missing"
     }
 ```
 
 2. In `needsAttention`, change `return player.commandNotice != nil || !player.state.isActiveDevice` to `return player.commandNotice != nil`. Another device playing, or none, is not an error.
 3. In `record(diameter:)`, change `TimelineView(PlaybackClockSchedule(running: player.state.phase == .playing && presentation.isVisible, reducedMotion: reduceMotion))` to `TimelineView(PlaybackClockSchedule(running: player.isPositionAdvancing && presentation.isVisible, reducedMotion: reduceMotion))`. Change `durationMs: player.state.durationMs,` in the `RadialProgressView` call to `durationMs: player.displayDurationMs,`.
-4. In `controls`, change the `FavoriteButton`'s `.disabled(track?.uri != player.state.currentTrack?.uri)` to `.disabled(player.state.remote != nil || track?.uri != player.state.currentTrack?.uri)`.
+4. In `controls`, change the `FavoriteButton`'s `.disabled(track?.uri != player.state.currentTrack?.uri)` to `.disabled(player.state.mirror != nil || track?.uri != player.state.currentTrack?.uri)`.
 5. In `controls`, change `TimelineView(PlaybackClockSchedule(running: player.state.phase == .playing && presentation.isVisible, reducedMotion: true))` to `TimelineView(PlaybackClockSchedule(running: player.isPositionAdvancing && presentation.isVisible, reducedMotion: true))`. Change `Text(playbackTime(player.state.durationMs))` to `Text(playbackTime(player.displayDurationMs))`.
-6. In `controls`, after the queue button's `.accessibilityLabel(Text("queue.title"))`, add `.disabled(player.state.remote != nil)`. The remote queue is not modelled.
+6. In `controls`, after the queue button's `.accessibilityLabel(Text("queue.title"))`, add `.disabled(player.state.mirror != nil)`. The remote queue is not modelled, and Bopify's own queue belongs to a different track.
 7. In `status`, change `case .idle: Text("player.inactiveDevice.title")` to `case .idle: player.state.localizedStatusText`.
 
 In `TransportControls.swift`, change the Play button's `.disabled(!canControl || state.phase == .loading || state.phase == .buffering)` to `.disabled(!(canControl || model.canPlayHere) || state.phase == .loading || state.phase == .buffering)`.
@@ -1953,18 +2027,20 @@ python3 docs/superpowers/verification/run-monolith-probe.py --derived-data /priv
 
 Expected: `MONOLITH MIRROR PASS`, and each other probe prints its own PASS line and exits 0. Also run `swift test --package-path Packages/BopifyCore` (expected: PASS).
 
-Open and look at `/private/tmp/bopify-mirror-probe/mirror-playing.png`, `mirror-paused.png` and `stale.png`. In the report, describe each one:
+Open and look at `/private/tmp/bopify-mirror-probe/mirror-playing.png`, `mirror-paused.png`, `stale-mirror.png` and `stale-own.png`. In the report, describe each one:
 - the title shown;
 - the status line;
 - that no orange rim is present;
 - that the controls other than Play look disabled.
 
-These captures stand in for previews, as the spec now says (Task 5, Step 4). Also check `git diff Bopify/Bopify/Localizable.xcstrings`: it should show only the two new entries. Report any reformatting Xcode added.
+These captures stand in for previews, because the Monolith player replaced preview fixtures with native probes. Record that in `docs/superpowers/specs/2026-09-26-startup-restore-design.md`, Phase 2 item 7: replace `- Previews: mirror, paused remote, and stale.` with `- Native probe captures (the Monolith player replaced previews with probes): mirror, paused remote, stale mirror, and stale own track.`
+
+Also check `git diff Bopify/Bopify/Localizable.xcstrings`: it should show only the two new entries. Report any reformatting Xcode added.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Bopify/Bopify/AppEnvironment.swift Bopify/Bopify/Views/MonolithPlayerView.swift Bopify/Bopify/Views/TransportControls.swift Bopify/Bopify/PlaybackState+Localized.swift Bopify/Bopify/Localizable.xcstrings docs/superpowers/verification/MonolithMirrorProbe.swift docs/superpowers/verification/run-monolith-probe.py docs/superpowers/verification/MonolithVisualProbe.swift
+git add Bopify/Bopify/AppEnvironment.swift Bopify/Bopify/Views/MonolithPlayerView.swift Bopify/Bopify/Views/TransportControls.swift Bopify/Bopify/PlaybackState+Localized.swift Bopify/Bopify/Localizable.xcstrings docs/superpowers/verification/MonolithMirrorProbe.swift docs/superpowers/verification/run-monolith-probe.py docs/superpowers/verification/MonolithVisualProbe.swift docs/superpowers/specs/2026-09-26-startup-restore-design.md
 git commit -m "Show the mirrored device and the stale state in the player" -m "After a takeover the record froze on Bopify's old track with an error rim and 'Playing on another device'. It now shows the other device's track and moving progress with its name, or keeps the last track and says nothing plays, and Play takes the session over. Other controls stay disabled because the remote queue is not modelled. A native probe checks the states, the controls and the missing rim."
 ```
 
@@ -2005,7 +2081,7 @@ For each scenario, record:
 1. **The mirror follows.** The user plays on the phone and then launches Bopify. Expect `outcome=remote`, then the record and sleeve showing the phone's track with "Playing on <device>" and a moving ring. The user skips a track on the phone. Expect the mirror to follow within a few seconds, and the phone never to pause.
 2. **Play here moves playback.** The user presses Play on the mirror. Expect `loading → playing` on Bopify, the sleeve's status clearing, and the user confirming that the phone stopped and the Mac continues the same track at about the same position.
 3. **A takeover becomes the mirror.** While Bopify plays, the user picks the phone in Spotify's device picker. Expect `activeDeviceChanged` inactive, then the mirror with "Playing on <device>". There should be no orange rim and no frozen stale track.
-4. **Stale, then resume that session.** The user pauses on the phone (expect "Paused on <device>"), then closes Spotify on the phone. Once the phone leaves the cluster, expect the last track with "Not playing" and no rim. The user presses Play. Expect that session restored here and playing from its last reported position, not Liked Songs. If the phone lingers in the cluster, record how long it took to leave.
+4. **Stale, then resume that session.** The user pauses on the phone (expect "Paused on <device>"), then closes Spotify on the phone. Once the phone leaves the cluster, expect the phone's last track to stay on the record, at its paused position, with "Not playing" and no rim. The user presses Play. Expect that same track restored here and playing from its last reported position, not Liked Songs. Run this once from a launch while the phone plays (Bopify has no track of its own), and once after scenario 3's takeover. If the phone lingers in the cluster, record how long it took to leave.
 5. **No dealer drop.** In the log from scenario 2, look for what run 5 showed: the server's "Request disconnect", a failed reply to its transfer request, and a new connection id. Their absence is a **pass**. Also record whether the `play here: transfer replied` warning appeared, and with what status.
 
 - [ ] **Step 3: Remove the diagnostic edit and rebuild**
@@ -2037,4 +2113,5 @@ git commit -m "Record live verification of mirroring and play here" -m "Evidence
 - **Mirroring the remote queue.** Up Next stays disabled while mirroring.
 - **A phone playing a local file.** Its URI has more than three parts, so `SpotifyURI` rejects it, the event is dropped at decoding, and the mirror keeps its previous value.
 - **Surfacing `Stopped`/`Unavailable`** when a whole context can't play (a phase 1 risk, still open).
-- **A brief "Not playing" at a takeover.** The deactivation reaches Swift before the mirror's metadata lookup finishes, so "Not playing" shows for about as long as one lookup.
+- **A brief "Not playing" at a takeover.** The deactivation reaches Swift before the mirror's metadata lookup finishes, so "Not playing" shows, with Play enabled, for about as long as one lookup.
+- **A device that stops before its first mirror arrives.** At launch, the worker cancels the pending lookup and forwards only `None`. Nothing was mirrored, so the startup "Playing on <device>" placeholder stays until the next mirror or a relaunch. This needs the phone to stop within one lookup of Bopify connecting.
