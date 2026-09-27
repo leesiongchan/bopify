@@ -74,4 +74,33 @@ struct PlaybackEventTests {
         #expect(throws: (any Error).self) { try decode(#"{"type":"startupResolved","outcome":"teleported"}"#) }
         #expect(throws: (any Error).self) { try decode(#"{"type":"startupResolved","outcome":"remote"}"#) }
     }
+
+    @Test func decodesARemoteWithAndWithoutMetadata() throws {
+        let json = #"""
+        {"type":"remotePlayback","remote":{"deviceName":"iPhone","trackUri":"spotify:track:abc",
+         "track":{"trackUri":"spotify:track:abc","title":"Title","artists":["A"],"albumTitle":null,"artworkUrl":null,"durationMs":200000},
+         "isPlaying":true,"positionMs":7500,"durationMs":200000}}
+        """#
+        guard case let .remotePlayback(remote?) = try decode(json) else {
+            Issue.record("expected a remote"); return
+        }
+        #expect(remote.deviceName == "iPhone")
+        #expect(remote.trackURI.id == "abc")
+        #expect(remote.track?.title == "Title")
+        #expect(remote.isPlaying)
+        #expect(remote.positionMs == 7500)
+        #expect(remote.durationMs == 200_000)
+        let bare = #"{"type":"remotePlayback","remote":{"deviceName":"iPhone","trackUri":"spotify:track:abc","track":null,"isPlaying":false,"positionMs":0,"durationMs":0}}"#
+        guard case let .remotePlayback(withoutMetadata?) = try decode(bare) else {
+            Issue.record("expected a remote"); return
+        }
+        #expect(withoutMetadata.track == nil)
+        #expect(try decode(#"{"type":"remotePlayback","remote":null}"#) == .remotePlayback(nil))
+    }
+
+    @Test func rejectsARemoteWithAMalformedTrackURI() {
+        #expect(throws: (any Error).self) {
+            try decode(#"{"type":"remotePlayback","remote":{"deviceName":"iPhone","trackUri":"nope","track":null,"isPlaying":false,"positionMs":0,"durationMs":0}}"#)
+        }
+    }
 }

@@ -11,6 +11,24 @@ public enum StartupPhase: Hashable, Sendable {
     case resolved(StartupOutcome)
 }
 
+/// What another Connect device is playing while Bopify is inactive.
+public struct RemotePlayback: Hashable, Sendable {
+    public let deviceName: String
+    public let trackURI: SpotifyURI
+    /// Nil when the metadata lookup failed.
+    public let track: Track?
+    public let isPlaying: Bool
+    /// As of the event's receipt; the player model interpolates from there.
+    public let positionMs: Int64
+    public let durationMs: Int64
+
+    public init(deviceName: String, trackURI: SpotifyURI, track: Track?,
+                isPlaying: Bool, positionMs: Int64, durationMs: Int64) {
+        self.deviceName = deviceName; self.trackURI = trackURI; self.track = track
+        self.isPlaying = isPlaying; self.positionMs = positionMs; self.durationMs = durationMs
+    }
+}
+
 public enum PlaybackPhase: Hashable, Sendable {
     case idle, loading, buffering, playing, paused, ended
     case error(PlayerError)
@@ -32,6 +50,13 @@ public struct PlaybackState: Hashable, Sendable {
     /// UI would show a phantom paused track indefinitely.
     public var isActiveDevice = false
     public var startup: StartupPhase = .pending
+    /// Another device's live playback. Always nil while Bopify is the active device.
+    public var remote: RemotePlayback?
+    /// The last live mirror, no longer playing, once its device stopped. The record
+    /// keeps it because Play resumes that session. Always nil while Bopify is active.
+    public var staleRemote: RemotePlayback?
+    /// What the record shows while Bopify is inactive, if another device was mirrored.
+    public var mirror: RemotePlayback? { remote ?? staleRemote }
 
     public init() {}
 }

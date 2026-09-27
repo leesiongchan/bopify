@@ -1,5 +1,5 @@
 use librespot_metadata::audio::{AudioItem, UniqueFields};
-use librespot_playback::player::{PlayerEvent, StartupOutcome};
+use librespot_playback::player::{PlayerEvent, RemoteState, StartupOutcome};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -18,6 +18,18 @@ pub struct WireTrack {
     pub artists: Vec<String>,
     pub album_title: Option<String>,
     pub artwork_url: Option<String>,
+    pub duration_ms: u32,
+}
+
+/// Another device's playback, mirrored while Bopify is inactive.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WireRemote {
+    pub device_name: String,
+    pub track_uri: String,
+    pub track: Option<WireTrack>,
+    pub is_playing: bool,
+    pub position_ms: u32,
     pub duration_ms: u32,
 }
 
@@ -94,6 +106,9 @@ pub enum WireEvent {
         #[serde(skip_serializing_if = "Option::is_none")]
         device_name: Option<String>,
     },
+    RemotePlayback {
+        remote: Option<WireRemote>,
+    },
 }
 
 /// Maps librespot's player events onto the wire format.
@@ -150,6 +165,7 @@ pub fn translate(event: PlayerEvent) -> Option<WireEvent> {
             next: next_tracks.into_iter().filter_map(queue_entry).collect(),
         }),
         PlayerEvent::StartupResolved { outcome } => Some(startup_resolved(outcome)),
+        PlayerEvent::RemotePlayback { remote } => Some(remote_playback(remote)),
         PlayerEvent::ShuffleChanged { shuffle } => {
             Some(WireEvent::ShuffleChanged { enabled: shuffle })
         }
@@ -184,6 +200,21 @@ fn startup_resolved(outcome: StartupOutcome) -> WireEvent {
     WireEvent::StartupResolved {
         outcome,
         device_name,
+    }
+}
+
+fn remote_playback(remote: Option<RemoteState>) -> WireEvent {
+    // Presence only: a device name is whatever the user called their phone.
+    log::debug!("event: remote playback present={}", remote.is_some());
+    WireEvent::RemotePlayback {
+        remote: remote.map(|remote| WireRemote {
+            device_name: remote.device_name,
+            track_uri: remote.track_uri,
+            track: None,
+            is_playing: remote.is_playing,
+            position_ms: remote.position_ms,
+            duration_ms: remote.duration_ms,
+        }),
     }
 }
 
@@ -503,5 +534,28 @@ mod tests {
                 format!(r#"{{"type":"startupResolved","outcome":"{wire}"}}"#)
             );
         }
+    }
+
+    #[test]
+    fn remote_playback_serialises_the_mirror_or_null() {
+        let none = translate(PlayerEvent::RemotePlayback { remote: None }).unwrap();
+        assert_eq!(
+            serde_json::to_string(&none).unwrap(),
+            r#"{"type":"remotePlayback","remote":null}"#
+        );
+        let some = translate(PlayerEvent::RemotePlayback {
+            remote: Some(RemoteState {
+                device_name: "iPhone".into(),
+                track_uri: "spotify:track:abc".into(),
+                is_playing: true,
+                position_ms: 7_500,
+                duration_ms: 200_000,
+            }),
+        })
+        .unwrap();
+        assert_eq!(
+            serde_json::to_string(&some).unwrap(),
+            r#"{"type":"remotePlayback","remote":{"deviceName":"iPhone","trackUri":"spotify:track:abc","track":null,"isPlaying":true,"positionMs":7500,"durationMs":200000}}"#
+        );
     }
 }

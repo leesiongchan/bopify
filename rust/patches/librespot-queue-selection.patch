@@ -1347,10 +1347,10 @@ index 0ecfde2..a7b6c61 100644
 +    }
 +}
 diff --git a/playback/src/player.rs b/playback/src/player.rs
-index f3d803d..28436a9 100644
+index f3d803d..f285453 100644
 --- a/playback/src/player.rs
 +++ b/playback/src/player.rs
-@@ -139,11 +139,13 @@ enum PlayerCommand {
+@@ -139,11 +139,14 @@ enum PlayerCommand {
      },
      EmitAutoPlayChangedEvent(bool),
      EmitSetQueueEvent {
@@ -1361,10 +1361,11 @@ index f3d803d..28436a9 100644
          prev_tracks: Vec<QueueTrack>,
      },
 +    EmitStartupResolvedEvent(StartupOutcome),
++    EmitRemotePlaybackEvent(Option<RemoteState>),
  }
  
  /// Represents a track in the queue with its URI and provider.
-@@ -151,6 +153,26 @@ enum PlayerCommand {
+@@ -151,6 +154,42 @@ enum PlayerCommand {
  pub struct QueueTrack {
      pub uri: String,
      pub provider: String,
@@ -1388,10 +1389,26 @@ index f3d803d..28436a9 100644
 +    },
 +    /// Liked Songs could not be loaded either; the device is active and empty.
 +    Nothing,
++}
++
++/// What another Connect device is playing, mirrored while this device is
++/// inactive. Emitted only when `ConnectConfig::startup_restore` is set.
++#[derive(Clone, Debug, PartialEq, Eq)]
++pub struct RemoteState {
++    /// The device's name, as Spotify's device picker shows it.
++    pub device_name: String,
++    /// The playing track's URI.
++    pub track_uri: String,
++    /// False while the device is paused.
++    pub is_playing: bool,
++    /// The position as of the cluster's server timestamp.
++    pub position_ms: u32,
++    /// The track's duration, as the device reported it.
++    pub duration_ms: u32,
  }
  
  #[derive(Debug, Clone)]
-@@ -263,11 +285,16 @@ pub enum PlayerEvent {
+@@ -263,11 +302,20 @@ pub enum PlayerEvent {
      },
      /// Fired when the queue is set or context is loaded with its track list.
      SetQueue {
@@ -1405,10 +1422,14 @@ index f3d803d..28436a9 100644
 +    StartupResolved {
 +        outcome: StartupOutcome,
 +    },
++    /// Fired when a mirrored device's playback changes; `None` once no other device plays.
++    RemotePlayback {
++        remote: Option<RemoteState>,
++    },
  }
  
  impl PlayerEvent {
-@@ -670,18 +697,24 @@ impl Player {
+@@ -670,18 +718,28 @@ impl Player {
  
      pub fn emit_set_queue_event(
          &self,
@@ -1430,10 +1451,14 @@ index f3d803d..28436a9 100644
 +    pub fn emit_startup_resolved_event(&self, outcome: StartupOutcome) {
 +        self.command(PlayerCommand::EmitStartupResolvedEvent(outcome));
 +    }
++
++    pub fn emit_remote_playback_event(&self, remote: Option<RemoteState>) {
++        self.command(PlayerCommand::EmitRemotePlaybackEvent(remote));
++    }
  }
  
  impl Drop for Player {
-@@ -2371,17 +2404,23 @@ impl PlayerInternal {
+@@ -2371,17 +2429,27 @@ impl PlayerInternal {
              }
  
              PlayerCommand::EmitSetQueueEvent {
@@ -1454,10 +1479,14 @@ index f3d803d..28436a9 100644
 +                self.send_event(PlayerEvent::StartupResolved { outcome })
 +            }
 +
++            PlayerCommand::EmitRemotePlaybackEvent(remote) => {
++                self.send_event(PlayerEvent::RemotePlayback { remote })
++            }
++
              PlayerCommand::EmitFilterExplicitContentChangedEvent(filter) => {
                  self.send_event(PlayerEvent::FilterExplicitContentChanged { filter });
  
-@@ -2584,16 +2623,22 @@ impl fmt::Debug for PlayerCommand {
+@@ -2584,16 +2652,27 @@ impl fmt::Debug for PlayerCommand {
                  .field(&auto_play)
                  .finish(),
              PlayerCommand::EmitSetQueueEvent {
@@ -1476,6 +1505,11 @@ index f3d803d..28436a9 100644
 +            PlayerCommand::EmitStartupResolvedEvent(outcome) => f
 +                .debug_tuple("EmitStartupResolvedEvent")
 +                .field(&outcome)
++                .finish(),
++            // Presence only: the state carries the user's device name.
++            PlayerCommand::EmitRemotePlaybackEvent(remote) => f
++                .debug_tuple("EmitRemotePlaybackEvent")
++                .field(&remote.is_some())
 +                .finish(),
          }
      }
