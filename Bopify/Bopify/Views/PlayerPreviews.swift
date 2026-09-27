@@ -246,4 +246,30 @@ struct GlassGestureScene: View {
     }
 }
 
+@MainActor @Observable final class MonolithRecordFixture {
+    let store = previewArtworkStore()
+    var index = 1
+    var occurrenceID = "first"
+    var direction: CarouselDirection = .next
+    var playing = true
+    var visible = true
+    var missing = false
+    var reducedMotion = false
+    var diameter: CGFloat = 182
+    var image: Image? {
+        missing ? nil : store.images[previewArtworkURL(index)].map { Image(nsImage: $0) }
+    }
+}
+
+struct MonolithRecordScene: View {
+    let fixture: MonolithRecordFixture
+    var body: some View {
+        VinylRecordView(image: fixture.image, occurrenceID: fixture.occurrenceID, direction: fixture.direction,
+                        diameter: fixture.diameter, isPlaying: fixture.playing, isVisible: fixture.visible,
+                        reduceMotionOverride: fixture.reducedMotion)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+#Preview("Monolith vinyl") { MonolithRecordScene(fixture: MonolithRecordFixture()).frame(width: 264, height: 264) }
 #endif
