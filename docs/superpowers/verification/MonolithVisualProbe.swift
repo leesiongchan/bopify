@@ -65,7 +65,7 @@ private struct ProbePlayerScene: View {
         var statusFailures: [String] = []
         for (event, expected) in [(PlaybackEvent.playing(positionMs: 1545), "Playing"),
                                   (.loading, "Loading…"), (.endOfTrack, "Finished"),
-                                  (.activeDeviceChanged(isActive: false), "Playing on another device"),
+                                  (.activeDeviceChanged(isActive: false), "Not playing"),
                                   (.failed(.playbackSessionLost), String(localized: "error.playbackSessionLost")),
                                   (.paused(positionMs: 1545), "Paused")] {
             engine.emit(event)
