@@ -12,6 +12,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     private var hasPosition = false
     private var appliedMode: PlayerMode?
     private var applyingFrame = false
+    private var isMonolithApplied = false
     private let environment: AppEnvironment
 
     init<Content: View>(content: Content, environment: AppEnvironment) {
@@ -34,6 +35,13 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         panel?.onPrevious = { [weak self] in self?.environment.player?.previous() }
         panel?.onNext = { [weak self] in self?.environment.player?.next() }
         panel?.onDismissQueue = { [weak self] in self?.environment.presentation.dismissQueue() ?? false }
+        panel?.onKeyChanged = { [weak self] in self?.environment.presentation.sendAttention(.keyboardFocus($0)) }
+        panel?.onPointerChanged = { [weak self] in self?.environment.presentation.sendAttention(.pointer($0)) }
+        panel?.onWindowDragChanged = { [weak self] active in
+            guard let self else { return }
+            self.environment.monolithWindow.setDragging(active)
+            self.environment.presentation.sendAttention(.interaction(.windowDrag, active))
+        }
         if let stored = UserDefaults.standard.string(forKey: "player.frame") {
             let frame = NSRectFromString(stored)
             if frame.width > 0, frame.height > 0 {
@@ -49,7 +57,6 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     private func observePresentation() {
         withObservationTracking {
             configure(mode: environment.playerMode, keepOnTop: environment.presentation.keepOnTop)
-            UserDefaults.standard.set(environment.presentation.mode.rawValue, forKey: "player.mode")
         } onChange: { [weak self] in
             Task { @MainActor in self?.observePresentation() }
         }
@@ -59,6 +66,31 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         guard let panel else { return }
         panel.level = keepOnTop ? .floating : .normal
         UserDefaults.standard.set(keepOnTop, forKey: "player.keepOnTop")
+        if environment.isListening {
+            if !isMonolithApplied {
+                if !hasPosition, MonolithWindowController.restoredAnchor(defaults: .standard) == nil,
+                   let button = statusItem.button,
+                   let frame = button.window?.convertToScreen(button.convert(button.bounds, to: nil)) {
+                    panel.setFrame(CGRect(x: frame.midX - 71, y: frame.minY - 148, width: 142, height: 142), display: false)
+                }
+                environment.monolithWindow.attach(to: panel)
+                environment.presentation.sendAttention(.visibility(panel.isVisible))
+                if panel.isKeyWindow { environment.presentation.sendAttention(.keyboardFocus(true)) }
+                isMonolithApplied = true
+            }
+            environment.monolithWindow.apply(mode: environment.presentation.mode,
+                                              reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+            return
+        }
+        if isMonolithApplied {
+            environment.monolithWindow.invalidateTransition()
+            panel.containsPlayerPoint = nil
+            environment.presentation.resetEngagement()
+            environment.presentation.sendAttention(.visibility(panel.isVisible))
+            panel.styleMask.insert(.resizable)
+            isMonolithApplied = false
+            appliedMode = nil
+        }
         guard appliedMode != mode else { return }
         let compact = mode == .compact
         let oldFrame = panel.frame
@@ -94,11 +126,16 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 
     @objc private func screenChanged() {
         guard let panel else { return }
+        if isMonolithApplied {
+            environment.monolithWindow.apply(mode: environment.presentation.mode, reduceMotion: true)
+            return
+        }
         setReachableFrame(origin: panel.frame.origin, size: panel.frame.size)
     }
 
     private func saveFrame() {
         guard let panel, hasPosition, !applyingFrame else { return }
+        if isMonolithApplied { return }
         UserDefaults.standard.set(NSStringFromRect(panel.frame), forKey: "player.frame")
     }
     func windowDidBecomeKey(_ notification: Notification) { Task { await environment.refreshFavorite() } }
@@ -123,19 +160,25 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         guard let panel, let button = statusItem.button else { return }
         if panel.isVisible { dismiss(); return }
 
-        if !hasPosition, let frame = button.window?.convertToScreen(button.convert(button.bounds, to: nil)) {
+        if isMonolithApplied {
+            hasPosition = true
+            screenChanged()
+        } else if !hasPosition, let frame = button.window?.convertToScreen(button.convert(button.bounds, to: nil)) {
             hasPosition = true
             setReachableFrame(origin: NSPoint(x: frame.midX - panel.frame.width / 2, y: frame.minY - panel.frame.height - 6), size: panel.frame.size)
         } else {
             screenChanged()
         }
         environment.presentation.isVisible = true
+        environment.presentation.sendAttention(.keyboardFocus(true))
+        if isMonolithApplied { environment.monolithWindow.apply(mode: .expanded, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion) }
         panel.makeKeyAndOrderFront(nil)
         BopifyLog.playback.debug("player panel opened")
     }
 
     private func dismiss() {
         saveFrame()
+        if isMonolithApplied { environment.monolithWindow.persistAnchor(); environment.monolithWindow.invalidateTransition() }
         environment.presentation.isVisible = false
         panel?.orderOut(nil)
         BopifyLog.playback.debug("player panel hidden")
@@ -144,6 +187,13 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     private func showMenu() {
         guard let button = statusItem.button else { return }
         let menu = NSMenu()
+        environment.presentation.sendAttention(.interaction(.menu, true))
+        defer { environment.presentation.sendAttention(.interaction(.menu, false)) }
+        let keepOnTop = NSMenuItem(title: String(localized: "window.keepOnTop"), action: #selector(toggleKeepOnTop), keyEquivalent: "")
+        keepOnTop.target = self
+        keepOnTop.state = environment.presentation.keepOnTop ? .on : .off
+        menu.addItem(keepOnTop)
+        menu.addItem(.separator())
 
         let signOutItem = NSMenuItem(title: String(localized: "menu.signOut"),
                                       action: #selector(signOutTapped), keyEquivalent: "")
@@ -161,6 +211,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     @objc private func signOutTapped() {
         Task { await environment.signOut() }
     }
+    @objc private func toggleKeepOnTop() { environment.presentation.keepOnTop.toggle() }
 
     @objc private func quitTapped() {
         // `bopify_engine_destroy` (inside `shutdown()`) joins the Rust

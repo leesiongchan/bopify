@@ -696,6 +696,20 @@
         }
       }
     },
+    "transport.mute" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : { "state" : "translated", "value" : "Mute" }
+        }
+      }
+    },
+    "transport.unmute" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : { "state" : "translated", "value" : "Unmute" }
+        }
+      }
+    },
     "transport.volume" : {
       "localizations" : {
         "en" : {

@@ -26,15 +26,15 @@ struct PlayerPresentationTests {
         #expect(carouselDirection(old: old, new: replacement) == .fade)
         #expect(carouselDirection(old: nil, new: replacement) == .fade)
     }
-    @Test func radialProgressStartsAtBottomAndRunsClockwise() {
-        #expect(radialProgress(x: 0, y: 1) == 0)
-        #expect(radialProgress(x: -1, y: 0) == 0.25)
-        #expect(radialProgress(x: 0, y: -1) == 0.5)
-        #expect(radialProgress(x: 1, y: 0) == 0.75)
+    @Test func radialProgressStartsAtTopAndRunsClockwise() {
+        #expect(radialProgress(x: 0, y: -1) == 0)
+        #expect(radialProgress(x: 1, y: 0) == 0.25)
+        #expect(radialProgress(x: 0, y: 1) == 0.5)
+        #expect(radialProgress(x: -1, y: 0) == 0.75)
         #expect(radialProgress(x: 0, y: 0) == nil)
         #expect(radialProgress(x: .infinity, y: 1) == nil)
     }
-    @Test func crossingBottomDoesNotJumpBetweenStartAndEnd() {
+    @Test func crossingTopDoesNotJumpBetweenStartAndEnd() {
         var end = RadialScrub(start: 0.99)
         end.update(0.01)
         #expect(end.progress == 1)
@@ -42,14 +42,6 @@ struct PlayerPresentationTests {
         start.update(0.99)
         #expect(start.progress == 0)
     }
-    @Test func albumSkipRequiresADecisiveLeftwardRelease() {
-        #expect(shouldAdvanceAlbum(translation: CGSize(width: -51, height: 8), diameter: 204))
-        #expect(!shouldAdvanceAlbum(translation: CGSize(width: -50, height: 0), diameter: 204))
-        #expect(!shouldAdvanceAlbum(translation: CGSize(width: 80, height: 0), diameter: 204))
-        #expect(!shouldAdvanceAlbum(translation: CGSize(width: -60, height: 90), diameter: 204))
-        #expect(!shouldAdvanceAlbum(translation: .zero, diameter: 204))
-    }
-
     @Test func invalidDurationDisablesSeekAndValidProgressClamps() {
         #expect(seekPosition(progress: 0.5, durationMs: 0) == nil)
         #expect(seekPosition(progress: .nan, durationMs: 1000) == nil)

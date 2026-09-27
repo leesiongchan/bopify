@@ -10,19 +10,8 @@ struct TransportControls: View {
     private var canControl: Bool {
         state.isActiveDevice && state.currentTrack != nil
     }
-    private var nextRepeat: RepeatMode {
-        switch state.repeatMode { case .off: .context; case .context: .track; case .track: .off }
-    }
-
     var body: some View {
-        HStack(spacing: 16) {
-            Button { model.setShuffle(!state.shuffleEnabled) } label: {
-                modeSymbol("shuffle", active: state.shuffleEnabled)
-            }
-            .disabled(!canControl)
-            .accessibilityLabel(Text("transport.shuffle"))
-            .accessibilityValue(Text(state.shuffleEnabled ? "control.on" : "control.off"))
-            .help(Text("transport.shuffle"))
+        HStack(spacing: 8) {
             Button(action: model.previous) {
                 Image(systemName: "backward.fill")
                     .font(.system(size: 18, weight: .semibold))
@@ -52,28 +41,9 @@ struct TransportControls: View {
             .disabled(!canControl || !state.canNext)
             .accessibilityLabel(Text("transport.next"))
             .help(Text("transport.next"))
-
-            Button { model.setRepeat(nextRepeat) } label: {
-                modeSymbol(state.repeatMode == .track ? "repeat.1" : "repeat", active: state.repeatMode != .off)
-            }
-            .disabled(!canControl)
-            .accessibilityLabel(Text("transport.repeat"))
-            .accessibilityValue(Text(state.repeatMode == .off ? "control.off" : state.repeatMode == .track ? "transport.repeat.track" : "transport.repeat.context"))
-            .help(Text("transport.repeat"))
         }
         .buttonStyle(PlayerControlStyle())
-        .padding(.horizontal, 16)
-        .padding(.vertical, 4)
-        .modifier(PlayerGlass())
     }
-    private func modeSymbol(_ name: String, active: Bool) -> some View {
-        Image(systemName: name)
-            .font(.system(size: 15, weight: .medium))
-            .foregroundStyle(.primary.opacity(active ? 1 : 0.48))
-            .frame(width: 32, height: 40)
-            .overlay(alignment: .bottom) { if active { Circle().fill(.primary).frame(width: 3, height: 3).padding(.bottom, 2) } }
-    }
-
 }
 
 struct PlayerControlStyle: ButtonStyle {
@@ -90,8 +60,8 @@ private struct PlayerControlBody: View {
             .contentShape(Capsule())
             .background(.white.opacity(hovered ? 0.08 : 0), in: Capsule())
             .scaleEffect(configuration.isPressed ? 0.94 : 1)
-            .animation(.easeOut(duration: 0.16), value: configuration.isPressed)
-            .animation(.easeOut(duration: 0.16), value: hovered)
+            .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
+            .animation(.easeOut(duration: 0.14), value: hovered)
             .onHover { hovered = $0 }
     }
 }

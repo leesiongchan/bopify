@@ -4,10 +4,9 @@ import BopifyPlayback
 
 struct QueueView: View {
     let player: PlayerModel
-    let state: PlaybackState
+    private var state: PlaybackState { player.state }
     let store: ArtworkStore
-    let presentation: PlayerPresentation
-    let artworkNamespace: Namespace.ID
+    let select: (QueueEntry) -> Void
 
     var body: some View {
         ScrollView {
@@ -27,23 +26,10 @@ struct QueueView: View {
                     .frame(maxWidth: .infinity).padding(.vertical, 50)
                 }
             }
-            .padding(.bottom, 98)
+            .padding(.bottom, 4)
         }
         .scrollIndicators(.hidden)
-        .mask(alignment: .bottom) {
-            LinearGradient(stops: [.init(color: .white, location: 0), .init(color: .white, location: 0.8),
-                                   .init(color: .clear, location: 0.87)], startPoint: .top, endPoint: .bottom)
-        }
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
-        .overlay(alignment: .bottom) {
-            VStack(spacing: 6) {
-                if let notice = player.commandNotice {
-                    Text(notice).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                }
-                CompactPlayerView(player: player, state: state, store: store, presentation: presentation, artworkNamespace: artworkNamespace)
-            }
-            .padding(.top, 14)
-        }
+
     }
 
     private func row(_ entry: QueueEntry, current: Bool) -> some View {
@@ -67,12 +53,12 @@ struct QueueView: View {
                 Text(track?.title ?? String(localized: entry.metadataFailed ? "queue.unavailable" : "queue.loadingTrack"))
                     .font(.system(size: 13, weight: current ? .medium : .regular)).lineLimit(1)
                 Text(track?.artists.map(\.name).joined(separator: ", ") ?? "")
-                    .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                    .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if current { Image(systemName: "waveform").font(.system(size: 12)).accessibilityLabel(Text("player.nowPlaying")) }
             Text(track.map { playbackTime($0.durationMs) } ?? "—")
-                .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
         }
         .padding(.vertical, 8).padding(.horizontal, 8)
         .contentShape(Rectangle())
@@ -81,7 +67,7 @@ struct QueueView: View {
             if current { label }
             else {
                 Button {
-                    if let target = entry.target { player.selectQueueEntry(target) }
+                    select(entry)
                 } label: { label }
                 .disabled(entry.target == nil || !state.isActiveDevice)
             }

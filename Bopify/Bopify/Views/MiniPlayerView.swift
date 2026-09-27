@@ -4,67 +4,45 @@ import BopifyPlayback
 
 struct MiniPlayerView: View {
     let environment: AppEnvironment
-    @Namespace private var artworkNamespace
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        let url = environment.player?.state.currentTrack?.artwork?.url
-        let image = url.flatMap { environment.artworkStore.images[$0] }.map { Image(nsImage: $0) }
-        let mode = environment.playerMode
-        PlayerSurface(mode: mode) {
-            if mode == .compact, let player = environment.player, player.state.currentTrack != nil {
-                CompactPlayerView(player: player, state: player.state, store: environment.artworkStore,
-                                  presentation: environment.presentation, artworkNamespace: artworkNamespace)
-                    .padding(8)
+        Group {
+            if environment.isListening, let player = environment.player {
+                MonolithPlayerView(player: player, store: environment.artworkStore,
+                                   presentation: environment.presentation, window: environment.monolithWindow)
+                    .id(ObjectIdentifier(player))
             } else {
-                VStack(spacing: 8) {
-                    header
-                    switch environment.authState {
-                    case .signedOut, .needsReauthentication:
-                        SignedOutView(presentation: .idle, signIn: requestSignIn)
-                    case .authenticating, .refreshing:
-                        SignedOutView(presentation: .authenticating, signIn: requestSignIn)
-                    case let .error(error):
-                        SignedOutView(presentation: .error(error), signIn: requestSignIn)
-                    case .signedIn:
-                        if let player = environment.player {
-                            if mode == .queue {
-                                QueueView(player: player, state: player.state, store: environment.artworkStore,
-                                          presentation: environment.presentation, artworkNamespace: artworkNamespace)
-                            } else {
-                                PlayingView(player: player, image: image, state: player.state,
-                                            position: player.displayPositionMs, store: environment.artworkStore,
-                                            presentation: environment.presentation, artworkNamespace: artworkNamespace,
-                                            isVisible: environment.presentation.isVisible)
-                            }
-                        } else {
+                PlayerSurface {
+                    VStack(spacing: 8) {
+                        header
+                        switch environment.authState {
+                        case .signedOut, .needsReauthentication:
+                            SignedOutView(presentation: .idle, signIn: requestSignIn)
+                        case .authenticating, .refreshing:
                             SignedOutView(presentation: .authenticating, signIn: requestSignIn)
+                        case let .error(error):
+                            SignedOutView(presentation: .error(error), signIn: requestSignIn)
+                        case .signedIn:
+                            if let player = environment.player {
+                                StartupPlayerContent(player: player)
+                            } else {
+                                SignedOutView(presentation: .authenticating, signIn: requestSignIn)
+                            }
                         }
                     }
+                    .padding(16)
+                    .modifier(ScrollablePlayerContent(mode: .expanded))
                 }
-                .padding(16)
-                .modifier(ScrollablePlayerContent(mode: mode))
             }
         }
-        .modifier(SharedCurrentArtwork(image: image, namespace: artworkNamespace))
-        .animation(.spring(duration: reduceMotion ? 0.16 : 0.36, bounce: reduceMotion ? 0 : 0.04), value: mode)
         .environment(\.favoriteEnvironment, environment)
         .task(id: environment.player?.state.currentTrack?.uri) { await environment.refreshFavorite() }
-        .task(id: url) { if let url { await environment.artworkStore.load(url) } }
     }
 
     private var header: some View {
         HStack {
-            if environment.playerMode == .queue {
-                Button { environment.presentation.setMode(.expanded) } label: {
-                    Label("queue.title", systemImage: "chevron.left")
-                        .font(.system(size: 15, weight: .medium))
-                }
-                .buttonStyle(.plain)
-            } else {
-                Label("app.name", systemImage: "waveform")
-                    .font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
-            }
+            Label("app.name", systemImage: "waveform")
+                .font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
             WindowDragRegion().frame(maxWidth: .infinity)
             FavoriteButton()
             Menu {
@@ -73,7 +51,6 @@ struct MiniPlayerView: View {
                         .disabled(!player.state.isActiveDevice)
                     Divider()
                 }
-                Toggle("window.keepOnTop", isOn: Binding(get: { environment.presentation.keepOnTop }, set: { environment.presentation.keepOnTop = $0 }))
                 Button("menu.signOut") { Task { await environment.signOut() } }.disabled(environment.authState != .signedIn)
                 Divider()
                 Button("menu.quit") { Task { await environment.prepareForQuit(); NSApp.terminate(nil) } }
@@ -89,109 +66,25 @@ struct MiniPlayerView: View {
     private func requestSignIn() { Task { await environment.signIn() } }
 }
 
-struct PlayingView: View {
+private struct StartupPlayerContent: View {
     let player: PlayerModel
-    let image: Image?
-    let state: PlaybackState
-    let position: (Date) -> Int64
-    let store: ArtworkStore
-    let presentation: PlayerPresentation
-    let artworkNamespace: Namespace.ID
-    var isVisible = true
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     var body: some View {
-        VStack(spacing: 8) {
-            let content = PlayerContent(state)
-            if content != .player {
-                StartupContent(content: content, load: player.load)
-                    .frame(maxHeight: .infinity)
-            } else {
-                VStack(spacing: 4) {
-                    Text(state.currentTrack?.title ?? String(localized: "player.unknownTrack"))
-                        .font(.system(size: 20, weight: .regular))
-                        .lineLimit(1)
-                        .help(state.currentTrack?.title ?? "")
-                    Text(state.currentTrack?.artists.map(\.name).joined(separator: ", ") ?? "")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.primary.opacity(0.7))
-                        .lineLimit(1)
-                        .help(state.currentTrack?.artists.map(\.name).joined(separator: ", ") ?? "")
+        let content = PlayerContent(player.state)
+        if content != .player {
+            StartupContent(content: content, load: player.load).frame(maxHeight: .infinity)
+        } else {
+            VStack(spacing: 12) {
+                if case let .error(error) = player.state.phase {
+                    Label("player.error", systemImage: "exclamationmark.circle")
+                    error.localizedText.foregroundStyle(.secondary)
+                } else {
+                    Text("player.inactiveDevice.title").foregroundStyle(.secondary)
                 }
-                .frame(maxWidth: .infinity)
-                .frame(height: 48)
-                .accessibilityElement(children: .combine)
-                .contentTransition(.opacity)
-                .animation(.easeInOut(duration: reduceMotion ? 0.16 : 0.42), value: state.currentTrack)
-
-                TimelineView(PlaybackClockSchedule(running: state.phase == .playing && isVisible, reducedMotion: reduceMotion)) { context in
-                    ArtworkCarouselView(queue: state.queue, currentTrack: state.currentTrack, image: image, store: store, artworkNamespace: artworkNamespace, canNext: state.isActiveDevice && state.canNext, next: player.next)
-                        .overlay {
-                            GeometryReader { geometry in
-                                let scale = min(1, (geometry.size.width - 68) / 310)
-                                let diameter = 274 * scale
-                                RadialProgressView(positionMs: position(context.date), durationMs: state.durationMs,
-                                                   canSeek: state.canSeek && state.isActiveDevice, seek: player.seek(to:))
-                                    .frame(width: diameter, height: diameter)
-                                    .position(x: geometry.size.width / 2, y: 165)
-                                    .id([state.currentTrack?.uri.rawValue, state.queue?.current?.id])
-                            }
-                        }
-                }
-                TransportControls(state: state, model: player)
-                HStack {
-                    Button { presentation.setMode(.queue) } label: { Image(systemName: "music.note.list").frame(width: 32, height: 28) }
-                        .accessibilityLabel(Text("queue.title")).help(Text("queue.title"))
-                    Spacer(minLength: 4)
-                    status(state: state).frame(maxWidth: .infinity)
-                    Spacer(minLength: 4)
-                    Button { presentation.setMode(.compact) } label: { Image(systemName: "arrow.down.right.and.arrow.up.left").frame(width: 32, height: 28) }
-                        .accessibilityLabel(Text("player.collapse")).help(Text("player.collapse"))
-                }
-                .buttonStyle(PlayerControlStyle())
-                .foregroundStyle(.secondary)
-                .frame(height: 28)
+                if let notice = player.commandNotice { Text(notice).foregroundStyle(.secondary) }
             }
-        }
-        .frame(maxHeight: .infinity)
-    }
-
-    @ViewBuilder
-    private func status(state: PlaybackState) -> some View {
-        switch state.phase {
-        case .playing, .paused:
-            Text(player.commandNotice ?? "")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        case .loading, .buffering:
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.mini)
-                Text(state.phase == .loading ? "player.loading" : "player.buffering")
-            }
-            .font(.caption)
-            .foregroundStyle(.primary.opacity(0.7))
-        case .idle:
-            Text("player.inactiveDevice.title")
-                .font(.caption)
-                .foregroundStyle(.primary.opacity(0.7))
-        case .ended:
-            Text("player.ended")
-                .font(.caption)
-                .foregroundStyle(.primary.opacity(0.7))
-        case let .error(error):
-            VStack(spacing: 3) {
-                Label("player.error", systemImage: "exclamationmark.circle")
-                    .fontWeight(.medium)
-                error.localizedText
-                    .foregroundStyle(.primary.opacity(0.7))
-            }
-            .font(.caption)
-            .multilineTextAlignment(.center)
+            .font(.callout).multilineTextAlignment(.center).frame(maxHeight: .infinity)
         }
     }
-
-
 }
 
 private struct ContextURILoadView: View {
@@ -234,7 +127,7 @@ private struct StartupContent: View {
             ContextURILoadView(load: load)
         case let .remote(deviceName):
             placeholder { Text("player.remote.title \(deviceName)") }
-        // .player never reaches here; PlayingView renders it directly.
+        // Errors without metadata are rendered by StartupPlayerContent.
         case .loading, .player:
             placeholder { ProgressView { Text("player.loading") }.controlSize(.small) }
         }

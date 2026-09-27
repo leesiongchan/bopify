@@ -83,12 +83,8 @@ public func carouselDirection(old: PlaybackQueue?, new: PlaybackQueue) -> Carous
 
 public func radialProgress(x: Double, y: Double) -> Double? {
     guard x.isFinite, y.isFinite, x != 0 || y != 0 else { return nil }
-    let turns = (atan2(y, x) - .pi / 2) / (2 * .pi)
+    let turns = (atan2(y, x) + .pi / 2) / (2 * .pi)
     return turns < 0 ? turns + 1 : turns
-}
-
-public func shouldAdvanceAlbum(translation: CGSize, diameter: CGFloat) -> Bool {
-    translation.width <= -diameter * 0.25 && abs(translation.height) < -translation.width
 }
 
 public struct RadialScrub {
