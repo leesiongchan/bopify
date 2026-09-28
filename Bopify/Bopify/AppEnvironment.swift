@@ -69,7 +69,8 @@ final class AppEnvironment {
     init() {
         let auth = SpotifyAuthService(clientID: librespotClientID)
         let libraryAuth = SpotifyAuthService(clientID: dashboardLibraryClientID,
-                                             store: KeychainTokenStore(service: "my.snsoft.bopify.library"))
+                                             store: KeychainTokenStore(service: "my.snsoft.bopify.library"),
+                                             callbackPort: 8898, callbackPath: "/callback")
         self.auth = auth
         self.libraryAuth = libraryAuth
         let library = SpotifyLibraryClient { scopes in

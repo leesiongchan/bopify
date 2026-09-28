@@ -14,6 +14,8 @@ public actor SpotifyAuthService {
     private let clientID: String
     private let client: TokenClient
     private let store: any TokenStoring
+    private let callbackPort: UInt16?
+    private let callbackPath: String
     private let openURL: @Sendable (URL) -> Void
     private var tokens: TokenSet?
     // Sign-out and new consent invalidate suspended work before it can persist credentials.
@@ -24,11 +26,15 @@ public actor SpotifyAuthService {
         clientID: String,
         client: TokenClient? = nil,
         store: any TokenStoring = KeychainTokenStore(),
+        callbackPort: UInt16? = nil,
+        callbackPath: String = "/login",
         openURL: @Sendable @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }
     ) {
         self.clientID = clientID
         self.client = client ?? TokenClient(clientID: clientID)
         self.store = store
+        self.callbackPort = callbackPort
+        self.callbackPath = callbackPath
         self.openURL = openURL
     }
 
@@ -66,11 +72,10 @@ public actor SpotifyAuthService {
         let pkce = PKCEPair.random()
         let state = UUID().uuidString
         let listener = LoopbackCallbackListener(expectedState: state)
-        let port = try await listener.start()
+        let port = try await listener.start(port: callbackPort)
         BopifyLog.auth.debug("callback listener bound port=\(port, privacy: .public)")
-        defer { Task { await listener.stop() } }
 
-        let redirectURI = "http://127.0.0.1:\(port)/login"
+        let redirectURI = "http://127.0.0.1:\(port)\(callbackPath)"
         let request = AuthorizationRequest(clientID: clientID, redirectURI: redirectURI,
                                            scopes: scopes.sorted(), pkce: pkce, state: state)
         openURL(request.url)
@@ -79,14 +84,17 @@ public actor SpotifyAuthService {
         let code: String
         do { code = try await listener.waitForCallback() }
         catch CallbackError.accessDenied {
+            await listener.stop()
             BopifyLog.auth.notice("user declined consent")
             throw PlayerError.authDenied
         }
         catch {
+            await listener.stop()
             let description = String(describing: error)
             BopifyLog.auth.error("callback wait failed error=\(description, privacy: .public)")
             throw PlayerError.invalidCallback
         }
+        await listener.stop()
 
         let tokens = try await client.exchange(code: code, redirectURI: redirectURI, pkce: pkce)
         BopifyLog.auth.info("token exchange succeeded")

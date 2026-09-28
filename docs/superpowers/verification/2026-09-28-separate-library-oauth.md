@@ -1,10 +1,10 @@
 # Separate library OAuth verification
 
-Status: implementation and controlled verification complete on `feat/separate-library-oauth`; live library acceptance awaits consent under the Dashboard app.
+Status: implementation merged into `main`; live library acceptance awaits consent under the Dashboard app.
 
 The app uses public Dashboard client ID `25bbd3bacca4412b80f17b892072af71` for Web API library access and stores its grant under `my.snsoft.bopify.library`. Playback retains librespot's ID and `my.snsoft.bopify`. Liked Songs requests `user-library-read`; favorites can widen that library grant to `user-library-modify`. Library consent never requests `streaming`. The two features continue sharing one library client and its 429 cooldown.
 
-The Dashboard app must register `http://127.0.0.1/login` as a redirect URI. The existing loopback listener adds its dynamic port at runtime, as allowed for a loopback IP literal by [Spotify's redirect URI guidance](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri). Registration has not been confirmed in this environment. Library consent is initiated only by an existing Enable action, using Spotify's [PKCE flow](https://developer.spotify.com/documentation/web-api/tutorials/code-pkce-flow).
+The Dashboard app has `http://127.0.0.1:8898/callback` registered. Library consent binds that fixed port and sends the same URI to Spotify; playback still uses its dynamic `/login` callback. Spotify's [redirect URI guidance](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri) documents portless loopback registration, but the Dashboard rejected `http://127.0.0.1/login` as insecure in this account. Other developers have [reported the same Dashboard behavior](https://community.spotify.com/t5/Spotify-for-Developers/redirect-uri-doesn-t-seems-to-support-dynamic-port/td-p/6968154). Library consent is initiated only by an existing Enable action, using Spotify's [PKCE flow](https://developer.spotify.com/documentation/web-api/tutorials/code-pkce-flow).
 
 ## Observed checks
 
@@ -17,4 +17,10 @@ The Dashboard app must register `http://127.0.0.1/login` as a redirect URI. The 
 - The read-only `live-library` probe exited 77: `BLOCKED: existing session lacks library read authorization`. It did not open a browser or send a Web API request. No token, response body, or library content was printed. Log: `/private/tmp/bopify-library-live.log`.
 - `git diff --check` passed. The main worktree's `Localizable.xcstrings` edits were untouched.
 
-After the user confirms the callback is registered and invokes Enable Liked Songs in the app, rerun `--probe live-library` once. Record whether Spotify accepts the request or returns 429, including the sanitized rate-limit category and `Retry-After`. A separate client ID does not guarantee a larger allowance; see [Spotify's rate-limit guidance](https://developer.spotify.com/documentation/web-api/concepts/rate-limits) and [quota mode guidance](https://developer.spotify.com/documentation/web-api/concepts/quota-modes).
+After the user invokes Enable Liked Songs in the app, rerun `--probe live-library` once. Record whether Spotify accepts the request or returns 429, including the sanitized rate-limit category and `Retry-After`. A separate client ID does not guarantee a larger allowance; see [Spotify's rate-limit guidance](https://developer.spotify.com/documentation/web-api/concepts/rate-limits) and [quota mode guidance](https://developer.spotify.com/documentation/web-api/concepts/quota-modes).
+
+## Fixed callback follow-up
+
+The first live consent failed because Bopify sent a dynamic-port `/login` URI while the Dashboard registered fixed-port `/callback`. An attempt to register the portless URI was rejected as insecure. The library auth service now uses `http://127.0.0.1:8898/callback` exactly. The listener waits for a successful bind before opening the browser, and waits for port release before a later consent can reuse it. Playback retains its original dynamic callback.
+
+Verification: 194 Swift tests pass (96 playback, 34 library, 22 domain, 42 auth); macOS build and native library probe exit 0. Focused tests cover the exact fixed redirect, occupied-port rejection without opening OAuth, and rebind after stop. Logs: `/private/tmp/bopify-callback-final-tests.log`, `/private/tmp/bopify-callback-build.log`, `/private/tmp/bopify-callback-library-probe.log`. Live consent remains to be retried by the user.
