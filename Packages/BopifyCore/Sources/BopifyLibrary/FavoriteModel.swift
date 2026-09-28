@@ -6,6 +6,7 @@ import BopifyDomain
 @MainActor @Observable
 public final class FavoriteModel {
     public private(set) var uri: SpotifyURI?
+    public private(set) var membershipRevision: UInt64 = 0
     public private(set) var saved: Bool?
     public private(set) var isPending = false
     public private(set) var error: LibraryError?
@@ -76,6 +77,7 @@ public final class FavoriteModel {
                 let value = try await service.savedState(for: uri)
                 guard isCurrent(requestGeneration, uri) else { return }
                 saved = value
+                if value != confirmed { membershipRevision &+= 1 }
                 error = nil
             } catch {
                 guard isCurrent(requestGeneration, uri) else { return }

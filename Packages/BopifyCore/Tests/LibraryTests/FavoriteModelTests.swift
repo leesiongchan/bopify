@@ -66,6 +66,7 @@ struct FavoriteModelTests {
         await service.resolveRead(a, .success(true))
         await request.value
         #expect(model.uri == nil && model.saved == nil && !model.isPending)
+        #expect(model.membershipRevision == 0)
     }
     @Test func rejectedMutationRollsBackAndIgnoresRepeatedToggle() async {
         let service = ControlledLibrary()
@@ -83,6 +84,7 @@ struct FavoriteModelTests {
         await toggle.value
         #expect(model.saved == false)
         #expect(model.error == .forbidden)
+        #expect(model.membershipRevision == 0)
         #expect(!model.isPending)
     }
     @Test(arguments: [true, false]) func ambiguousMutationReconcilesOrBecomesUnknown(readSucceeds: Bool) async {
@@ -100,6 +102,7 @@ struct FavoriteModelTests {
         await toggle.value
         #expect(model.saved == (readSucceeds ? true : nil))
         #expect(model.error == (readSucceeds ? nil : .unavailable))
+        #expect(model.membershipRevision == (readSucceeds ? 1 : 0))
         #expect(!model.isPending)
     }
     @Test func clearDuringMutationStartsNoReconciliation() async {
@@ -115,5 +118,28 @@ struct FavoriteModelTests {
         await service.resolveMutation(.success(()))
         await toggle.value
         #expect(model.uri == nil && model.saved == nil && !model.isPending)
+        #expect(model.membershipRevision == 0)
     }
+    @Test(arguments: [true, false]) func revisionChangesOnlyAfterConfirmedMutation(changed: Bool) async {
+        let service = ControlledLibrary()
+        let model = FavoriteModel(service: service)
+        for _ in 0..<2 {
+            let read = Task { await model.select(a) }
+            _ = await service.nextRequest()
+            await service.resolveRead(a, .success(false))
+            await read.value
+            #expect(model.membershipRevision == 0)
+        }
+        let toggle = Task { await model.toggle() }
+        _ = await service.nextRequest()
+        #expect(model.membershipRevision == 0)
+        await service.resolveMutation(.success(()))
+        _ = await service.nextRequest()
+        await service.resolveRead(a, .success(changed))
+        await toggle.value
+        #expect(model.membershipRevision == (changed ? 1 : 0))
+        model.clear()
+        #expect(model.membershipRevision == (changed ? 1 : 0))
+    }
+
 }
