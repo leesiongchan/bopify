@@ -15,7 +15,8 @@ import BopifyLibrary
             switch error {
             case LibraryError.authorizationRequired: print("BLOCKED: existing session lacks library read authorization")
             case LibraryError.forbidden: print("BLOCKED: Spotify denied endpoint access for this client")
-            case LibraryError.rateLimited: print("BLOCKED: Spotify rate limited the request")
+            case LibraryError.rateLimited: print("BLOCKED: Spotify returned 429 without a quota marker")
+            case LibraryError.quotaExceeded: print("BLOCKED: Spotify reported library quota exhaustion")
             default: print("BLOCKED: live saved-track request unavailable")
             }
             exit(77)

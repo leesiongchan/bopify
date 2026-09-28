@@ -1,5 +1,6 @@
 public enum LibraryError: Error, Equatable, Sendable {
     case authorizationRequired, forbidden, invalidResponse, unavailable
+    case quotaExceeded(retryAfterSeconds: Int?)
     case rateLimited(retryAfterSeconds: Int?)
 }
 

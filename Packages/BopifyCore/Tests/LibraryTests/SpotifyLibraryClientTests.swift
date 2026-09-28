@@ -26,6 +26,12 @@ private final class LibraryFixture: @unchecked Sendable {
     func reset(_ response: Response) { lock.withLock { self.response = response; recorded = [] } }
     func respond(_ request: URLRequest) -> Response { lock.withLock { recorded.append(request); return response } }
 }
+private final class LibraryClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = Date(timeIntervalSince1970: 1_000)
+    func now() -> Date { lock.withLock { value } }
+    func advance(_ seconds: TimeInterval) { lock.withLock { value.addTimeInterval(seconds) } }
+}
 
 @Suite("SpotifyLibraryClient", .serialized)
 struct SpotifyLibraryClientTests {
@@ -73,6 +79,44 @@ struct SpotifyLibraryClientTests {
             await #expect(throws: error) { try await client().save(uri) }
             #expect(LibraryProtocol.fixture.requests.count == 1)
         }
+    }
+    @Test func rateLimitFromLikedSongsBlocksFavoriteRequest() async {
+        LibraryProtocol.fixture.reset(.init(status: 429, headers: ["Retry-After": "12"]))
+        let client = client()
+        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 12)) {
+            _ = try await client.savedTracks(offset: 0, limit: 50)
+        }
+        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 12)) {
+            _ = try await client.savedState(for: uri)
+        }
+        #expect(LibraryProtocol.fixture.requests.count == 1)
+    }
+    @Test func cooldownExpiresForBothLibraryFeatures() async throws {
+        let clock = LibraryClock()
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [LibraryProtocol.self]
+        let client = SpotifyLibraryClient(session: URLSession(configuration: configuration),
+                                          tokenProvider: { _ in "TEST_TOKEN" }, now: { clock.now() })
+        LibraryProtocol.fixture.reset(.init(status: 429, headers: ["Retry-After": "12"]))
+        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 12)) {
+            _ = try await client.savedTracks(offset: 0, limit: 50)
+        }
+        clock.advance(11)
+        LibraryProtocol.fixture.reset(.init(data: Data("[true]".utf8)))
+        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 12)) { _ = try await client.savedState(for: uri) }
+        #expect(LibraryProtocol.fixture.requests.isEmpty)
+        clock.advance(1)
+        #expect(try await client.savedState(for: uri))
+        #expect(LibraryProtocol.fixture.requests.count == 1)
+    }
+    @Test func quotaResponseHasDistinctErrorAndSharedCooldown() async {
+        LibraryProtocol.fixture.reset(.init(status: 429,
+            data: Data(#"{"error":{"status":429,"message":"Too many requests","reason":"QUOTA_EXCEEDED"}}"#.utf8),
+            headers: ["Retry-After": "90"]))
+        let client = client()
+        await #expect(throws: LibraryError.quotaExceeded(retryAfterSeconds: 90)) { _ = try await client.savedTracks(offset: 0, limit: 50) }
+        await #expect(throws: LibraryError.quotaExceeded(retryAfterSeconds: 90)) { _ = try await client.savedState(for: uri) }
+        #expect(LibraryProtocol.fixture.requests.count == 1)
     }
     @Test func unsupportedAndMissingScopesDoNotSendRequests() async {
         LibraryProtocol.fixture.reset(.init())

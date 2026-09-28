@@ -19,11 +19,14 @@ private nonisolated final class FixtureArtworkProtocol: URLProtocol, @unchecked 
 
 @main struct MonolithRefinementProbe {
     actor Library: LibraryService, SavedTracksService {
+        private let limit: LibraryError?
         private(set) var pageOffsets: [Int] = []
+        init(limit: LibraryError? = nil) { self.limit = limit }
         func savedState(for uri: SpotifyURI) async throws -> Bool { false }
         func save(_ uri: SpotifyURI) async throws {}
         func remove(_ uri: SpotifyURI) async throws {}
         func savedTracks(offset: Int, limit: Int) async throws -> SavedTracksPage {
+            if let limit = self.limit { throw limit }
             pageOffsets.append(offset)
             return SavedTracksPage(tracks: (offset..<min(60, offset + limit)).map { index in
                 Track(uri: SpotifyURI("spotify:track:liked\(index)")!,
@@ -48,7 +51,8 @@ private nonisolated final class FixtureArtworkProtocol: URLProtocol, @unchecked 
             let engine = StubPlaybackEngine()
             let player = PlayerModel(engine: engine)
             player.start()
-            let library = Library()
+            let limited = ProcessInfo.processInfo.environment["BOPIFY_LIBRARY_LIMIT"] == "quota"
+            let library = Library(limit: limited ? .quotaExceeded(retryAfterSeconds: 60) : nil)
             let environment = AppEnvironment(previewPlayer: player, favoriteService: library, savedTracksService: library)
             let controller = StatusItemController(content: MiniPlayerView(environment: environment), environment: environment)
             controller.perform(NSSelectorFromString("handleClick"))
@@ -62,6 +66,16 @@ private nonisolated final class FixtureArtworkProtocol: URLProtocol, @unchecked 
             let content = try! await SCShareableContent.currentProcess
             let capturedWindow = content.windows.first { $0.windowID == panel.windowNumber }!
             let config = SCStreamConfiguration(); config.width = 968; config.height = 720; config.showsCursor = false
+            if limited {
+                precondition(environment.likedSongs.error == .quotaExceeded(retryAfterSeconds: 60) && environment.likedSongs.retryAfter != nil)
+                let image = try! await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(desktopIndependentWindow: capturedWindow), configuration: config)
+                try! NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: CommandLine.arguments[1]).appendingPathComponent("quota-error.png"))
+                print("MONOLITH LIBRARY QUOTA PASS: distinct error and retry deadline")
+                fflush(nil)
+                await environment.prepareForQuit()
+                app.terminate(nil)
+                return
+            }
             let capture = try! await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(desktopIndependentWindow: capturedWindow), configuration: config)
             try! NSBitmapImageRep(cgImage: capture).representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: CommandLine.arguments[1]).appendingPathComponent("refinement-before.png"))
             let layout = environment.monolithWindow.layout

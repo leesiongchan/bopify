@@ -148,6 +148,19 @@ struct LikedSongsModelTests {
         await model.reveal(at: now.addingTimeInterval(13))
         #expect(await service.count == 3)
     }
+    @Test func quotaErrorRetainsDistinctReasonAndCooldown() async throws {
+        let service = ControlledSavedTracks()
+        let model = LikedSongsModel(service: service, now: { now })
+        let initial = Task { await model.reveal(at: now) }
+        _ = await service.next()
+        await service.resolve(.failure(LibraryError.quotaExceeded(retryAfterSeconds: 120)))
+        await initial.value
+        #expect(model.error == .quotaExceeded(retryAfterSeconds: 120))
+        let deadline = try #require(model.retryAfter)
+        #expect(deadline == now.addingTimeInterval(120))
+        await model.retry(at: now.addingTimeInterval(119))
+        #expect(await service.count == 1)
+    }
     @Test func refreshInvalidatesSuspendedPageAndClearRejectsLateResults() async {
         let service = ControlledSavedTracks()
         let model = LikedSongsModel(service: service)
