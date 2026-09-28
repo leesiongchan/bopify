@@ -1,16 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "%@ of %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ of %2$@"
-          }
-        }
-      }
-    },
     "app.name" : {
       "localizations" : {
         "en" : {
@@ -303,6 +293,7 @@
       }
     },
     "player.collapse" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -333,6 +324,7 @@
       }
     },
     "player.expand" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -596,6 +588,16 @@
         }
       }
     },
+    "transport.mute" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mute"
+          }
+        }
+      }
+    },
     "transport.next" : {
       "localizations" : {
         "en" : {
@@ -696,17 +698,13 @@
         }
       }
     },
-    "transport.mute" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : { "state" : "translated", "value" : "Mute" }
-        }
-      }
-    },
     "transport.unmute" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : { "state" : "translated", "value" : "Unmute" }
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unmute"
+          }
         }
       }
     },
