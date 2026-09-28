@@ -27,8 +27,13 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         panel?.delegate = self
         panel?.onDismiss = { [weak self] in self?.dismiss() }
         panel?.onTogglePlayback = { [weak self] in
-            guard let player = self?.environment.player, player.state.isActiveDevice,
-                  player.state.phase == .playing || player.state.phase == .paused else { return }
+            // Space acts as the Play button, including play-here while inactive.
+            guard let player = self?.environment.player else { return }
+            if player.state.isActiveDevice {
+                guard player.state.phase == .playing || player.state.phase == .paused else { return }
+            } else {
+                guard player.canPlayHere, player.state.phase != .loading, player.state.phase != .buffering else { return }
+            }
             player.togglePlayPause()
         }
         panel?.onSeek = { [weak self] in self?.environment.player?.seek(by: $0) }

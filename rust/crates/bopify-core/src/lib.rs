@@ -9,3 +9,4 @@ pub mod ffi;
 /// symbols -- so the header generator must skip the whole module.
 mod logging;
 mod queue;
+mod remote;

@@ -1,3 +1,16 @@
+diff --git a/connect/Cargo.toml b/connect/Cargo.toml
+index bc5267f..650640d 100644
+--- a/connect/Cargo.toml
++++ b/connect/Cargo.toml
+@@ -28,7 +28,7 @@ protobuf = "3.7"
+ rand = { version = "0.9", default-features = false, features = ["small_rng"] }
+ serde_json = "1.0"
+ thiserror = "2"
+-tokio = { version = "1", features = ["macros", "sync"] }
++tokio = { version = "1", features = ["macros", "sync", "rt"] }
+ tokio-stream = { version = "0.1", default-features = false }
+ uuid = { version = "1.18", default-features = false, features = ["v4"] }
+ 
 diff --git a/connect/src/lib.rs b/connect/src/lib.rs
 index ba00aa4..dcefba6 100644
 --- a/connect/src/lib.rs
@@ -285,7 +298,7 @@ index 0000000..1e7dd3d
 +    }
 +}
 diff --git a/connect/src/spirc.rs b/connect/src/spirc.rs
-index c7c195b..8f47957 100644
+index c7c195b..473324b 100644
 --- a/connect/src/spirc.rs
 +++ b/connect/src/spirc.rs
 @@ -14,7 +14,7 @@ use crate::{
@@ -293,7 +306,7 @@ index c7c195b..8f47957 100644
      playback::{
          mixer::Mixer,
 -        player::{Player, PlayerEvent, PlayerEventChannel, QueueTrack},
-+        player::{Player, PlayerEvent, PlayerEventChannel, StartupOutcome},
++        player::{Player, PlayerEvent, PlayerEventChannel, RemoteState, StartupOutcome},
      },
      protocol::{
          connect::{Cluster, ClusterUpdate, LogoutCommand, SetVolumeCommand},
@@ -301,7 +314,7 @@ index c7c195b..8f47957 100644
          transfer_state::TransferState,
          user_attributes::UserAttributesMutation,
      },
-+    startup::{StartupDecision, startup_decision},
++    startup::{StartupDecision, remote_changed, remote_playback, startup_decision, transfer_position},
      state::{
          context::{ContextType, ResetContext},
          provider::IsProvider,
@@ -314,17 +327,29 @@ index c7c195b..8f47957 100644
      player: Arc<Player>,
      mixer: Arc<dyn Mixer>,
  
-@@ -96,6 +99,9 @@ struct SpircTask {
+@@ -96,6 +99,16 @@ struct SpircTask {
      context_resolver: ContextResolver,
  
      emit_set_queue_events: bool,
 +    startup_restore: bool,
 +    /// The startup decision runs on the first connection id only; later ones are dealer reconnects.
 +    startup_resolved: bool,
++
++    /// The mirror last emitted, so cluster updates emit only changes.
++    last_remote: Option<RemoteState>,
++
++    /// The time of play-here's transfer request, so its reply plays even from a paused
++    /// device, and a repeat press inside the window is not sent again.
++    play_here_requested_at: Option<i64>,
  
      shutdown: bool,
      session: Session,
-@@ -123,6 +129,10 @@ enum SpircCommand {
+@@ -119,10 +132,15 @@ static SPIRC_COUNTER: AtomicUsize = AtomicUsize::new(0);
+ #[derive(Debug)]
+ enum SpircCommand {
+     Play,
++    PlayHere,
+     PlayPause,
      Pause,
      Prev,
      Next,
@@ -335,7 +360,7 @@ index c7c195b..8f47957 100644
      VolumeUp,
      VolumeDown,
      Shutdown,
-@@ -139,6 +149,56 @@ enum SpircCommand {
+@@ -139,12 +157,65 @@ enum SpircCommand {
      ClearQueue,
  }
  
@@ -392,7 +417,16 @@ index c7c195b..8f47957 100644
  const CONTEXT_FETCH_THRESHOLD: usize = 2;
  
  // delay to update volume after a certain amount of time, instead on each update request
-@@ -177,6 +237,7 @@ impl Spirc {
+ const VOLUME_UPDATE_DELAY: Duration = Duration::from_millis(500);
+ // to reduce updates to remote, we group some request by waiting for a set amount of time
+ const UPDATE_STATE_DELAY: Duration = Duration::from_millis(200);
++/// How long a play-here request stays pending, so a second Play press inside the
++/// window does not send another transfer.
++const PLAY_HERE_WINDOW_MS: i64 = 10_000;
+ 
+ /// The spotify connect handle
+ pub struct Spirc {
+@@ -177,6 +248,7 @@ impl Spirc {
          debug!("new Spirc[{spirc_id}]");
  
          let emit_set_queue_events = config.emit_set_queue_events;
@@ -400,7 +434,7 @@ index c7c195b..8f47957 100644
          let connect_state = ConnectState::new(config, &session);
  
          let connection_id_update = session
-@@ -230,6 +291,8 @@ impl Spirc {
+@@ -230,6 +302,8 @@ impl Spirc {
          let player_events = player.get_player_event_channel();
  
          let mut task = SpircTask {
@@ -409,16 +443,18 @@ index c7c195b..8f47957 100644
              player,
              mixer,
  
-@@ -254,6 +317,8 @@ impl Spirc {
+@@ -254,6 +328,10 @@ impl Spirc {
              context_resolver: ContextResolver::new(session.clone()),
  
              emit_set_queue_events,
 +            startup_restore,
 +            startup_resolved: false,
++            last_remote: None,
++            play_here_requested_at: None,
  
              shutdown: false,
              session,
-@@ -329,6 +394,17 @@ impl Spirc {
+@@ -329,6 +407,17 @@ impl Spirc {
          Ok(self.commands.send(SpircCommand::Next)?)
      }
  
@@ -436,7 +472,22 @@ index c7c195b..8f47957 100644
      /// Increases the volume by configured steps of [ConnectConfig].
      ///
      /// Does nothing if we are not the active device.
-@@ -599,6 +675,7 @@ impl SpircTask {
+@@ -447,6 +536,14 @@ impl Spirc {
+             .commands
+             .send(SpircCommand::Transfer(transfer_request))?)
+     }
++
++    /// Bopify: plays here from wherever the account's session is, taking over
++    /// another device, resuming the last session, or playing Liked Songs.
++    ///
++    /// Needs `ConnectConfig::startup_restore`; while this device is active it is [Spirc::play].
++    pub fn play_here(&self) -> Result<(), Error> {
++        Ok(self.commands.send(SpircCommand::PlayHere)?)
++    }
+ }
+ 
+ impl SpircTask {
+@@ -599,6 +696,7 @@ impl SpircTask {
                  },
                  else => break
              }
@@ -444,7 +495,7 @@ index c7c195b..8f47957 100644
          }
  
          if !self.shutdown && self.connect_state.is_active() {
-@@ -662,41 +739,24 @@ impl SpircTask {
+@@ -662,41 +760,24 @@ impl SpircTask {
          update_state
      }
  
@@ -501,7 +552,7 @@ index c7c195b..8f47957 100644
      }
  
      // todo: is the time_delta still necessary?
-@@ -711,6 +771,27 @@ impl SpircTask {
+@@ -711,6 +792,27 @@ impl SpircTask {
      async fn handle_command(&mut self, cmd: SpircCommand) -> Result<(), Error> {
          trace!("Received SpircCommand::{cmd:?}");
          match cmd {
@@ -529,7 +580,27 @@ index c7c195b..8f47957 100644
              SpircCommand::Shutdown => {
                  trace!("Received SpircCommand::Shutdown");
                  self.handle_pause();
-@@ -925,6 +1006,13 @@ impl SpircTask {
+@@ -733,6 +835,10 @@ impl SpircTask {
+                 self.handle_activate();
+                 return self.notify().await;
+             }
++            SpircCommand::PlayHere if self.startup_restore && !self.connect_state.is_active() => {
++                self.handle_play_here().await;
++                return Ok(());
++            }
+             SpircCommand::Transfer(..) | SpircCommand::Activate => {
+                 warn!("SpircCommand::{cmd:?} will be ignored while already active")
+             }
+@@ -745,7 +851,7 @@ impl SpircTask {
+                 }
+                 return self.handle_disconnect().await;
+             }
+-            SpircCommand::Play => self.handle_play(),
++            SpircCommand::Play | SpircCommand::PlayHere => self.handle_play(),
+             SpircCommand::PlayPause => self.handle_play_pause(),
+             SpircCommand::Pause => self.handle_pause(),
+             SpircCommand::Prev => self.handle_prev()?,
+@@ -925,6 +1031,13 @@ impl SpircTask {
  
          self.connect_established = true;
  
@@ -543,7 +614,7 @@ index c7c195b..8f47957 100644
          let same_session = cluster.player_state.session_id == self.session.session_id()
              || cluster.player_state.session_id.is_empty();
          if !cluster.active_device_id.is_empty() || !same_session {
-@@ -953,6 +1041,56 @@ impl SpircTask {
+@@ -953,6 +1066,141 @@ impl SpircTask {
          Ok(())
      }
  
@@ -551,56 +622,172 @@ index c7c195b..8f47957 100644
 +    /// handler ends the Spirc task, and Swift would see a lost session.
 +    async fn resolve_startup(&mut self, cluster: &Cluster) -> StartupOutcome {
 +        match startup_decision(cluster, self.session.device_id()) {
-+            StartupDecision::Remote { device_name } => {
++            StartupDecision::Remote(remote) => {
++                let device_name = remote.device_name.clone();
++                // Emitted with the outcome, so the mirror appears at launch.
++                self.publish_remote(Some(remote));
 +                return StartupOutcome::Remote { device_name };
 +            }
 +            StartupDecision::Restore(transfer) => {
-+                match self.handle_transfer(transfer) {
-+                    // handle_transfer returns Ok without loading when the session names no
-+                    // playable track, so only a paused load counts as restored.
-+                    Ok(()) if matches!(self.play_status, SpircPlayStatus::LoadingPause { .. }) => {
-+                        return StartupOutcome::Restored;
-+                    }
-+                    Ok(()) => warn!("startup: the last session had no track to restore"),
-+                    Err(why) => warn!("startup: restoring the last session failed: {why}"),
++                if self.restore_session(transfer) {
++                    return StartupOutcome::Restored;
 +                }
-+                // A half-applied transfer must not be finished later on top of Liked Songs.
-+                self.transfer_state = None;
 +            }
 +            StartupDecision::Fallback => {}
 +        }
-+        self.load_liked_songs().await
++        self.load_liked_songs(false).await
++    }
++
++    /// Takes the last session over paused, as `startup_decision` prepared it.
++    /// Returns false when no track was loaded, after dropping the pending
++    /// transfer so it is not finished on top of Liked Songs.
++    fn restore_session(&mut self, transfer: TransferState) -> bool {
++        match self.handle_transfer(transfer) {
++            // handle_transfer returns Ok without loading when the session names no
++            // playable track, so only a paused load counts as restored.
++            Ok(()) if matches!(self.play_status, SpircPlayStatus::LoadingPause { .. }) => {
++                return true;
++            }
++            Ok(()) => warn!("restore: the last session had no track to restore"),
++            Err(why) => warn!("restore: restoring the last session failed: {why}"),
++        }
++        // A half-applied transfer must not be finished later on top of Liked Songs.
++        self.transfer_state = None;
++        false
++    }
++
++    /// Bopify: logs its own failures, because the command loop only debug-logs
++    /// an error. The cluster comes from the same PUT whose reply the startup
++    /// decision reads, since cluster updates are not known to carry the full last session.
++    async fn handle_play_here(&mut self) {
++        use protobuf::Message as _;
++        if self
++            .play_here_requested_at
++            .is_some_and(|at| self.now_ms() - at < PLAY_HERE_WINDOW_MS)
++        {
++            debug!("play here: a transfer request is already pending");
++            return;
++        }
++        let cluster = match self
++            .connect_state
++            .notify_new_device_appeared(&self.session)
++            .await
++        {
++            Ok(bytes) => Cluster::parse_from_bytes(&bytes).ok(),
++            Err(why) => {
++                warn!("play here: fetching the cluster failed: {why}");
++                return;
++            }
++        };
++        let Some(cluster) = cluster else {
++            warn!("play here: the state update returned no cluster");
++            return;
++        };
++        let decision = startup_decision(&cluster, self.session.device_id());
++        let kind = match &decision {
++            StartupDecision::Remote(_) => "remote",
++            StartupDecision::Restore(_) => "restore",
++            StartupDecision::Fallback => "fallback",
++        };
++        // Visible in a diagnostic build: tells a Liked Songs fallback from a thin reply.
++        debug!("play here: decision={kind} transfer_data={} bytes", cluster.transfer_data.len());
++        match decision {
++            StartupDecision::Remote(_) => {
++                // Set before the request goes out, so the transfer the server sends back
++                // plays even if the mirrored device was paused.
++                self.play_here_requested_at = Some(self.now_ms());
++                // Spawned, so this loop can answer the transfer request the server sends
++                // before it replies; awaiting here dropped the dealer connection (run 5).
++                let spclient = self.session.spclient().clone();
++                let device_id = self.session.device_id().to_owned();
++                tokio::spawn(async move {
++                    // Run 5 moved playback despite a 410, so the reply is only logged.
++                    if let Err(why) = spclient.transfer(&device_id, &device_id, None).await {
++                        warn!("play here: transfer replied {why}");
++                    }
++                });
++                return;
++            }
++            StartupDecision::Restore(transfer) => {
++                if self.restore_session(transfer) {
++                    self.handle_play();
++                    if let Err(why) = self.notify().await {
++                        warn!("play here: publishing the restored session failed: {why}");
++                    }
++                    return;
++                }
++            }
++            StartupDecision::Fallback => {}
++        }
++        self.load_liked_songs(true).await;
 +    }
 +
 +    /// Mirrors the Activate and Load command paths, but keeps the load's
 +    /// result, which the command path only debug-logs.
-+    async fn load_liked_songs(&mut self) -> StartupOutcome {
++    async fn load_liked_songs(&mut self, start_playing: bool) -> StartupOutcome {
 +        self.handle_activate();
 +        let uri = format!("spotify:user:{}:collection", self.session.username());
 +        let request = LoadRequest::from_context_uri(
 +            uri,
 +            LoadRequestOptions {
-+                start_playing: false,
++                start_playing,
 +                ..Default::default()
 +            },
 +        );
 +        let outcome = match self.handle_load(request, None, None).await {
 +            Ok(()) => StartupOutcome::LikedSongs,
 +            Err(why) => {
-+                warn!("startup: loading liked songs failed: {why}");
++                warn!("liked songs: loading failed: {why}");
 +                StartupOutcome::Nothing
 +            }
 +        };
 +        if let Err(why) = self.notify().await {
-+            warn!("startup: state update failed: {why}");
++            warn!("liked songs: state update failed: {why}");
 +        }
 +        outcome
++    }
++
++    fn publish_remote(&mut self, remote: Option<RemoteState>) {
++        if remote_changed(&mut self.last_remote, &remote) {
++            self.player.emit_remote_playback_event(remote);
++        }
 +    }
 +
      fn handle_user_attributes_update(&mut self, update: UserAttributesUpdate) {
          trace!("Received attributes update: {update:#?}");
          let attributes: UserAttributes = update
-@@ -1181,6 +1319,7 @@ impl SpircTask {
+@@ -1024,6 +1272,12 @@ impl SpircTask {
+                 //  tried: providing session_id, playback_id, track-metadata "track_player"
+                 self.update_state = true;
+             }
++
++            // Bopify: this includes the update that just deactivated this device.
++            if self.startup_restore && !self.connect_state.is_active() {
++                let remote = remote_playback(&cluster, self.session.device_id());
++                self.publish_remote(remote);
++            }
+         } else if self.connect_state.is_active() {
+             self.connect_state.became_inactive(&self.session).await?;
+         }
+@@ -1083,7 +1337,17 @@ impl SpircTask {
+             }
+             // modification and update of the connect_state
+             Transfer(transfer) => {
++                // Taken before handle_transfer, so an error can't leave it set for a later transfer.
++                let play_here = self
++                    .play_here_requested_at
++                    .take()
++                    .is_some_and(|at| self.now_ms() - at < PLAY_HERE_WINDOW_MS);
+                 self.handle_transfer(transfer.data.expect("by condition checked"))?;
++                if play_here {
++                    // Bopify: play-here asked to play, even if the mirrored device was paused.
++                    debug!("play here: playing the transferred session");
++                    self.handle_play();
++                }
+                 return self.notify().await;
+             }
+             Play(mut play) => {
+@@ -1181,6 +1445,7 @@ impl SpircTask {
      }
  
      fn handle_transfer(&mut self, mut transfer: TransferState) -> Result<(), Error> {
@@ -608,7 +795,38 @@ index c7c195b..8f47957 100644
          let mut ctx_uri = match transfer.current_session.context.uri {
              None => Err(SpircError::NoUri("transfer context"))?,
              // can apparently happen when a state is transferred and was started with "uris" via the api
-@@ -1363,6 +1502,7 @@ impl SpircTask {
+@@ -1254,17 +1519,7 @@ impl SpircTask {
+             ContextType::Default
+         };
+ 
+-        // update position if the track continued playing
+-        let transfer_timestamp = transfer.playback.timestamp.unwrap_or_default();
+-        let position = match transfer.playback.position_as_of_timestamp {
+-            Some(position) if transfer.playback.is_paused.unwrap_or_default() => position.into(),
+-            // update position if the track continued playing
+-            Some(position) if position > 0 => {
+-                let time_since_position_update = timestamp - transfer_timestamp;
+-                i64::from(position) + time_since_position_update
+-            }
+-            _ => 0,
+-        };
++        let position = transfer_position(&transfer.playback, timestamp);
+ 
+         let is_playing = !transfer.playback.is_paused();
+ 
+@@ -1329,6 +1584,11 @@ impl SpircTask {
+     }
+ 
+     fn handle_activate(&mut self) {
++        // Bopify: Swift drops the mirror on becoming active, so the next takeover must emit
++        // again, and a transfer that never arrived must not force-play a later one.
++        self.last_remote = None;
++        self.play_here_requested_at = None;
++
+         self.connect_state.set_active(true);
+         self.player
+             .emit_session_connected_event(self.session.connection_id(), self.session.username());
+@@ -1363,6 +1623,7 @@ impl SpircTask {
          page: Option<ContextPage>,
          fallback_index: Option<usize>,
      ) -> Result<(), Error> {
@@ -616,7 +834,7 @@ index c7c195b..8f47957 100644
          self.connect_state
              .reset_context(if let PlayContext::Uri(ref uri) = cmd.context {
                  ResetContext::WhenDifferent(uri)
-@@ -1621,6 +1761,7 @@ impl SpircTask {
+@@ -1621,6 +1882,7 @@ impl SpircTask {
      }
  
      fn handle_shuffle(&mut self, shuffle: bool) -> Result<(), Error> {
@@ -624,7 +842,7 @@ index c7c195b..8f47957 100644
          self.player.emit_shuffle_changed_event(shuffle);
          self.connect_state.handle_shuffle(shuffle)
      }
-@@ -1896,7 +2037,11 @@ impl SpircTask {
+@@ -1896,7 +2158,11 @@ impl SpircTask {
          let current_uri = self.connect_state.current_track(|t| &t.uri);
          let id = SpotifyUri::from_uri(current_uri)?;
          self.player.load(id, start_playing, position_ms);
@@ -636,7 +854,7 @@ index c7c195b..8f47957 100644
          self.connect_state
              .update_position(position_ms, self.now_ms());
          if start_playing {
-@@ -1905,11 +2050,10 @@ impl SpircTask {
+@@ -1905,11 +2171,10 @@ impl SpircTask {
              self.play_status = SpircPlayStatus::LoadingPause { position_ms };
          }
          self.connect_state.set_status(&self.play_status);
@@ -651,42 +869,32 @@ index c7c195b..8f47957 100644
          if self.connect_state.is_playing() {
 diff --git a/connect/src/startup.rs b/connect/src/startup.rs
 new file mode 100644
-index 0000000..a545f71
+index 0000000..c36abc2
 --- /dev/null
 +++ b/connect/src/startup.rs
-@@ -0,0 +1,195 @@
-+//! Bopify: the connect-time decision behind `ConnectConfig::startup_restore`.
+@@ -0,0 +1,388 @@
++//! Bopify: the connect-time decision behind `ConnectConfig::startup_restore`,
++//! and the mirror of another device's playback.
 +
-+use crate::protocol::{connect::Cluster, transfer_state::TransferState};
++use crate::{
++    playback::player::RemoteState,
++    protocol::{connect::Cluster, playback::Playback, transfer_state::TransferState},
++};
 +use protobuf::Message;
 +
 +#[derive(Debug)]
 +pub(crate) enum StartupDecision {
-+    Remote { device_name: String },
++    Remote(RemoteState),
 +    Restore(TransferState),
 +    Fallback,
 +}
 +
 +pub(crate) fn startup_decision(cluster: &Cluster, own_device_id: &str) -> StartupDecision {
-+    let active = cluster.active_device_id.as_str();
-+    if !active.is_empty() {
-+        let has_track = cluster
-+            .player_state
-+            .track
-+            .as_ref()
-+            .is_some_and(|track| !track.uri.is_empty());
-+        return if active != own_device_id && has_track {
-+            let device_name = cluster
-+                .device
-+                .get(active)
-+                .map(|device| device.name.clone())
-+                .unwrap_or_default();
-+            StartupDecision::Remote { device_name }
-+        } else {
-+            // A trackless active device has nothing to mirror, and while any device is
-+            // active the transfer data is a stub that would pull its context over.
-+            StartupDecision::Fallback
-+        };
++    if !cluster.active_device_id.is_empty() {
++        // A trackless active device has nothing to mirror, and while any device is
++        // active the transfer data is a stub that would pull its context over.
++        return remote_playback(cluster, own_device_id)
++            .map_or(StartupDecision::Fallback, StartupDecision::Remote);
 +    }
 +    match TransferState::parse_from_bytes(&cluster.transfer_data) {
 +        Ok(mut transfer) if is_usable(&transfer) => {
@@ -700,6 +908,73 @@ index 0000000..a545f71
 +        }
 +        _ => StartupDecision::Fallback,
 +    }
++}
++
++/// What another active device is playing, or `None` when no other device is
++/// active with a track. Reads `player_state`, because `transfer_data` is a
++/// stub with an empty track while a device is active (run 4).
++pub(crate) fn remote_playback(cluster: &Cluster, own_device_id: &str) -> Option<RemoteState> {
++    let active = cluster.active_device_id.as_str();
++    if active.is_empty() || active == own_device_id {
++        return None;
++    }
++    let state = cluster.player_state.as_ref()?;
++    let track_uri = state
++        .track
++        .as_ref()
++        .map(|track| track.uri.clone())
++        .filter(|uri| !uri.is_empty())?;
++    let is_playing = state.is_playing && !state.is_paused;
++    // Server clocks only, so a skewed Mac clock cannot move the mirror.
++    let elapsed = if is_playing {
++        cluster.server_timestamp_ms.saturating_sub(state.timestamp).max(0)
++    } else {
++        0
++    };
++    let mut position = state.position_as_of_timestamp.saturating_add(elapsed).max(0);
++    if state.duration > 0 {
++        position = position.min(state.duration);
++    }
++    Some(RemoteState {
++        device_name: cluster
++            .device
++            .get(active)
++            .map(|device| device.name.clone())
++            .unwrap_or_default(),
++        track_uri,
++        is_playing,
++        position_ms: u32::try_from(position).unwrap_or(u32::MAX),
++        duration_ms: u32::try_from(state.duration.max(0)).unwrap_or(u32::MAX),
++    })
++}
++
++/// The transfer's playback position, extrapolated forward while the reported
++/// session was still playing: a session reported at 0:00 (just after a skip)
++/// has still been playing since its timestamp.
++pub(crate) fn transfer_position(playback: &Playback, now_ms: i64) -> i64 {
++    let Some(position) = playback.position_as_of_timestamp else {
++        return 0;
++    };
++    let position = i64::from(position);
++    if playback.is_paused.unwrap_or_default() {
++        return position;
++    }
++    match playback.timestamp {
++        Some(timestamp) if timestamp > 0 => {
++            position.saturating_add(now_ms.saturating_sub(timestamp)).max(0)
++        }
++        _ => position,
++    }
++}
++
++/// Records `next` as the last emitted mirror, and says whether it differs,
++/// so Spirc emits only changes.
++pub(crate) fn remote_changed(last: &mut Option<RemoteState>, next: &Option<RemoteState>) -> bool {
++    if last == next {
++        return false;
++    }
++    last.clone_from(next);
++    true
 +}
 +
 +/// Checks content, not byte length: an empty Bopify session still serialises
@@ -748,6 +1023,19 @@ index 0000000..a545f71
 +            .mut_or_insert_default()
 +            .uri = playing_track.into();
 +        cluster.transfer_data = transfer_data;
++        cluster
++    }
++
++    /// `cluster`, with the active device reporting playback at a known server time.
++    fn reporting(active: &str, paused: bool, server_timestamp_ms: i64) -> Cluster {
++        let mut cluster = cluster(active, "spotify:track:0phqiLIH4JYk4jPissBOQE", Vec::new());
++        let state = cluster.player_state.mut_or_insert_default();
++        state.is_playing = true;
++        state.is_paused = paused;
++        state.timestamp = 1_000;
++        state.position_as_of_timestamp = 5_000;
++        state.duration = 200_000;
++        cluster.server_timestamp_ms = server_timestamp_ms;
 +        cluster
 +    }
 +
@@ -816,7 +1104,7 @@ index 0000000..a545f71
 +            OWN,
 +        );
 +        assert!(
-+            matches!(&decision, StartupDecision::Remote { device_name } if device_name == "iPhone"),
++            matches!(&decision, StartupDecision::Remote(remote) if remote.device_name == "iPhone"),
 +            "{decision:?}"
 +        );
 +    }
@@ -848,6 +1136,129 @@ index 0000000..a545f71
 +    fn this_device_is_never_mirrored() {
 +        let decision = startup_decision(&cluster(OWN, "spotify:track:x", Vec::new()), OWN);
 +        assert!(matches!(decision, StartupDecision::Fallback), "{decision:?}");
++    }
++
++    #[test]
++    fn a_playing_mirror_advances_by_server_time_only() {
++        let remote = remote_playback(&reporting("6dce37", false, 3_500), OWN).unwrap();
++        assert_eq!(
++            remote,
++            RemoteState {
++                device_name: "iPhone".into(),
++                track_uri: "spotify:track:0phqiLIH4JYk4jPissBOQE".into(),
++                is_playing: true,
++                position_ms: 7_500,
++                duration_ms: 200_000,
++            }
++        );
++    }
++
++    #[test]
++    fn a_paused_mirror_holds_its_reported_position() {
++        let remote = remote_playback(&reporting("6dce37", true, 3_500), OWN).unwrap();
++        assert!(!remote.is_playing);
++        assert_eq!(remote.position_ms, 5_000);
++    }
++
++    #[test]
++    fn a_mirrored_position_never_passes_the_track_end() {
++        let remote = remote_playback(&reporting("6dce37", false, 900_000), OWN).unwrap();
++        assert_eq!(remote.position_ms, 200_000);
++    }
++
++    #[test]
++    fn nothing_is_mirrored_without_another_active_device_with_a_track() {
++        for cluster in [
++            cluster("", "spotify:track:x", Vec::new()),
++            cluster(OWN, "spotify:track:x", Vec::new()),
++            cluster("ghost", "", Vec::new()),
++        ] {
++            assert_eq!(remote_playback(&cluster, OWN), None);
++        }
++    }
++
++    #[test]
++    fn a_device_missing_from_the_device_list_is_mirrored_without_a_name() {
++        let mut cluster = reporting("6dce37", false, 3_500);
++        cluster.device.clear();
++        assert_eq!(remote_playback(&cluster, OWN).unwrap().device_name, "");
++    }
++
++    #[test]
++    fn only_a_changed_mirror_is_emitted() {
++        let playing = remote_playback(&reporting("6dce37", false, 3_500), OWN);
++        let mut last = None;
++        assert!(remote_changed(&mut last, &playing));
++        assert!(!remote_changed(&mut last, &playing));
++        assert!(remote_changed(
++            &mut last,
++            &remote_playback(&reporting("6dce37", true, 3_500), OWN)
++        ));
++        assert!(remote_changed(&mut last, &None));
++        assert!(!remote_changed(&mut last, &None));
++    }
++
++    #[test]
++    fn a_paused_transfer_keeps_its_reported_position() {
++        let playback = Playback {
++            position_as_of_timestamp: Some(68_188),
++            timestamp: Some(1_000_000),
++            is_paused: Some(true),
++            ..Default::default()
++        };
++        assert_eq!(transfer_position(&playback, 1_500_000), 68_188);
++    }
++
++    #[test]
++    fn a_playing_transfer_reported_at_zero_still_counts_time_since_its_report() {
++        let playback = Playback {
++            position_as_of_timestamp: Some(0),
++            timestamp: Some(1_000_000),
++            is_paused: Some(false),
++            ..Default::default()
++        };
++        assert_eq!(transfer_position(&playback, 1_000_000 + 79_000), 79_000);
++    }
++
++    #[test]
++    fn a_playing_transfer_extrapolates_from_its_reported_position() {
++        let playback = Playback {
++            position_as_of_timestamp: Some(68_188),
++            timestamp: Some(1_000_000),
++            is_paused: Some(false),
++            ..Default::default()
++        };
++        assert_eq!(transfer_position(&playback, 1_000_500), 68_688);
++    }
++
++    #[test]
++    fn a_playing_transfer_never_goes_negative_on_clock_skew() {
++        let playback = Playback {
++            position_as_of_timestamp: Some(1_000),
++            timestamp: Some(1_000_000),
++            is_paused: Some(false),
++            ..Default::default()
++        };
++        assert_eq!(transfer_position(&playback, 1_000_000 - 5_000), 0);
++    }
++
++    #[test]
++    fn a_playing_transfer_without_a_timestamp_keeps_its_reported_position() {
++        for timestamp in [None, Some(0)] {
++            let playback = Playback {
++                position_as_of_timestamp: Some(68_188),
++                timestamp,
++                is_paused: Some(false),
++                ..Default::default()
++            };
++            assert_eq!(transfer_position(&playback, 1_000_000), 68_188);
++        }
++    }
++
++    #[test]
++    fn a_transfer_without_a_position_starts_at_zero() {
++        let playback = Playback::default();
++        assert_eq!(transfer_position(&playback, 1_000_000), 0);
 +    }
 +}
 diff --git a/connect/src/state.rs b/connect/src/state.rs
@@ -1347,10 +1758,10 @@ index 0ecfde2..a7b6c61 100644
 +    }
 +}
 diff --git a/playback/src/player.rs b/playback/src/player.rs
-index f3d803d..28436a9 100644
+index f3d803d..a6b2427 100644
 --- a/playback/src/player.rs
 +++ b/playback/src/player.rs
-@@ -139,11 +139,13 @@ enum PlayerCommand {
+@@ -139,11 +139,14 @@ enum PlayerCommand {
      },
      EmitAutoPlayChangedEvent(bool),
      EmitSetQueueEvent {
@@ -1361,10 +1772,11 @@ index f3d803d..28436a9 100644
          prev_tracks: Vec<QueueTrack>,
      },
 +    EmitStartupResolvedEvent(StartupOutcome),
++    EmitRemotePlaybackEvent(Option<RemoteState>),
  }
  
  /// Represents a track in the queue with its URI and provider.
-@@ -151,6 +153,26 @@ enum PlayerCommand {
+@@ -151,6 +154,42 @@ enum PlayerCommand {
  pub struct QueueTrack {
      pub uri: String,
      pub provider: String,
@@ -1388,10 +1800,26 @@ index f3d803d..28436a9 100644
 +    },
 +    /// Liked Songs could not be loaded either; the device is active and empty.
 +    Nothing,
++}
++
++/// What another Connect device is playing, mirrored while this device is
++/// inactive. Emitted only when `ConnectConfig::startup_restore` is set.
++#[derive(Clone, Debug, PartialEq, Eq)]
++pub struct RemoteState {
++    /// The device's name, as Spotify's device picker shows it.
++    pub device_name: String,
++    /// The playing track's URI.
++    pub track_uri: String,
++    /// False while the device is paused.
++    pub is_playing: bool,
++    /// The position as of the cluster's server timestamp.
++    pub position_ms: u32,
++    /// The track's duration, as the device reported it.
++    pub duration_ms: u32,
  }
  
  #[derive(Debug, Clone)]
-@@ -263,11 +285,16 @@ pub enum PlayerEvent {
+@@ -263,11 +302,20 @@ pub enum PlayerEvent {
      },
      /// Fired when the queue is set or context is loaded with its track list.
      SetQueue {
@@ -1405,10 +1833,14 @@ index f3d803d..28436a9 100644
 +    StartupResolved {
 +        outcome: StartupOutcome,
 +    },
++    /// Fired when a mirrored device's playback changes; `None` once no other device plays.
++    RemotePlayback {
++        remote: Option<RemoteState>,
++    },
  }
  
  impl PlayerEvent {
-@@ -670,18 +697,24 @@ impl Player {
+@@ -670,18 +718,29 @@ impl Player {
  
      pub fn emit_set_queue_event(
          &self,
@@ -1430,10 +1862,15 @@ index f3d803d..28436a9 100644
 +    pub fn emit_startup_resolved_event(&self, outcome: StartupOutcome) {
 +        self.command(PlayerCommand::EmitStartupResolvedEvent(outcome));
 +    }
++
++    /// Emits the mirrored device's playback, or `None` once no other device plays.
++    pub fn emit_remote_playback_event(&self, remote: Option<RemoteState>) {
++        self.command(PlayerCommand::EmitRemotePlaybackEvent(remote));
++    }
  }
  
  impl Drop for Player {
-@@ -2371,17 +2404,23 @@ impl PlayerInternal {
+@@ -2371,17 +2430,27 @@ impl PlayerInternal {
              }
  
              PlayerCommand::EmitSetQueueEvent {
@@ -1454,10 +1891,14 @@ index f3d803d..28436a9 100644
 +                self.send_event(PlayerEvent::StartupResolved { outcome })
 +            }
 +
++            PlayerCommand::EmitRemotePlaybackEvent(remote) => {
++                self.send_event(PlayerEvent::RemotePlayback { remote })
++            }
++
              PlayerCommand::EmitFilterExplicitContentChangedEvent(filter) => {
                  self.send_event(PlayerEvent::FilterExplicitContentChanged { filter });
  
-@@ -2584,16 +2623,22 @@ impl fmt::Debug for PlayerCommand {
+@@ -2584,16 +2653,27 @@ impl fmt::Debug for PlayerCommand {
                  .field(&auto_play)
                  .finish(),
              PlayerCommand::EmitSetQueueEvent {
@@ -1476,6 +1917,11 @@ index f3d803d..28436a9 100644
 +            PlayerCommand::EmitStartupResolvedEvent(outcome) => f
 +                .debug_tuple("EmitStartupResolvedEvent")
 +                .field(&outcome)
++                .finish(),
++            // Presence only: the state carries the user's device name.
++            PlayerCommand::EmitRemotePlaybackEvent(remote) => f
++                .debug_tuple("EmitRemotePlaybackEvent")
++                .field(&remote.is_some())
 +                .finish(),
          }
      }

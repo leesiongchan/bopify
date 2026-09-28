@@ -46,3 +46,47 @@ The scenario 3 edit was removed by hand, not with `git checkout`. After that, `p
 ## Limits
 
 Not exercised: a session old enough that Spotify no longer returns `transfer_data`; a Liked Songs library that is actually empty; a whole context that can't play (`Unavailable`/`Stopped`, still dropped by the event translation); a network failure during startup. A real Nothing outcome was never reached, so the paste view was only checked in preview.
+
+## Phase 2: mirror and play here (2026-09-27)
+
+Checked 2026-09-27 to 2026-09-28 against the user's own Spotify account and iPhone. Branch `feat/remote-mirror`, first at `8febc7b`, then at `26f26b3` after two fixes found in this run (see Deviations).
+
+```sh
+./scripts/build-rust.sh
+xcodebuild -quiet -project Bopify/Bopify.xcodeproj -scheme Bopify -destination 'platform=macOS,arch=arm64' -derivedDataPath /private/tmp/bopify-mirror-build build
+/usr/bin/log stream --style compact --level debug --predicate 'subsystem == "my.snsoft.bopify"' > /private/tmp/bopify-mirror.log
+```
+
+The run used a diagnostic build. The only change was the same local, uncommitted `logging.rs` edit as in phase 1: librespot logged at `Debug`, in a public category, so dealer and transfer lines were visible. That edit was reverted by hand before this commit (`git status` clean), and the library and app were rebuilt without it. The app was launched from `/private/tmp/bopify-mirror-build/Build/Products/Debug/Bopify.app`, one instance at a time, and quit through AppleScript between launches. Times are local. Device names, device IDs and track titles are left out on purpose.
+
+| # | Setup | Expected | Observed | User confirmation | Result |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Phone playing, then launch; then skip on the phone | `outcome=remote`; the mirror follows the skip; the phone keeps playing | 23:53:12.953 `outcome=remote`, mirror in Swift 66 ms later. Skip: cluster update 23:54:36.773, mirror 101 ms later | Phone's track, "Playing on <device>", moving ring, time within about 1 s of the phone, only Play usable, no heart, no rim; the mirror followed | Pass |
+| 2 | Click Play on a playing mirror | `loading → playing`, the phone stops, same track at about the same position | 23:55:55.906 `play here: decision=remote`; the server's transfer arrived 96 ms after the request; `idle → loading → playing` 0.5 s after the press; `update position to 0:00` | Same track, almost immediately, player stayed open; **position reset to 0:00** | Fail, fixed (see Deviations) |
+| 2 | After a pause and resume on the phone, double-click Play | One takeover, no restart | One `command enqueued command=playHere`; transfer +66 ms; `Load(…, true, 68188)`, i.e. 1:08 kept. The second click came after `loading` (175 ms), which disables Play | No restart or jump, the phone stopped | Pass |
+| 2 | Pause the phone, then click Play within a minute | Bopify plays, not paused | 00:09:28 `decision=remote`, `play here: playing the transferred session`, `Load(…, false, 115533)` then `loading → playing` 0.58 s after the press | As expected | Pass |
+| 2 | After fixes: skip on the phone, about 30 s untouched, then Space | Takeover at about 0:30 | 00:50:33.968 `command enqueued command=playHere` (from Space), `decision=remote`, `update position to 0:30`, `Load(…, true, 30598)`, playing 0.9 s after Space | As expected | Pass |
+| 3 | While Bopify plays, pick the phone in its device picker | Mirror "Playing on <device>", no rim, no frozen track | Cluster update 00:00:35.183, `EmitSessionDisconnectedEvent` and `playing → idle` 0.22 s later, mirror 0.62 s after that; no `Playing` after going inactive | As expected; same-track record transition looked right | Pass |
+| 3 | Same, with Up Next open | The Up Next button can close the queue; no heart | `Player presentation: queue` 00:51:44, takeover 00:51:55.993, mirror 00:51:56.626, `expanded` at 00:52:08 via the button | As expected | Pass |
+| 4 | After scenario 3: pause the phone, wait until it leaves the cluster, click Play | Same track restored here, playing from its last reported position | Phone left the cluster 126 s after the pause (`remote playback present=false`); `decision=restore`, `Load(…, false, 41702)`, `loading → playing`; positions 0:41 → 0:42, no jump | As expected | Pass |
+| 4 | Launch while the phone plays (Bopify has no track of its own), pause the phone, close Spotify there, press Space | Same, and Space acts as Play | Phone left the cluster 9 s after Spotify was closed; Space → `decision=restore`, `Load(…, false, 91884)`, playing 0.8 s later; 1:31 → 1:32 | As expected | Pass |
+| 5 | Read the logs of scenario 2's takeovers | No "Request disconnect", no failed transfer reply, no new connection (run 5 had all three) | Across three play-heres in one process: none of them; no `play here: transfer replied` warning; the transfer arrived 65–96 ms after the request (run 5: 3.2 s) | n/a | Pass |
+| — | After a play-here from a paused phone, move playback back to the phone, pause, then hand the paused session to Bopify from the phone's picker | Loads paused (the play-here flag is gone) | Transfer from the phone, no `play here: playing the transferred session`, `Load(…, false, 54085)`, `loading → paused` | As expected | Pass |
+
+Native probe captures (the Monolith player replaced previews with probes) come from `python3 docs/superpowers/verification/run-monolith-probe.py --derived-data /private/tmp/bopify-mirror-build --output <dir> --probe mirror`. It writes `mirror-playing.png`, `mirror-paused.png`, `stale-mirror.png`, `stale-own.png`, `active-paused.png` and `error.png`. With the Mac left idle, the composition probe passed 3 of 3 runs at `26f26b3`, each started from a cleared `my.snsoft.bopify.monolith-probe` defaults domain.
+
+### Deviations
+
+- **Play here after a skip restarted the track at 0:00.**
+  - **Cause.** Upstream `handle_transfer` added the time since the report only when the reported position was above 0. A phone playing through a playlist reports 0:00 at each track start and nothing after that, so a takeover 79 s later loaded at 0:00. A pause and resume on the phone makes it report its real position, and play here then kept 1:08. That contrast confirmed the cause. Phone-picker transfers took the same path.
+  - **Fix.** `c830f30` moved the calculation into a tested `transfer_position` that also extrapolates a reported 0, clamped at 0. The restore path still forces paused, so it never extrapolates.
+  - **Rerun.** After the fix, the rerun took over at 0:30.
+- **Space did nothing on the mirror.** Space was gated on an active device by design. The user decided during this run that Space should play and pause in every state. `26f26b3` makes Space follow the Play button's rules, and the mirror probe presses Space. It was verified live in scenarios 2 and 4.
+- **Keyboard focus could not reach Play.** Tab didn't land on Play. With Space fixed, the keyboard path no longer depends on it.
+- **The double-press guard was not exercised live.** Play disables itself once `loading` arrives, 175 ms after a press, so the second click never reached Spirc. The 10 s guard in `handle_play_here` covers presses inside that window, and has no live evidence.
+
+### Observed, not caused by this branch
+
+- **Favourites were rate-limited all session.** All 29 library requests returned HTTP 429, starting with the first launch before any scenario, so the heart reported "too many requests". The mirror doesn't use the Web API.
+- **The server closed the session once.** At 00:16:09 the user pressed Next, and half a second later librespot logged `Connection to server closed`. It invalidated the session, and the next track's audio key timed out. The player then decoded without a key and failed, and the engine reported `playbackSessionLost`. Nothing recovers a lost session automatically. No play-here or state update came before it.
+- **A paused phone left the cluster.** It went 126 s after being paused. After Spotify was closed on the phone, it went within 9 s. Either way the mirror became the stale state, as specified.
