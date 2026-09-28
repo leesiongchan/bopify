@@ -19,6 +19,7 @@ import BopifyDomain
     @MainActor static func main() {
         let app = NSApplication.shared
         app.setActivationPolicy(.regular)
+        app.activate(ignoringOtherApps: true)
         Task { @MainActor in
             let engine = StubPlaybackEngine()
             let player = PlayerModel(engine: engine)
@@ -35,9 +36,45 @@ import BopifyDomain
             engine.emit(.trackChanged(first))
             engine.emit(.paused(positionMs: 1545))
             await settle()
-            check(environment.presentation.mode == .expanded && panel.frame.size == CGSize(width: 484, height: 264)
+            check(environment.presentation.mode == .expanded && panel.frame.size == CGSize(width: 484, height: 360)
                   && !environment.monolithWindow.isTransitioning, "first track settles to tight listening geometry")
             check(engine.recordedCommands.isEmpty, "composition never autoplays")
+            let background = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 900, height: 600),
+                                      styleMask: [.borderless], backing: .buffered, defer: false)
+            background.backgroundColor = .systemTeal
+            check(CGPreflightPostEventAccess(), "WindowServer event delivery is authorized")
+            for queue in [false, true] {
+                environment.presentation.requestQueue(queue)
+                await settle()
+                background.makeKeyAndOrderFront(nil)
+                panel.resignKey()
+                panel.orderFrontRegardless()
+                try? await Task.sleep(for: .milliseconds(100))
+                let point = CGPoint(x: panel.frame.maxX - 30, y: panel.frame.minY + 28)
+                mouse(.leftMouseDown, at: point)
+                mouse(.leftMouseUp, at: point)
+                await settle()
+                mouse(.mouseMoved, at: CGPoint(x: 10, y: 10))
+                await settle()
+                check(panel.isKeyWindow && environment.presentation.mode != .compact,
+                      "blank \(queue ? "queue" : "control") panel click retains native focus")
+                let origin = panel.frame.origin
+                mouse(.leftMouseDown, at: point)
+                mouse(.leftMouseDragged, at: CGPoint(x: point.x + 3, y: point.y))
+                await settle()
+                check(panel.frame.origin == origin, "background drag slop leaves the frame unchanged")
+                mouse(.leftMouseDragged, at: CGPoint(x: point.x + 24, y: point.y + 16))
+                mouse(.leftMouseUp, at: CGPoint(x: point.x + 24, y: point.y + 16))
+                await settle()
+                check(abs(panel.frame.minX - origin.x - 24) < 1 && abs(panel.frame.minY - origin.y - 16) < 1,
+                      "blank \(queue ? "queue" : "control") panel drag moves the whole window")
+                check(!environment.monolithWindow.isDragging && engine.recordedCommands.isEmpty,
+                      "background drag balances attention without playback commands")
+            }
+            background.orderOut(nil)
+            panel.makeKey()
+            environment.presentation.requestQueue(false)
+            await settle()
             let a = QueueEntry(id: "a", uri: first.uri, target: nil, track: first, metadataFailed: false)
             let b = QueueEntry(id: "b", uri: second.uri, target: nil, track: second, metadataFailed: false)
             engine.emit(.queueChanged(PlaybackQueue(generation: 1, previous: [], current: a, next: [b])))
@@ -68,10 +105,10 @@ import BopifyDomain
             check(panel.level == (environment.presentation.keepOnTop ? .floating : .normal), "keep-on-top updates native level")
             environment.presentation.requestQueue(true)
             await settle()
-            check(panel.frame.height > 264, "production observer extends queue")
+            check(panel.frame.height == 360, "production observer switches queue without resizing")
             panel.cancelOperation(nil)
             await settle()
-            check(panel.isVisible && environment.presentation.mode == .expanded && panel.frame.height == 264, "Escape closes queue first")
+            check(panel.isVisible && environment.presentation.mode == .expanded && panel.frame.height == 360, "Escape closes queue first")
             panel.cancelOperation(nil)
             await settle()
             check(!panel.isVisible && !environment.presentation.isVisible, "second Escape hides panel")
@@ -90,6 +127,12 @@ import BopifyDomain
         let selector = NSSelectorFromString(name)
         guard value.responds(to: selector) else { return nil }
         return value.perform(selector)?.takeUnretainedValue()
+    }
+    @MainActor static func mouse(_ type: CGEventType, at point: CGPoint) {
+        let height = NSScreen.screens.first!.frame.maxY
+        CGEvent(mouseEventSource: nil, mouseType: type,
+                mouseCursorPosition: CGPoint(x: point.x, y: height - point.y), mouseButton: .left)!
+            .post(tap: .cghidEventTap)
     }
     @MainActor static func booleanAction(_ value: NSObject, _ name: String) -> Bool {
         let selector = NSSelectorFromString(name)

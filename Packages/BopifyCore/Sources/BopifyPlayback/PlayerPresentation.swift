@@ -4,11 +4,14 @@ import Observation
 import BopifyDomain
 import os
 
+public enum PlayerPopover: Sendable { case favorite, volume }
+
 public enum PlayerMode: String, Codable, Sendable { case expanded, compact, queue }
 
 @MainActor
 @Observable
 public final class PlayerPresentation {
+    public private(set) var activePopover: PlayerPopover?
     public private(set) var mode: PlayerMode
     public var keepOnTop: Bool
     public var isVisible: Bool {
@@ -29,9 +32,24 @@ public final class PlayerPresentation {
         self.mode = mode
     }
     public func sendAttention(_ event: PlayerAttentionEvent) {
+        switch event {
+        case .visibility(false), .reset: activePopover = nil
+        default: break
+        }
         attention.update(event, at: ProcessInfo.processInfo.systemUptime)
         updateMode()
         scheduleCollapse()
+    }
+    public func presentPopover(_ popover: PlayerPopover) {
+        guard isVisible else { return }
+        activePopover = popover
+        sendAttention(.interaction(.popover, true))
+    }
+    @discardableResult public func dismissPopover() -> Bool {
+        guard activePopover != nil else { return false }
+        activePopover = nil
+        sendAttention(.interaction(.popover, false))
+        return true
     }
     public func requestQueue(_ open: Bool) {
         queueRequested = open && attention.isRevealed

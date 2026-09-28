@@ -4,7 +4,7 @@ import subprocess, shutil, sys, argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--derived-data", required=True)
 parser.add_argument("--output", required=True)
-parser.add_argument("--probe", choices=["window", "visual", "artwork", "composition", "mirror", "library"], required=True)
+parser.add_argument("--probe", choices=["window", "visual", "artwork", "composition", "mirror", "surface", "library", "live-library", "refinement", "input-routing"], required=True)
 parser.add_argument("--measure-ambient", action="store_true")
 options = parser.parse_args()
 root = Path(__file__).resolve().parents[3]
@@ -20,10 +20,12 @@ if options.measure_ambient or options.probe == 'composition':
     instrumented = probe / 'InstrumentedVinylRecordView.swift'
     source = original.read_text()
     if options.measure_ambient:
-        source = source.replace('paused: !isPlaying || !isVisible || reduceMotion)) { context in',
-            'paused: !isPlaying || !isVisible || reduceMotion)) { context in\n                let _ = MonolithAmbientProbe.tick()')
+        marker = 'paused: !isPlaying || !isVisible || reduceMotion || isScrubbing)) { _ in'
+        assert source.count(marker) == 1, 'ambient probe instrumentation marker changed'
+        source = source.replace(marker, marker + '\n            let _ = MonolithAmbientProbe.tick()')
         source += '\n@MainActor enum MonolithAmbientProbe { static var ticks = 0; static func tick() { ticks += 1 } }\n'
     if options.probe == 'composition':
+        assert source.count('.onChange(of: occurrenceID) { _, _ in') == 1, 'navigation probe instrumentation marker changed'
         source = source.replace('.onChange(of: occurrenceID) { _, _ in',
             '.onChange(of: occurrenceID) { _, _ in\n            MonolithNavigationProbe.samples.append((occurrenceID, direction))')
         source += '\n@MainActor enum MonolithNavigationProbe { static var samples: [(String, CarouselDirection)] = [] }\n'
@@ -33,7 +35,7 @@ args = ['swiftc', '-parse-as-library', '-D', 'DEBUG', '-swift-version', '6', '-d
 if options.measure_ambient: args += ['-D', 'MONOLITH_MEASURE']
 for framework in ['AudioToolbox', 'CoreAudio', 'IOKit', 'CoreFoundation', 'Foundation', 'SystemConfiguration', 'Security']:
     args += ['-framework', framework]
-args += sources + [str(root / 'docs/superpowers/verification' / {'window': 'MonolithWindowProbe.swift', 'visual': 'MonolithVisualProbe.swift', 'artwork': 'ArtworkMorphProbe.swift', 'composition': 'MonolithCompositionProbe.swift', 'mirror': 'MonolithMirrorProbe.swift', 'library': 'MonolithLibraryProbe.swift'}[options.probe])] + [str(products / (name + '.o')) for name in ['BopifyDomain', 'BopifyPlayback', 'BopifyAuth', 'BopifyLibrary', 'CBopifyCore']]
+args += sources + [str(root / 'docs/superpowers/verification' / {'window': 'MonolithWindowProbe.swift', 'visual': 'MonolithVisualProbe.swift', 'artwork': 'ArtworkMorphProbe.swift', 'composition': 'MonolithCompositionProbe.swift', 'mirror': 'MonolithMirrorProbe.swift', 'surface': 'MonolithSurfaceProbe.swift', 'library': 'MonolithLibraryProbe.swift', 'live-library': 'MonolithLiveLibraryProbe.swift', 'refinement': 'MonolithRefinementProbe.swift', 'input-routing': 'MonolithInputRoutingProbe.swift'}[options.probe])] + [str(products / (name + '.o')) for name in ['BopifyDomain', 'BopifyPlayback', 'BopifyAuth', 'BopifyLibrary', 'CBopifyCore']]
 args += ['-o', str(app / 'MacOS/MonolithProbe')]
 subprocess.run(args, check=True)
 if instrumented: instrumented.unlink()

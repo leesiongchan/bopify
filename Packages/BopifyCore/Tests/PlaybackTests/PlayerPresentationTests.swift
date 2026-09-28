@@ -140,4 +140,36 @@ struct PlayerPresentationTests {
         state.staleRemote = remote(isPlaying: false)
         #expect(InactiveStatus(state) == .notPlaying)
     }
+    @MainActor @Test func popoverSwitchKeepsAttention() {
+        let presentation = PlayerPresentation()
+        presentation.isVisible = true
+        presentation.sendAttention(.pointer(true))
+        presentation.presentPopover(.favorite)
+        presentation.presentPopover(.volume)
+        presentation.sendAttention(.pointer(false))
+        presentation.sendAttention(.keyboardFocus(false))
+        presentation.advanceAttention(to: ProcessInfo.processInfo.systemUptime + 1)
+        #expect(presentation.activePopover == .volume && presentation.mode == .expanded)
+        presentation.sendAttention(.interaction(.volume, true))
+        #expect(presentation.dismissPopover())
+        presentation.advanceAttention(to: ProcessInfo.processInfo.systemUptime + 1)
+        #expect(presentation.mode == .expanded)
+        presentation.sendAttention(.interaction(.volume, false))
+        presentation.advanceAttention(to: ProcessInfo.processInfo.systemUptime + 1)
+        #expect(presentation.mode == .compact)
+        #expect(!presentation.dismissPopover())
+    }
+    @MainActor @Test func hidingAndResetClearPopoverOwnership() {
+        let presentation = PlayerPresentation()
+        presentation.isVisible = true
+        presentation.presentPopover(.volume)
+        presentation.isVisible = false
+        #expect(presentation.activePopover == nil)
+        presentation.isVisible = true
+        #expect(presentation.mode == .compact)
+        presentation.presentPopover(.favorite)
+        presentation.resetEngagement()
+        #expect(presentation.activePopover == nil)
+    }
+
 }

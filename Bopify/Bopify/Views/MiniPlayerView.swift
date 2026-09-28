@@ -37,6 +37,9 @@ struct MiniPlayerView: View {
             }
         }
         .environment(\.favoriteEnvironment, environment)
+        .onChange(of: environment.presentation.isVisible) { _, visible in
+            if !visible { environment.player?.cancelVolumeEditing() }
+        }
         .task(id: environment.player?.state.currentTrack?.uri) { await environment.refreshFavorite() }
         .onChange(of: environment.favorite.membershipRevision) { _, _ in
             Task { await environment.likedSongs.refresh() }
@@ -51,7 +54,11 @@ struct MiniPlayerView: View {
             FavoriteButton()
             Menu {
                 if let player = environment.player {
-                    Slider(value: Binding(get: { player.state.volume }, set: player.setVolume), in: 0...1) { Text("transport.volume") }
+                    Slider(value: Binding(get: { player.displayVolume }, set: player.setVolume), in: 0...1,
+                           onEditingChanged: { editing in
+                               if editing { player.beginVolumeEditing() } else { player.endVolumeEditing() }
+                               environment.presentation.sendAttention(.interaction(.volume, editing))
+                           }) { Text("transport.volume") }
                         .disabled(!player.state.isActiveDevice)
                     Divider()
                 }

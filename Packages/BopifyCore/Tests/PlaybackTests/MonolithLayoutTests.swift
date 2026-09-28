@@ -6,6 +6,18 @@ import Testing
 struct MonolithLayoutTests {
     let available = CGSize(width: 1440, height: 900)
 
+    @Test(arguments: [CGSize(width: 484, height: 480), CGSize(width: 320, height: 480), CGSize(width: 484, height: 300)])
+    func engagedModesShareGeometry(_ size: CGSize) {
+        let expanded = monolithLayout(mode: .expanded, availableSize: size)
+        let queue = monolithLayout(mode: .queue, availableSize: size)
+        #expect(expanded.contentSize == queue.contentSize)
+        #expect(expanded.recordCenter == queue.recordCenter)
+        #expect(expanded.controlsFrame == queue.controlsFrame)
+        #expect(expanded.lowerFrame == queue.lowerFrame)
+        #expect(expanded.lowerFrame.height >= 80)
+        #expect(!expanded.controlsFrame.intersects(expanded.lowerFrame))
+    }
+
     @Test func recordSizesAndFixedQueueTransport() {
         let rest = monolithLayout(mode: .compact, availableSize: available)
         let focus = monolithLayout(mode: .expanded, availableSize: available)
@@ -13,8 +25,8 @@ struct MonolithLayoutTests {
         #expect(rest.recordDiameter == 118)
         #expect(rest.contentSize == CGSize(width: 142, height: 142))
         #expect(focus.recordDiameter == 182)
-        #expect(focus.contentSize == CGSize(width: 484, height: 264))
-        #expect(queue.contentSize == CGSize(width: 484, height: 424))
+        #expect(focus.contentSize == CGSize(width: 484, height: 360))
+        #expect(queue.contentSize == CGSize(width: 484, height: 360))
         #expect(focus.recordCenter == queue.recordCenter)
         #expect(focus.controlsFrame == queue.controlsFrame)
     }
@@ -50,9 +62,9 @@ struct MonolithLayoutTests {
         #expect(queue.recordDiameter == 118)
         #expect(queue.controlsFrame == focused.controlsFrame)
         #expect(CGRect(origin: .zero, size: queue.contentSize).contains(queue.controlsFrame))
-        #expect(CGRect(origin: .zero, size: queue.contentSize).contains(queue.queueFrame))
+        #expect(CGRect(origin: .zero, size: queue.contentSize).contains(queue.lowerFrame))
         #expect(queue.controlsFrame.width >= 144)
-        #expect(queue.controlsFrame.height >= 216)
+        #expect(queue.controlsFrame.height >= 176)
     }
 
     @Test func invalidAnchorHasFiniteFallback() {

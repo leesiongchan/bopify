@@ -1,10 +1,14 @@
 import AppKit
 import SwiftUI
 
+protocol PlayerShortcutForwarding {}
+
 /// A persistent non-activating window that accepts keyboard focus when opened.
 final class StatusPanel: NSPanel {
     var onDismiss: (() -> Void)?
+    var onDismissPopover: (() -> Bool)?
     var onDismissQueue: (() -> Bool)?
+    var onCancelInteraction: (() -> Bool)?
     var onTogglePlayback: (() -> Void)?
     var onSeek: ((Int64) -> Void)?
     var onPrevious: (() -> Void)?
@@ -36,11 +40,21 @@ final class StatusPanel: NSPanel {
     override func animationResizeTime(_ newFrame: NSRect) -> TimeInterval { 0.36 }
 
     override func cancelOperation(_ sender: Any?) {
+        if onDismissPopover?() == true { return }
+        if onCancelInteraction?() == true { return }
         if onDismissQueue?() != true { onDismiss?() }
     }
 
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown {
+            let point = CGPoint(x: event.locationInWindow.x, y: frame.height - event.locationInWindow.y)
+            if containsPlayerPoint?(point) == true { makeKey() }
+        }
+        super.sendEvent(event)
+    }
+
     override func keyDown(with event: NSEvent) {
-        guard !(firstResponder is NSTextView), !(firstResponder is NSControl) else {
+        guard !(firstResponder is NSTextView), !(firstResponder is NSControl) || firstResponder is PlayerShortcutForwarding else {
             super.keyDown(with: event)
             return
         }
@@ -75,7 +89,7 @@ private final class PlayerHostingView<Content: View>: NSHostingView<Content> {
     }
 }
 
-struct RecordDragRegion: NSViewRepresentable {
+struct PlayerBackgroundDragRegion: NSViewRepresentable {
     func makeNSView(context: Context) -> DragView { DragView() }
     func updateNSView(_ nsView: DragView, context: Context) {}
 

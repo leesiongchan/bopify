@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 import BopifyDomain
-import BopifyLibrary
+@testable import BopifyLibrary
 
 private actor ControlledSavedTracks: SavedTracksService {
     struct Request: Equatable { let offset: Int; let limit: Int }
@@ -127,7 +127,7 @@ struct LikedSongsModelTests {
     }
     @Test func errorRetryDeadlineAndEmptyState() async {
         let service = ControlledSavedTracks()
-        let model = LikedSongsModel(service: service)
+        let model = LikedSongsModel(service: service, now: { now })
         let initial = Task { await model.reveal(at: now) }
         _ = await service.next()
         await service.resolve(.failure(LibraryError.rateLimited(retryAfterSeconds: 12)))
@@ -188,6 +188,64 @@ struct LikedSongsModelTests {
         await service.resolve(.success(page([3])))
         await retry.value
         #expect(model.tracks == [track(1), track(2), track(3)] && model.error == nil)
+    }
+
+    @Test func hidingDuringRefreshRetainsDeepSelectionUntilNextReveal() async {
+        let service = ControlledSavedTracks()
+        let model = LikedSongsModel(service: service)
+        let initial = Task { await model.reveal(at: now) }
+        _ = await service.next()
+        await service.resolve(.success(page(Array(0..<50), next: 50)))
+        await initial.value
+        let more = Task { await model.loadMoreIfNeeded(near: track(49).uri) }
+        _ = await service.next()
+        await service.resolve(.success(page(Array(50..<100), next: 100)))
+        await more.value
+        model.select(track(75).uri)
+        let refresh = Task { await model.refresh() }
+        _ = await service.next()
+        model.hide(at: now)
+        await service.resolve(.success(page(Array(0..<50), next: 50)))
+        await refresh.value
+        #expect(model.tracks.count == 100 && model.selectedURI == track(75).uri)
+        #expect(await service.count == 3)
+        guard model.tracks.count == 100 else { return }
+        let reveal = Task { await model.reveal(at: now.addingTimeInterval(1)) }
+        #expect(await service.next().offset == 0)
+        await service.resolve(.success(page(Array(0..<50), next: 50)))
+        #expect(await service.next().offset == 50)
+        await service.resolve(.success(page(Array(50..<100), next: 100)))
+        await reveal.value
+        #expect(model.selectedURI == track(75).uri)
+    }
+    @Test func skippedFirstPageDoesNotHideLaterPlayableSongs() async {
+        let service = ControlledSavedTracks()
+        let model = LikedSongsModel(service: service)
+        let initial = Task { await model.reveal(at: now) }
+        _ = await service.next()
+        await service.resolve(.success(page([], next: 50)))
+        await initial.value
+        #expect(model.hasMore && model.tracks.isEmpty)
+        let more = Task { await model.loadMore() }
+        #expect(await service.next().offset == 50)
+        await service.resolve(.success(page([51])))
+        await more.value
+        #expect(model.tracks == [track(51)] && model.selectedURI == track(51).uri)
+    }
+
+    @Test func rateLimitStartsWhenFailureArrives() async {
+        let service = ControlledSavedTracks()
+        var clock = now
+        let model = LikedSongsModel(service: service, now: { clock })
+        let initial = Task { await model.reveal(at: now) }
+        _ = await service.next()
+        clock = now.addingTimeInterval(10)
+        await service.resolve(.failure(LibraryError.rateLimited(retryAfterSeconds: 12)))
+        await initial.value
+        #expect(model.retryAfter == now.addingTimeInterval(22))
+        guard model.retryAfter == now.addingTimeInterval(22) else { return }
+        await model.retry(at: now.addingTimeInterval(21))
+        #expect(await service.count == 1)
     }
 
 }

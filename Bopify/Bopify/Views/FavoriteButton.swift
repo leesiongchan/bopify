@@ -8,15 +8,13 @@ extension EnvironmentValues {
 }
 
 struct FavoriteButton: View {
-    var detailsChanged: (Bool) -> Void = { _ in }
     @Environment(\.favoriteEnvironment) private var environment
-    @State private var showsDetails = false
 
     var body: some View {
         if let environment, environment.player?.state.currentTrack?.uri.kind == .track {
             let model = environment.favorite
             Button {
-                if model.saved == nil || model.error != nil { showsDetails = true }
+                if model.saved == nil || model.error != nil { environment.presentation.presentPopover(.favorite) }
                 else { Task { await model.toggle() } }
             } label: {
                 Group {
@@ -30,7 +28,8 @@ struct FavoriteButton: View {
             .accessibilityLabel(Text("favorite.title"))
             .accessibilityValue(Text(model.isPending ? "favorite.pending" : model.saved == true ? "favorite.saved" : model.saved == false ? "favorite.unsaved" : "favorite.unknown"))
             .help(Text(model.saved == true ? "favorite.remove" : "favorite.save"))
-            .popover(isPresented: $showsDetails) {
+            .popover(isPresented: Binding(get: { environment.presentation.activePopover == .favorite },
+                                           set: { if !$0 && environment.presentation.activePopover == .favorite { environment.presentation.dismissPopover() } })) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(environment.favoriteAuthorizationNotice ?? favoriteNotice(model.error))
                         .font(.callout).fixedSize(horizontal: false, vertical: true)
@@ -38,10 +37,11 @@ struct FavoriteButton: View {
                         .disabled(model.uri != environment.player?.state.currentTrack?.uri)
                 }
                 .padding(16).frame(width: 260)
-                .onExitCommand { showsDetails = false }
+                .onExitCommand { environment.presentation.dismissPopover() }
             }
-            .onChange(of: showsDetails) { _, value in detailsChanged(value) }
-            .onDisappear { showsDetails = false; detailsChanged(false) }
+            .onDisappear {
+                if environment.presentation.activePopover == .favorite { environment.presentation.dismissPopover() }
+            }
         }
     }
 }

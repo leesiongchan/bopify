@@ -7,11 +7,12 @@ import os
 
 @MainActor @Observable
 final class MonolithWindowController {
-    private(set) var layout = monolithLayout(mode: .compact, availableSize: CGSize(width: 484, height: 424))
+    private(set) var layout = monolithLayout(mode: .compact, availableSize: CGSize(width: 484, height: 360))
     private(set) var contentOffset: CGPoint = .zero
     private(set) var transitionID: UInt64 = 0
     private(set) var isTransitioning = false
     private(set) var isDragging = false
+    @ObservationIgnored var cancelInteraction: (() -> Bool)?
     @ObservationIgnored private weak var panel: StatusPanel?
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var anchor: CGPoint?
@@ -23,6 +24,7 @@ final class MonolithWindowController {
 
     func attach(to panel: StatusPanel) {
         self.panel = panel
+        panel.onCancelInteraction = { [weak self] in self?.cancelInteraction?() ?? false }
         anchor = Self.restoredAnchor(defaults: defaults)
         panel.minSize = CGSize(width: 1, height: 1)
         panel.maxSize = CGSize(width: 10000, height: 10000)
@@ -54,9 +56,9 @@ final class MonolithWindowController {
         let screen = NSScreen.screens.first { $0.visibleFrame.contains(desiredAnchor) } ?? panel.screen ?? NSScreen.main
         guard let visible = visibleFrame ?? screen?.visibleFrame else { return }
         var available = visible.size
-        // Extend the queue into available space before translating the whole player.
-        if mode == .queue {
-            available.height = min(available.height, max(344, desiredAnchor.y + 132 - visible.minY))
+        // Both lower-panel occupants reserve the same viewport before moving the spindle.
+        if mode != .compact {
+            available.height = min(available.height, max(300, desiredAnchor.y + 132 - visible.minY))
         }
         let next = monolithLayout(mode: mode, availableSize: available)
         let target = monolithFrame(recordCenter: desiredAnchor, layout: next, visibleFrame: visible)
@@ -134,7 +136,7 @@ final class MonolithWindowController {
     private func contains(_ point: CGPoint) -> Bool {
         let local = CGPoint(x: point.x - contentOffset.x, y: point.y - contentOffset.y)
         if hypot(local.x - layout.recordCenter.x, local.y - layout.recordCenter.y) <= layout.recordDiameter / 2 { return true }
-        return !layout.sleeveFrame.isEmpty && layout.sleeveFrame.contains(local)
+        return !layout.sleeveFrame.isEmpty && CGPath(roundedRect: layout.sleeveFrame, cornerWidth: 28, cornerHeight: 28, transform: nil).contains(local)
     }
 
     private func withoutAnimation(_ body: () -> Void) {
