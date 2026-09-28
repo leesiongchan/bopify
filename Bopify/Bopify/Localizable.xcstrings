@@ -404,6 +404,16 @@
         }
       }
     },
+    "player.notPlaying" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not playing"
+          }
+        }
+      }
+    },
     "player.nowPlaying" : {
       "localizations" : {
         "en" : {
@@ -431,6 +441,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ of %2$@"
+          }
+        }
+      }
+    },
+    "player.remote.paused %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paused on %@"
+          }
+        }
+      }
+    },
+    "player.remote.pausedUnnamed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paused on another device"
           }
         }
       }

@@ -25,6 +25,7 @@ public final class PlayerModel {
     public private(set) var queueSelection: QueueSelectionStatus = .idle
     private var lastPositiveVolume: Double?
     private(set) var positionUpdatedAt = Date.now
+    private(set) var remoteUpdatedAt = Date.now
     private var frozenDisplayPositionMs: Int64?
 
     @ObservationIgnored private let engine: any PlaybackEngine
@@ -35,11 +36,23 @@ public final class PlayerModel {
     public init(engine: any PlaybackEngine) { self.engine = engine }
 
     /// Interpolate for display without replacing the engine's authoritative position.
+    /// A mirrored device's own clock takes precedence while Bopify is inactive.
     public func displayPositionMs(at date: Date) -> Int64 {
+        if let remote = state.mirror {
+            let elapsed = remote.isPlaying ? max(0, date.timeIntervalSince(remoteUpdatedAt)) * 1000 : 0
+            let position = Double(remote.positionMs) + elapsed
+            // Clamped only to a reported duration, as the Rust extraction is.
+            return Int64(remote.durationMs > 0 ? min(Double(remote.durationMs), position) : position)
+        }
         let elapsed = state.phase == .playing ? max(0, date.timeIntervalSince(positionUpdatedAt)) * 1000 : 0
         let position = min(Double(max(0, state.durationMs)), max(0, Double(frozenDisplayPositionMs ?? state.positionMs) + elapsed))
         return Int64(position)
     }
+
+    public var displayDurationMs: Int64 { state.mirror?.durationMs ?? state.durationMs }
+
+    /// Views run a display clock only while this is true.
+    public var isPositionAdvancing: Bool { state.mirror?.isPlaying ?? (state.phase == .playing) }
 
     /// One consumer for the model's lifetime. A per-view .task would
     /// resubscribe whenever view identity changed.
@@ -65,8 +78,20 @@ public final class PlayerModel {
         pendingCommand = nil
     }
 
+    /// Play takes the session over while Bopify is inactive, from a mirror or a stale track.
+    public var canPlayHere: Bool {
+        guard !state.isActiveDevice, state.mirror != nil || state.currentTrack != nil else { return false }
+        if case .error = state.phase { return false }
+        return true
+    }
+
+    public func playHere() {
+        guard canPlayHere else { return }
+        enqueue("playHere") { [engine] in try await engine.playHere() }
+    }
+
     public func togglePlayPause() {
-        guard state.isActiveDevice else { return }
+        guard state.isActiveDevice else { playHere(); return }
         let shouldPause = state.phase == .playing
         enqueue(shouldPause ? "pause" : "resume", requiresActive: true) { [engine] in
             if shouldPause { try await engine.pause() } else { try await engine.resume() }
@@ -161,6 +186,12 @@ public final class PlayerModel {
         if state.phase == .playing { frozenDisplayPositionMs = displayPositionMs(at: .now) }
     }
 
+    /// A stopped device's last state, frozen: the record shows it, but the ring stops advancing.
+    private func stalled(_ remote: RemotePlayback) -> RemotePlayback {
+        RemotePlayback(deviceName: remote.deviceName, trackURI: remote.trackURI, track: remote.track,
+                       isPlaying: false, positionMs: remote.positionMs, durationMs: remote.durationMs)
+    }
+
     private func apply(_ event: PlaybackEvent) {
         let oldPhase = state.phase
         switch event {
@@ -224,11 +255,13 @@ public final class PlayerModel {
             positionUpdatedAt = .now
             state.phase = .playing; state.positionMs = position
             state.isActiveDevice = true
+            state.remote = nil; state.staleRemote = nil
         case let .paused(position):
             frozenDisplayPositionMs = nil
             positionUpdatedAt = .now
             state.phase = .paused; state.positionMs = position
             state.isActiveDevice = true
+            state.remote = nil; state.staleRemote = nil
         case let .seeked(position), let .positionCorrection(position):
             frozenDisplayPositionMs = nil
             positionUpdatedAt = .now
@@ -249,6 +282,10 @@ public final class PlayerModel {
                 if case .pending = queueSelection { queueSelection = .failed }
                 freezeDisplayPosition()
                 state.phase = .idle
+            } else {
+                // Always nil while active: a mirror from just before the takeover must not linger.
+                state.remote = nil
+                state.staleRemote = nil
             }
         case let .failed(error):
             freezeDisplayPosition()
@@ -256,6 +293,11 @@ public final class PlayerModel {
             let description = String(describing: error)
             BopifyLog.playback.error("playback failed error=\(description, privacy: .public)")
             if error == .playbackSessionLost { state.isActiveDevice = false }
+            // A live mirror must stop advancing under the error, same as a device that stopped.
+            if let remote = state.remote {
+                state.staleRemote = stalled(remote)
+                state.remote = nil
+            }
         case let .startupResolved(outcome):
             state.startup = .resolved(outcome)
             let kind = switch outcome {
@@ -265,6 +307,15 @@ public final class PlayerModel {
             case .nothing: "nothing"
             }
             BopifyLog.playback.info("startup resolved outcome=\(kind, privacy: .public)")
+        case let .remotePlayback(remote):
+            // A lookup still in flight when Bopify took over must not bring the mirror back.
+            guard !state.isActiveDevice else { break }
+            if remote == nil, let last = state.remote {
+                state.staleRemote = stalled(last)
+            }
+            state.remote = remote
+            remoteUpdatedAt = .now
+            BopifyLog.playback.debug("remote playback present=\(remote != nil, privacy: .public)")
         }
         if state.phase != oldPhase {
             let old = String(describing: oldPhase)

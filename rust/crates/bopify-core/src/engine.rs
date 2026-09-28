@@ -138,6 +138,9 @@ impl Engine {
     pub fn play(&self) -> Result<(), BopifyError> {
         self.spirc.play().map_err(command_failed)
     }
+    pub fn play_here(&self) -> Result<(), BopifyError> {
+        self.spirc.play_here().map_err(command_failed)
+    }
     pub fn pause(&self) -> Result<(), BopifyError> {
         self.spirc.pause().map_err(command_failed)
     }
@@ -220,8 +223,9 @@ impl Engine {
 /// kill the task, tokio would swallow it, and event delivery would stop for
 /// good with no terminal `Failed` -- the UI would sit on stale state forever.
 fn supervise_forwarder(events: PlayerEventChannel, sink: EventSink, session: Session) {
-    let metadata = crate::queue::start(session, sink.clone());
-    let forwarder = tokio::spawn(forward_events(events, sink.clone(), metadata));
+    let metadata = crate::queue::start(session.clone(), sink.clone());
+    let remote = crate::remote::start(session, sink.clone());
+    let forwarder = tokio::spawn(forward_events(events, sink.clone(), metadata, remote));
     tokio::spawn(async move {
         match forwarder.await {
             Ok(()) => {}
@@ -241,9 +245,15 @@ async fn forward_events(
     mut events: PlayerEventChannel,
     sink: EventSink,
     metadata: tokio::sync::watch::Sender<Option<crate::queue::MetadataRequest>>,
+    remote: tokio::sync::watch::Sender<Option<crate::event::WireRemote>>,
 ) {
     while let Some(event) = events.recv().await {
         if let Some(wire) = crate::event::translate(event) {
+            // The mirror waits for its track metadata, so the remote worker publishes it.
+            if let WireEvent::RemotePlayback { remote: mirrored } = wire {
+                remote.send_replace(mirrored);
+                continue;
+            }
             let request = crate::queue::MetadataRequest::from_event(&wire);
             sink(wire);
             if let Some(request) = request {
@@ -292,19 +302,36 @@ fn classify_connect_error<E: std::fmt::Debug>(err: E) -> BopifyError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use librespot_playback::player::PlayerEvent;
+    use librespot_playback::player::{PlayerEvent, RemoteState};
     #[tokio::test]
     async fn transport_drain_publishes_structure_before_metadata_without_waiting() {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let (metadata, mut requests) = tokio::sync::watch::channel(None);
+        let (remote, _mirror) = tokio::sync::watch::channel(None);
         let (output, mut received) = tokio::sync::mpsc::unbounded_channel();
         let sink: EventSink = Arc::new(move |event| { output.send(event).unwrap(); });
         tx.send(PlayerEvent::SetQueue { generation: 9, context_uri: String::new(), current_track: None, next_tracks: vec![], prev_tracks: vec![] }).unwrap();
         tx.send(PlayerEvent::Paused { play_request_id: 0, track_id: librespot_core::SpotifyUri::from_uri("spotify:track:6rqhFgbbKwnb9MLmUQDhG6").unwrap(), position_ms: 250 }).unwrap();
         drop(tx);
-        forward_events(rx, sink, metadata).await;
+        forward_events(rx, sink, metadata, remote).await;
         assert!(matches!(received.recv().await.unwrap(), WireEvent::QueueChanged { generation: 9, .. }));
         assert!(matches!(received.recv().await.unwrap(), WireEvent::Paused { position_ms: 250 }));
         assert!(requests.borrow_and_update().is_some());
+    }
+
+    #[tokio::test]
+    async fn the_mirror_waits_for_its_metadata_instead_of_reaching_swift_directly() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let (metadata, _requests) = tokio::sync::watch::channel(None);
+        let (remote, mirrored) = tokio::sync::watch::channel(None);
+        let (output, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let sink: EventSink = Arc::new(move |event| { output.send(event).unwrap(); });
+        tx.send(PlayerEvent::RemotePlayback { remote: Some(RemoteState { device_name: "iPhone".into(), track_uri: "spotify:track:abc".into(), is_playing: true, position_ms: 0, duration_ms: 1000 }) }).unwrap();
+        drop(tx);
+        forward_events(rx, sink, metadata, remote).await;
+        let mirrored = mirrored.borrow().clone();
+        assert_eq!(mirrored.map(|remote| remote.track_uri), Some("spotify:track:abc".to_string()));
+        // Only the drain's closing SessionLost went straight to Swift.
+        assert!(matches!(received.recv().await.unwrap(), WireEvent::Failed { .. }));
     }
 }

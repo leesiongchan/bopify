@@ -28,7 +28,7 @@ struct TransportControls: View {
                     .frame(width: 48, height: 48)
                     .background(.primary.opacity(0.1), in: Circle())
             }
-            .disabled(!canControl || state.phase == .loading || state.phase == .buffering)
+            .disabled(!(canControl || model.canPlayHere) || state.phase == .loading || state.phase == .buffering)
             .accessibilityLabel(Text(isPlaying ? "transport.pause" : "transport.play"))
             .accessibilityValue(state.localizedStatusText)
             .help(Text(isPlaying ? "transport.pause" : "transport.play"))

@@ -1,7 +1,7 @@
 # Bopify startup: always have something loaded
 
 Date: 2026-09-26
-Status: approved by the user on 2026-09-26 for implementation planning, including resuming at the last reported position rather than extrapolating. Phase 1 was implemented and live-verified on 2026-09-26 (see `docs/superpowers/verification/2026-09-26-startup-restore.md`); phase 2 (mirroring) is not started.
+Status: approved by the user on 2026-09-26 for implementation planning, including resuming at the last reported position rather than extrapolating. Phase 1 was implemented and live-verified on 2026-09-26 (see `docs/superpowers/verification/2026-09-26-startup-restore.md`); phase 2 (mirroring and play here) was revised for the Monolith player and approved on 2026-09-27, then implemented and live-verified on 2026-09-28 (see the verification doc's Phase 2 section).
 
 ## Intent and scope
 
@@ -67,7 +67,7 @@ The changes extend `rust/patches/librespot-queue-selection.patch`, because `scri
 - `WireEvent::StartupResolved`, serialised as `{"type":"startupResolved","outcome":"restored"|"likedSongs"|"remote"|"nothing","deviceName":<string, remote only>}`. `translate` lists it by name. bopify-core logs `startup resolved outcome=…` at info in its own `playback` category. The `librespot` category is capped at Warn and redacted, so info lines there would be invisible.
 - `BopifyDomain.PlaybackEvent` gains `.startupResolved(StartupOutcome)` in the same commit, as `event.rs` requires.
 - Phase 1 changes no FFI signatures. `activate()` becomes unused, so it is removed as an orphan of this change: `bopify_activate`, `Engine::activate`, `PlaybackEngine.activate()`, `LibrespotEngine.activate()`, the stub's `activate()`, `PlayerModel.activate()`, and their tests. The header is regenerated. The foundation spec's §2.1 note, protocol block and ABI block (`2026-09-21-bopify-foundation-design.md` lines 36, 147, 189 and 203) are updated.
-- Phase 2 adds `bopify_transfer(BopifyEngine *)`, which calls `Spirc::transfer(None)` and backs `PlaybackEngine.transferHere()`.
+- Phase 2 adds `bopify_play_here(BopifyEngine *)`, which calls `Spirc::play_here()` and backs `PlaybackEngine.playHere()` (see Phase 2).
 
 ## Swift
 
@@ -83,12 +83,32 @@ The changes extend `rust/patches/librespot-queue-selection.patch`, because `scri
 
 ## Phase 2: mirror
 
-1. **Verify first.** Check that `Spirc::transfer(None)` moves an actively playing phone session onto Bopify. This has not been tried. If it fails, stop and revisit the design before building the mirror UI.
-2. **Remote events.** While Bopify is inactive and the flag is on, `handle_cluster_update` emits `PlayerEvent::RemotePlayback(Option<…>)` carrying the device name, track URI, context URI, playing flag, position, server timestamp and duration. It emits `None` when no other active device has a track. Mirror state comes from `player_state`, not `transfer_data`: while a device is active, `transfer_data` is a 1 KB stub with an empty track (run 4).
-3. **Metadata.** bopify-core fetches track metadata the way `queue.rs` does and emits `WireEvent::RemotePlayback` with a `WireTrack`.
-4. **Swift state.** `PlaybackState.remote: RemotePlayback?`. To avoid clock skew, Rust adjusts the position to the moment of receipt using only server clocks: `position_as_of_timestamp + (cluster.server_timestamp_ms - player_state.timestamp)` while playing. Swift then interpolates from its own receipt time, as `displayPositionMs` does for local playback. No local-versus-server clock comparison is needed.
-5. **UI.** The mirror uses the player surface with transport disabled except Play, which calls `PlayerModel.transferHere()`. The status line reads "Playing on <device>". It also replaces the frozen mid-session inactive state. Compact mode shows the remote track with Play.
-6. **Hand-over.** When Bopify becomes active, `remote` clears.
+1. **Verify first.** Check that `Spirc::transfer(None)` moves an actively playing phone session onto Bopify. If it fails, stop and revisit the design before building the mirror UI. Verified on 2026-09-26 (appendix run 5): playback moved, but the HTTP call returned 410 and took 3.2 s. So "play here" judges success by the incoming transfer and `Playing` event, not the reply, and sends the request without blocking the Spirc loop.
+Revised on 2026-09-27 for the Monolith player (record and sleeve, no compact mode) and the run 5 findings; approved by the user.
+
+2. **One "play here" command.** `SpircCommand::PlayHere` (`Spirc::play_here()`, behind `startup_restore`) decides from a fresh cluster, the reply to the same state PUT the startup decision reads (`notify_new_device_appeared`), using `startup_decision`. Cluster updates are not known to carry the full last session:
+   - another device active with a track: send the transfer request (`spclient().transfer(own, own, None)`) on a spawned task, so the Spirc loop keeps answering the dealer. The reply, including a 410, is only logged. Success is the server's incoming transfer and the `Playing` event that follows. That transfer plays even when the other device was paused. It resumes where that device is: a playing session reported at 0:00 (just after a skip) still counts the time since its report;
+   - no active device and a usable last session: restore it exactly as at startup (forced paused, no extrapolation), then resume playback;
+   - otherwise: load Liked Songs with `start_playing: true`.
+   This covers both the mirror's Play and the stale state after a takeover whose device later stopped (the user chose "resume that session here" on 2026-09-27).
+3. **Remote events.** `PlayerEvent::RemotePlayback(Option<RemoteState>)`, where `RemoteState` carries the device name, track URI, playing flag, position and duration. It is emitted from the startup cluster when the outcome is `Remote` (so the mirror appears at launch), and from every cluster update while Bopify is inactive, including the one that deactivates it. It is emitted only when the value changes, and is `None` when no other device is active with a track. The extraction is a pure function next to `startup_decision`, unit-tested the same way. Mirror state comes from `player_state`, not `transfer_data`: while a device is active, `transfer_data` is a 1 KB stub with an empty track (run 4). To avoid clock skew, the position uses server clocks only: `position_as_of_timestamp + (cluster.server_timestamp_ms - player_state.timestamp)` while playing, and `position_as_of_timestamp` while paused.
+4. **bopify-core.** `WireEvent::RemotePlayback` carries the device name, a `WireTrack` looked up with the same `AudioItem::get_file` path `queue.rs` uses, the playing flag and the position. Lookups are latest-wins with a cache, so a slow lookup never overwrites a newer track. `None` serialises as `{"type":"remotePlayback","remote":null}`. Device names never reach the public log category.
+5. **Swift state.** `PlaybackState.remote: RemotePlayback?` (device name, `Track`, playing flag, position at receipt). Swift interpolates from its own receipt time, as `displayPositionMs` does for local playback. `PlayerModel.playHere()` backs Play whenever Bopify is inactive. `remote` clears when Bopify becomes active, and nothing is set optimistically: until the engine's events arrive, the existing loading/buffering status shows.
+6. **Monolith UI.**
+   - `AppEnvironment.isListening` becomes "signed in and (a current track or a remote track)", so the record and sleeve show a remote device instead of the placeholder disc. The startup `remote` placeholder stays only as the fallback for the moment before the first `RemotePlayback`.
+   - **Mirror.** While Bopify is inactive, a remote track takes precedence over Bopify's stale track. The record shows its artwork, and the sleeve shows its title and artists. The progress ring advances but is not seekable, and the status line reads "Playing on <device>" or "Paused on <device>". Only Play is enabled, and it calls `playHere()`. Space does the same. Previous, next, seek, shuffle, repeat, volume, mute and queue stay disabled, because the remote queue is not modelled; a queue already open can still be closed. The favourite is hidden while mirroring, because it would show the saved state of Bopify's own track. There is no orange attention rim, since another device playing is not an error. The record's reflection does not rotate, because nothing plays on this Mac.
+   - **Stale state.** When Bopify is inactive and no other device is active, the record keeps the last track it showed: the stopped device's last mirrored track at its last reported position, or Bopify's own last track when nothing was mirrored. Play resumes the account's last session, which is that mirrored track's session (the user chose this on 2026-09-27 over keeping Bopify's own track; at launch Bopify has none). The status reads "Not playing" instead of "Playing on another device". Play is enabled and calls `playHere()`, as does Space, and there is no rim.
+   - New strings: "Paused on %@", "Paused on another device" and "Not playing". "Playing on %@" already exists, and a device with no name reads "Playing on another device" or "Paused on another device".
+7. **Tests.**
+   - Rust: remote-state extraction (position maths, the `None` cases, own device, change-only emission), `translate`, and the wire JSON.
+   - Swift: decoding; the fold (remote set, cleared, and cleared on becoming active); the precedence of remote track and status; and `togglePlayPause` routing to `playHere()` when inactive.
+   - Native probe captures (the Monolith player replaced previews with probes): mirror, paused remote, stale mirror, and stale own track.
+8. **Live.**
+   1. The phone plays, then skips a track; the mirror follows.
+   2. Play here moves playback, and the phone stops.
+   3. A takeover mid-session becomes the mirror.
+   4. The phone pauses and closes, leaving the stale state; Play resumes that session here.
+   5. Check whether the non-blocking transfer avoids run 5's dealer drop.
 
 ## Testing
 
@@ -116,7 +136,7 @@ These scenarios repeat the spike on the real build. Logs are captured with `/usr
 1. No active device and a real last session: restored paused, with the right track, position and queue.
 2. Kill Bopify mid-song, then relaunch: paused, not playing, at the last position the killed session reported. That is often near the start of the track, and that counts as a **pass** (see Forced pause). A position beyond where playback actually was is a failure.
 3. No usable session: Liked Songs, paused.
-4. Phone actively playing: the phone keeps playing, and Bopify shows it. Phase 2: a skip on the phone updates the mirror, and Play moves playback to Bopify.
+4. Phone actively playing: the phone keeps playing, and Bopify shows it. Phase 2's own scenarios are listed under Phase 2.
 5. Normal quit and relaunch: Bopify's own session resumes.
 6. No frame of "Nothing playing" between connect and the track.
 
@@ -124,11 +144,11 @@ UI changes get before/after screenshots and previews for the loading, remote and
 
 ## Risks and unknowns
 
-- **`Spirc::transfer` for "play here" is untested.** Phase 2 starts by verifying it.
+- **`Spirc::transfer` for "play here" works, but its reply is misleading and it is slow.** Run 5 moved playback, yet the reply was `410 Gone` after 3.2 s. Upstream awaits it inside the Spirc loop, which left the server's transfer request unanswered, and the server dropped the dealer connection; it reconnected within a second and playback continued. The request came from inside the startup handler there, so whether a non-blocking send avoids the drop is unverified.
 - **How long Spotify keeps a session with no active device is unknown.** The spike restored sessions minutes old, not a "next morning" gap. When the session is gone, the decision falls through to Liked Songs.
 - **An empty Liked Songs has not been observed live.** It is covered by the `handle_load` error path and a unit test.
 - **Unverified: a restored or Liked Songs context in which no track can play.** `translate` drops `Unavailable` and `Stopped` (`event.rs`). If Spirc exhausts the context, Swift receives nothing further, and the panel could stay on the loading presentation. This is not handled in phase 1. If it is observed, surfacing `Stopped` is the first candidate fix.
-- **Unverified: a ghost Bopify after an unclean exit.** Device ids are random per launch (every spike run had a different own id). If a killed Bopify is still listed as active *with a track* when the next one connects, `startup_decision` returns `Remote` naming "Bopify". Phase 1 ignores cluster updates while inactive, so the panel would stay on "Playing on Bopify" until a relaunch. In the spike, an instance killed a few seconds before the next launch was already gone (runs 2 and 3 both saw `active=""`), but that is two observations, not a guarantee. Live verification scenario 2 checks it. It will be fixed only on evidence.
+- **Unverified: a ghost Bopify after an unclean exit.** Device ids are random per launch (every spike run had a different own id). If a killed Bopify is still listed as active *with a track* when the next one connects, `startup_decision` returns `Remote` naming "Bopify". Phase 2 reads cluster updates while inactive, so a ghost Bopify device would be mirrored as "Playing on <its name>", and Play would target it with a transfer. The play-here window (10 s) caps a transfer that never arrives. In the spike, an instance killed a few seconds before the next launch was already gone (runs 2 and 3 both saw `active=""`), but that is two observations, not a guarantee. Live verification scenario 2 checks it. It will be fixed only on evidence.
 - **The patch grows,** and every librespot bump must carry it. The flag keeps upstream behaviour intact when it is off.
 - **Inferred, not observed:** today's content-less `activate()` probably replaces the account's resume point on every launch, because run 0 reported the active Bopify's empty session as `transfer_data`. The new startup never activates without content, except in the `Nothing` branch.
 
@@ -144,5 +164,6 @@ Setup: pinned librespot `939dc5e` plus the queue patch; temporary `warn!` lines 
 | 3 | The phone pressed play while run 2's Bopify was still active, so it acted as a remote; that Bopify was then killed | `active=""` with `ps.playing=true`, `paused=false`, 203 ms at timestamp `1790418322113`. That is about 18:25:22, derived from run 3b's iPhone update at 18:27:07.98 carrying `1790418427830`, so the state was about 25 s old when the cluster arrived at 18:25:47.6. This is a stale "playing" state left by a vanished device. |
 | 3b | Same inactive instance; the phone switched to "This iPhone" and skipped a track | Cluster updates arrived while Bopify was inactive: `active=<iPhone id>`, `name="iPhone"`, the track changed from `22Tmr1R5TVgtLOSYrgMWdu` to `0phqiLIH4JYk4jPissBOQE`, each with a position and timestamp. |
 | 4 | Relaunch while the phone was actively playing, without `activate()` | `active=<iPhone id>`, `name="iPhone"`, `player_state` with context, track `0phqiLIH4JYk4jPissBOQE`, playing, position and duration. `transfer_data` was 1,156 bytes with an empty track. |
+| 5 | Phase 2 check, 23:31. The phone was actively playing; a throwaway edit made the startup `Remote` branch send what `SpircCommand::Transfer(None)` sends while inactive: `spclient().transfer(own, own, None)` | The POST to `connect/transfer/from/<own>/to/<own>` returned `410 Gone` after 3.2 s. Straight after, Bopify handled a server transfer request, loaded the phone's track at 27 s with playing on, and was `playing` 0.6 s later; the cluster named Bopify active. The server then closed the dealer socket ("Request disconnect"), and the reply to its transfer request failed. The dealer reconnected within a second, and that connection id took the upstream path (startup guard held). The phone left the cluster 15 s later. The user confirmed that the phone stopped, the Mac continued the same track from about 0:27, and Pause worked. |
 
 Other findings: librespot documents `spotify:user:<user_id>:collection` as the Liked Songs context (`core/src/spclient.rs`, `get_context` doc comment). Commands wait on `connect_established`, which is set inside `handle_connection_id_update` before the cluster checks, so the startup decision always runs before any queued command.
