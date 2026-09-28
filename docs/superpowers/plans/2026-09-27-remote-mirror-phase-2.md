@@ -2065,7 +2065,7 @@ Then:
 ```sh
 ./scripts/build-rust.sh
 xcodebuild -quiet -project Bopify/Bopify.xcodeproj -scheme Bopify -destination 'platform=macOS,arch=arm64' -derivedDataPath /private/tmp/bopify-mirror-build build
-/usr/bin/log stream --style compact --level debug --predicate 'subsystem == "my.snsoft.bopify"' > /private/tmp/bopify-mirror.log
+/usr/bin/log stream --style compact --level debug --predicate 'subsystem == "com.leesiongchan.bopify"' > /private/tmp/bopify-mirror.log
 ```
 
 Run the log stream in the background. Launch with `/private/tmp/bopify-mirror-build/Build/Products/Debug/Bopify.app/Contents/MacOS/Bopify`, and quit through the status item's Quit menu item.

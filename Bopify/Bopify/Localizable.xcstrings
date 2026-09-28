@@ -418,17 +418,6 @@
         }
       }
     },
-    "player.collapse" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Collapse player"
-          }
-        }
-      }
-    },
     "player.ended" : {
       "localizations" : {
         "en" : {
@@ -445,17 +434,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Playback error"
-          }
-        }
-      }
-    },
-    "player.expand" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Expand player"
           }
         }
       }
@@ -556,17 +534,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Playback progress"
-          }
-        }
-      }
-    },
-    "player.progress.value" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ of %2$@"
           }
         }
       }
@@ -674,6 +641,9 @@
         }
       }
     },
+    "Retry in %lld seconds." : {
+
+    },
     "signIn.authenticating" : {
       "localizations" : {
         "en" : {
@@ -743,6 +713,9 @@
           }
         }
       }
+    },
+    "Spotify's library quota has been reached. Try again later." : {
+
     },
     "transport.mute" : {
       "localizations" : {

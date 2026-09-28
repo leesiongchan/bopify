@@ -131,7 +131,7 @@ Tests come first, one unit at a time.
 
 ## Live verification
 
-These scenarios repeat the spike on the real build. Logs are captured with `/usr/bin/log stream --level debug --predicate 'subsystem == "my.snsoft.bopify"'`; zsh's builtin `log` shadows the binary.
+These scenarios repeat the spike on the real build. Logs are captured with `/usr/bin/log stream --level debug --predicate 'subsystem == "com.leesiongchan.bopify"'`; zsh's builtin `log` shadows the binary.
 
 1. No active device and a real last session: restored paused, with the right track, position and queue.
 2. Kill Bopify mid-song, then relaunch: paused, not playing, at the last position the killed session reported. That is often near the start of the track, and that counts as a **pass** (see Forced pause). A position beyond where playback actually was is a failure.

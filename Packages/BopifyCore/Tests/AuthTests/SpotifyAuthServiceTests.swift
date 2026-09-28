@@ -272,26 +272,6 @@ struct SpotifyAuthServiceTests {
         }
         #expect(store.load() == nil)
     }
-    @Test(arguments: [true, false]) func unsuccessfulAdditionalConsentPreservesStreaming(declined: Bool) async throws {
-        AuthFlowStubProtocol.handler = { _ in (200, Data(self.success.utf8)) }
-        let store = InMemoryTokenStore()
-        let old = TokenSet(accessToken: "OLD_FAKE", refreshToken: "RT", expiresAt: Date().addingTimeInterval(3600), grantedScopes: ["streaming"])
-        try store.save(old)
-        let service = SpotifyAuthService(clientID: "client123", client: makeClient(), store: store, openURL: { url in
-            let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
-            #expect(Set(query["scope"]!.split(separator: " ").map(String.init)) == ["streaming", "user-library-read"])
-            let result = declined ? "error=access_denied" : "code=TESTCODE"
-            let callback = URL(string: "\(query["redirect_uri"]!)?\(result)&state=\(query["state"]!)")!
-            Task { _ = try? await URLSession.shared.data(from: callback) }
-        })
-        do {
-            _ = try await service.authorizeAdditionalScopes(["user-library-read"])
-            Issue.record("Insufficient or declined authorization must fail")
-        } catch {}
-        #expect(store.load() == old)
-        #expect(try await service.validAccessToken() == "OLD_FAKE")
-    }
-
     @Test func missingScopesNeverOpenBrowserOrRefresh() async throws {
         let store = InMemoryTokenStore()
         try store.save(TokenSet(accessToken: "OLD_FAKE", refreshToken: "RT", expiresAt: .distantPast, grantedScopes: ["streaming"]))

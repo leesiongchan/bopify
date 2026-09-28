@@ -7,7 +7,7 @@ Checked 2026-09-26 on macOS 27 / Xcode 27 against the user's own Spotify account
 ```sh
 ./scripts/build-rust.sh
 xcodebuild -project Bopify/Bopify.xcodeproj -scheme Bopify -destination 'platform=macOS,arch=arm64' -derivedDataPath /private/tmp/bopify-startup-restore build
-/usr/bin/log stream --style compact --level debug --predicate 'subsystem == "my.snsoft.bopify"'
+/usr/bin/log stream --style compact --level debug --predicate 'subsystem == "com.leesiongchan.bopify"'
 ```
 
 The app was launched from `/private/tmp/bopify-startup-restore/Build/Products/Debug/Bopify.app`, with one instance at a time. At `a652a8a`: bopify-core 29 tests, librespot-connect 23 + 1 doc test, Swift package 110 tests, app build succeeded.
@@ -54,7 +54,7 @@ Checked 2026-09-27 to 2026-09-28 against the user's own Spotify account and iPho
 ```sh
 ./scripts/build-rust.sh
 xcodebuild -quiet -project Bopify/Bopify.xcodeproj -scheme Bopify -destination 'platform=macOS,arch=arm64' -derivedDataPath /private/tmp/bopify-mirror-build build
-/usr/bin/log stream --style compact --level debug --predicate 'subsystem == "my.snsoft.bopify"' > /private/tmp/bopify-mirror.log
+/usr/bin/log stream --style compact --level debug --predicate 'subsystem == "com.leesiongchan.bopify"' > /private/tmp/bopify-mirror.log
 ```
 
 The run used a diagnostic build. The only change was the same local, uncommitted `logging.rs` edit as in phase 1: librespot logged at `Debug`, in a public category, so dealer and transfer lines were visible. That edit was reverted by hand before this commit (`git status` clean), and the library and app were rebuilt without it. The app was launched from `/private/tmp/bopify-mirror-build/Build/Products/Debug/Bopify.app`, one instance at a time, and quit through AppleScript between launches. Times are local. Device names, device IDs and track titles are left out on purpose.

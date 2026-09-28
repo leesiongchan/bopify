@@ -16,4 +16,3 @@ librespot-core = { path = "../.build/librespot-939dc5e/core" }
 librespot-playback = { path = "../.build/librespot-939dc5e/playback" }
 librespot-connect = { path = "../.build/librespot-939dc5e/connect" }
 librespot-metadata = { path = "../.build/librespot-939dc5e/metadata" }
-librespot-oauth = { path = "../.build/librespot-939dc5e/oauth" }
