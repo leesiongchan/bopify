@@ -21,6 +21,7 @@ public actor SpotifyAuthService {
     // Sign-out and new consent invalidate suspended work before it can persist credentials.
     private var generation = 0
     private var refresh: (id: UUID, generation: Int, task: Task<TokenSet, Error>)?
+    private var activeListener: LoopbackCallbackListener?
 
     public init(
         clientID: String,
@@ -69,10 +70,25 @@ public actor SpotifyAuthService {
         generation += 1
         let myGeneration = generation
         BopifyLog.auth.info("signIn starting generation=\(myGeneration, privacy: .public)")
+        let previousListener = activeListener
+        activeListener = nil
+        if let previousListener { await previousListener.stop() }
+        guard generation == myGeneration else { throw PlayerError.authDenied }
         let pkce = PKCEPair.random()
         let state = UUID().uuidString
         let listener = LoopbackCallbackListener(expectedState: state)
-        let port = try await listener.start(port: callbackPort)
+        activeListener = listener
+        let port: Int
+        do { port = try await listener.start(port: callbackPort) }
+        catch {
+            if activeListener === listener { activeListener = nil }
+            if generation != myGeneration { throw PlayerError.authDenied }
+            throw error
+        }
+        guard generation == myGeneration else {
+            await stopAuthorization(listener)
+            throw PlayerError.authDenied
+        }
         BopifyLog.auth.debug("callback listener bound port=\(port, privacy: .public)")
 
         let redirectURI = "http://127.0.0.1:\(port)\(callbackPath)"
@@ -84,17 +100,18 @@ public actor SpotifyAuthService {
         let code: String
         do { code = try await listener.waitForCallback() }
         catch CallbackError.accessDenied {
-            await listener.stop()
+            await stopAuthorization(listener)
             BopifyLog.auth.notice("user declined consent")
             throw PlayerError.authDenied
         }
         catch {
-            await listener.stop()
+            await stopAuthorization(listener)
+            if generation != myGeneration { throw PlayerError.authDenied }
             let description = String(describing: error)
             BopifyLog.auth.error("callback wait failed error=\(description, privacy: .public)")
             throw PlayerError.invalidCallback
         }
-        await listener.stop()
+        await stopAuthorization(listener)
 
         let tokens = try await client.exchange(code: code, redirectURI: redirectURI, pkce: pkce)
         BopifyLog.auth.info("token exchange succeeded")
@@ -113,6 +130,11 @@ public actor SpotifyAuthService {
         BopifyLog.auth.debug("saved token set to store")
         self.tokens = tokens
         return tokens
+    }
+
+    private func stopAuthorization(_ listener: LoopbackCallbackListener) async {
+        await listener.stop()
+        if activeListener === listener { activeListener = nil }
     }
 
     public func validAccessToken() async throws -> String {
@@ -153,7 +175,7 @@ public actor SpotifyAuthService {
         return refreshed.accessToken
     }
 
-    public func signOut() {
+    public func signOut() async {
         generation += 1
         refresh?.task.cancel()
         refresh = nil
@@ -165,5 +187,8 @@ public actor SpotifyAuthService {
             BopifyLog.auth.error("failed to clear token store error=\(description, privacy: .public)")
         }
         tokens = nil
+        let listener = activeListener
+        activeListener = nil
+        if let listener { await listener.stop() }
     }
 }

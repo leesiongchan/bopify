@@ -15,14 +15,16 @@ public enum CallbackError: Error, Hashable, Sendable {
 public actor LoopbackCallbackListener {
     private let expectedState: String
     private var listener: NWListener?
+    private var listenerID: UUID?
     private var startContinuation: CheckedContinuation<Int, any Error>?
-    private var stopContinuation: CheckedContinuation<Void, Never>?
+    private var stopWaiters: [CheckedContinuation<Void, Never>] = []
     private var continuation: CheckedContinuation<String, any Error>?
     private var pendingResult: Result<String, any Error>?
 
     public init(expectedState: String) { self.expectedState = expectedState }
 
     public func start(port: UInt16? = nil) async throws -> Int {
+        guard listener == nil, port != 0 else { throw CallbackError.listenerFailed }
         let parameters = NWParameters.tcp
         let localPort: NWEndpoint.Port = port.flatMap(NWEndpoint.Port.init(rawValue:)) ?? .any
         parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: localPort)
@@ -30,9 +32,11 @@ public actor LoopbackCallbackListener {
         do { listener = try NWListener(using: parameters) }
         catch { throw CallbackError.listenerFailed }
         self.listener = listener
+        let id = UUID()
+        listenerID = id
 
         listener.stateUpdateHandler = { [weak self] state in
-            Task { await self?.handleState(state) }
+            Task { await self?.handleState(state, id: id) }
         }
 
         listener.newConnectionHandler = { [weak self] connection in
@@ -49,37 +53,46 @@ public actor LoopbackCallbackListener {
         }
     }
 
-    private func handleState(_ state: NWListener.State) {
+    private func handleState(_ state: NWListener.State, id: UUID) {
+        guard listenerID == id else { return }
         if case .cancelled = state {
             startContinuation?.resume(throwing: CallbackError.cancelled)
             startContinuation = nil
-            stopContinuation?.resume()
-            stopContinuation = nil
-            listener = nil
+            finishListener()
             return
         }
-        guard let startContinuation else { return }
         switch state {
         case .ready:
+            guard stopWaiters.isEmpty, let startContinuation else { return }
             guard let port = listener?.port?.rawValue, port != 0 else {
                 self.startContinuation = nil
                 startContinuation.resume(throwing: CallbackError.listenerFailed)
                 listener?.cancel()
-                listener = nil
+                finishListener()
                 return
             }
             self.startContinuation = nil
             BopifyLog.callback.debug("listener bound port=\(port, privacy: .public)")
             startContinuation.resume(returning: Int(port))
         case .failed, .waiting:
+            let pendingStart = startContinuation
             self.startContinuation = nil
             BopifyLog.callback.error("callback listener could not bind")
-            startContinuation.resume(throwing: CallbackError.listenerFailed)
+            pendingStart?.resume(throwing: CallbackError.listenerFailed)
             listener?.cancel()
-            listener = nil
+            finishListener()
+            deliver(.failure(CallbackError.listenerFailed))
         default:
             break
         }
+    }
+
+    private func finishListener() {
+        listener = nil
+        listenerID = nil
+        let waiters = stopWaiters
+        stopWaiters = []
+        for waiter in waiters { waiter.resume() }
     }
 
     public func waitForCallback() async throws -> String {
@@ -93,8 +106,9 @@ public actor LoopbackCallbackListener {
     public func stop() async {
         if let listener {
             await withCheckedContinuation { continuation in
-                stopContinuation = continuation
-                listener.cancel()
+                let firstStop = stopWaiters.isEmpty
+                stopWaiters.append(continuation)
+                if firstStop { listener.cancel() }
             }
         }
         deliver(.failure(CallbackError.cancelled))
@@ -125,7 +139,12 @@ public actor LoopbackCallbackListener {
               let components = URLComponents(string: "http://127.0.0.1\(path)") else {
             deliver(.failure(CallbackError.invalidCallback)); return
         }
-        let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
+        var query: [String: String] = [:]
+        for item in components.queryItems ?? [] {
+            guard query.updateValue(item.value ?? "", forKey: item.name) == nil else {
+                deliver(.failure(CallbackError.invalidCallback)); return
+            }
+        }
 
         if query["error"] == "access_denied" { deliver(.failure(CallbackError.accessDenied)); return }
         guard query["state"] == expectedState else {

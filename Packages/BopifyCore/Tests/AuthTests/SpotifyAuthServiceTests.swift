@@ -109,6 +109,37 @@ struct SpotifyAuthServiceTests {
         await occupied.stop()
     }
 
+    @Test func signOutReleasesAbandonedFixedCallbackForNextConsent() async throws {
+        AuthFlowStubProtocol.handler = { _ in (200, Data(self.librarySuccess.utf8)) }
+        let reserved = LoopbackCallbackListener(expectedState: "unused")
+        let port = try await reserved.start()
+        await reserved.stop()
+        let opened = AsyncStream<URL>.makeStream()
+        let firstService = SpotifyAuthService(clientID: "dashboard", client: makeClient(), store: InMemoryTokenStore(),
+                                              callbackPort: UInt16(port), callbackPath: "/callback",
+                                              openURL: { _ = opened.continuation.yield($0) })
+        let abandoned = Task { try await firstService.authorizeLibraryScopes(["user-library-read"]) }
+        var iterator = opened.stream.makeAsyncIterator()
+        let firstURL = try #require(await iterator.next())
+        await firstService.signOut()
+
+        let nextService = SpotifyAuthService(clientID: "dashboard", client: makeClient(), store: InMemoryTokenStore(),
+                                             callbackPort: UInt16(port), callbackPath: "/callback", openURL: { url in
+            let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
+            let callback = URL(string: "\(query["redirect_uri"]!)?code=TESTCODE&state=\(query["state"]!)")!
+            Task { _ = try? await URLSession.shared.data(from: callback) }
+        })
+        var nextToken: TokenSet?
+        do { nextToken = try await nextService.authorizeLibraryScopes(["user-library-read"]) }
+        catch { Issue.record("A new consent could not bind the port after sign-out: \(error)") }
+
+        let firstQuery = Dictionary(uniqueKeysWithValues: URLComponents(url: firstURL, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
+        let firstCallback = URL(string: "\(firstQuery["redirect_uri"]!)?code=TESTCODE&state=\(firstQuery["state"]!)")!
+        _ = try? await URLSession.shared.data(from: firstCallback)
+        _ = try? await abandoned.value
+        #expect(nextToken?.accessToken == "LIBRARY")
+    }
+
     @Test func libraryConsentWidensExistingGrant() async throws {
         let widened = #"{"access_token":"WIDE","token_type":"Bearer","expires_in":3600,"refresh_token":"RT","scope":"user-library-read user-library-modify"}"#
         AuthFlowStubProtocol.handler = { _ in (200, Data(widened.utf8)) }
