@@ -51,6 +51,15 @@ struct LoopbackCallbackListenerTests {
         await listener.stop()
     }
 
+    @Test func rejectsDuplicateOAuthParametersWithoutCrashing() async throws {
+        let listener = LoopbackCallbackListener(expectedState: "expected")
+        let port = try await listener.start()
+        let result = Task { try await listener.waitForCallback() }
+        try await get(URL(string: "http://127.0.0.1:\(port)/callback?code=abc&state=expected&state=attacker")!)
+        await #expect(throws: CallbackError.invalidCallback) { try await result.value }
+        await listener.stop()
+    }
+
     @Test func surfacesUserDenial() async throws {
         let listener = LoopbackCallbackListener(expectedState: "s")
         let port = try await listener.start()
@@ -70,5 +79,13 @@ struct LoopbackCallbackListenerTests {
         await listener.stop()
 
         await #expect(throws: CallbackError.cancelled) { try await result.value }
+    }
+
+    @Test func concurrentStopsBothComplete() async throws {
+        let listener = LoopbackCallbackListener(expectedState: "s")
+        _ = try await listener.start()
+        async let first: Void = listener.stop()
+        async let second: Void = listener.stop()
+        _ = await (first, second)
     }
 }
