@@ -171,6 +171,24 @@ struct SpotifyLibraryClientTests {
         #expect(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems == [
             URLQueryItem(name: "offset", value: "0"), URLQueryItem(name: "limit", value: "50")])
     }
+    @Test func libraryRequestsUseOnlyTheirRequiredScopesAndLibraryBearer() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [LibraryProtocol.self]
+        let readClient = SpotifyLibraryClient(session: URLSession(configuration: configuration)) { required in
+            #expect(required == ["user-library-read"])
+            return "LIBRARY_ONLY"
+        }
+        LibraryProtocol.fixture.reset(.init(data: try savedPage([], total: 0, next: nil)))
+        _ = try await readClient.savedTracks(offset: 0, limit: 50)
+        #expect(LibraryProtocol.fixture.requests.first?.value(forHTTPHeaderField: "Authorization") == "Bearer LIBRARY_ONLY")
+        let writeClient = SpotifyLibraryClient(session: URLSession(configuration: configuration)) { required in
+            #expect(required == ["user-library-modify"])
+            return "LIBRARY_ONLY"
+        }
+        LibraryProtocol.fixture.reset(.init())
+        try await writeClient.save(uri)
+        #expect(LibraryProtocol.fixture.requests.first?.value(forHTTPHeaderField: "Authorization") == "Bearer LIBRARY_ONLY")
+    }
     @Test func skippedTrackDoesNotChangeNextOffset() async throws {
         LibraryProtocol.fixture.reset(.init(data: try savedPage([savedTrack("a"), ["track": NSNull()], savedTrack("b")])))
         let page = try await client().savedTracks(offset: 0, limit: 50)
