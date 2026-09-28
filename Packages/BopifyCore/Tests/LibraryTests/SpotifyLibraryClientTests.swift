@@ -91,6 +91,30 @@ struct SpotifyLibraryClientTests {
         }
         #expect(LibraryProtocol.fixture.requests.count == 1)
     }
+    @Test func concurrentLibraryFeaturesShareEstablishedCooldown() async {
+        let uri = self.uri
+        LibraryProtocol.fixture.reset(.init(status: 429, headers: ["Retry-After": "12"]))
+        let client = client()
+        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 12)) {
+            _ = try await client.savedTracks(offset: 0, limit: 50)
+        }
+        LibraryProtocol.fixture.reset(.init())
+        let blocked = await withTaskGroup(of: Bool.self) { group in
+            group.addTask {
+                do { _ = try await client.savedState(for: uri); return false }
+                catch { return error as? LibraryError == .rateLimited(retryAfterSeconds: 12) }
+            }
+            group.addTask {
+                do { _ = try await client.savedTracks(offset: 0, limit: 50); return false }
+                catch { return error as? LibraryError == .rateLimited(retryAfterSeconds: 12) }
+            }
+            var results: [Bool] = []
+            for await result in group { results.append(result) }
+            return results
+        }
+        #expect(blocked == [true, true])
+        #expect(LibraryProtocol.fixture.requests.isEmpty)
+    }
     @Test func cooldownExpiresForBothLibraryFeatures() async throws {
         let clock = LibraryClock()
         let configuration = URLSessionConfiguration.ephemeral

@@ -199,12 +199,10 @@ final class AppEnvironment {
             player = nil
             artworkStore.clear()
             clearLibrary()
-            await libraryAuth.signOut()
-            // Set before the teardown `await`, not after: `engine.shutdown()`
-            // can take multiple seconds, and leaving `authState` at `.signedIn`
-            // across that suspension makes the UI fall through to the
-            // "signing in" presentation for someone who is signing out.
+            // Block new library consent before any teardown await can
+            // suspend this actor and let an Enable action run.
             authState = .signedOut
+            await libraryAuth.signOut()
             if let engine {
                 self.engine = nil
                 await engine.shutdown()

@@ -5,6 +5,19 @@ import BopifyPlayback
 import BopifyAuth
 
 @main struct MonolithLibraryProbe {
+    final class BlockingStore: TokenStoring, @unchecked Sendable {
+        let base: KeychainTokenStore
+        let entered = AsyncStream<Void>.makeStream()
+        let release = DispatchSemaphore(value: 0)
+        init(service: String) { base = KeychainTokenStore(service: service) }
+        func save(_ tokens: TokenSet) throws { try base.save(tokens) }
+        func load() -> TokenSet? { base.load() }
+        func clear() throws {
+            entered.continuation.yield(())
+            release.wait()
+            try base.clear()
+        }
+    }
     actor Library: LibraryService, SavedTracksService {
         var scopes: Set<String> = []
         var requested: [Set<String>] = []
@@ -89,11 +102,24 @@ import BopifyAuth
         precondition(playbackStore.load() == nil && libraryStore.load() == nil, "sign-out clears both grants")
         precondition(signingOut.authState == .signedOut && signingOut.likedSongs.tracks.isEmpty,
                      "late consent cannot restore browsing")
+        let racingLibrary = Library()
+        let blockingStore = BlockingStore(service: "my.bopify.probe.\(UUID().uuidString).library")
+        let racing = AppEnvironment(previewPlayer: player, favoriteService: racingLibrary,
+                                    savedTracksService: racingLibrary, authorizeLibraryScopes: racingLibrary.authorize,
+                                    libraryAuth: SpotifyAuthService(clientID: "dashboard", store: blockingStore))
+        let racingSignOut = Task { await racing.signOut() }
+        for await _ in blockingStore.entered.stream { break }
+        precondition(racing.authState == .signedOut, "sign-out must block new consent before awaiting Keychain")
+        await racing.enableLikedSongs()
+        let racingRequests = await racingLibrary.requested
+        precondition(racingRequests.isEmpty, "Enable during sign-out must not reopen consent")
+        blockingStore.release.signal()
+        await racingSignOut.value
         let absent = AppEnvironment(previewPlayer: player, favoriteService: library)
         await absent.likedSongs.reveal(at: Date())
         precondition(absent.likedSongs.error == .unavailable)
         await absent.enableLikedSongs()
         precondition(absent.libraryAuthorizationNotice != nil)
-        print("PASS: read consent, shared consent guard, write recovery, no playback, teardown, dual-store sign-out, late consent, fixture isolation")
+        print("PASS: read consent, shared consent guard, write recovery, no playback, teardown, dual-store sign-out, late consent, sign-out ordering, fixture isolation")
     }
 }
