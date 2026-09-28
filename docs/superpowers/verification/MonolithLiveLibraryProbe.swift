@@ -6,7 +6,7 @@ import BopifyLibrary
 @main struct MonolithLiveLibraryProbe {
     static func main() async {
         let auth = SpotifyAuthService(clientID: dashboardLibraryClientID,
-                                      store: KeychainTokenStore(service: "my.snsoft.bopify.library"))
+                                      store: KeychainTokenStore(service: "com.leesiongchan.bopify.library"))
         let library = SpotifyLibraryClient { scopes in try await auth.validAccessToken(requiredScopes: scopes) }
         do {
             let page = try await library.savedTracks(offset: 0, limit: 1)

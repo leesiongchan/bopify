@@ -17,11 +17,15 @@ public protocol TokenStoring: Sendable {
 /// signed with a real team.
 public struct KeychainTokenStore: TokenStoring {
     private let service: String
+    private let legacyService: String?
     private let account = "spotify-tokens"
 
-    public init(service: String = "my.snsoft.bopify") { self.service = service }
+    public init(service: String = "com.leesiongchan.bopify", migratingFrom legacyService: String? = nil) {
+        self.service = service
+        self.legacyService = legacyService
+    }
 
-    private var baseQuery: [String: Any] {
+    private func baseQuery(for service: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -31,9 +35,10 @@ public struct KeychainTokenStore: TokenStoring {
 
     public func save(_ tokens: TokenSet) throws {
         let data = try JSONEncoder().encode(Stored(tokens))
-        let status = SecItemUpdate(baseQuery as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        let query = baseQuery(for: service)
+        let status = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
         if status == errSecItemNotFound {
-            var attributes = baseQuery
+            var attributes = query
             attributes[kSecValueData as String] = data
             attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
             let addStatus = SecItemAdd(attributes as CFDictionary, nil)
@@ -49,7 +54,25 @@ public struct KeychainTokenStore: TokenStoring {
     }
 
     public func load() -> TokenSet? {
-        var query = baseQuery
+        if let current = load(from: service) { return current }
+        guard let legacyService,
+              !UserDefaults.standard.bool(forKey: migrationKey),
+              let legacy = load(from: legacyService) else { return nil }
+        do {
+            try save(legacy)
+            UserDefaults.standard.set(true, forKey: migrationKey)
+            try delete(from: legacyService)
+            BopifyLog.keychain.info("legacy token migrated")
+        } catch {
+            BopifyLog.keychain.error("legacy token migration failed")
+        }
+        return legacy
+    }
+
+    private var migrationKey: String { "keychain.migrated.\(service)" }
+
+    private func load(from service: String) -> TokenSet? {
+        var query = baseQuery(for: service)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
@@ -72,7 +95,16 @@ public struct KeychainTokenStore: TokenStoring {
     }
 
     public func clear() throws {
-        let status = SecItemDelete(baseQuery as CFDictionary)
+        if let legacyService {
+            UserDefaults.standard.set(true, forKey: migrationKey)
+            do { try delete(from: legacyService) }
+            catch { BopifyLog.keychain.error("legacy token clear failed") }
+        }
+        try delete(from: service)
+    }
+
+    private func delete(from service: String) throws {
+        let status = SecItemDelete(baseQuery(for: service) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             BopifyLog.keychain.error("clear failed status=\(status, privacy: .public)")
             throw KeychainError.unexpected(status)

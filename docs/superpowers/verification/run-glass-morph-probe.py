@@ -16,6 +16,6 @@ args += ['-o', str(app / 'MacOS/GlassProbe')]
 subprocess.run(args, check=True)
 for source in (products / 'Bopify.app/Contents/Resources').iterdir():
     if source.is_file(): shutil.copy2(source, app / 'Resources' / source.name)
-(app / 'Info.plist').write_text('<plist version="1.0"><dict><key>CFBundleExecutable</key><string>GlassProbe</string><key>CFBundleIdentifier</key><string>my.snsoft.bopify.glass-probe</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>')
+(app / 'Info.plist').write_text('<plist version="1.0"><dict><key>CFBundleExecutable</key><string>GlassProbe</string><key>CFBundleIdentifier</key><string>com.leesiongchan.bopify.glass-probe</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>')
 
 print(app / "MacOS/GlassProbe")

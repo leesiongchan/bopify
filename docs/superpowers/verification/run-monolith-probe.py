@@ -42,7 +42,7 @@ if instrumented: instrumented.unlink()
 for source in (products / 'Bopify.app/Contents/Resources').iterdir():
     if source.is_file(): shutil.copy2(source, app / 'Resources' / source.name)
     elif source.is_dir(): shutil.copytree(source, app / 'Resources' / source.name, dirs_exist_ok=True)
-(app / 'Info.plist').write_text('<plist version="1.0"><dict><key>CFBundleExecutable</key><string>MonolithProbe</string><key>CFBundleIdentifier</key><string>my.snsoft.bopify.monolith-probe</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>')
+(app / 'Info.plist').write_text('<plist version="1.0"><dict><key>CFBundleExecutable</key><string>MonolithProbe</string><key>CFBundleIdentifier</key><string>com.leesiongchan.bopify.monolith-probe</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>')
 
 print(app / "MacOS/MonolithProbe")
 
