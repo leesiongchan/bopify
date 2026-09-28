@@ -6,6 +6,8 @@ import BopifyDomain
 import BopifyPlayback
 import BopifyLibrary
 
+let dashboardLibraryClientID = "25bbd3bacca4412b80f17b892072af71"
+
 /// The only place concrete implementations are chosen.
 ///
 /// Holds the concrete `LibrespotEngine` alongside the type-erased
@@ -41,10 +43,8 @@ final class AppEnvironment {
         isListening ? presentation.mode : .expanded
     }
 
-    // A Developer Dashboard client ID is rejected by login5 with HTTP 400
-    // (see BopifyAuth's `librespotClientID` doc comment), so the same ID
-    // used for the librespot session is also the one used here.
     @ObservationIgnored private let auth: SpotifyAuthService
+    @ObservationIgnored private let libraryAuth: SpotifyAuthService
     @ObservationIgnored private var engine: LibrespotEngine?
 
     /// `engine == nil` cannot serve as a lock: it cannot distinguish "torn
@@ -68,20 +68,28 @@ final class AppEnvironment {
 
     init() {
         let auth = SpotifyAuthService(clientID: librespotClientID)
+        let libraryAuth = SpotifyAuthService(clientID: dashboardLibraryClientID,
+                                             store: KeychainTokenStore(service: "my.snsoft.bopify.library"))
         self.auth = auth
+        self.libraryAuth = libraryAuth
         let library = SpotifyLibraryClient { scopes in
-            try await auth.validAccessToken(requiredScopes: scopes)
+            try await libraryAuth.validAccessToken(requiredScopes: scopes)
         }
         favorite = FavoriteModel(service: library)
         likedSongs = LikedSongsModel(service: library)
-        authorizeLibraryScopes = { scopes in _ = try await auth.authorizeAdditionalScopes(scopes) }
+        authorizeLibraryScopes = { scopes in _ = try await libraryAuth.authorizeLibraryScopes(scopes) }
     }
 
     #if DEBUG
     init(previewPlayer: PlayerModel, favoriteService: any LibraryService,
          savedTracksService: (any SavedTracksService)? = nil,
-         authorizeLibraryScopes: (@Sendable (Set<String>) async throws -> Void)? = nil) {
-        auth = SpotifyAuthService(clientID: librespotClientID)
+         authorizeLibraryScopes: (@Sendable (Set<String>) async throws -> Void)? = nil,
+         playbackAuth: SpotifyAuthService? = nil,
+         libraryAuth: SpotifyAuthService? = nil) {
+        auth = playbackAuth ?? SpotifyAuthService(clientID: librespotClientID,
+            store: KeychainTokenStore(service: "my.snsoft.bopify.preview.\(UUID().uuidString)"))
+        self.libraryAuth = libraryAuth ?? SpotifyAuthService(clientID: dashboardLibraryClientID,
+            store: KeychainTokenStore(service: "my.snsoft.bopify.preview.library.\(UUID().uuidString)"))
         favorite = FavoriteModel(service: favoriteService)
         likedSongs = LikedSongsModel(service: savedTracksService ?? UnavailableSavedTracks())
         self.authorizeLibraryScopes = authorizeLibraryScopes ?? { _ in throw LibraryError.unavailable }
@@ -191,6 +199,7 @@ final class AppEnvironment {
             player = nil
             artworkStore.clear()
             clearLibrary()
+            await libraryAuth.signOut()
             // Set before the teardown `await`, not after: `engine.shutdown()`
             // can take multiple seconds, and leaving `authState` at `.signedIn`
             // across that suspension makes the UI fall through to the
