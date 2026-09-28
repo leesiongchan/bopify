@@ -47,4 +47,20 @@ struct TokenStoreTests {
     @Test func clearOnAnEmptyStoreIsNotAnError() throws {
         try makeStore().clear()
     }
+
+    @Test func separateKeychainServicesDoNotOverwriteEachOther() throws {
+        let prefix = "my.bopify.tests.\(UUID().uuidString)"
+        let playback = KeychainTokenStore(service: prefix)
+        let library = KeychainTokenStore(service: prefix + ".library")
+        defer { try? playback.clear(); try? library.clear() }
+        let libraryToken = TokenSet(accessToken: "LIBRARY", refreshToken: "LIBRARY_RT",
+                                    expiresAt: sample.expiresAt, grantedScopes: ["user-library-read"])
+        try playback.save(sample)
+        try library.save(libraryToken)
+        #expect(playback.load() == sample)
+        #expect(library.load() == libraryToken)
+        try library.clear()
+        #expect(playback.load() == sample)
+        #expect(library.load() == nil)
+    }
 }
