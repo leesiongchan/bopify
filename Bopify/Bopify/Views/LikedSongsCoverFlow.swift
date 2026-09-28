@@ -23,7 +23,9 @@ struct LikedSongsCoverFlow: View {
                 Text("library.title").font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
                 if model.isLoading && !model.tracks.isEmpty { ProgressView().controlSize(.mini) }
-                if model.error != nil && !model.tracks.isEmpty { retryButton }
+                if model.error != nil && !model.tracks.isEmpty {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in retryButton(at: context.date) }
+                }
             }
             .background(PlayerBackgroundDragRegion())
             if model.tracks.isEmpty {
@@ -150,10 +152,19 @@ struct LikedSongsCoverFlow: View {
                 if let notice = environment?.libraryAuthorizationNotice { Text(notice).font(.caption) }
             }
         } else if model.error != nil {
-            VStack(spacing: 8) {
-                Text(model.retryAfter == nil ? "library.unavailable" : "library.rateLimited")
-                    .font(.caption).foregroundStyle(.secondary)
-                retryButton
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                let remaining = model.retryAfter.map { max(0, Int(ceil($0.timeIntervalSince(context.date)))) } ?? 0
+                VStack(spacing: 8) {
+                    if case .some(.quotaExceeded) = model.error {
+                        Text("Spotify's library quota has been reached. Try again later.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Text(model.retryAfter == nil ? "library.unavailable" : "library.rateLimited")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if remaining > 0 { Text("Retry in \(remaining) seconds.").font(.caption).foregroundStyle(.secondary) }
+                    retryButton(at: context.date)
+                }
             }
         } else if model.hasMore {
             VStack(spacing: 8) {
@@ -164,9 +175,10 @@ struct LikedSongsCoverFlow: View {
             Text("library.empty").font(.caption).foregroundStyle(.secondary)
         }
     }
-    private var retryButton: some View {
+    private func retryButton(at date: Date) -> some View {
         Button("library.retry") { Task { await model.retry(at: Date()) } }
-            .font(.caption).disabled(model.isLoading)
+            .font(.caption)
+            .disabled(model.isLoading || model.retryAfter.map { $0 > date } == true)
     }
 }
 

@@ -70,6 +70,7 @@ private func favoriteNotice(_ error: LibraryError?) -> String {
     case .authorizationRequired: String(localized: "favorite.permission")
     case .forbidden: String(localized: "favorite.forbidden")
     case .rateLimited: String(localized: "favorite.rateLimited")
+    case .quotaExceeded: String(localized: "Spotify's library quota has been reached. Try again later.")
     case .invalidResponse, .unavailable: String(localized: "favorite.unavailable")
     case nil: String(localized: "favorite.unknown")
     }

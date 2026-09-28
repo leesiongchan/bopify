@@ -56,7 +56,7 @@ public final class LikedSongsModel {
 
     public func refresh() async {
         needsRefresh = true
-        guard visible, retryAfter.map({ $0 <= Date() }) ?? true else { return }
+        guard visible, retryAfter.map({ $0 <= now() }) ?? true else { return }
         await request(refresh: true)
     }
 
@@ -132,6 +132,8 @@ public final class LikedSongsModel {
                 let failure = error as? LibraryError ?? .unavailable
                 self.error = failure
                 if case let .rateLimited(seconds) = failure {
+                    retryAfter = now().addingTimeInterval(TimeInterval(seconds ?? 60))
+                } else if case let .quotaExceeded(seconds) = failure {
                     retryAfter = now().addingTimeInterval(TimeInterval(seconds ?? 60))
                 }
                 BopifyLog.library.notice("liked songs request failed")

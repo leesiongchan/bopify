@@ -6,10 +6,17 @@ public struct SpotifyLibraryClient: LibraryService, SavedTracksService {
     private let session: URLSession
     private let tokenProvider: @Sendable (Set<String>) async throws -> String
     private let redirects = LibraryRedirectPolicy()
+    private let cooldown: LibraryCooldown
 
     public init(session: URLSession = .shared, tokenProvider: @Sendable @escaping (Set<String>) async throws -> String) {
+        self.init(session: session, tokenProvider: tokenProvider, now: Date.init)
+    }
+
+    init(session: URLSession, tokenProvider: @Sendable @escaping (Set<String>) async throws -> String,
+         now: @Sendable @escaping () -> Date) {
         self.session = session
         self.tokenProvider = tokenProvider
+        cooldown = LibraryCooldown(now: now)
     }
 
     public func savedState(for uri: SpotifyURI) async throws -> Bool {
@@ -62,6 +69,7 @@ public struct SpotifyLibraryClient: LibraryService, SavedTracksService {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         let data: Data
         let response: URLResponse
+        try await cooldown.check()
         do { (data, response) = try await session.data(for: request, delegate: redirects) }
         catch is CancellationError { throw CancellationError() }
         catch let error as URLError where error.code == .cancelled { throw CancellationError() }
@@ -75,11 +83,39 @@ public struct SpotifyLibraryClient: LibraryService, SavedTracksService {
         case 403: throw LibraryError.forbidden
         case 429:
             let seconds = http.value(forHTTPHeaderField: "Retry-After").flatMap(Int.init).flatMap { $0 >= 0 ? $0 : nil }
-            throw LibraryError.rateLimited(retryAfterSeconds: seconds)
+            let quota = (try? JSONDecoder().decode(LibraryLimitResponse.self, from: data))?.error.reason == "QUOTA_EXCEEDED"
+            let failure: LibraryError = quota ? .quotaExceeded(retryAfterSeconds: seconds) : .rateLimited(retryAfterSeconds: seconds)
+            await cooldown.record(failure, seconds: seconds)
+            BopifyLog.library.notice("library request limited cause=\(quota ? "quota" : "rate", privacy: .public) retryAfterSeconds=\(seconds ?? -1, privacy: .public)")
+            throw failure
         case 500...599: throw LibraryError.unavailable
         default: throw LibraryError.invalidResponse
         }
     }
+}
+
+private actor LibraryCooldown {
+    private let now: @Sendable () -> Date
+    private var until: Date?
+    private var failure: LibraryError?
+
+    init(now: @Sendable @escaping () -> Date) { self.now = now }
+
+    func check() throws {
+        if let until, now() < until, let failure { throw failure }
+    }
+
+    func record(_ failure: LibraryError, seconds: Int?) {
+        let deadline = now().addingTimeInterval(TimeInterval(seconds ?? 60))
+        if let until, until > deadline { return }
+        until = deadline
+        self.failure = failure
+    }
+}
+
+private struct LibraryLimitResponse: Decodable {
+    struct Details: Decodable { let reason: String? }
+    let error: Details
 }
 
 // The fixed API endpoint has no legitimate redirect requirement.
