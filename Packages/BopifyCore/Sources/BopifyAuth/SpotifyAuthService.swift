@@ -49,6 +49,11 @@ public actor SpotifyAuthService {
         return try await authorize(scopes: required, validateGrant: true)
     }
 
+    public func authorizeLibraryScopes(_ scopes: Set<String>) async throws -> TokenSet {
+        let required = (tokens ?? restore())?.grantedScopes.union(scopes) ?? scopes
+        return try await authorize(scopes: required, validateGrant: true)
+    }
+
     private func authorize(scopes: Set<String>, validateGrant: Bool) async throws -> TokenSet {
         refresh?.task.cancel()
         refresh = nil
