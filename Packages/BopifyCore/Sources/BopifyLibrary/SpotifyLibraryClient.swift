@@ -2,7 +2,7 @@ import Foundation
 import os
 import BopifyDomain
 
-public struct SpotifyLibraryClient: LibraryService {
+public struct SpotifyLibraryClient: LibraryService, SavedTracksService {
     private let session: URLSession
     private let tokenProvider: @Sendable (Set<String>) async throws -> String
     private let redirects = LibraryRedirectPolicy()
@@ -22,20 +22,41 @@ public struct SpotifyLibraryClient: LibraryService {
     public func save(_ uri: SpotifyURI) async throws { _ = try await request(method: "PUT", uri: uri) }
     public func remove(_ uri: SpotifyURI) async throws { _ = try await request(method: "DELETE", uri: uri) }
 
+    public func savedTracks(offset: Int, limit: Int) async throws -> SavedTracksPage {
+        guard offset >= 0, (1...50).contains(limit) else { throw LibraryError.invalidResponse }
+        let data = try await request(method: "GET", path: "/v1/me/tracks", query: [
+            URLQueryItem(name: "offset", value: String(offset)), URLQueryItem(name: "limit", value: String(limit))
+        ], scope: "user-library-read")
+        guard let page = try? JSONDecoder().decode(SavedPage.self, from: data),
+              page.offset == offset, page.limit == limit, page.total >= 0,
+              page.items.count <= limit else { throw LibraryError.invalidResponse }
+        let (next, overflow) = offset.addingReportingOverflow(page.items.count)
+        guard !overflow else { throw LibraryError.invalidResponse }
+        let continues = page.next != nil && !page.items.isEmpty && next < page.total
+        return SavedTracksPage(tracks: page.items.compactMap { $0.track?.domain },
+                               nextOffset: continues ? next : nil, total: page.total)
+    }
+
     private func request(method: String, uri: SpotifyURI, contains: Bool = false) async throws -> Data {
         guard uri.kind == .track, uri.id.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) }) else {
             throw LibraryError.unavailable
         }
+        return try await request(method: method, path: "/v1/me/library" + (contains ? "/contains" : ""),
+                                 query: [URLQueryItem(name: "uris", value: uri.rawValue)],
+                                 scope: contains ? "user-library-read" : "user-library-modify")
+    }
+
+    private func request(method: String, path: String, query: [URLQueryItem], scope: String) async throws -> Data {
         let token: String
-        do { token = try await tokenProvider([contains ? "user-library-read" : "user-library-modify"]) }
+        do { token = try await tokenProvider([scope]) }
         catch let error as LibraryError { throw error }
         catch is CancellationError { throw CancellationError() }
         catch PlayerError.authExpired { throw LibraryError.authorizationRequired }
         catch { throw LibraryError.unavailable }
         try Task.checkCancellation()
-        var components = URLComponents(string: "https://api.spotify.com/v1/me/library")!
-        if contains { components.path += "/contains" }
-        components.queryItems = [URLQueryItem(name: "uris", value: uri.rawValue)]
+        var components = URLComponents(string: "https://api.spotify.com")!
+        components.path = path
+        components.queryItems = query
         var request = URLRequest(url: components.url!, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)
         request.httpMethod = method
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -66,5 +87,47 @@ final class LibraryRedirectPolicy: NSObject, URLSessionTaskDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
         completionHandler(nil)
+    }
+}
+
+private struct SavedPage: Decodable {
+    let items: [SavedItem]
+    let offset: Int
+    let limit: Int
+    let total: Int
+    let next: String?
+}
+
+private struct SavedItem: Decodable {
+    let track: SavedTrack?
+    private enum CodingKeys: String, CodingKey { case track }
+    init(from decoder: Decoder) throws {
+        let container = try? decoder.container(keyedBy: CodingKeys.self)
+        track = try? container?.decode(SavedTrack.self, forKey: .track)
+    }
+}
+
+private struct SavedTrack: Decodable {
+    struct Artist: Decodable { let name: String }
+    struct Image: Decodable { let url: String }
+    struct Album: Decodable { let name: String; let images: [Image] }
+    let uri: String
+    let name: String
+    let artists: [Artist]
+    let album: Album?
+    let duration_ms: Int64
+    let is_playable: Bool?
+    let is_local: Bool?
+
+    var domain: Track? {
+        guard let uri = SpotifyURI(uri), uri.kind == .track,
+              uri.id.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) }),
+              duration_ms > 0, !name.isEmpty, is_playable != false, is_local != true else { return nil }
+        let artwork = album?.images.compactMap { image -> Artwork? in
+            guard let url = URL(string: image.url), url.scheme == "https", url.host != nil else { return nil }
+            return Artwork(url: url)
+        }.first
+        return Track(uri: uri, title: name, artists: artists.map { ArtistSummary(name: $0.name) },
+                     albumTitle: album?.name, artwork: artwork, durationMs: duration_ms)
     }
 }
