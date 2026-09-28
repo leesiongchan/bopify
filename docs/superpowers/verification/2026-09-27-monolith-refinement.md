@@ -1,8 +1,8 @@
 # Monolith refinement verification
 
-Status: all six refinements implemented; automated package, build, and native interaction checks pass. Live Spotify and manual accessibility acceptance remain incomplete. Not merged.
+Status: all six refinements implemented; automated package, build, and native interaction checks pass. Live Spotify and manual accessibility acceptance remain incomplete. Merged into `main` on 2026-09-28 at the user's explicit request.
 
-Worktree: `.worktrees/monolith-refinement`, branch `feat/monolith-refinement`, base `728a09b`.
+Implementation branch: `feat/monolith-refinement`, base `728a09b`, integrated through `0ef7f1a`.
 
 ## Requests and evidence
 
@@ -76,4 +76,4 @@ A live saved-track request via the existing auth service exits 77 because the se
 
 Real VoiceOver traversal, real system accessibility preference notifications, physical display removal and the full hide/sign-out-during-every-gesture matrix remain unverified. Injected appearance/motion settings and layout assertions do not establish those manual results. Task 7 remains incomplete until its required acceptance evidence is supplied or scope is explicitly revised.
 
-Main has not been modified or merged by this refinement.
+Integration: `main` fast-forwarded from `728a09b` to `0ef7f1a` after 178 tests passed on the feature branch. The user authorized merging with the acceptance limits above recorded. Merged-main verification also passed: 178 Swift tests and the macOS build, using fresh scratch/build directories. Logs: `/private/tmp/bopify-main-merged-tests.log` and `/private/tmp/bopify-main-merged-build.log`. No remote is configured; nothing was pushed.
