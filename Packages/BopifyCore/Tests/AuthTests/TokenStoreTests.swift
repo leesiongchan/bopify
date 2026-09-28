@@ -63,18 +63,4 @@ struct TokenStoreTests {
         #expect(playback.load() == sample)
         #expect(library.load() == nil)
     }
-
-    @Test func migratesLegacyItemAndDoesNotRestoreItAfterSignOut() throws {
-        let prefix = "my.bopify.tests.\(UUID().uuidString)"
-        let old = KeychainTokenStore(service: prefix + ".old")
-        let current = KeychainTokenStore(service: prefix + ".new", migratingFrom: prefix + ".old")
-        defer { try? old.clear(); try? current.clear() }
-        try old.save(sample)
-
-        #expect(current.load() == sample)
-        #expect(old.load() == nil)
-        try current.clear()
-        try old.save(sample)
-        #expect(current.load() == nil)
-    }
 }

@@ -67,11 +67,9 @@ final class AppEnvironment {
     @ObservationIgnored private var signInRequested = false
 
     init() {
-        let auth = SpotifyAuthService(clientID: librespotClientID,
-                                      store: KeychainTokenStore(migratingFrom: "my.snsoft.bopify"))
+        let auth = SpotifyAuthService(clientID: librespotClientID)
         let libraryAuth = SpotifyAuthService(clientID: dashboardLibraryClientID,
-                                             store: KeychainTokenStore(service: "com.leesiongchan.bopify.library",
-                                                                       migratingFrom: "my.snsoft.bopify.library"),
+                                             store: KeychainTokenStore(service: "com.leesiongchan.bopify.library"),
                                              callbackPort: 8898, callbackPath: "/callback")
         self.auth = auth
         self.libraryAuth = libraryAuth
