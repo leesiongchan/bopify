@@ -24,6 +24,9 @@ public final class PlayerModel {
     public private(set) var commandNotice: String?
     public private(set) var queueSelection: QueueSelectionStatus = .idle
     private var lastPositiveVolume: Double?
+    private var volumeDraft: Double?
+    private var isEditingVolume = false
+    public var displayVolume: Double { volumeDraft ?? state.volume }
     private(set) var positionUpdatedAt = Date.now
     private(set) var remoteUpdatedAt = Date.now
     private var frozenDisplayPositionMs: Int64?
@@ -32,8 +35,26 @@ public final class PlayerModel {
     @ObservationIgnored private var consumer: Task<Void, Never>?
     @ObservationIgnored private var pendingCommand: Task<Void, Never>?
     @ObservationIgnored private var commandGeneration: UInt64 = 0
+    @ObservationIgnored private var volumeRequest: (value: Double, immediate: Bool)?
+    @ObservationIgnored private var volumeTask: Task<Void, Never>?
+    @ObservationIgnored private var volumeDelay: Task<Void, Error>?
+    @ObservationIgnored private var volumeGeneration: UInt64 = 0
+    @ObservationIgnored private var lastVolumeSent: Double?
+    @ObservationIgnored private var volumeDispatchedAt: TimeInterval?
+    @ObservationIgnored private let volumeNow: @MainActor () -> TimeInterval
+    @ObservationIgnored private let volumeSleep: @Sendable (Duration) async throws -> Void
 
-    public init(engine: any PlaybackEngine) { self.engine = engine }
+    public convenience init(engine: any PlaybackEngine) {
+        self.init(engine: engine, volumeNow: { ProcessInfo.processInfo.systemUptime },
+                  volumeSleep: { try await Task.sleep(for: $0) })
+    }
+
+    init(engine: any PlaybackEngine, volumeNow: @escaping @MainActor () -> TimeInterval,
+         volumeSleep: @escaping @Sendable (Duration) async throws -> Void) {
+        self.engine = engine
+        self.volumeNow = volumeNow
+        self.volumeSleep = volumeSleep
+    }
 
     /// Interpolate for display without replacing the engine's authoritative position.
     /// A mirrored device's own clock takes precedence while Bopify is inactive.
@@ -67,6 +88,7 @@ public final class PlayerModel {
     }
 
     public func stop() {
+        cancelVolumeEditing()
         queueSelection = .idle
         lastPositiveVolume = nil
         guard consumer != nil else { return }
@@ -149,13 +171,82 @@ public final class PlayerModel {
     }
 
     public func setVolume(_ value: Double) {
-        guard state.isActiveDevice, value.isFinite else { return }
+        guard consumer != nil, state.isActiveDevice, value.isFinite else { return }
         let volume = max(0, min(1, value))
-        enqueue("setVolume", requiresActive: true) { [engine] in try await engine.setVolume(volume) }
+        guard volume != (volumeRequest?.value ?? volumeDraft ?? state.volume) else { return }
+        volumeDraft = volume
+        volumeRequest = (volume, false)
+        startVolumeWorker()
+    }
+
+    public func beginVolumeEditing() {
+        guard consumer != nil, state.isActiveDevice else { return }
+        isEditingVolume = true
+        volumeDraft = volumeDraft ?? state.volume
+    }
+
+    public func endVolumeEditing() {
+        isEditingVolume = false
+        if let request = volumeRequest { volumeRequest = (request.value, true) }
+        else if let draft = volumeDraft, draft != (lastVolumeSent ?? state.volume) { volumeRequest = (draft, true) }
+        volumeDelay?.cancel()
+        if volumeRequest != nil { startVolumeWorker() }
+        if volumeDraft == state.volume && volumeRequest == nil && volumeTask == nil { volumeDraft = nil }
+    }
+
+    public func cancelVolumeEditing() {
+        isEditingVolume = false
+        volumeDraft = nil
+        volumeRequest = nil
+        volumeGeneration &+= 1
+        volumeDelay?.cancel()
+        lastVolumeSent = nil
+        volumeDispatchedAt = nil
     }
 
     public func toggleMute() {
         setVolume(state.volume > 0 ? 0 : (lastPositiveVolume ?? 0.5))
+        endVolumeEditing()
+    }
+
+    private func startVolumeWorker() {
+        guard volumeTask == nil else { return }
+        volumeTask = Task { [weak self] in await self?.drainVolume() }
+    }
+
+    private func drainVolume() async {
+        defer { volumeTask = nil }
+        while let request = volumeRequest {
+            if !request.immediate, let last = volumeDispatchedAt {
+                let delay = last + 0.150 - volumeNow()
+                if delay > 0 {
+                    let sleep = volumeSleep
+                    let wait = Task { try await sleep(.seconds(delay)) }
+                    volumeDelay = wait
+                    try? await wait.value
+                    volumeDelay = nil
+                    continue
+                }
+            }
+            volumeRequest = nil
+            guard consumer != nil, state.isActiveDevice else { cancelVolumeEditing(); return }
+            if request.value == (lastVolumeSent ?? state.volume) { continue }
+            let generation = volumeGeneration
+            volumeDispatchedAt = volumeNow()
+            lastVolumeSent = request.value
+            BopifyLog.playback.debug("volume command dispatched")
+            do { try await engine.setVolume(request.value) }
+            catch {
+                guard generation == volumeGeneration else { continue }
+                lastVolumeSent = nil
+                if volumeRequest == nil { volumeDraft = nil }
+                commandNotice = String(localized: "command.unavailable", defaultValue: "That action is unavailable.")
+                BopifyLog.playback.error("volume command failed")
+            }
+            if generation == volumeGeneration, !isEditingVolume, volumeRequest == nil, volumeDraft == state.volume {
+                volumeDraft = nil
+            }
+        }
     }
 
     private func enqueue(_ name: String, requiresActive: Bool = false,
@@ -268,6 +359,8 @@ public final class PlayerModel {
             state.positionMs = position
         case let .volumeChanged(volume):
             state.volume = volume
+            lastVolumeSent = volume
+            if !isEditingVolume, volumeRequest == nil, volumeTask == nil || volumeDraft == volume { volumeDraft = nil }
             if volume.isFinite, volume > 0 { lastPositiveVolume = min(1, volume) }
         case .loading:
             // Keep metadata and the displayed position until the engine supplies new values.
@@ -279,6 +372,7 @@ public final class PlayerModel {
         case let .activeDeviceChanged(isActive):
             state.isActiveDevice = isActive
             if !isActive {
+                cancelVolumeEditing()
                 if case .pending = queueSelection { queueSelection = .failed }
                 freezeDisplayPosition()
                 state.phase = .idle
@@ -292,7 +386,7 @@ public final class PlayerModel {
             state.phase = .error(error)
             let description = String(describing: error)
             BopifyLog.playback.error("playback failed error=\(description, privacy: .public)")
-            if error == .playbackSessionLost { state.isActiveDevice = false }
+            if error == .playbackSessionLost { state.isActiveDevice = false; cancelVolumeEditing() }
             // A live mirror must stop advancing under the error, same as a device that stopped.
             if let remote = state.remote {
                 state.staleRemote = stalled(remote)
