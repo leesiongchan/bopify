@@ -11,6 +11,7 @@ struct RadialProgressView: View {
     var interactionChanged: (Bool) -> Void = { _ in }
     var isVisible = true
     var showsTime = true
+    var pointerEnabled = true
     @State private var scrub: RadialScrub?
     @State private var lastScrubProgress = 0.0
     @State private var holdTask: Task<Void, Never>?
@@ -92,7 +93,7 @@ struct RadialProgressView: View {
                     }
                     cancelScrub()
                     rejectedGesture = false
-                })
+                }, including: pointerEnabled ? .all : .none)
             .overlay(alignment: .bottom) {
                 if showsTime { Text("−" + playbackTime(max(0, durationMs - displayedPosition)))
                     .font(.system(size: 11, weight: .medium, design: .monospaced))

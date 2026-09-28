@@ -52,11 +52,16 @@ func previewArtworkStore() -> ArtworkStore {
 
 struct MonolithRecordScene: View {
     let fixture: MonolithRecordFixture
+    @State private var rotation = RecordRotation()
+    private var running: Bool { fixture.playing && fixture.visible && !fixture.reducedMotion }
     var body: some View {
         VinylRecordView(image: fixture.image, occurrenceID: fixture.occurrenceID, direction: fixture.direction,
-                        diameter: fixture.diameter, isPlaying: fixture.playing, isVisible: fixture.visible,
+                        diameter: fixture.diameter, isPlaying: fixture.playing, isVisible: fixture.visible, rotation: rotation,
                         reduceMotionOverride: fixture.reducedMotion)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onChange(of: running, initial: true) { _, value in
+                rotation.setRunning(value, at: ProcessInfo.processInfo.systemUptime)
+            }
     }
 }
 

@@ -128,54 +128,64 @@ private struct ProbePlayerScene: View {
         presentation.requestQueue(false)
         try await settle()
         func mouse(_ type: NSEvent.EventType, at point: CGPoint) {
-            let event = NSEvent.mouseEvent(with: type, location: CGPoint(x: point.x, y: panel.frame.height - point.y),
-                                          modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
-                                          windowNumber: panel.windowNumber, context: nil, eventNumber: 0,
-                                          clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1)!
-            panel.sendEvent(event)
+            let screen = panel.convertPoint(toScreen: CGPoint(x: point.x, y: panel.frame.height - point.y))
+            let eventType: CGEventType = type == .leftMouseDown ? .leftMouseDown : type == .leftMouseDragged ? .leftMouseDragged : .leftMouseUp
+            CGEvent(mouseEventSource: nil, mouseType: eventType,
+                    mouseCursorPosition: CGPoint(x: screen.x, y: NSScreen.screens[0].frame.maxY - screen.y), mouseButton: .left)?.post(tap: .cghidEventTap)
         }
         let center = controller.layout.recordCenter
-        let ring = CGPoint(x: center.x + controller.layout.recordDiameter / 2, y: center.y)
+        let ring = CGPoint(x: center.x, y: center.y - controller.layout.recordDiameter / 2 + 8)
+        let right = CGPoint(x: center.x + controller.layout.recordDiameter / 2 - 8, y: center.y)
+        let originBeforeScrub = panel.frame.origin
         mouse(.leftMouseDown, at: ring)
         try await settle(50)
         mouse(.leftMouseUp, at: ring)
         try await settle(80)
         precondition(engine.recordedCommands.isEmpty, "quick ring click cannot seek")
         mouse(.leftMouseDown, at: ring)
-        try await settle(350)
-        mouse(.leftMouseUp, at: ring)
         try await settle(80)
-        precondition(engine.recordedCommands == ["seek:60000"], "held right rim commits one quarter-duration seek")
+        mouse(.leftMouseDragged, at: right)
+        try await settle(80)
+        mouse(.leftMouseUp, at: right)
+        try await settle(80)
+        precondition(engine.recordedCommands == ["seek:16545"], "clockwise quarter turn commits one relative 15-second seek")
         mouse(.leftMouseDown, at: ring)
-        try await settle(350)
+        try await settle(80)
+        mouse(.leftMouseDragged, at: right)
+        try await settle(80)
         engine.emit(.activeDeviceChanged(isActive: false))
         try await settle(80)
         mouse(.leftMouseUp, at: ring)
         try await settle(80)
-        precondition(engine.recordedCommands == ["seek:60000"], "capability loss cancels a held seek")
+        precondition(engine.recordedCommands == ["seek:16545"], "capability loss cancels a held seek")
         engine.emit(.paused(positionMs: 1545))
         try await settle(80)
         mouse(.leftMouseDown, at: ring)
-        try await settle(350)
+        try await settle(80)
+        mouse(.leftMouseDragged, at: right)
+        try await settle(80)
         engine.emit(.queueChanged(PlaybackQueue(generation: 1, previous: [], current: QueueEntry(id: "replacement", uri: track.uri, target: nil, track: track, metadataFailed: false), next: [])))
         try await settle(80)
         mouse(.leftMouseUp, at: ring)
         try await settle(80)
-        precondition(engine.recordedCommands == ["seek:60000"], "occurrence replacement cancels a held seek")
+        precondition(engine.recordedCommands == ["seek:16545"], "occurrence replacement cancels a held seek")
         mouse(.leftMouseDown, at: ring)
-        try await settle(350)
+        try await settle(80)
+        mouse(.leftMouseDragged, at: right)
+        try await settle(80)
         presentation.isVisible = false
         try await settle(80)
         mouse(.leftMouseUp, at: ring)
         try await settle(80)
-        precondition(engine.recordedCommands == ["seek:60000"], "hiding cancels a held seek")
+        precondition(engine.recordedCommands == ["seek:16545"], "hiding cancels a held seek")
         presentation.isVisible = true
         presentation.sendAttention(.keyboardFocus(true))
         try await settle()
         mouse(.leftMouseDown, at: center)
         mouse(.leftMouseUp, at: center)
         try await settle(80)
-        precondition(engine.recordedCommands == ["seek:60000"], "center click has no playback command")
+        precondition(engine.recordedCommands == ["seek:16545"], "center click has no playback command")
+        precondition(panel.frame.origin == originBeforeScrub, "record dragging never moves the window")
         let current = QueueEntry(id: "a", uri: track.uri, target: nil, track: track, metadataFailed: false)
         let next = QueueEntry(id: "b", uri: track.uri, target: QueueTarget(generation: 2, rawNextIndex: 0), track: track, metadataFailed: false)
         engine.emit(.queueChanged(PlaybackQueue(generation: 2, previous: [], current: current, next: [next])))
@@ -183,7 +193,7 @@ private struct ProbePlayerScene: View {
         presentation.requestQueue(true)
         try await settle()
         try await capture(panel, "player-queue")
-        let rowPoint = CGPoint(x: controller.layout.queueFrame.midX, y: controller.layout.queueFrame.minY + 98)
+        let rowPoint = CGPoint(x: controller.layout.lowerFrame.midX, y: controller.layout.lowerFrame.minY + 98)
         mouse(.leftMouseDown, at: rowPoint)
         mouse(.leftMouseUp, at: rowPoint)
         try await settle(100)
@@ -192,7 +202,7 @@ private struct ProbePlayerScene: View {
         engine.emit(.queueChanged(PlaybackQueue(generation: 3, previous: [current], current: QueueEntry(id: next.id, uri: track.uri, target: nil, track: track, metadataFailed: false), next: [])))
         try await settle()
         precondition(presentation.mode == .expanded, "confirmed occurrence closes the queue extension")
-        precondition(controller.layout.contentSize.height == 264 && panel.frame.height == 264, "confirmed selection tightens native queue geometry")
+        precondition(controller.layout.contentSize.height == 360 && panel.frame.height == 360, "confirmed selection preserves lower-panel geometry")
         try await capture(panel, "player-confirmed-selection")
         let delayed = QueueEntry(id: "c", uri: track.uri, target: QueueTarget(generation: 4, rawNextIndex: 0), track: track, metadataFailed: false)
         engine.emit(.queueChanged(PlaybackQueue(generation: 4, previous: [], current: current, next: [delayed])))
@@ -272,7 +282,7 @@ private struct ProbePlayerScene: View {
         #if MONOLITH_MEASURE
         let playingTicks = MonolithAmbientProbe.ticks
         try await settle(300)
-        precondition(MonolithAmbientProbe.ticks > playingTicks, "playing reflection advances")
+        precondition(MonolithAmbientProbe.ticks > playingTicks, "playing record advances")
         print("ambient playing ticks in 300 ms: \(MonolithAmbientProbe.ticks - playingTicks)")
         #endif
         fixture.playing = false
@@ -326,7 +336,7 @@ private struct ProbePlayerScene: View {
         let ticks = MonolithAmbientProbe.ticks
         try await settle(300)
         print("ambient \(name) ticks in 300 ms: \(MonolithAmbientProbe.ticks - ticks)")
-        precondition(MonolithAmbientProbe.ticks == ticks, "settled \(name) reflection has no timer updates")
+        precondition(MonolithAmbientProbe.ticks == ticks, "settled \(name) record has no timer updates")
     }
     #endif
 

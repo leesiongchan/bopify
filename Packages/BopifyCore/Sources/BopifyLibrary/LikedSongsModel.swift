@@ -10,6 +10,7 @@ public final class LikedSongsModel {
     public private(set) var isLoading = false
     public private(set) var error: LibraryError?
     public private(set) var retryAfter: Date?
+    @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let service: any SavedTracksService
     @ObservationIgnored private var pending: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
@@ -21,14 +22,20 @@ public final class LikedSongsModel {
     @ObservationIgnored private var loadedPrefix = 0
     @ObservationIgnored private var failedRefresh = true
 
-    public init(service: any SavedTracksService) { self.service = service }
+    public convenience init(service: any SavedTracksService) { self.init(service: service, now: Date.init) }
+    init(service: any SavedTracksService, now: @escaping () -> Date) { self.service = service; self.now = now }
+    public var hasMore: Bool { nextOffset != nil }
+    public func loadMore() async {
+        guard visible, !isLoading, error == nil, nextOffset != nil else { return }
+        await request(refresh: false)
+    }
 
     public func reveal(at date: Date) async {
         visible = true
         let stale = hiddenAt.map { date.timeIntervalSince($0) >= 60 } ?? false
         hiddenAt = nil
         guard !isLoading, error == nil, needsRefresh || stale || !loaded else { return }
-        await request(refresh: true, at: date)
+        await request(refresh: true)
     }
 
     public func hide(at date: Date) {
@@ -44,18 +51,18 @@ public final class LikedSongsModel {
     public func loadMoreIfNeeded(near uri: SpotifyURI) async {
         guard visible, !isLoading, error == nil, nextOffset != nil,
               let index = tracks.firstIndex(where: { $0.uri == uri }), index >= tracks.count - 5 else { return }
-        await request(refresh: false, at: Date())
+        await loadMore()
     }
 
     public func refresh() async {
         needsRefresh = true
         guard visible, retryAfter.map({ $0 <= Date() }) ?? true else { return }
-        await request(refresh: true, at: Date())
+        await request(refresh: true)
     }
 
     public func retry(at date: Date) async {
         guard visible, !isLoading, error != nil, retryAfter.map({ $0 <= date }) ?? true else { return }
-        await request(refresh: failedRefresh, at: date)
+        await request(refresh: failedRefresh)
     }
 
     public func clear() {
@@ -75,7 +82,7 @@ public final class LikedSongsModel {
         BopifyLog.library.debug("liked songs cleared")
     }
 
-    private func request(refresh: Bool, at date: Date) async {
+    private func request(refresh: Bool) async {
         let previous = pending
         previous?.cancel()
         generation += 1
@@ -103,7 +110,8 @@ public final class LikedSongsModel {
                     if let next = page.nextOffset, next <= offset { throw LibraryError.invalidResponse }
                     replacement.append(contentsOf: page.tracks.filter { seen.insert($0.uri).inserted })
                     let prefix = page.nextOffset ?? (offset + 50)
-                    if refresh, let next = page.nextOffset, next < targetPrefix, visible {
+                    if refresh, let next = page.nextOffset, next < targetPrefix {
+                        guard visible else { needsRefresh = true; return }
                         offset = next
                         continue
                     }
@@ -124,7 +132,7 @@ public final class LikedSongsModel {
                 let failure = error as? LibraryError ?? .unavailable
                 self.error = failure
                 if case let .rateLimited(seconds) = failure {
-                    retryAfter = date.addingTimeInterval(TimeInterval(seconds ?? 60))
+                    retryAfter = now().addingTimeInterval(TimeInterval(seconds ?? 60))
                 }
                 BopifyLog.library.notice("liked songs request failed")
             }
