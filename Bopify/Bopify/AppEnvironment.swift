@@ -22,8 +22,13 @@ final class AppEnvironment {
     private(set) var player: PlayerModel?
     let artworkStore = ArtworkStore()
     let favorite: FavoriteModel
-    private(set) var isEnablingFavorites = false
-    private(set) var favoriteAuthorizationNotice: String?
+    let likedSongs: LikedSongsModel
+    private(set) var isEnablingLibrary = false
+    private(set) var libraryAuthorizationNotice: String?
+    var isEnablingFavorites: Bool { isEnablingLibrary }
+    var favoriteAuthorizationNotice: String? { libraryAuthorizationNotice }
+    @ObservationIgnored private let authorizeLibraryScopes: @Sendable (Set<String>) async throws -> Void
+    @ObservationIgnored private var libraryGeneration = 0
     let presentation = PlayerPresentation(
         mode: .compact,
         keepOnTop: UserDefaults.standard.bool(forKey: "player.keepOnTop"))
@@ -64,15 +69,22 @@ final class AppEnvironment {
     init() {
         let auth = SpotifyAuthService(clientID: librespotClientID)
         self.auth = auth
-        favorite = FavoriteModel(service: SpotifyLibraryClient { scopes in
+        let library = SpotifyLibraryClient { scopes in
             try await auth.validAccessToken(requiredScopes: scopes)
-        })
+        }
+        favorite = FavoriteModel(service: library)
+        likedSongs = LikedSongsModel(service: library)
+        authorizeLibraryScopes = { scopes in _ = try await auth.authorizeAdditionalScopes(scopes) }
     }
 
     #if DEBUG
-    init(previewPlayer: PlayerModel, favoriteService: any LibraryService) {
+    init(previewPlayer: PlayerModel, favoriteService: any LibraryService,
+         savedTracksService: (any SavedTracksService)? = nil,
+         authorizeLibraryScopes: (@Sendable (Set<String>) async throws -> Void)? = nil) {
         auth = SpotifyAuthService(clientID: librespotClientID)
         favorite = FavoriteModel(service: favoriteService)
+        likedSongs = LikedSongsModel(service: savedTracksService ?? UnavailableSavedTracks())
+        self.authorizeLibraryScopes = authorizeLibraryScopes ?? { _ in throw LibraryError.unavailable }
         player = previewPlayer
         authState = .signedIn
     }
@@ -84,19 +96,38 @@ final class AppEnvironment {
     }
 
     func enableFavorites() async {
-        guard authState == .signedIn, !isEnablingFavorites else { return }
-        isEnablingFavorites = true
-        favoriteAuthorizationNotice = nil
-        defer { isEnablingFavorites = false }
+        await enableLibrary(scopes: ["user-library-read", "user-library-modify"])
+    }
+
+    func enableLikedSongs() async {
+        await enableLibrary(scopes: ["user-library-read"])
+    }
+
+    private func enableLibrary(scopes: Set<String>) async {
+        guard authState == .signedIn, !isEnablingLibrary else { return }
+        isEnablingLibrary = true
+        libraryAuthorizationNotice = nil
+        let generation = libraryGeneration
+        defer { if generation == libraryGeneration { isEnablingLibrary = false } }
         do {
-            _ = try await auth.authorizeAdditionalScopes(["user-library-read", "user-library-modify"])
-            guard authState == .signedIn else { return }
+            try await authorizeLibraryScopes(scopes)
+            guard authState == .signedIn, generation == libraryGeneration else { return }
             await refreshFavorite()
+            guard generation == libraryGeneration else { return }
+            await likedSongs.refresh()
         } catch {
-            guard authState == .signedIn else { return }
-            favoriteAuthorizationNotice = String(localized: "favorite.consentFailed")
-            BopifyLog.library.notice("favorite authorization did not complete")
+            guard authState == .signedIn, generation == libraryGeneration else { return }
+            libraryAuthorizationNotice = String(localized: "favorite.consentFailed")
+            BopifyLog.library.notice("library authorization did not complete")
         }
+    }
+
+    private func clearLibrary() {
+        libraryGeneration += 1
+        isEnablingLibrary = false
+        libraryAuthorizationNotice = nil
+        favorite.clear()
+        likedSongs.clear()
     }
 
     private func serialize(_ operation: @escaping @MainActor () async -> Void) async {
@@ -159,8 +190,7 @@ final class AppEnvironment {
             player?.stop()
             player = nil
             artworkStore.clear()
-            favorite.clear()
-            favoriteAuthorizationNotice = nil
+            clearLibrary()
             // Set before the teardown `await`, not after: `engine.shutdown()`
             // can take multiple seconds, and leaving `authState` at `.signedIn`
             // across that suspension makes the UI fall through to the
@@ -182,7 +212,7 @@ final class AppEnvironment {
     func prepareForQuit() async {
         await serialize { [self] in
             BopifyLog.playback.info("prepare for quit starting")
-            favorite.clear()
+            clearLibrary()
             player?.stop()
             player = nil
             if let engine {
@@ -215,6 +245,7 @@ final class AppEnvironment {
             // for the process lifetime, which no test would catch.
             await self.engine?.shutdown()
             player?.stop()
+            clearLibrary()
             self.engine = engine
             player = model
             authState = .signedIn
@@ -226,3 +257,9 @@ final class AppEnvironment {
         }
     }
 }
+
+#if DEBUG
+private struct UnavailableSavedTracks: SavedTracksService {
+    func savedTracks(offset: Int, limit: Int) async throws -> SavedTracksPage { throw LibraryError.unavailable }
+}
+#endif

@@ -1,4 +1,5 @@
 import SwiftUI
+import BopifyLibrary
 import BopifyDomain
 import BopifyPlayback
 
@@ -37,6 +38,9 @@ struct MiniPlayerView: View {
         }
         .environment(\.favoriteEnvironment, environment)
         .task(id: environment.player?.state.currentTrack?.uri) { await environment.refreshFavorite() }
+        .onChange(of: environment.favorite.membershipRevision) { _, _ in
+            Task { await environment.likedSongs.refresh() }
+        }
     }
 
     private var header: some View {
