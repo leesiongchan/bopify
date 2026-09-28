@@ -70,6 +70,9 @@ private struct ProbePlayerScene: View {
                                   (.paused(positionMs: 1545), "Paused")] {
             engine.emit(event)
             try await settle(100)
+            #if MONOLITH_MEASURE
+            if expected == "Not playing" { try await verifyAmbientStopped("inactive") }
+            #endif
             let record = accessibilityTree(panel.contentView!).first { attribute($0, "accessibilityLabel") as? String == "Afterglow" }!
             let actual = attribute(record, "accessibilityValue") as? String
             print("record status: \(actual ?? "nil"), expected: \(expected)")

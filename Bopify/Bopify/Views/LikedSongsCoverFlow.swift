@@ -21,7 +21,7 @@ struct LikedSongsCoverFlow: View {
         VStack(spacing: 3) {
             HStack {
                 Text("library.title").font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
-                Spacer()
+                    .frame(maxWidth: .infinity)
                 if model.isLoading && !model.tracks.isEmpty { ProgressView().controlSize(.mini) }
                 if model.error != nil && !model.tracks.isEmpty { retryButton }
             }
@@ -32,10 +32,11 @@ struct LikedSongsCoverFlow: View {
                 GeometryReader { geometry in
                     let radius = geometry.size.width < 300 ? 1 : 2
                     ZStack {
-                        ForEach(visibleIndices(radius), id: \.self) { index in
-                            let track = model.tracks[index]
-                            let distance = index - selected
-                            Button { activate(index) } label: { cover(track) }
+                        ForEach(visibleIndices(radius).map { model.tracks[$0] }, id: \.uri) { track in
+                            let distance = (model.tracks.firstIndex { $0.uri == track.uri } ?? selected) - selected
+                            Button {
+                                if let index = model.tracks.firstIndex(where: { $0.uri == track.uri }) { activate(index) }
+                            } label: { cover(track) }
                                 .buttonStyle(.plain)
                                 .frame(width: 76, height: 76)
                                 .scaleEffect(distance == 0 ? 1 : 0.8)
@@ -58,6 +59,7 @@ struct LikedSongsCoverFlow: View {
                         CoverFlowInput(click: { x, width in
                             if let relative = coverFlowRelativeIndex(x: x - width / 2, radius: radius) { activate(selected + relative) }
                         }, drag: { translation in
+                            guard !model.tracks.isEmpty else { return }
                             if dragStart == nil { dragStart = selected }
                             let start = dragStart ?? selected
                             let index = min(model.tracks.count - 1, max(0, start - Int((translation / spacing).rounded())))
@@ -98,8 +100,9 @@ struct LikedSongsCoverFlow: View {
         }
     }
 
-    private func visibleIndices(_ radius: Int) -> [Int] {
-        Array(max(0, selected - radius)...min(model.tracks.count - 1, selected + radius))
+    func visibleIndices(_ radius: Int) -> [Int] {
+        guard !model.tracks.isEmpty else { return [] }
+        return Array(max(0, selected - radius)...min(model.tracks.count - 1, selected + radius))
     }
     private func label(_ track: Track) -> String {
         ([track.title] + track.artists.map(\.name)).joined(separator: " · ")
@@ -115,7 +118,7 @@ struct LikedSongsCoverFlow: View {
         withAnimation(.easeOut(duration: reduceMotion ? 0.12 : 0.28)) { model.select(model.tracks[index].uri) }
     }
     private func cover(_ track: Track) -> some View {
-        Group {
+        let face = Group {
             if let url = track.artwork?.url, let image = store.images[url] {
                 Image(nsImage: image).resizable().scaledToFill()
             } else {
@@ -127,10 +130,13 @@ struct LikedSongsCoverFlow: View {
         }
         .frame(width: 76, height: 76)
         .clipShape(RoundedRectangle(cornerRadius: 5))
+        return face
         .shadow(color: .black.opacity(0.25), radius: 5, y: 4)
         .overlay(alignment: .bottom) {
-            RoundedRectangle(cornerRadius: 4).fill(.white.opacity(0.07))
-                .frame(height: 4).blur(radius: 2).offset(y: 7).accessibilityHidden(true)
+            face.scaleEffect(x: 1, y: -1)
+                .frame(height: 8, alignment: .top).clipped()
+                .mask(LinearGradient(colors: [.white.opacity(0.2), .clear], startPoint: .top, endPoint: .bottom))
+                .offset(y: 10).accessibilityHidden(true)
         }
     }
     @ViewBuilder private var emptyState: some View {

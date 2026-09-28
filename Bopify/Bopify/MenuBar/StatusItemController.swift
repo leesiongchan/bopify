@@ -97,6 +97,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             environment.presentation.resetEngagement()
             environment.presentation.sendAttention(.visibility(panel.isVisible))
             panel.styleMask.insert(.resizable)
+            panel.hasShadow = true
             isMonolithApplied = false
             appliedMode = nil
         }

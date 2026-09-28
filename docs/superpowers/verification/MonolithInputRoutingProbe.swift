@@ -1,6 +1,13 @@
 import SwiftUI
+import BopifyLibrary
+import BopifyDomain
 
 @main struct MonolithInputRoutingProbe {
+    struct EmptyLibrary: SavedTracksService {
+        func savedTracks(offset: Int, limit: Int) async throws -> SavedTracksPage {
+            SavedTracksPage(tracks: [], nextOffset: nil, total: 0)
+        }
+    }
     @MainActor static func main() {
         _ = NSApplication.shared
         var failures = 0
@@ -8,6 +15,8 @@ import SwiftUI
             print("\(valid ? "PASS" : "FAIL"): \(message)")
             if !valid { failures += 1 }
         }
+        let flow = LikedSongsCoverFlow(model: LikedSongsModel(service: EmptyLibrary()), store: ArtworkStore(), play: { _ in })
+        check(flow.visibleIndices(2).isEmpty, "cleared library has no visible carousel indices")
         check(coverFlowRelativeIndex(x: 30, radius: 2) == 0, "centered cover owns its visible right edge")
         check(coverFlowRelativeIndex(x: -30, radius: 2) == 0, "centered cover owns its visible left edge")
         check(coverFlowRelativeIndex(x: 55, radius: 2) == 1, "visible side cover centers its own song")

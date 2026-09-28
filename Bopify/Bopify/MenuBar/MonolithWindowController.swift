@@ -24,6 +24,8 @@ final class MonolithWindowController {
 
     func attach(to panel: StatusPanel) {
         self.panel = panel
+        // Native shadow traces the record's translucent halo as a second hard outline.
+        panel.hasShadow = false
         panel.onCancelInteraction = { [weak self] in self?.cancelInteraction?() ?? false }
         anchor = Self.restoredAnchor(defaults: defaults)
         panel.minSize = CGSize(width: 1, height: 1)

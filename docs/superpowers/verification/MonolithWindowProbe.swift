@@ -78,6 +78,7 @@ private struct WindowScene: View {
         let presentation = PlayerPresentation()
         let panel = StatusPanel(content: WindowScene(controller: controller))
         controller.attach(to: panel)
+        try check(!panel.hasShadow, "listening window omits the native outline-producing shadow")
         controller.apply(mode: .compact, reduceMotion: true)
         let background = Process()
         background.executableURL = URL(fileURLWithPath: CommandLine.arguments[0])

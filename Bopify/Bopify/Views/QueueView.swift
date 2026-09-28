@@ -9,6 +9,7 @@ struct QueueView: View {
     let select: (QueueEntry) -> Void
 
     var body: some View {
+        GeometryReader { geometry in
         ScrollView {
             LazyVStack(spacing: 2) {
                 if let queue = state.queue {
@@ -26,10 +27,13 @@ struct QueueView: View {
                     .frame(maxWidth: .infinity).padding(.vertical, 50)
                 }
             }
+            .padding(.top, 16)
             .padding(.bottom, 4)
+            .frame(minHeight: geometry.size.height, alignment: .top)
+            .background(PlayerBackgroundDragRegion())
         }
         .scrollIndicators(.hidden)
-
+        }
     }
 
     private func row(_ entry: QueueEntry, current: Bool) -> some View {

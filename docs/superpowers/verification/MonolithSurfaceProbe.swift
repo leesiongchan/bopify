@@ -37,6 +37,9 @@ import BopifyPlayback
         engine.emit(.trackChanged(Track(uri: SpotifyURI("spotify:track:surface")!, title: "Afterglow",
             artists: [ArtistSummary(name: "The Evening Hours")], albumTitle: nil, artwork: nil, durationMs: 240_000)))
         engine.emit(.paused(positionMs: 1545))
+        if ProcessInfo.processInfo.environment["MONOLITH_CAPTURE_SCENE"] == "1" {
+            backdrop.addChildWindow(panel, ordered: .above)
+        }
         panel.makeKeyAndOrderFront(nil)
         defer { player.stop(); panel.orderOut(nil); backdrop.orderOut(nil) }
         for dark in [false, true] {
@@ -55,7 +58,16 @@ import BopifyPlayback
                 config.height = Int(panel.frame.height * 2)
                 config.showsCursor = false
                 config.ignoreShadowsSingleWindow = false
-                let image = try await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(desktopIndependentWindow: window), configuration: config)
+                let filter: SCContentFilter
+                if ProcessInfo.processInfo.environment["MONOLITH_CAPTURE_SCENE"] == "1" {
+                    let background = content.windows.first { $0.windowID == backdrop.windowNumber }!
+                    filter = SCContentFilter(desktopIndependentWindow: background)
+                    config.includeChildWindows = true
+                    config.width = Int(area.width * 2); config.height = Int(area.height * 2)
+                } else {
+                    filter = SCContentFilter(desktopIndependentWindow: window)
+                }
+                let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
                 let name = "surface-\(dark ? "dark" : "light")-\(shadow ? "shadow" : "no-shadow").png"
                 try NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])!.write(to: output.appendingPathComponent(name))
                 print("CAPTURE: \(name)")
