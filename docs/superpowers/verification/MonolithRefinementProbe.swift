@@ -1,7 +1,21 @@
 import SwiftUI
+import ScreenCaptureKit
 import BopifyDomain
 import BopifyLibrary
 import BopifyPlayback
+
+private nonisolated final class FixtureArtworkProtocol: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var data = Data()
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "preview.invalid" }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func stopLoading() {}
+    override func startLoading() {
+        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "image/png"])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Self.data)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+}
 
 @main struct MonolithRefinementProbe {
     actor Library: LibraryService, SavedTracksService {
@@ -28,6 +42,9 @@ import BopifyPlayback
         app.setActivationPolicy(.regular)
         app.activate(ignoringOtherApps: true)
         Task { @MainActor in
+            let artwork = previewArtworkStore().images[previewArtworkURL(1)]!
+            FixtureArtworkProtocol.data = NSBitmapImageRep(data: artwork.tiffRepresentation!)!.representation(using: .png, properties: [:])!
+            URLProtocol.registerClass(FixtureArtworkProtocol.self)
             let engine = StubPlaybackEngine()
             let player = PlayerModel(engine: engine)
             player.start()
@@ -39,6 +56,14 @@ import BopifyPlayback
             engine.emit(.paused(positionMs: 30_000))
             await settle()
             let panel = app.windows.compactMap { $0 as? StatusPanel }.first!
+            panel.makeKeyAndOrderFront(nil)
+            panel.orderFrontRegardless()
+            await settle(300)
+            let content = try! await SCShareableContent.currentProcess
+            let capturedWindow = content.windows.first { $0.windowID == panel.windowNumber }!
+            let config = SCStreamConfiguration(); config.width = 968; config.height = 720; config.showsCursor = false
+            let capture = try! await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(desktopIndependentWindow: capturedWindow), configuration: config)
+            try! NSBitmapImageRep(cgImage: capture).representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: CommandLine.arguments[1]).appendingPathComponent("refinement-before.png"))
             let layout = environment.monolithWindow.layout
             precondition(environment.likedSongs.tracks.count == 50)
             let center = CGPoint(x: layout.lowerFrame.midX, y: layout.lowerFrame.minY + 58)
@@ -57,6 +82,22 @@ import BopifyPlayback
             await settle(350)
             precondition(environment.likedSongs.selectedURI != afterDrag, "arrow belongs to focused Cover Flow")
             precondition(engine.recordedCommands.isEmpty, "arrow browsing cannot seek")
+            let beforeWheel = environment.likedSongs.selectedURI
+            mouse(.mouseMoved, center, panel)
+            let wheel = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: 0, wheel2: -30, wheel3: 0)!
+            let wheelPoint = panel.convertPoint(toScreen: CGPoint(x: center.x, y: panel.frame.height - center.y))
+            wheel.location = CGPoint(x: wheelPoint.x, y: NSScreen.screens[0].frame.maxY - wheelPoint.y)
+            wheel.post(tap: .cghidEventTap)
+            await settle(350)
+            precondition(environment.likedSongs.selectedURI != beforeWheel && engine.recordedCommands.isEmpty, "horizontal wheel browses without playback")
+            for _ in 0..<44 { key(124); await settle(12) }
+            await settle(350)
+            let offsets = await library.pageOffsets
+            precondition(environment.likedSongs.tracks.count == 60 && offsets == [0, 50], "native browsing fetches the next page once")
+            let covers = try! await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(desktopIndependentWindow: capturedWindow), configuration: config)
+            try! NSBitmapImageRep(cgImage: covers).representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: CommandLine.arguments[1]).appendingPathComponent("refinement-cover-flow.png"))
+            environment.presentation.requestQueue(true)
+            await settle(350)
             // The speaker is immediately before Queue in the bottom control row.
             let volume = accessibilityTree(panel.contentView!).first { attribute($0, "accessibilityLabel") as? String == "Volume" }!
             let frameSelector = NSSelectorFromString("accessibilityFrame")
@@ -68,15 +109,39 @@ import BopifyPlayback
             let sliders = app.windows.flatMap { descendants($0.contentView) }.compactMap { $0 as? NSSlider }
             let slider = sliders.first { $0.isVertical }!
             precondition(slider.bounds.height > slider.bounds.width, "volume slider is vertical")
+            let sliderScreen = slider.window!.convertToScreen(slider.convert(slider.bounds, to: nil))
+            let top = NSScreen.screens[0].frame.maxY - sliderScreen.maxY
+            let start = CGPoint(x: sliderScreen.midX, y: top + sliderScreen.height - 10)
+            let finish = CGPoint(x: sliderScreen.midX + 30, y: top - 30)
+            let frameBeforeVolume = panel.frame
+            await Task.detached {
+                CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: start, mouseButton: .left)?.post(tap: .cghidEventTap)
+                for step in 1...40 {
+                    try? await Task.sleep(for: .milliseconds(5))
+                    let fraction = Double(step) / 40
+                    let point = CGPoint(x: start.x + (finish.x - start.x) * fraction, y: start.y + (finish.y - start.y) * fraction)
+                    CGEvent(mouseEventSource: nil, mouseType: .leftMouseDragged, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+                }
+                CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: finish, mouseButton: .left)?.post(tap: .cghidEventTap)
+            }.value
+            await settle(350)
+            let volumeCommands = engine.recordedCommands.filter { $0.hasPrefix("setVolume:") }
+            print("VOLUME: 40 drag samples, \(volumeCommands.count) commands, final=\(volumeCommands.last ?? "none")"); fflush(nil)
+            precondition((1...4).contains(volumeCommands.count) && volumeCommands.last == "setVolume:1.0", "drag samples coalesce and flush final volume")
+            precondition(panel.frame == frameBeforeVolume && environment.presentation.mode == .queue, "outside volume drag holds focus without moving window")
             key(53)
             await settle(350)
-            precondition(environment.presentation.activePopover == nil, "Escape closes volume first")
+            precondition(environment.presentation.activePopover == nil && environment.presentation.mode == .queue, "Escape closes volume before queue")
+            key(53)
+            await settle(350)
+            precondition(environment.presentation.mode == .expanded, "second Escape returns to Cover Flow")
             await click(CGPoint(x: center.x + 44, y: center.y), panel)
             let selected = environment.likedSongs.selectedURI!
             key(36)
             await settle(350)
             precondition(engine.recordedCommands.filter { $0.hasPrefix("load:") } == ["load:" + selected.rawValue], "Return plays the selected track exactly once")
-            print("MONOLITH REFINEMENT PASS")
+            print("MONOLITH REFINEMENT PASS: native Cover Flow, vertical slider, bounded volume drag, and Escape order")
+            fflush(nil)
             await environment.prepareForQuit()
             app.terminate(nil)
         }

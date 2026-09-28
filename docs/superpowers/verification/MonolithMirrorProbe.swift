@@ -57,11 +57,11 @@ import BopifyDomain
             engine.emit(.startupResolved(.remote(deviceName: "iPhone")))
             engine.emit(mirror(playing: true, at: 1000))
             await settle()
-            check(environment.isListening && environment.presentation.mode == .expanded && panel.frame.size == CGSize(width: 484, height: 264),
+            check(environment.isListening && environment.presentation.mode == .expanded && panel.frame.size == CGSize(width: 484, height: 360),
                   "a mirrored track opens the record and sleeve at listening geometry")
             check(recordStatus("Remote track") == "Playing on iPhone", "the record names the mirrored track and its device")
             check(enabled("Play") == true, "Play is enabled while mirroring")
-            for label in ["Previous", "Next", "Shuffle", "Repeat", "Up Next", "Mute"] {
+            for label in ["Previous", "Next", "Shuffle", "Repeat", "Up Next", "Volume"] {
                 check(enabled(label) == false, "\(label) is disabled while mirroring")
             }
             check(element("Spotify favorite") == nil, "the favourite is hidden while mirroring")
