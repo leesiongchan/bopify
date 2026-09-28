@@ -52,13 +52,17 @@ struct PlayerPresentationTests {
 
     @MainActor @Test func escapeReturnsFromQueueBeforeHiding() {
         let presentation = PlayerPresentation()
-        presentation.setMode(.queue)
+        presentation.sendAttention(.visibility(true))
+        presentation.sendAttention(.pointer(true))
+        presentation.requestQueue(true)
         #expect(presentation.dismissQueue())
         #expect(presentation.mode == .expanded)
         #expect(!presentation.dismissQueue())
-        presentation.setMode(.compact)
+        presentation.sendAttention(.pointer(false))
+        presentation.advanceAttention(to: ProcessInfo.processInfo.systemUptime + 1)
         #expect(!presentation.dismissQueue())
         #expect(presentation.mode == .compact)
+        presentation.resetEngagement()
     }
 
     @Test func windowClampsInsideVisibleScreen() {

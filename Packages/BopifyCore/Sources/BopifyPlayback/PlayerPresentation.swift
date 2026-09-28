@@ -27,10 +27,6 @@ public final class PlayerPresentation {
         self.mode = mode
         self.keepOnTop = keepOnTop
     }
-    public func setMode(_ mode: PlayerMode) {
-        queueRequested = mode == .queue
-        self.mode = mode
-    }
     public func sendAttention(_ event: PlayerAttentionEvent) {
         switch event {
         case .visibility(false), .reset: activePopover = nil

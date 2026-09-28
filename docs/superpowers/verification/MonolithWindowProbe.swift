@@ -68,7 +68,7 @@ private struct WindowScene: View {
     }
     @MainActor static func run() async throws {
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
-        let defaults = UserDefaults(suiteName: "my.snsoft.monolith-probe.\(UUID())")!
+        let defaults = UserDefaults(suiteName: "com.leesiongchan.monolith-probe.\(UUID())")!
         defaults.set("{{200, 300}, {410, 560}}", forKey: "player.frame")
         try check(MonolithWindowController.restoredAnchor(defaults: defaults) == CGPoint(x: 405, y: 580), "legacy midpoint migration")
         defaults.set("{nan, inf}", forKey: "player.recordCenter")

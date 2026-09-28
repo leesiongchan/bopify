@@ -1108,7 +1108,7 @@ This task needs the user: their phone, their Spotify account, and permission to 
 ```sh
 ./scripts/build-rust.sh
 xcodebuild -project Bopify/Bopify.xcodeproj -scheme Bopify -destination 'platform=macOS,arch=arm64' -derivedDataPath /private/tmp/bopify-startup-restore build 2>&1 | rg "BUILD (SUCCEEDED|FAILED)"
-/usr/bin/log stream --style compact --level debug --predicate 'subsystem == "my.snsoft.bopify"' > /private/tmp/bopify-startup-restore.log &
+/usr/bin/log stream --style compact --level debug --predicate 'subsystem == "com.leesiongchan.bopify"' > /private/tmp/bopify-startup-restore.log &
 ```
 
 Launch with `/private/tmp/bopify-startup-restore/Build/Products/Debug/Bopify.app/Contents/MacOS/Bopify`. Quit through the status item's menu (Quit), not `kill`, except in scenario 2.
