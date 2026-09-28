@@ -96,6 +96,20 @@ struct SpotifyAuthServiceTests {
         #expect(token.grantedScopes == ["user-library-read", "user-library-modify"])
     }
 
+    @Test func libraryConsentNeverCarriesPlaybackScopeFromStoredGrant() async throws {
+        let widened = #"{"access_token":"WIDE","token_type":"Bearer","expires_in":3600,"scope":"user-library-read user-library-modify"}"#
+        AuthFlowStubProtocol.handler = { _ in (200, Data(widened.utf8)) }
+        let store = InMemoryTokenStore()
+        try store.save(TokenSet(accessToken: "OLD", refreshToken: "RT", expiresAt: Date().addingTimeInterval(3600), grantedScopes: ["streaming", "user-library-read"]))
+        let service = SpotifyAuthService(clientID: "dashboard", client: makeClient(), store: store, openURL: { url in
+            let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
+            #expect(Set(query["scope"]!.split(separator: " ").map(String.init)) == ["user-library-read", "user-library-modify"])
+            let callback = URL(string: "\(query["redirect_uri"]!)?code=TESTCODE&state=\(query["state"]!)")!
+            Task { _ = try? await URLSession.shared.data(from: callback) }
+        })
+        _ = try await service.authorizeLibraryScopes(["user-library-modify"])
+    }
+
     @Test func libraryConsentRejectsMissingScopes() async throws {
         AuthFlowStubProtocol.handler = { _ in (200, Data(self.librarySuccess.utf8)) }
         let store = InMemoryTokenStore()
