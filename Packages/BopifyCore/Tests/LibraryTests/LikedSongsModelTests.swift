@@ -47,6 +47,16 @@ private actor ControlledSavedTracks: SavedTracksService {
     }
 }
 
+private actor ConsentSavedTracks: SavedTracksService {
+    private(set) var count = 0
+
+    func savedTracks(offset: Int, limit: Int) async throws -> SavedTracksPage {
+        count += 1
+        if count == 1 { throw LibraryError.authorizationRequired }
+        return SavedTracksPage(tracks: [], nextOffset: nil, total: 0)
+    }
+}
+
 @Suite("LikedSongsModel") @MainActor
 struct LikedSongsModelTests {
     private let now = Date(timeIntervalSince1970: 1000)
@@ -147,6 +157,18 @@ struct LikedSongsModelTests {
         #expect(model.tracks.isEmpty && model.selectedURI == nil && model.error == nil)
         await model.reveal(at: now.addingTimeInterval(13))
         #expect(await service.count == 3)
+    }
+    @Test func consentWhileHiddenRefreshesOnRevealAfterAuthorizationError() async {
+        let service = ConsentSavedTracks()
+        let model = LikedSongsModel(service: service)
+        await model.reveal(at: now)
+        #expect(model.error == .authorizationRequired)
+        model.hide(at: now)
+        await model.refresh()
+        #expect(await service.count == 1)
+        await model.reveal(at: now.addingTimeInterval(1))
+        #expect(await service.count == 2)
+        #expect(model.error == nil)
     }
     @Test func quotaErrorRetainsDistinctReasonAndCooldown() async throws {
         let service = ControlledSavedTracks()
