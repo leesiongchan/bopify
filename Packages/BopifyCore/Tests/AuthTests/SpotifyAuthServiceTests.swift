@@ -126,6 +126,15 @@ struct SpotifyAuthServiceTests {
         #expect(store.load() == old)
     }
 
+    @Test func libraryGrantRestoresLazilyWithoutBrowser() async throws {
+        let store = InMemoryTokenStore()
+        try store.save(TokenSet(accessToken: "LIBRARY_SAVED", refreshToken: "RT",
+                                expiresAt: Date().addingTimeInterval(3600), grantedScopes: ["user-library-read"]))
+        let relaunched = SpotifyAuthService(clientID: "dashboard", client: makeClient(), store: store,
+                                            openURL: { _ in Issue.record("Restoring a grant must not open OAuth") })
+        #expect(try await relaunched.validAccessToken(requiredScopes: ["user-library-read"]) == "LIBRARY_SAVED")
+    }
+
     @Test func libraryConsentCancelledBySignOut() async throws {
         AuthFlowStubProtocol.handler = { _ in (200, Data(self.librarySuccess.utf8)) }
         let store = InMemoryTokenStore()
