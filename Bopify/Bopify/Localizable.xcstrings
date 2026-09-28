@@ -1,125 +1,11 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "library.skipped" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "These songs aren’t available."
-          }
-        }
-      }
+    "" : {
+
     },
-    "library.more" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show more songs"
-          }
-        }
-      }
-    },
-    "library.title" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LIKED SONGS"
-          }
-        }
-      }
-    },
-    "library.selected" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Selected"
-          }
-        }
-      }
-    },
-    "library.play" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Play song"
-          }
-        }
-      }
-    },
-    "library.loading" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Loading liked songs…"
-          }
-        }
-      }
-    },
-    "library.permission" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bring your liked songs here."
-          }
-        }
-      }
-    },
-    "library.enable" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enable Liked Songs"
-          }
-        }
-      }
-    },
-    "library.unavailable" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Liked songs couldn’t load."
-          }
-        }
-      }
-    },
-    "library.rateLimited" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Please wait a moment before trying again."
-          }
-        }
-      }
-    },
-    "library.retry" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Retry"
-          }
-        }
-      }
-    },
-    "library.empty" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Songs you like will appear here."
-          }
-        }
-      }
+    "%lld%%" : {
+
     },
     "app.name" : {
       "localizations" : {
@@ -368,6 +254,126 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Not saved to Spotify"
+          }
+        }
+      }
+    },
+    "library.empty" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Songs you like will appear here."
+          }
+        }
+      }
+    },
+    "library.enable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable Liked Songs"
+          }
+        }
+      }
+    },
+    "library.loading" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading liked songs…"
+          }
+        }
+      }
+    },
+    "library.more" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show more songs"
+          }
+        }
+      }
+    },
+    "library.permission" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bring your liked songs here."
+          }
+        }
+      }
+    },
+    "library.play" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play song"
+          }
+        }
+      }
+    },
+    "library.rateLimited" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Please wait a moment before trying again."
+          }
+        }
+      }
+    },
+    "library.retry" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry"
+          }
+        }
+      }
+    },
+    "library.selected" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selected"
+          }
+        }
+      }
+    },
+    "library.skipped" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These songs aren’t available."
+          }
+        }
+      }
+    },
+    "library.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LIKED SONGS"
+          }
+        }
+      }
+    },
+    "library.unavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Liked songs couldn’t load."
           }
         }
       }
