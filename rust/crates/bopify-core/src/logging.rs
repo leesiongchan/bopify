@@ -13,8 +13,8 @@ use std::sync::Once;
 use log::{Level, LevelFilter, Log, Metadata, Record};
 
 /// Shared with `BopifyLog.subsystem` on the Swift side, so one
-/// `log stream --subsystem my.snsoft.bopify` shows both halves of the app.
-const SUBSYSTEM: &str = "my.snsoft.bopify";
+/// `log stream --subsystem com.leesiongchan.bopify` shows both halves of the app.
+const SUBSYSTEM: &str = "com.leesiongchan.bopify";
 
 /// The engine, the FFI layer and event translation are all one thing to
 /// someone reading the log, and Swift already calls that `playback`.

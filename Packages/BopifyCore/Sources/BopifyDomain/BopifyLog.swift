@@ -1,10 +1,10 @@
 import os
 
 /// One subsystem for the whole app, one category per component, so
-/// `log stream --subsystem my.snsoft.bopify` shows everything and
+/// `log stream --subsystem com.leesiongchan.bopify` shows everything and
 /// `--category auth` narrows it.
 public enum BopifyLog {
-    public static let subsystem = "my.snsoft.bopify"
+    public static let subsystem = "com.leesiongchan.bopify"
 
     public static let auth = Logger(subsystem: subsystem, category: "auth")
     public static let keychain = Logger(subsystem: subsystem, category: "keychain")

@@ -67,9 +67,11 @@ final class AppEnvironment {
     @ObservationIgnored private var signInRequested = false
 
     init() {
-        let auth = SpotifyAuthService(clientID: librespotClientID)
+        let auth = SpotifyAuthService(clientID: librespotClientID,
+                                      store: KeychainTokenStore(migratingFrom: "my.snsoft.bopify"))
         let libraryAuth = SpotifyAuthService(clientID: dashboardLibraryClientID,
-                                             store: KeychainTokenStore(service: "my.snsoft.bopify.library"),
+                                             store: KeychainTokenStore(service: "com.leesiongchan.bopify.library",
+                                                                       migratingFrom: "my.snsoft.bopify.library"),
                                              callbackPort: 8898, callbackPath: "/callback")
         self.auth = auth
         self.libraryAuth = libraryAuth
@@ -88,9 +90,9 @@ final class AppEnvironment {
          playbackAuth: SpotifyAuthService? = nil,
          libraryAuth: SpotifyAuthService? = nil) {
         auth = playbackAuth ?? SpotifyAuthService(clientID: librespotClientID,
-            store: KeychainTokenStore(service: "my.snsoft.bopify.preview.\(UUID().uuidString)"))
+            store: KeychainTokenStore(service: "com.leesiongchan.bopify.preview.\(UUID().uuidString)"))
         self.libraryAuth = libraryAuth ?? SpotifyAuthService(clientID: dashboardLibraryClientID,
-            store: KeychainTokenStore(service: "my.snsoft.bopify.preview.library.\(UUID().uuidString)"))
+            store: KeychainTokenStore(service: "com.leesiongchan.bopify.preview.library.\(UUID().uuidString)"))
         favorite = FavoriteModel(service: favoriteService)
         likedSongs = LikedSongsModel(service: savedTracksService ?? UnavailableSavedTracks())
         self.authorizeLibraryScopes = authorizeLibraryScopes ?? { _ in throw LibraryError.unavailable }
