@@ -81,6 +81,34 @@ struct SpotifyAuthServiceTests {
         #expect(store.load()?.accessToken == "LIBRARY")
     }
 
+    @Test func libraryConsentUsesTheRegisteredFixedCallback() async throws {
+        AuthFlowStubProtocol.handler = { _ in (200, Data(self.librarySuccess.utf8)) }
+        let reserved = LoopbackCallbackListener(expectedState: "unused")
+        let port = try await reserved.start()
+        await reserved.stop()
+        let callback = "http://127.0.0.1:\(port)/callback"
+        let service = SpotifyAuthService(clientID: "dashboard", client: makeClient(), store: InMemoryTokenStore(),
+                                         callbackPort: UInt16(port), callbackPath: "/callback", openURL: { url in
+            let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
+            #expect(query["redirect_uri"] == callback)
+            let response = URL(string: "\(callback)?code=TESTCODE&state=\(query["state"]!)")!
+            Task { _ = try? await URLSession.shared.data(from: response) }
+        })
+        #expect(try await service.authorizeLibraryScopes(["user-library-read"]).accessToken == "LIBRARY")
+    }
+
+    @Test func occupiedLibraryCallbackPortDoesNotOpenBrowser() async throws {
+        let occupied = LoopbackCallbackListener(expectedState: "unused")
+        let port = try await occupied.start()
+        let service = SpotifyAuthService(clientID: "dashboard", client: makeClient(), store: InMemoryTokenStore(),
+                                         callbackPort: UInt16(port), callbackPath: "/callback",
+                                         openURL: { _ in Issue.record("An unbound callback must not open OAuth") })
+        await #expect(throws: CallbackError.listenerFailed) {
+            _ = try await service.authorizeLibraryScopes(["user-library-read"])
+        }
+        await occupied.stop()
+    }
+
     @Test func libraryConsentWidensExistingGrant() async throws {
         let widened = #"{"access_token":"WIDE","token_type":"Bearer","expires_in":3600,"refresh_token":"RT","scope":"user-library-read user-library-modify"}"#
         AuthFlowStubProtocol.handler = { _ in (200, Data(widened.utf8)) }
@@ -169,6 +197,7 @@ struct SpotifyAuthServiceTests {
                 let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
                 #expect(query["scope"] == "streaming")
                 guard let redirectURI = query["redirect_uri"], let state = query["state"] else { return }
+                #expect(URL(string: redirectURI)?.path == "/login")
                 let callbackURL = URL(string: "\(redirectURI)?code=TESTCODE&state=\(state)")!
                 Task { _ = try? await URLSession.shared.data(from: callbackURL) }
             }

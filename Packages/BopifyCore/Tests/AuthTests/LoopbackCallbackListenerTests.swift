@@ -15,6 +15,18 @@ struct LoopbackCallbackListenerTests {
         await listener.stop()
     }
 
+    @Test func bindsRequestedPortAndRejectsAnOccupiedPort() async throws {
+        let first = LoopbackCallbackListener(expectedState: "first")
+        let port = try await first.start()
+        let second = LoopbackCallbackListener(expectedState: "second")
+        await #expect(throws: CallbackError.listenerFailed) {
+            _ = try await second.start(port: UInt16(port))
+        }
+        await first.stop()
+        #expect(try await second.start(port: UInt16(port)) == port)
+        await second.stop()
+    }
+
     @Test func returnsTheAuthorizationCode() async throws {
         let listener = LoopbackCallbackListener(expectedState: "state123")
         let port = try await listener.start()

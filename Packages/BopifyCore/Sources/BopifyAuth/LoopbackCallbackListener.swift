@@ -7,7 +7,7 @@ public enum CallbackError: Error, Hashable, Sendable {
     case invalidCallback, accessDenied, stateMismatch, listenerFailed, cancelled
 }
 
-/// A single-shot HTTP listener on 127.0.0.1 with an OS-assigned port.
+/// A single-shot HTTP listener on 127.0.0.1 with an assigned or fixed port.
 ///
 /// Spotify rejects `localhost` but permits loopback IP literals, and those
 /// alone may use a dynamically assigned port -- which is why librespot's
@@ -15,16 +15,25 @@ public enum CallbackError: Error, Hashable, Sendable {
 public actor LoopbackCallbackListener {
     private let expectedState: String
     private var listener: NWListener?
+    private var startContinuation: CheckedContinuation<Int, any Error>?
+    private var stopContinuation: CheckedContinuation<Void, Never>?
     private var continuation: CheckedContinuation<String, any Error>?
     private var pendingResult: Result<String, any Error>?
 
     public init(expectedState: String) { self.expectedState = expectedState }
 
-    public func start() throws -> Int {
+    public func start(port: UInt16? = nil) async throws -> Int {
         let parameters = NWParameters.tcp
-        parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: .any)
-        let listener = try NWListener(using: parameters)
+        let localPort: NWEndpoint.Port = port.flatMap(NWEndpoint.Port.init(rawValue:)) ?? .any
+        parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: localPort)
+        let listener: NWListener
+        do { listener = try NWListener(using: parameters) }
+        catch { throw CallbackError.listenerFailed }
         self.listener = listener
+
+        listener.stateUpdateHandler = { [weak self] state in
+            Task { await self?.handleState(state) }
+        }
 
         listener.newConnectionHandler = { [weak self] connection in
             guard let self else { return }
@@ -34,17 +43,43 @@ public actor LoopbackCallbackListener {
                 Task { await self.handle(requestLine: request, on: connection) }
             }
         }
-        listener.start(queue: .main)
-
-        // NWListener assigns the port asynchronously; spin briefly for it.
-        for _ in 0..<100 {
-            if let port = listener.port?.rawValue, port != 0 {
-                BopifyLog.callback.debug("listener bound port=\(port, privacy: .public)")
-                return Int(port)
-            }
-            Thread.sleep(forTimeInterval: 0.01)
+        return try await withCheckedThrowingContinuation { continuation in
+            startContinuation = continuation
+            listener.start(queue: .main)
         }
-        throw CallbackError.listenerFailed
+    }
+
+    private func handleState(_ state: NWListener.State) {
+        if case .cancelled = state {
+            startContinuation?.resume(throwing: CallbackError.cancelled)
+            startContinuation = nil
+            stopContinuation?.resume()
+            stopContinuation = nil
+            listener = nil
+            return
+        }
+        guard let startContinuation else { return }
+        switch state {
+        case .ready:
+            guard let port = listener?.port?.rawValue, port != 0 else {
+                self.startContinuation = nil
+                startContinuation.resume(throwing: CallbackError.listenerFailed)
+                listener?.cancel()
+                listener = nil
+                return
+            }
+            self.startContinuation = nil
+            BopifyLog.callback.debug("listener bound port=\(port, privacy: .public)")
+            startContinuation.resume(returning: Int(port))
+        case .failed, .waiting:
+            self.startContinuation = nil
+            BopifyLog.callback.error("callback listener could not bind")
+            startContinuation.resume(throwing: CallbackError.listenerFailed)
+            listener?.cancel()
+            listener = nil
+        default:
+            break
+        }
     }
 
     public func waitForCallback() async throws -> String {
@@ -55,9 +90,13 @@ public actor LoopbackCallbackListener {
         return try await withCheckedThrowingContinuation { self.continuation = $0 }
     }
 
-    public func stop() {
-        listener?.cancel()
-        listener = nil
+    public func stop() async {
+        if let listener {
+            await withCheckedContinuation { continuation in
+                stopContinuation = continuation
+                listener.cancel()
+            }
+        }
         deliver(.failure(CallbackError.cancelled))
     }
 
