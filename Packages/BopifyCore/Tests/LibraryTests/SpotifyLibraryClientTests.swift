@@ -100,4 +100,93 @@ struct SpotifyLibraryClientTests {
         }
     }
 
+    private func savedTrack(_ id: String, image: Bool = true) -> [String: Any] {
+        ["track": ["uri": "spotify:track:\(id)", "name": "Song \(id)",
+                   "artists": [["name": "Artist"]], "duration_ms": 180_000,
+                   "album": ["name": "Album", "images": image ? [["url": "https://i.scdn.co/image/cover"]] : []]]]
+    }
+    private func savedPage(_ items: [Any], offset: Int = 0, total: Int = 7,
+                           next: String? = "https://api.spotify.com/v1/me/tracks?offset=3") throws -> Data {
+        try JSONSerialization.data(withJSONObject: ["items": items, "offset": offset,
+            "limit": 50, "total": total, "next": next as Any? ?? NSNull()])
+    }
+    @Test func savedTracksRequestUsesReadScope() async throws {
+        LibraryProtocol.fixture.reset(.init(data: try savedPage([], total: 0, next: nil)))
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [LibraryProtocol.self]
+        let client = SpotifyLibraryClient(session: URLSession(configuration: configuration)) { required in
+            #expect(required == ["user-library-read"])
+            return "TEST_TOKEN"
+        }
+        let page = try await client.savedTracks(offset: 0, limit: 50)
+        #expect(page == SavedTracksPage(tracks: [], nextOffset: nil, total: 0))
+        let request = try #require(LibraryProtocol.fixture.requests.first)
+        #expect(request.httpMethod == "GET")
+        #expect(request.url?.scheme == "https" && request.url?.host == "api.spotify.com")
+        #expect(request.url?.path == "/v1/me/tracks")
+        #expect(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems == [
+            URLQueryItem(name: "offset", value: "0"), URLQueryItem(name: "limit", value: "50")])
+    }
+    @Test func skippedTrackDoesNotChangeNextOffset() async throws {
+        LibraryProtocol.fixture.reset(.init(data: try savedPage([savedTrack("a"), ["track": NSNull()], savedTrack("b")])))
+        let page = try await client().savedTracks(offset: 0, limit: 50)
+        #expect(page.tracks.count == 2)
+        #expect(page.nextOffset == 3)
+        #expect(page.total == 7)
+        #expect(page.tracks.map(\.uri.rawValue) == ["spotify:track:a", "spotify:track:b"])
+        #expect(page.tracks[0].artwork == page.tracks[1].artwork)
+    }
+    @Test func invalidItemsAreSkippedAndMissingArtworkIsAllowed() async throws {
+        var invalidURI = savedTrack("bad,id")
+        var negative = savedTrack("negative")["track"] as! [String: Any]
+        negative["duration_ms"] = -1
+        var unavailable = savedTrack("unavailable")["track"] as! [String: Any]
+        unavailable["is_playable"] = false
+        invalidURI["added_at"] = "2026-09-27T00:00:00Z"
+        let items: [Any] = [invalidURI, ["track": negative], ["track": unavailable], ["track": "bad"], savedTrack("ok", image: false)]
+        LibraryProtocol.fixture.reset(.init(data: try savedPage(items)))
+        let page = try await client().savedTracks(offset: 0, limit: 50)
+        #expect(page.tracks.map(\.uri.rawValue) == ["spotify:track:ok"])
+        #expect(page.tracks.first?.artwork == nil)
+        #expect(page.nextOffset == 5)
+        LibraryProtocol.fixture.reset(.init(data: try savedPage(Array(items.prefix(4)))))
+        let skipped = try await client().savedTracks(offset: 0, limit: 50)
+        #expect(skipped.tracks.isEmpty && skipped.nextOffset == 4)
+    }
+    @Test func paginationNeverFollowsResponseURL() async throws {
+        LibraryProtocol.fixture.reset(.init(data: try savedPage([savedTrack("a")], next: "https://example.com/steal")))
+        let client = client()
+        let first = try await client.savedTracks(offset: 0, limit: 50)
+        #expect(first.nextOffset == 1)
+        LibraryProtocol.fixture.reset(.init(data: try savedPage([savedTrack("b")], offset: 1, next: nil)))
+        let last = try await client.savedTracks(offset: 1, limit: 50)
+        #expect(last.nextOffset == nil)
+        #expect(LibraryProtocol.fixture.requests.allSatisfy { $0.url?.host == "api.spotify.com" })
+        LibraryProtocol.fixture.reset(.init(data: try savedPage([], offset: 2)))
+        #expect(try await client.savedTracks(offset: 2, limit: 50).nextOffset == nil)
+    }
+    @Test func malformedPagesAndInvalidArgumentsFail() async throws {
+        for body in ["{}", "null", "{\"items\":[],\"offset\":0,\"limit\":50,\"total\":-1,\"next\":null}",
+                     "{\"items\":[],\"offset\":1,\"limit\":50,\"total\":7,\"next\":null}",
+                     "{\"items\":[],\"offset\":0,\"limit\":0,\"total\":7,\"next\":null}"] {
+            LibraryProtocol.fixture.reset(.init(data: Data(body.utf8)))
+            await #expect(throws: LibraryError.invalidResponse) { _ = try await client().savedTracks(offset: 0, limit: 50) }
+        }
+        LibraryProtocol.fixture.reset(.init())
+        for (offset, limit) in [(-1, 50), (0, 0), (0, 51)] {
+            await #expect(throws: LibraryError.invalidResponse) { _ = try await client().savedTracks(offset: offset, limit: limit) }
+        }
+        #expect(LibraryProtocol.fixture.requests.isEmpty)
+    }
+    @Test func savedTracksErrorsAndCancellation() async {
+        for (status, error) in [(401, LibraryError.authorizationRequired), (403, .forbidden),
+                                 (429, .rateLimited(retryAfterSeconds: 12)), (503, .unavailable), (302, .invalidResponse)] {
+            LibraryProtocol.fixture.reset(.init(status: status, headers: ["Retry-After": "12"]))
+            await #expect(throws: error) { _ = try await client().savedTracks(offset: 0, limit: 50) }
+            #expect(LibraryProtocol.fixture.requests.count == 1)
+        }
+        LibraryProtocol.fixture.reset(.init(error: URLError(.cancelled)))
+        await #expect(throws: CancellationError.self) { _ = try await client().savedTracks(offset: 0, limit: 50) }
+    }
+
 }
