@@ -6,9 +6,9 @@ import BopifyPlayback
 
 struct MonolithPlayerView: View {
     let player: PlayerModel
-    let store: ArtworkStore
+    let artworkStore: ArtworkStore
     let presentation: PlayerPresentation
-    let window: MonolithWindowController
+    let windowController: MonolithWindowController
     @State private var rotation = RecordRotation()
     @State private var scrub: RecordScrub?
     @State private var pressedAngle: Double?
@@ -16,14 +16,14 @@ struct MonolithPlayerView: View {
     @State private var previousQueue: PlaybackQueue?
     @State private var pendingSelection: QueueSelectionStatus?
     @AccessibilityFocusState private var accessibilityFocus: Bool
-    @Environment(\.favoriteEnvironment) private var environment
+    @Environment(AppEnvironment.self) private var environment: AppEnvironment?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var canScrub: Bool { player.state.canSeek && player.state.isActiveDevice && player.displayDurationMs > 0 }
     private var shouldSpin: Bool {
         player.state.phase == .playing && player.state.isActiveDevice && presentation.isVisible && !reduceMotion && pressedAngle == nil
     }
-    private var engaged: Bool { presentation.mode != .compact }
+    private var isEngaged: Bool { presentation.mode != .compact }
     // Bopify's queue says nothing about which way a mirrored device moved.
     private var direction: CarouselDirection {
         guard player.state.mirror == nil else { return .fade }
@@ -37,7 +37,7 @@ struct MonolithPlayerView: View {
     private var occurrenceID: String {
         player.state.mirror?.trackURI.rawValue ?? player.state.queue?.current?.id ?? player.state.currentTrack?.uri.rawValue ?? "missing"
     }
-    private var image: Image? { track?.artwork.flatMap { store.images[$0.url] }.map { Image(nsImage: $0) } }
+    private var image: Image? { track?.artwork.flatMap { artworkStore.images[$0.url] }.map { Image(nsImage: $0) } }
     private var recordStatus: Text {
         if let notice = player.commandNotice { return Text(notice) }
         return player.state.localizedStatusText
@@ -48,32 +48,32 @@ struct MonolithPlayerView: View {
     }
 
     var body: some View {
-        let layout = window.layout
+        let layout = windowController.layout
         ZStack(alignment: .topLeading) {
             PlayerSurface { PlayerBackgroundDragRegion() }
                 .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
                 .frame(width: layout.sleeveFrame.width, height: layout.sleeveFrame.height)
                 .offset(x: layout.sleeveFrame.minX, y: layout.sleeveFrame.minY)
-                .opacity(engaged ? 1 : 0)
-                .allowsHitTesting(engaged)
+                .opacity(isEngaged ? 1 : 0)
+                .allowsHitTesting(isEngaged)
             ScrollView(layout.controlsFrame.width < 144 ? [.horizontal, .vertical] : .vertical) {
                 controls.frame(minWidth: 144)
             }
             .scrollIndicators(.hidden)
             .frame(width: layout.controlsFrame.width, height: layout.controlsFrame.height)
             .offset(x: layout.controlsFrame.minX, y: layout.controlsFrame.minY)
-            .opacity(engaged ? 1 : 0)
-            .allowsHitTesting(engaged)
-            .disabled(!engaged)
-            .accessibilityHidden(!engaged)
+            .opacity(isEngaged ? 1 : 0)
+            .allowsHitTesting(isEngaged)
+            .disabled(!isEngaged)
+            .accessibilityHidden(!isEngaged)
             .accessibilityFocused($accessibilityFocus)
             if presentation.mode == .expanded, let environment {
-                LikedSongsCoverFlow(model: environment.likedSongs, store: store,
-                                    play: { player.load(PlayRequest(contextURI: $0.uri)) })
+                LikedSongsCoverFlow(model: environment.likedSongs, artworkStore: artworkStore,
+                                    onPlay: { player.load(PlayRequest(contextURI: $0.uri)) })
                     .frame(width: layout.lowerFrame.width, height: layout.lowerFrame.height)
                     .offset(x: layout.lowerFrame.minX, y: layout.lowerFrame.minY)
             }
-            QueueView(player: player, store: store, select: select)
+            QueueView(player: player, artworkStore: artworkStore, onSelect: select)
                 .frame(width: layout.lowerFrame.width, height: layout.lowerFrame.height)
                 .offset(x: layout.lowerFrame.minX, y: layout.lowerFrame.minY)
                 .opacity(presentation.mode == .queue ? 1 : 0)
@@ -84,10 +84,10 @@ struct MonolithPlayerView: View {
                 .position(layout.recordCenter)
         }
         .frame(width: layout.contentSize.width, height: layout.contentSize.height, alignment: .topLeading)
-        .offset(x: window.contentOffset.x, y: window.contentOffset.y)
+        .offset(x: windowController.contentOffset.x, y: windowController.contentOffset.y)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .onAppear { window.cancelInteraction = cancelRecord }
-        .onDisappear { _ = cancelRecord(); window.cancelInteraction = nil }
+        .onAppear { windowController.onCancelInteraction = cancelRecord }
+        .onDisappear { _ = cancelRecord(); windowController.onCancelInteraction = nil }
         .onChange(of: shouldSpin, initial: true) { _, running in
             rotation.setRunning(running, at: ProcessInfo.processInfo.systemUptime)
         }
@@ -108,7 +108,7 @@ struct MonolithPlayerView: View {
             if !visible { pendingSelection = nil; accessibilityFocus = false; _ = cancelRecord() }
         }
         .onChange(of: accessibilityFocus) { _, focused in presentation.sendAttention(.accessibilityFocus(focused)) }
-        .task(id: track?.artwork?.url) { if let url = track?.artwork?.url { await store.load(url) } }
+        .task(id: track?.artwork?.url) { if let url = track?.artwork?.url { await artworkStore.load(url) } }
     }
 
     private func record(diameter: CGFloat) -> some View {
@@ -117,24 +117,24 @@ struct MonolithPlayerView: View {
                         isVisible: presentation.isVisible, rotation: rotation,
                         rotationOverride: pressedAngle.map { $0 + (scrub?.angleDelta ?? 0) }, isScrubbing: pressedAngle != nil)
             .overlay {
-                RecordPointerRegion(press: { point, geometry in
+                RecordPointerRegion(onPress: { point, geometryID in
                     guard presentation.isVisible else { return }
                     let now = ProcessInfo.processInfo.systemUptime
                     rotation.setRunning(false, at: now)
                     pressedAngle = rotation.angle(at: now)
                     if canScrub {
                         scrub = RecordScrub(positionMs: player.displayPositionMs(at: Date()), durationMs: player.displayDurationMs)
-                        scrub?.update(x: point.x, y: point.y, geometryID: geometry)
+                        scrub?.update(x: point.x, y: point.y, geometryID: geometryID)
                     }
-                }, drag: { point, geometry in
+                }, onDrag: { point, geometryID in
                     guard pressedAngle != nil, canScrub else { return }
                     if !isScrubbing {
                         isScrubbing = true
                         presentation.sendAttention(.interaction(.seek, true))
                         BopifyLog.playback.debug("record scrub began")
                     }
-                    scrub?.update(x: point.x, y: point.y, geometryID: geometry)
-                }, release: {
+                    scrub?.update(x: point.x, y: point.y, geometryID: geometryID)
+                }, onRelease: {
                     if isScrubbing, canScrub, presentation.isVisible, let scrub {
                         player.seek(to: scrub.positionMs)
                         BopifyLog.playback.debug("record scrub committed")
@@ -146,16 +146,16 @@ struct MonolithPlayerView: View {
                 .accessibilityLabel(Text(track?.title ?? String(localized: "player.unknownTrack")))
                 .accessibilityValue(recordStatus)
                 .accessibilityAddTraits(.isButton)
-                .accessibilityAction { window.focus() }
+                .accessibilityAction { windowController.focus() }
                 .accessibilityFocused($accessibilityFocus)
             }
             .overlay {
-                if engaged {
-                    TimelineView(PlaybackClockSchedule(running: player.isPositionAdvancing && presentation.isVisible, reducedMotion: reduceMotion)) { context in
+                if isEngaged {
+                    TimelineView(PlaybackClockSchedule(isRunning: player.isPositionAdvancing && presentation.isVisible, reduceMotion: reduceMotion)) { context in
                         RadialProgressView(positionMs: isScrubbing ? (scrub?.positionMs ?? 0) : player.displayPositionMs(at: context.date), durationMs: player.displayDurationMs,
                                            canSeek: player.state.canSeek && player.state.isActiveDevice,
-                                           seek: player.seek(to:), interactionChanged: { presentation.sendAttention(.interaction(.seek, $0)) },
-                                           isVisible: presentation.isVisible, showsTime: false, pointerEnabled: false)
+                                           onSeek: player.seek(to:), onInteractionChanged: { presentation.sendAttention(.interaction(.seek, $0)) },
+                                           isVisible: presentation.isVisible, showsTime: false, isPointerEnabled: false)
                             .allowsHitTesting(false)
                             .id(occurrenceID)
                     }
@@ -185,9 +185,9 @@ struct MonolithPlayerView: View {
                         .disabled(track?.uri != player.state.currentTrack?.uri)
                 }
             }
-            TransportControls(state: player.state, model: player)
+            TransportControls(player: player)
                 .frame(maxWidth: .infinity)
-            TimelineView(PlaybackClockSchedule(running: player.isPositionAdvancing && presentation.isVisible, reducedMotion: true)) { context in
+            TimelineView(PlaybackClockSchedule(isRunning: player.isPositionAdvancing && presentation.isVisible, reduceMotion: true)) { context in
                 HStack {
                     Text(playbackTime(isScrubbing ? (scrub?.positionMs ?? 0) : player.displayPositionMs(at: context.date)))
                     Spacer()
@@ -218,7 +218,7 @@ struct MonolithPlayerView: View {
             }
             status.font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
-        .buttonStyle(PlayerControlStyle())
+        .buttonStyle(.playerControl)
         .onDisappear { presentation.sendAttention(.interaction(.volume, false)) }
     }
 
@@ -256,19 +256,19 @@ struct MonolithPlayerView: View {
 }
 
 struct RecordPointerRegion: NSViewRepresentable {
-    var press: (CGPoint, UInt64) -> Void
-    var drag: (CGPoint, UInt64) -> Void
-    var release: () -> Void
+    var onPress: (_ point: CGPoint, _ geometryID: UInt64) -> Void
+    var onDrag: (_ point: CGPoint, _ geometryID: UInt64) -> Void
+    var onRelease: () -> Void
     func makeNSView(context: Context) -> PointerView { PointerView() }
     func updateNSView(_ view: PointerView, context: Context) {
-        view.press = press; view.drag = drag; view.release = release
+        view.onPress = onPress; view.onDrag = onDrag; view.onRelease = onRelease
     }
     final class PointerView: NSView {
-        var press: ((CGPoint, UInt64) -> Void)?
-        var drag: ((CGPoint, UInt64) -> Void)?
-        var release: (() -> Void)?
+        var onPress: ((_ point: CGPoint, _ geometryID: UInt64) -> Void)?
+        var onDrag: ((_ point: CGPoint, _ geometryID: UInt64) -> Void)?
+        var onRelease: (() -> Void)?
         private var origin: CGPoint?
-        private var dragging = false
+        private var isDragging = false
         private var geometry: CGRect?
         private var geometryID: UInt64 = 0
         override var isFlipped: Bool { true }
@@ -277,7 +277,7 @@ struct RecordPointerRegion: NSViewRepresentable {
             let local = convert(point, from: superview)
             return hypot(local.x - bounds.midX, local.y - bounds.midY) <= bounds.width / 2 ? self : nil
         }
-        private func sample(_ event: NSEvent) -> (CGPoint, UInt64) {
+        private func sample(_ event: NSEvent) -> (point: CGPoint, geometryID: UInt64) {
             let point = convert(event.locationInWindow, from: nil)
             let centerInWindow = convert(CGPoint(x: bounds.midX, y: bounds.midY), to: nil)
             let centerOnScreen = window?.convertPoint(toScreen: centerInWindow) ?? centerInWindow
@@ -287,18 +287,18 @@ struct RecordPointerRegion: NSViewRepresentable {
         }
         override func mouseDown(with event: NSEvent) {
             origin = window?.convertPoint(toScreen: event.locationInWindow)
-            dragging = false
-            let (point, geometry) = sample(event)
-            press?(point, geometry)
+            isDragging = false
+            let location = sample(event)
+            onPress?(location.point, location.geometryID)
             window?.makeKey()
         }
         override func mouseDragged(with event: NSEvent) {
             guard let origin, let screen = window?.convertPoint(toScreen: event.locationInWindow),
-                  dragging || hypot(screen.x - origin.x, screen.y - origin.y) > 4 else { return }
-            dragging = true
-            let (point, geometry) = sample(event)
-            drag?(point, geometry)
+                  isDragging || hypot(screen.x - origin.x, screen.y - origin.y) > 4 else { return }
+            isDragging = true
+            let location = sample(event)
+            onDrag?(location.point, location.geometryID)
         }
-        override func mouseUp(with event: NSEvent) { origin = nil; dragging = false; release?() }
+        override func mouseUp(with event: NSEvent) { origin = nil; isDragging = false; onRelease?() }
     }
 }

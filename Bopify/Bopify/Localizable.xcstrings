@@ -318,6 +318,16 @@
         }
       }
     },
+    "library.quotaExceeded" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotify's library quota has been reached. Try again later."
+          }
+        }
+      }
+    },
     "library.rateLimited" : {
       "localizations" : {
         "en" : {
@@ -334,6 +344,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Retry"
+          }
+        }
+      }
+    },
+    "library.retryIn %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry in %lld seconds."
           }
         }
       }
@@ -641,9 +661,6 @@
         }
       }
     },
-    "Retry in %lld seconds." : {
-
-    },
     "signIn.authenticating" : {
       "localizations" : {
         "en" : {
@@ -713,9 +730,6 @@
           }
         }
       }
-    },
-    "Spotify's library quota has been reached. Try again later." : {
-
     },
     "transport.mute" : {
       "localizations" : {

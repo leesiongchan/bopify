@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import SwiftUI
 
 protocol PlayerShortcutForwarding {}
@@ -59,12 +60,12 @@ final class StatusPanel: NSPanel {
             return
         }
         let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
-        switch (event.keyCode, modifiers) {
-        case (49, []): if !event.isARepeat { onTogglePlayback?() }
-        case (123, []): onSeek?(-5000)
-        case (124, []): onSeek?(5000)
-        case (123, .command): if !event.isARepeat { onPrevious?() }
-        case (124, .command): if !event.isARepeat { onNext?() }
+        switch (Int(event.keyCode), modifiers) {
+        case (kVK_Space, []): if !event.isARepeat { onTogglePlayback?() }
+        case (kVK_LeftArrow, []): onSeek?(-5000)
+        case (kVK_RightArrow, []): onSeek?(5000)
+        case (kVK_LeftArrow, .command): if !event.isARepeat { onPrevious?() }
+        case (kVK_RightArrow, .command): if !event.isARepeat { onNext?() }
         default: super.keyDown(with: event)
         }
     }
@@ -86,49 +87,5 @@ private final class PlayerHostingView<Content: View>: NSHostingView<Content> {
         guard let panel = window as? StatusPanel, let contains = panel.containsPlayerPoint else { return }
         let point = CGPoint(x: event.locationInWindow.x, y: panel.frame.height - event.locationInWindow.y)
         panel.onPointerChanged?(contains(point))
-    }
-}
-
-struct PlayerBackgroundDragRegion: NSViewRepresentable {
-    func makeNSView(context: Context) -> DragView { DragView() }
-    func updateNSView(_ nsView: DragView, context: Context) {}
-
-    final class DragView: NSView {
-        private var start: CGPoint?
-        private var origin: CGPoint = .zero
-        private var dragging = false
-        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-        override func mouseDown(with event: NSEvent) {
-            window?.makeKey()
-            start = window?.convertPoint(toScreen: event.locationInWindow)
-            origin = window?.frame.origin ?? .zero
-        }
-        override func mouseDragged(with event: NSEvent) {
-            guard let start, let panel = window as? StatusPanel else { return }
-            let point = panel.convertPoint(toScreen: event.locationInWindow)
-            let delta = CGPoint(x: point.x - start.x, y: point.y - start.y)
-            guard dragging || hypot(delta.x, delta.y) > 4 else { return }
-            if !dragging { dragging = true; panel.onWindowDragChanged?(true) }
-            panel.setFrameOrigin(CGPoint(x: origin.x + delta.x, y: origin.y + delta.y))
-        }
-        override func mouseUp(with event: NSEvent) { endDrag() }
-        override func viewWillMove(toWindow newWindow: NSWindow?) {
-            if newWindow == nil { endDrag() }
-            super.viewWillMove(toWindow: newWindow)
-        }
-        private func endDrag() {
-            start = nil
-            if dragging { dragging = false; (window as? StatusPanel)?.onWindowDragChanged?(false) }
-        }
-    }
-}
-
-struct WindowDragRegion: NSViewRepresentable {
-    func makeNSView(context: Context) -> DragView { DragView() }
-    func updateNSView(_ nsView: DragView, context: Context) {}
-
-    final class DragView: NSView {
-        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-        override func mouseDown(with event: NSEvent) { window?.performDrag(with: event) }
     }
 }

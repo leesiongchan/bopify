@@ -27,14 +27,12 @@ final class AppEnvironment {
     let likedSongs: LikedSongsModel
     private(set) var isEnablingLibrary = false
     private(set) var libraryAuthorizationNotice: String?
-    var isEnablingFavorites: Bool { isEnablingLibrary }
-    var favoriteAuthorizationNotice: String? { libraryAuthorizationNotice }
     @ObservationIgnored private let authorizeLibraryScopes: @Sendable (Set<String>) async throws -> Void
     @ObservationIgnored private var libraryGeneration = 0
     let presentation = PlayerPresentation(
         mode: .compact,
         keepOnTop: UserDefaults.standard.bool(forKey: "player.keepOnTop"))
-    let monolithWindow = MonolithWindowController(defaults: .standard)
+    let monolithWindowController = MonolithWindowController(defaults: .standard)
     var isListening: Bool {
         authState == .signedIn && (player?.state.currentTrack != nil || player?.state.mirror != nil)
     }
@@ -64,7 +62,7 @@ final class AppEnvironment {
     /// thing it reads, so this tracks sign-in-in-flight on its own, and
     /// `authState` goes back to being purely a description of what the UI
     /// should show.
-    @ObservationIgnored private var signInRequested = false
+    @ObservationIgnored private var isSignInInFlight = false
 
     init() {
         let auth = SpotifyAuthService(clientID: librespotClientID)
@@ -172,13 +170,13 @@ final class AppEnvironment {
         // — an operation ahead of this one in the chain (a sign-out) can
         // still be running when this is called, and it owns `authState`
         // until its block finishes.
-        guard !signInRequested else {
+        guard !isSignInInFlight else {
             BopifyLog.auth.notice("sign-in skipped: already authenticating")
             return
         }
-        signInRequested = true
+        isSignInInFlight = true
         await serialize { [self] in
-            defer { signInRequested = false }
+            defer { isSignInInFlight = false }
             authState = .authenticating
             do {
                 _ = try await auth.signIn()
@@ -195,7 +193,7 @@ final class AppEnvironment {
         await serialize { [self] in
             BopifyLog.auth.info("sign-out starting")
             presentation.resetEngagement()
-            monolithWindow.invalidateTransition()
+            monolithWindowController.invalidateTransition()
             player?.stop()
             player = nil
             artworkStore.clear()

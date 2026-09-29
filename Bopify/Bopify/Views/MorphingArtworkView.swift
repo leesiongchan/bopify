@@ -11,7 +11,7 @@ struct MorphingArtworkView: View {
     var isVisible = true
     var reduceMotionOverride = false
     @State private var morph: ArtworkMorphState
-    @State private var animating = false
+    @State private var isAnimating = false
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     private var reduceMotion: Bool { systemReduceMotion || reduceMotionOverride }
 
@@ -26,7 +26,7 @@ struct MorphingArtworkView: View {
     }
 
     var body: some View {
-        TimelineView(.animation(paused: !animating || !isVisible)) { context in
+        TimelineView(.animation(paused: !isAnimating || !isVisible)) { context in
             ZStack {
                 ForEach(morph.frames(at: context.date)) { frame in
                     ArtworkView(image: frame.image, diameter: diameter).opacity(frame.opacity)
@@ -38,13 +38,13 @@ struct MorphingArtworkView: View {
         .onChange(of: image) { _, _ in retarget() }
         .onChange(of: occurrenceID) { _, _ in retarget() }
         .onChange(of: isVisible) { _, visible in
-            if !visible { morph.finish(); animating = false }
+            if !visible { morph.finish(); isAnimating = false }
         }
         .task(id: morph.generation) {
-            guard animating else { return }
+            guard isAnimating else { return }
             do { try await Task.sleep(for: .seconds(morph.duration)) } catch { return }
             morph.finish()
-            animating = false
+            isAnimating = false
         }
         .accessibilityHidden(true)
     }
@@ -52,7 +52,7 @@ struct MorphingArtworkView: View {
     private func retarget() {
         morph.duration = reduceMotion ? 0.16 : 0.65
         morph.transition(to: image, occurrenceID: occurrenceID, direction: direction, at: .now, diameter: diameter)
-        animating = isVisible
+        isAnimating = isVisible
         if !isVisible { morph.finish() }
         BopifyLog.playback.debug("artwork blend retargeted")
     }

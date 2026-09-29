@@ -7,7 +7,7 @@ import BopifyPlayback
 // Original vector samples for native previews; never used for missing live artwork.
 func previewArtworkURL(_ index: Int) -> URL { URL(string: "https://preview.invalid/sample/\(index)")! }
 
-func previewArtworkStore() -> ArtworkStore {
+func makePreviewArtworkStore() -> ArtworkStore {
     var images: [URL: NSImage] = [:]
     for index in 0..<3 {
         let colors: [Color] = switch index {
@@ -36,30 +36,30 @@ func previewArtworkStore() -> ArtworkStore {
     return ArtworkStore(previewImages: images)
 }
 @MainActor @Observable final class MonolithRecordFixture {
-    let store = previewArtworkStore()
+    let artworkStore = makePreviewArtworkStore()
     var index = 1
     var occurrenceID = "first"
     var direction: CarouselDirection = .next
-    var playing = true
-    var visible = true
-    var missing = false
-    var reducedMotion = false
+    var isPlaying = true
+    var isVisible = true
+    var isArtworkMissing = false
+    var reduceMotion = false
     var diameter: CGFloat = 182
     var image: Image? {
-        missing ? nil : store.images[previewArtworkURL(index)].map { Image(nsImage: $0) }
+        isArtworkMissing ? nil : artworkStore.images[previewArtworkURL(index)].map { Image(nsImage: $0) }
     }
 }
 
 struct MonolithRecordScene: View {
     let fixture: MonolithRecordFixture
     @State private var rotation = RecordRotation()
-    private var running: Bool { fixture.playing && fixture.visible && !fixture.reducedMotion }
+    private var isSpinning: Bool { fixture.isPlaying && fixture.isVisible && !fixture.reduceMotion }
     var body: some View {
         VinylRecordView(image: fixture.image, occurrenceID: fixture.occurrenceID, direction: fixture.direction,
-                        diameter: fixture.diameter, isPlaying: fixture.playing, isVisible: fixture.visible, rotation: rotation,
-                        reduceMotionOverride: fixture.reducedMotion)
+                        diameter: fixture.diameter, isPlaying: fixture.isPlaying, isVisible: fixture.isVisible, rotation: rotation,
+                        reduceMotionOverride: fixture.reduceMotion)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .onChange(of: running, initial: true) { _, value in
+            .onChange(of: isSpinning, initial: true) { _, value in
                 rotation.setRunning(value, at: ProcessInfo.processInfo.systemUptime)
             }
     }

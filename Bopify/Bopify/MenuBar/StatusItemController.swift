@@ -11,7 +11,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     private var panel: StatusPanel?
     private var hasPosition = false
     private var appliedMode: PlayerMode?
-    private var applyingFrame = false
+    private var isApplyingFrame = false
     private var isMonolithApplied = false
     private let environment: AppEnvironment
 
@@ -21,7 +21,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         super.init()
         statusItem.button?.image = NSImage(systemSymbolName: "music.note", accessibilityDescription: "Bopify")
         statusItem.button?.target = self
-        statusItem.button?.action = #selector(handleClick)
+        statusItem.button?.action = #selector(statusItemClicked(_:))
         statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         panel = StatusPanel(content: content)
         panel?.delegate = self
@@ -45,7 +45,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         panel?.onPointerChanged = { [weak self] in self?.environment.presentation.sendAttention(.pointer($0)) }
         panel?.onWindowDragChanged = { [weak self] active in
             guard let self else { return }
-            self.environment.monolithWindow.setDragging(active)
+            self.environment.monolithWindowController.setDragging(active)
             self.environment.presentation.sendAttention(.interaction(.windowDrag, active))
         }
         if let stored = UserDefaults.standard.string(forKey: "player.frame") {
@@ -55,7 +55,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                 hasPosition = true
             }
         }
-        NotificationCenter.default.addObserver(self, selector: #selector(screenChanged),
+        NotificationCenter.default.addObserver(self, selector: #selector(screenParametersDidChange(_:)),
                                                name: NSApplication.didChangeScreenParametersNotification, object: nil)
         observePresentation()
     }
@@ -79,20 +79,20 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                    let frame = button.window?.convertToScreen(button.convert(button.bounds, to: nil)) {
                     panel.setFrame(CGRect(x: frame.midX - 71, y: frame.minY - 148, width: 142, height: 142), display: false)
                 }
-                environment.monolithWindow.attach(to: panel)
+                environment.monolithWindowController.attach(to: panel)
                 environment.presentation.sendAttention(.visibility(panel.isVisible))
                 if panel.isKeyWindow { environment.presentation.sendAttention(.keyboardFocus(true)) }
                 isMonolithApplied = true
                 // The new composition has no rendered Monolith geometry to animate from yet.
-                environment.monolithWindow.apply(mode: environment.presentation.mode, reduceMotion: true)
+                environment.monolithWindowController.apply(mode: environment.presentation.mode, reduceMotion: true)
                 BopifyLog.playback.debug("Monolith listening geometry initialized")
             }
-            environment.monolithWindow.apply(mode: environment.presentation.mode,
+            environment.monolithWindowController.apply(mode: environment.presentation.mode,
                                               reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
             return
         }
         if isMonolithApplied {
-            environment.monolithWindow.invalidateTransition()
+            environment.monolithWindowController.invalidateTransition()
             panel.containsPlayerPoint = nil
             environment.presentation.resetEngagement()
             environment.presentation.sendAttention(.visibility(panel.isVisible))
@@ -126,25 +126,27 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         let maximum = NSSize(width: compact ? 420 : 430, height: compact ? 88 : 800)
         let requested = NSSize(width: min(maximum.width, max(minimum.width, size.width)),
                                height: min(maximum.height, max(minimum.height, size.height)))
-        applyingFrame = true
+        isApplyingFrame = true
         panel.minSize = NSSize(width: min(minimum.width, visible.width), height: min(minimum.height, visible.height))
         panel.maxSize = NSSize(width: min(maximum.width, visible.width), height: min(maximum.height, visible.height))
         panel.setFrame(clampedPlayerFrame(origin: origin, size: requested, visibleFrame: visible), display: true, animate: animate)
-        applyingFrame = false
+        isApplyingFrame = false
         if hasPosition { saveFrame() }
     }
 
-    @objc private func screenChanged() {
+    @objc private func screenParametersDidChange(_ notification: Notification) { reposition() }
+
+    private func reposition() {
         guard let panel else { return }
         if isMonolithApplied {
-            environment.monolithWindow.apply(mode: environment.presentation.mode, reduceMotion: true)
+            environment.monolithWindowController.apply(mode: environment.presentation.mode, reduceMotion: true)
             return
         }
         setReachableFrame(origin: panel.frame.origin, size: panel.frame.size)
     }
 
     private func saveFrame() {
-        guard let panel, hasPosition, !applyingFrame else { return }
+        guard let panel, hasPosition, !isApplyingFrame else { return }
         if isMonolithApplied { return }
         UserDefaults.standard.set(NSStringFromRect(panel.frame), forKey: "player.frame")
     }
@@ -154,7 +156,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     func windowShouldClose(_ sender: NSWindow) -> Bool { dismiss(); return false }
 
 
-    @objc private func handleClick() {
+    @objc private func statusItemClicked(_ sender: Any?) {
         // LSUIElement plus a non-activating panel means there is no app
         // menu and no route for Cmd-Q, so the conventional agent-app
         // pattern -- a secondary-click menu -- is the only way to sign out
@@ -172,23 +174,23 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 
         if isMonolithApplied {
             hasPosition = true
-            screenChanged()
+            reposition()
         } else if !hasPosition, let frame = button.window?.convertToScreen(button.convert(button.bounds, to: nil)) {
             hasPosition = true
             setReachableFrame(origin: NSPoint(x: frame.midX - panel.frame.width / 2, y: frame.minY - panel.frame.height - 6), size: panel.frame.size)
         } else {
-            screenChanged()
+            reposition()
         }
         environment.presentation.isVisible = true
         environment.presentation.sendAttention(.keyboardFocus(true))
-        if isMonolithApplied { environment.monolithWindow.apply(mode: .expanded, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion) }
+        if isMonolithApplied { environment.monolithWindowController.apply(mode: .expanded, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion) }
         panel.makeKeyAndOrderFront(nil)
         BopifyLog.playback.debug("player panel opened")
     }
 
     private func dismiss() {
         saveFrame()
-        if isMonolithApplied { environment.monolithWindow.persistAnchor(); environment.monolithWindow.invalidateTransition() }
+        if isMonolithApplied { environment.monolithWindowController.persistAnchor(); environment.monolithWindowController.invalidateTransition() }
         environment.presentation.isVisible = false
         panel?.orderOut(nil)
         BopifyLog.playback.debug("player panel hidden")
@@ -199,31 +201,31 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         let menu = NSMenu()
         environment.presentation.sendAttention(.interaction(.menu, true))
         defer { environment.presentation.sendAttention(.interaction(.menu, false)) }
-        let keepOnTop = NSMenuItem(title: String(localized: "window.keepOnTop"), action: #selector(toggleKeepOnTop), keyEquivalent: "")
+        let keepOnTop = NSMenuItem(title: String(localized: "window.keepOnTop"), action: #selector(toggleKeepOnTop(_:)), keyEquivalent: "")
         keepOnTop.target = self
         keepOnTop.state = environment.presentation.keepOnTop ? .on : .off
         menu.addItem(keepOnTop)
         menu.addItem(.separator())
 
         let signOutItem = NSMenuItem(title: String(localized: "menu.signOut"),
-                                      action: #selector(signOutTapped), keyEquivalent: "")
+                                      action: #selector(signOut(_:)), keyEquivalent: "")
         signOutItem.target = self
         menu.addItem(signOutItem)
 
         let quitItem = NSMenuItem(title: String(localized: "menu.quit"),
-                                   action: #selector(quitTapped), keyEquivalent: "q")
+                                   action: #selector(quit(_:)), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
 
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height), in: button)
     }
 
-    @objc private func signOutTapped() {
+    @objc private func signOut(_ sender: Any?) {
         Task { await environment.signOut() }
     }
-    @objc private func toggleKeepOnTop() { environment.presentation.keepOnTop.toggle() }
+    @objc private func toggleKeepOnTop(_ sender: Any?) { environment.presentation.keepOnTop.toggle() }
 
-    @objc private func quitTapped() {
+    @objc private func quit(_ sender: Any?) {
         // `bopify_engine_destroy` (inside `shutdown()`) joins the Rust
         // runtime and then librespot's audio thread, with no timeout, so
         // this await can hang. Do the teardown here, not in
