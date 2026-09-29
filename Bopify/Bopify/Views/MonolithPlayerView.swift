@@ -50,11 +50,13 @@ struct MonolithPlayerView: View {
     var body: some View {
         let layout = windowController.layout
         ZStack(alignment: .topLeading) {
-            PlayerSurface { PlayerBackgroundDragRegion() }
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            PlayerSurface(cornerRadius: layout.sleeveCornerRadius) { PlayerBackgroundDragRegion() }
+                .clipShape(RoundedRectangle(cornerRadius: layout.sleeveCornerRadius, style: .continuous))
                 .frame(width: layout.sleeveFrame.width, height: layout.sleeveFrame.height)
                 .offset(x: layout.sleeveFrame.minX, y: layout.sleeveFrame.minY)
                 .opacity(isEngaged ? 1 : 0)
+                // Appears instantly hidden behind the record; on collapse it fades only once mostly folded back into it.
+                .animation(isEngaged || reduceMotion ? nil : .easeIn(duration: 0.12).delay(0.3), value: isEngaged)
                 .allowsHitTesting(isEngaged)
             ScrollView(layout.controlsFrame.width < 144 ? [.horizontal, .vertical] : .vertical) {
                 controls.frame(minWidth: 144)
@@ -62,7 +64,6 @@ struct MonolithPlayerView: View {
             .scrollIndicators(.hidden)
             .frame(width: layout.controlsFrame.width, height: layout.controlsFrame.height)
             .offset(x: layout.controlsFrame.minX, y: layout.controlsFrame.minY)
-            .opacity(isEngaged ? 1 : 0)
             .allowsHitTesting(isEngaged)
             .disabled(!isEngaged)
             .accessibilityHidden(!isEngaged)
@@ -115,7 +116,8 @@ struct MonolithPlayerView: View {
         VinylRecordView(image: image, occurrenceID: occurrenceID, direction: direction, diameter: diameter,
                         isPlaying: player.state.phase == .playing && player.state.isActiveDevice,
                         isVisible: presentation.isVisible, rotation: rotation,
-                        rotationOverride: pressedAngle.map { $0 + (scrub?.angleDelta ?? 0) }, isScrubbing: pressedAngle != nil)
+                        rotationOverride: pressedAngle.map { $0 + (scrub?.angleDelta ?? 0) }, isScrubbing: pressedAngle != nil,
+                        isEngaged: isEngaged)
             .overlay {
                 RecordPointerRegion(onPress: { point, geometryID in
                     guard presentation.isVisible else { return }
@@ -185,8 +187,10 @@ struct MonolithPlayerView: View {
                         .disabled(track?.uri != player.state.currentTrack?.uri)
                 }
             }
+            .modifier(UnfurlRow(index: 0, isEngaged: isEngaged, reduceMotion: reduceMotion))
             TransportControls(player: player)
                 .frame(maxWidth: .infinity)
+                .modifier(UnfurlRow(index: 1, isEngaged: isEngaged, reduceMotion: reduceMotion))
             TimelineView(PlaybackClockSchedule(isRunning: player.isPositionAdvancing && presentation.isVisible, reduceMotion: true)) { context in
                 HStack {
                     Text(playbackTime(isScrubbing ? (scrub?.positionMs ?? 0) : player.displayPositionMs(at: context.date)))
@@ -194,6 +198,7 @@ struct MonolithPlayerView: View {
                     Text(playbackTime(player.displayDurationMs))
                 }.font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
             }
+            .modifier(UnfurlRow(index: 2, isEngaged: isEngaged, reduceMotion: reduceMotion))
             HStack(spacing: 4) {
                 Button { player.setShuffle(!player.state.shuffleEnabled) } label: {
                     Image(systemName: "shuffle").frame(width: 28, height: 28)
@@ -216,7 +221,9 @@ struct MonolithPlayerView: View {
                 }.accessibilityLabel(Text("queue.title"))
                     .disabled(player.state.mirror != nil && presentation.mode != .queue)
             }
+            .modifier(UnfurlRow(index: 3, isEngaged: isEngaged, reduceMotion: reduceMotion))
             status.font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                .modifier(UnfurlRow(index: 4, isEngaged: isEngaged, reduceMotion: reduceMotion))
         }
         .buttonStyle(.playerControl)
         .onDisappear { presentation.sendAttention(.interaction(.volume, false)) }
@@ -252,6 +259,22 @@ struct MonolithPlayerView: View {
         guard let target = entry.target else { return }
         pendingSelection = .pending(entryID: entry.id, target: target)
         player.selectQueueEntry(target)
+    }
+}
+
+/// Cascades a control row in after the sleeve starts unfurling; all rows leave together so a quick flick never strands one.
+private struct UnfurlRow: ViewModifier {
+    let index: Int
+    let isEngaged: Bool
+    let reduceMotion: Bool
+    func body(content: Content) -> some View {
+        let settled = isEngaged || reduceMotion
+        content
+            .opacity(isEngaged ? 1 : 0)
+            .blur(radius: settled ? 0 : 6)
+            .offset(x: settled ? 0 : -14)
+            .animation(reduceMotion ? nil : isEngaged ? .spring(duration: 0.4, bounce: 0.1).delay(0.12 + Double(index) * 0.04)
+                                                      : .easeOut(duration: 0.12), value: isEngaged)
     }
 }
 

@@ -3,6 +3,7 @@ import BopifyPlayback
 
 struct PlayerSurface<Content: View>: View {
     var mode: PlayerMode = .expanded
+    var cornerRadius: CGFloat = 28
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
     @ViewBuilder let content: () -> Content
@@ -12,7 +13,7 @@ struct PlayerSurface<Content: View>: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background {
                 if mode != .compact {
-                    let shape = RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     if reduceTransparency || contrast == .increased {
                         shape.fill(Color(nsColor: .windowBackgroundColor))
                             .overlay(shape.strokeBorder(.primary.opacity(0.4), lineWidth: 1))
