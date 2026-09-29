@@ -1,22 +1,22 @@
 import SwiftUI
 import BopifyDomain
 
-enum SignedOutPresentation {
+enum SignInStatus {
     case idle
     case authenticating
     case error(PlayerError)
 }
 
-struct SignedOutView: View {
-    let presentation: SignedOutPresentation
-    let signIn: () -> Void
+struct SignInView: View {
+    let status: SignInStatus
+    let onSignIn: () -> Void
 
     var body: some View {
         VStack(spacing: 18) {
             ArtworkView(image: nil, diameter: 156)
             VStack(spacing: 6) {
                 Group {
-                    if case .error = presentation {
+                    if case .error = status {
                         Text("signIn.error")
                     } else {
                         Text("signIn.title")
@@ -29,7 +29,7 @@ struct SignedOutView: View {
                     .multilineTextAlignment(.center)
             }
 
-            switch presentation {
+            switch status {
             case .idle:
                 signInButton
                 Text("signIn.premium")
@@ -54,13 +54,13 @@ struct SignedOutView: View {
     }
 
     private var signInButton: some View {
-        Button(action: signIn) {
+        Button(action: onSignIn) {
             Text("signIn.button")
                 .font(.system(size: 13, weight: .semibold))
                 .padding(.horizontal, 24)
                 .frame(height: 44)
         }
         .buttonStyle(.plain)
-        .modifier(PlayerGlass())
+        .playerGlass()
     }
 }

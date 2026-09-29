@@ -7,17 +7,17 @@ struct RadialProgressView: View {
     let positionMs: Int64
     let durationMs: Int64
     let canSeek: Bool
-    let seek: (Int64) -> Void
-    var interactionChanged: (Bool) -> Void = { _ in }
+    let onSeek: (Int64) -> Void
+    var onInteractionChanged: (Bool) -> Void = { _ in }
     var isVisible = true
     var showsTime = true
-    var pointerEnabled = true
+    var isPointerEnabled = true
     @State private var scrub: RadialScrub?
     @State private var lastScrubProgress = 0.0
     @State private var holdTask: Task<Void, Never>?
     @State private var pressOrigin: CGPoint?
-    @State private var rejectedGesture = false
-    @GestureState private var gestureActive = false
+    @State private var isGestureRejected = false
+    @GestureState private var isGestureActive = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
 
@@ -62,9 +62,9 @@ struct RadialProgressView: View {
             }
             .contentShape(RingHitShape(), eoFill: true)
             .gesture(DragGesture(minimumDistance: 0)
-                .updating($gestureActive) { _, state, _ in state = true }
+                .updating($isGestureActive) { _, state, _ in state = true }
                 .onChanged { value in
-                    guard canSeek, isVisible, durationMs > 0, !rejectedGesture else { return }
+                    guard canSeek, isVisible, durationMs > 0, !isGestureRejected else { return }
                     let x = value.location.x - radius, y = value.location.y - radius
                     guard let fraction = radialProgress(x: x, y: y) else { return }
                     if scrub != nil {
@@ -72,12 +72,12 @@ struct RadialProgressView: View {
                     } else if let origin = pressOrigin {
                         if hypot(value.location.x - origin.x, value.location.y - origin.y) > 10 {
                             cancelScrub()
-                            rejectedGesture = true
+                            isGestureRejected = true
                         }
                     } else {
-                        guard abs(hypot(x, y) - radius) <= 18 else { rejectedGesture = true; return }
+                        guard abs(hypot(x, y) - radius) <= 18 else { isGestureRejected = true; return }
                         pressOrigin = value.location
-                        interactionChanged(true)
+                        onInteractionChanged(true)
                         holdTask = Task { @MainActor in
                             try? await Task.sleep(for: .milliseconds(250))
                             guard !Task.isCancelled else { return }
@@ -88,12 +88,12 @@ struct RadialProgressView: View {
                 }
                 .onEnded { _ in
                     if canSeek, isVisible, let scrub, let target = seekPosition(progress: scrub.progress, durationMs: durationMs) {
-                        seek(target)
+                        onSeek(target)
                         BopifyLog.playback.debug("radial scrub committed")
                     }
                     cancelScrub()
-                    rejectedGesture = false
-                }, including: pointerEnabled ? .all : .none)
+                    isGestureRejected = false
+                }, including: isPointerEnabled ? .all : .none)
             .overlay(alignment: .bottom) {
                 if showsTime { Text("−" + playbackTime(max(0, durationMs - displayedPosition)))
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -109,21 +109,21 @@ struct RadialProgressView: View {
         .accessibilityAdjustableAction { direction in
             guard canSeek, durationMs > 0 else { return }
             let delta: Int64 = direction == .increment ? 5_000 : -5_000
-            seek(min(max(0, positionMs + delta), durationMs))
+            onSeek(min(max(0, positionMs + delta), durationMs))
         }
         .onChange(of: canSeek) { _, enabled in
-            if !enabled { cancelScrub(); rejectedGesture = gestureActive }
+            if !enabled { cancelScrub(); isGestureRejected = isGestureActive }
         }
-        .onChange(of: durationMs) { _, _ in cancelScrub(); rejectedGesture = gestureActive }
-        .onChange(of: gestureActive) { _, active in
-            if !active { cancelScrub(); rejectedGesture = false }
+        .onChange(of: durationMs) { _, _ in cancelScrub(); isGestureRejected = isGestureActive }
+        .onChange(of: isGestureActive) { _, active in
+            if !active { cancelScrub(); isGestureRejected = false }
         }
-        .onChange(of: isVisible) { _, visible in if !visible { cancelScrub(); rejectedGesture = gestureActive } }
+        .onChange(of: isVisible) { _, visible in if !visible { cancelScrub(); isGestureRejected = isGestureActive } }
         .onDisappear { cancelScrub() }
     }
 
     private func cancelScrub() {
-        if pressOrigin != nil || scrub != nil { interactionChanged(false) }
+        if pressOrigin != nil || scrub != nil { onInteractionChanged(false) }
         holdTask?.cancel()
         holdTask = nil
         pressOrigin = nil
@@ -137,19 +137,5 @@ private nonisolated struct RingHitShape: Shape {
         var path = Path(ellipseIn: rect.insetBy(dx: -14, dy: -14))
         path.addEllipse(in: rect.insetBy(dx: 14, dy: 14))
         return path
-    }
-}
-
-func playbackTime(_ milliseconds: Int64) -> String {
-    let seconds = max(0, milliseconds / 1000)
-    return String(format: "%lld:%02lld", seconds / 60, seconds % 60)
-}
-
-nonisolated struct PlaybackClockSchedule: TimelineSchedule {
-    var running: Bool
-    var reducedMotion: Bool
-    func entries(from startDate: Date, mode: TimelineScheduleMode) -> AnySequence<Date> {
-        guard running else { return AnySequence([startDate]) }
-        return AnySequence(PeriodicTimelineSchedule(from: startDate, by: reducedMotion ? 1 : 1.0 / 30).entries(from: startDate, mode: mode))
     }
 }

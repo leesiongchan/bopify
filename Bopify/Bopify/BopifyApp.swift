@@ -1,25 +1,18 @@
-//
-//  BopifyApp.swift
-//  Bopify
-//
-//  Created by Harvey on 22/09/2026.
-//
-
 import SwiftUI
 
 @main
 struct BopifyApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     var body: some Scene { Settings { EmptyView() } }
 }
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var environment = AppEnvironment()
-    private var statusItem: StatusItemController?
+    private var statusItemController: StatusItemController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        statusItem = StatusItemController(content: MiniPlayerView(environment: environment), environment: environment)
+        statusItemController = StatusItemController(content: PlayerRootView(environment: environment), environment: environment)
         Task { await environment.restoreOrPromptSignIn() }
     }
 }

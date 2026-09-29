@@ -12,12 +12,12 @@ final class MonolithWindowController {
     private(set) var transitionID: UInt64 = 0
     private(set) var isTransitioning = false
     private(set) var isDragging = false
-    @ObservationIgnored var cancelInteraction: (() -> Bool)?
+    @ObservationIgnored var onCancelInteraction: (() -> Bool)?
     @ObservationIgnored private weak var panel: StatusPanel?
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var anchor: CGPoint?
-    @ObservationIgnored private var pendingMode: (PlayerMode, Bool)?
-    @ObservationIgnored private var lastRequest: (PlayerMode, Bool) = (.compact, false)
+    @ObservationIgnored private var pendingMode: (mode: PlayerMode, reduceMotion: Bool)?
+    @ObservationIgnored private var lastRequest: (mode: PlayerMode, reduceMotion: Bool) = (.compact, false)
     @ObservationIgnored private var targetFrame: CGRect = .zero
 
     init(defaults: UserDefaults) { self.defaults = defaults }
@@ -26,7 +26,7 @@ final class MonolithWindowController {
         self.panel = panel
         // Native shadow traces the record's translucent halo as a second hard outline.
         panel.hasShadow = false
-        panel.onCancelInteraction = { [weak self] in self?.cancelInteraction?() ?? false }
+        panel.onCancelInteraction = { [weak self] in self?.onCancelInteraction?() ?? false }
         anchor = Self.restoredAnchor(defaults: defaults)
         panel.minSize = CGSize(width: 1, height: 1)
         panel.maxSize = CGSize(width: 10000, height: 10000)

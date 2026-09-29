@@ -27,7 +27,7 @@ struct PlayerSurface<Content: View>: View {
     }
 }
 
-struct PlayerGlass: ViewModifier {
+private struct PlayerGlass: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
 
@@ -44,4 +44,8 @@ struct PlayerGlass: ViewModifier {
                 .overlay(Capsule().strokeBorder(.primary.opacity(0.12), lineWidth: 1).allowsHitTesting(false))
         }
     }
+}
+
+extension View {
+    func playerGlass() -> some View { modifier(PlayerGlass()) }
 }

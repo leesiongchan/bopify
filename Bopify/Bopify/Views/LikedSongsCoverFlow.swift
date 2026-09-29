@@ -1,3 +1,4 @@
+import Carbon.HIToolbox
 import SwiftUI
 import BopifyDomain
 import BopifyLibrary
@@ -5,16 +6,16 @@ import BopifyPlayback
 
 struct LikedSongsCoverFlow: View {
     let model: LikedSongsModel
-    let store: ArtworkStore
-    let play: (Track) -> Void
-    @Environment(\.favoriteEnvironment) private var environment
+    let artworkStore: ArtworkStore
+    let onPlay: (Track) -> Void
+    @Environment(AppEnvironment.self) private var environment: AppEnvironment?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var dragOffset = 0.0
     @State private var dragStart: Int?
     @State private var wheelOffset = 0.0
     private let spacing = 44.0
-    private var selected: Int { model.tracks.firstIndex { $0.uri == model.selectedURI } ?? 0 }
-    private var selectedTrack: Track? { model.tracks.indices.contains(selected) ? model.tracks[selected] : nil }
+    private var selectedIndex: Int { model.tracks.firstIndex { $0.uri == model.selectedURI } ?? 0 }
+    private var selectedTrack: Track? { model.tracks.indices.contains(selectedIndex) ? model.tracks[selectedIndex] : nil }
 
     var body: some View {
         GeometryReader { available in
@@ -34,11 +35,11 @@ struct LikedSongsCoverFlow: View {
                 GeometryReader { geometry in
                     let radius = geometry.size.width < 300 ? 1 : 2
                     ZStack {
-                        ForEach(visibleIndices(radius).map { model.tracks[$0] }, id: \.uri) { track in
-                            let distance = (model.tracks.firstIndex { $0.uri == track.uri } ?? selected) - selected
+                        ForEach(visibleIndices(radius: radius).map { model.tracks[$0] }, id: \.uri) { track in
+                            let distance = (model.tracks.firstIndex { $0.uri == track.uri } ?? selectedIndex) - selectedIndex
                             Button {
                                 if let index = model.tracks.firstIndex(where: { $0.uri == track.uri }) { activate(index) }
-                            } label: { cover(track) }
+                            } label: { cover(for: track) }
                                 .buttonStyle(.plain)
                                 .frame(width: 76, height: 76)
                                 .scaleEffect(distance == 0 ? 1 : 0.8)
@@ -47,35 +48,35 @@ struct LikedSongsCoverFlow: View {
                                 .opacity(abs(distance) == 2 ? 0.55 : 1)
                                 .offset(x: Double(distance) * spacing + dragOffset)
                                 .zIndex(Double(3 - abs(distance)))
-                                .accessibilityLabel(Text(label(track)))
+                                .accessibilityLabel(Text(label(for: track)))
                                 .accessibilityValue(Text(distance == 0 ? "library.selected" : ""))
-                                .accessibilityAction(named: Text("library.play")) { play(track) }
-                                .help(label(track))
+                                .accessibilityAction(named: Text("library.play")) { onPlay(track) }
+                                .help(label(for: track))
                                 .task(id: track.artwork?.url) {
-                                    if let url = track.artwork?.url { await store.load(url) }
+                                    if let url = track.artwork?.url { await artworkStore.load(url) }
                                 }
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay {
-                        CoverFlowInput(click: { x, width in
-                            if let relative = coverFlowRelativeIndex(x: x - width / 2, radius: radius) { activate(selected + relative) }
-                        }, drag: { translation in
+                        CoverFlowInput(onClick: { x, width in
+                            if let relative = coverFlowRelativeIndex(x: x - width / 2, radius: radius) { activate(selectedIndex + relative) }
+                        }, onDrag: { translation in
                             guard !model.tracks.isEmpty else { return }
-                            if dragStart == nil { dragStart = selected }
-                            let start = dragStart ?? selected
+                            if dragStart == nil { dragStart = selectedIndex }
+                            let start = dragStart ?? selectedIndex
                             let index = min(model.tracks.count - 1, max(0, start - Int((translation / spacing).rounded())))
                             model.select(model.tracks[index].uri)
                             dragOffset = min(spacing, max(-spacing, translation + Double(index - start) * spacing))
-                        }, end: {
+                        }, onDragEnd: {
                             withAnimation(.easeOut(duration: reduceMotion ? 0.12 : 0.28)) { dragOffset = 0; dragStart = nil }
-                        }, wheel: { delta in
+                        }, onScroll: { delta in
                             wheelOffset += delta
                             if abs(wheelOffset) >= 24 {
-                                navigate(wheelOffset < 0 ? 1 : -1)
+                                navigate(by: wheelOffset < 0 ? 1 : -1)
                                 wheelOffset = 0
                             }
-                        }, navigate: navigate, play: { if let selectedTrack { play(selectedTrack) } })
+                        }, onNavigate: { navigate(by: $0) }, onPlay: { if let selectedTrack { onPlay(selectedTrack) } })
                         .frame(width: min(geometry.size.width, Double(radius * 2) * spacing + 76))
                         .accessibilityHidden(true)
                     }
@@ -87,7 +88,7 @@ struct LikedSongsCoverFlow: View {
                         Text(selectedTrack.title).font(.system(size: 11, weight: .medium)).lineLimit(1)
                         Text(selectedTrack.artists.map(\.name).joined(separator: ", "))
                             .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
-                    }.help(label(selectedTrack)).background(PlayerBackgroundDragRegion())
+                    }.help(label(for: selectedTrack)).background(PlayerBackgroundDragRegion())
                 }
             }
         }
@@ -102,26 +103,26 @@ struct LikedSongsCoverFlow: View {
         }
     }
 
-    func visibleIndices(_ radius: Int) -> [Int] {
+    func visibleIndices(radius: Int) -> [Int] {
         guard !model.tracks.isEmpty else { return [] }
-        return Array(max(0, selected - radius)...min(model.tracks.count - 1, selected + radius))
+        return Array(max(0, selectedIndex - radius)...min(model.tracks.count - 1, selectedIndex + radius))
     }
-    private func label(_ track: Track) -> String {
+    private func label(for track: Track) -> String {
         ([track.title] + track.artists.map(\.name)).joined(separator: " · ")
     }
     private func activate(_ index: Int) {
         guard model.tracks.indices.contains(index) else { return }
-        if index == selected { play(model.tracks[index]) }
-        else { navigate(index - selected) }
+        if index == selectedIndex { onPlay(model.tracks[index]) }
+        else { navigate(by: index - selectedIndex) }
     }
-    private func navigate(_ delta: Int) {
+    private func navigate(by delta: Int) {
         guard !model.tracks.isEmpty else { return }
-        let index = min(model.tracks.count - 1, max(0, selected + delta))
+        let index = min(model.tracks.count - 1, max(0, selectedIndex + delta))
         withAnimation(.easeOut(duration: reduceMotion ? 0.12 : 0.28)) { model.select(model.tracks[index].uri) }
     }
-    private func cover(_ track: Track) -> some View {
+    private func cover(for track: Track) -> some View {
         let face = Group {
-            if let url = track.artwork?.url, let image = store.images[url] {
+            if let url = track.artwork?.url, let image = artworkStore.images[url] {
                 Image(nsImage: image).resizable().scaledToFill()
             } else {
                 ZStack {
@@ -156,13 +157,13 @@ struct LikedSongsCoverFlow: View {
                 let remaining = model.retryAfter.map { max(0, Int(ceil($0.timeIntervalSince(context.date)))) } ?? 0
                 VStack(spacing: 8) {
                     if case .some(.quotaExceeded) = model.error {
-                        Text("Spotify's library quota has been reached. Try again later.")
+                        Text("library.quotaExceeded")
                             .font(.caption).foregroundStyle(.secondary)
                     } else {
                         Text(model.retryAfter == nil ? "library.unavailable" : "library.rateLimited")
                             .font(.caption).foregroundStyle(.secondary)
                     }
-                    if remaining > 0 { Text("Retry in \(remaining) seconds.").font(.caption).foregroundStyle(.secondary) }
+                    if remaining > 0 { Text("library.retryIn \(remaining)").font(.caption).foregroundStyle(.secondary) }
                     retryButton(at: context.date)
                 }
             }
@@ -183,48 +184,48 @@ struct LikedSongsCoverFlow: View {
 }
 
 struct CoverFlowInput: NSViewRepresentable {
-    var click: (Double, Double) -> Void
-    var drag: (Double) -> Void
-    var end: () -> Void
-    var wheel: (Double) -> Void
-    var navigate: (Int) -> Void
-    var play: () -> Void
+    var onClick: (_ x: Double, _ width: Double) -> Void
+    var onDrag: (Double) -> Void
+    var onDragEnd: () -> Void
+    var onScroll: (Double) -> Void
+    var onNavigate: (Int) -> Void
+    var onPlay: () -> Void
     func makeNSView(context: Context) -> InputView { InputView() }
-    func updateNSView(_ view: InputView, context: Context) { view.actions = self }
+    func updateNSView(_ view: InputView, context: Context) { view.input = self }
     final class InputView: NSControl, PlayerShortcutForwarding {
-        var actions: CoverFlowInput?
+        var input: CoverFlowInput?
         private var origin: CGPoint?
-        private var dragged = false
+        private var didDrag = false
         override var acceptsFirstResponder: Bool { true }
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
         override func mouseDown(with event: NSEvent) {
             window?.makeKey()
             window?.makeFirstResponder(self)
             origin = convert(event.locationInWindow, from: nil)
-            dragged = false
+            didDrag = false
         }
         override func mouseDragged(with event: NSEvent) {
             guard let origin else { return }
             let point = convert(event.locationInWindow, from: nil)
-            guard dragged || hypot(point.x - origin.x, point.y - origin.y) > 4 else { return }
-            dragged = true
-            actions?.drag(point.x - origin.x)
+            guard didDrag || hypot(point.x - origin.x, point.y - origin.y) > 4 else { return }
+            didDrag = true
+            input?.onDrag(point.x - origin.x)
         }
         override func mouseUp(with event: NSEvent) {
-            if dragged { actions?.end() }
-            else if origin != nil { actions?.click(convert(event.locationInWindow, from: nil).x, bounds.width) }
-            origin = nil; dragged = false
+            if didDrag { input?.onDragEnd() }
+            else if origin != nil { input?.onClick(convert(event.locationInWindow, from: nil).x, bounds.width) }
+            origin = nil; didDrag = false
         }
         override func scrollWheel(with event: NSEvent) {
             guard abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) else { super.scrollWheel(with: event); return }
-            actions?.wheel(event.scrollingDeltaX)
+            input?.onScroll(event.scrollingDeltaX)
         }
         override func keyDown(with event: NSEvent) {
             guard event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty else { window?.keyDown(with: event); return }
-            switch event.keyCode {
-            case 123: actions?.navigate(-1)
-            case 124: actions?.navigate(1)
-            case 36, 76: if !event.isARepeat { actions?.play() }
+            switch Int(event.keyCode) {
+            case kVK_LeftArrow: input?.onNavigate(-1)
+            case kVK_RightArrow: input?.onNavigate(1)
+            case kVK_Return, kVK_ANSI_KeypadEnter: if !event.isARepeat { input?.onPlay() }
             default: window?.keyDown(with: event)
             }
         }

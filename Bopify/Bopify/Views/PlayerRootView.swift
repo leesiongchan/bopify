@@ -3,14 +3,14 @@ import BopifyLibrary
 import BopifyDomain
 import BopifyPlayback
 
-struct MiniPlayerView: View {
+struct PlayerRootView: View {
     let environment: AppEnvironment
 
     var body: some View {
         Group {
             if environment.isListening, let player = environment.player {
-                MonolithPlayerView(player: player, store: environment.artworkStore,
-                                   presentation: environment.presentation, window: environment.monolithWindow)
+                MonolithPlayerView(player: player, artworkStore: environment.artworkStore,
+                                   presentation: environment.presentation, windowController: environment.monolithWindowController)
                     .id(ObjectIdentifier(player))
             } else {
                 PlayerSurface {
@@ -18,16 +18,16 @@ struct MiniPlayerView: View {
                         header
                         switch environment.authState {
                         case .signedOut, .needsReauthentication:
-                            SignedOutView(presentation: .idle, signIn: requestSignIn)
+                            SignInView(status: .idle, onSignIn: requestSignIn)
                         case .authenticating, .refreshing:
-                            SignedOutView(presentation: .authenticating, signIn: requestSignIn)
+                            SignInView(status: .authenticating, onSignIn: requestSignIn)
                         case let .error(error):
-                            SignedOutView(presentation: .error(error), signIn: requestSignIn)
+                            SignInView(status: .error(error), onSignIn: requestSignIn)
                         case .signedIn:
                             if let player = environment.player {
                                 StartupPlayerContent(player: player)
                             } else {
-                                SignedOutView(presentation: .authenticating, signIn: requestSignIn)
+                                SignInView(status: .authenticating, onSignIn: requestSignIn)
                             }
                         }
                     }
@@ -36,7 +36,7 @@ struct MiniPlayerView: View {
                 }
             }
         }
-        .environment(\.favoriteEnvironment, environment)
+        .environment(environment)
         .onChange(of: environment.presentation.isVisible) { _, visible in
             if !visible { environment.player?.cancelVolumeEditing() }
         }
@@ -82,7 +82,7 @@ private struct StartupPlayerContent: View {
     var body: some View {
         let content = PlayerContent(player.state)
         if content != .player {
-            StartupContent(content: content, load: player.load).frame(maxHeight: .infinity)
+            StartupContent(content: content, onPlayRequest: player.load).frame(maxHeight: .infinity)
         } else {
             VStack(spacing: 12) {
                 if case let .error(error) = player.state.phase {
@@ -99,7 +99,7 @@ private struct StartupPlayerContent: View {
 }
 
 private struct ContextURILoadView: View {
-    let load: (PlayRequest) -> Void
+    let onPlayRequest: (PlayRequest) -> Void
     @State private var contextURIText = ""
 
     var body: some View {
@@ -124,18 +124,18 @@ private struct ContextURILoadView: View {
 
     private func submit() {
         guard let uri = SpotifyURI(contextURIText) else { return }
-        load(PlayRequest(contextURI: uri))
+        onPlayRequest(PlayRequest(contextURI: uri))
     }
 }
 
 private struct StartupContent: View {
     let content: PlayerContent
-    let load: (PlayRequest) -> Void
+    let onPlayRequest: (PlayRequest) -> Void
 
     var body: some View {
         switch content {
         case .chooseContext:
-            ContextURILoadView(load: load)
+            ContextURILoadView(onPlayRequest: onPlayRequest)
         case let .remote(deviceName):
             placeholder { Text("player.remote.title \(deviceName)") }
         // Errors without metadata are rendered by StartupPlayerContent.
@@ -155,7 +155,7 @@ private struct StartupContent: View {
 }
 
 #Preview("Signed out") {
-    MiniPlayerView(environment: AppEnvironment()).frame(width: 410, height: 560)
+    PlayerRootView(environment: AppEnvironment()).frame(width: 410, height: 560)
 }
 
 private struct ScrollablePlayerContent: ViewModifier {
@@ -176,5 +176,5 @@ private struct ScrollablePlayerContent: ViewModifier {
 }
 
 #Preview("Small display · sign in") {
-    MiniPlayerView(environment: AppEnvironment()).frame(width: 320, height: 480)
+    PlayerRootView(environment: AppEnvironment()).frame(width: 320, height: 480)
 }
