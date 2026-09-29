@@ -6,6 +6,7 @@ public struct MonolithLayout: Equatable, Sendable {
     public let recordCenter: CGPoint
     public let recordDiameter: CGFloat
     public let sleeveFrame: CGRect
+    public let sleeveCornerRadius: CGFloat
     public let controlsFrame: CGRect
     public let lowerFrame: CGRect
 }
@@ -15,8 +16,12 @@ public func monolithLayout(mode: PlayerMode, availableSize: CGSize) -> MonolithL
     let height = availableSize.height.isFinite ? max(1, availableSize.height) : 360
     if mode == .compact {
         let size = CGSize(width: min(142, width), height: min(142, height))
-        return MonolithLayout(contentSize: size, recordCenter: CGPoint(x: size.width / 2, y: size.height / 2),
-                              recordDiameter: 118, sleeveFrame: .zero, controlsFrame: .zero, lowerFrame: .zero)
+        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+        // The sleeve rests as a disc behind the record so opening unfurls it from the record, not the window corner.
+        let disc = CGRect(x: center.x - 59, y: center.y - 59, width: 118, height: 118)
+        let point = CGRect(origin: center, size: .zero)
+        return MonolithLayout(contentSize: size, recordCenter: center, recordDiameter: 118, sleeveFrame: disc,
+                              sleeveCornerRadius: 59, controlsFrame: point, lowerFrame: point)
     }
     let narrow = width < 484
     let center = CGPoint(x: narrow ? 77 : 116, y: min(132, height / 2))
@@ -26,7 +31,7 @@ public func monolithLayout(mode: PlayerMode, availableSize: CGSize) -> MonolithL
     let sleeve = CGRect(x: center.x, y: 12, width: max(1, width - center.x - 12), height: max(1, totalHeight - 24))
     let lower = CGRect(x: center.x + 12, y: controls.maxY + 8, width: max(1, width - center.x - 36), height: max(0, totalHeight - controls.maxY - 20))
     return MonolithLayout(contentSize: CGSize(width: width, height: totalHeight), recordCenter: center,
-                          recordDiameter: narrow ? 118 : 182, sleeveFrame: sleeve,
+                          recordDiameter: narrow ? 118 : 182, sleeveFrame: sleeve, sleeveCornerRadius: 28,
                           controlsFrame: controls, lowerFrame: lower)
 }
 

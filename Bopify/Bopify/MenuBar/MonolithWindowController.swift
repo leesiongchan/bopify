@@ -91,7 +91,7 @@ final class MonolithWindowController {
             isTransitioning = true
         }
         let duration = mode == .expanded && layout.recordDiameter == 118 ? 0.65 : 0.50
-        withAnimation(.spring(duration: duration, bounce: 0.08), completionCriteria: .removed) {
+        withAnimation(.spring(duration: duration, bounce: 0.18), completionCriteria: .removed) {
             layout = next
             contentOffset = CGPoint(x: target.minX - envelope.minX, y: envelope.maxY - target.maxY)
         } completion: { [weak self] in
@@ -138,7 +138,8 @@ final class MonolithWindowController {
     private func contains(_ point: CGPoint) -> Bool {
         let local = CGPoint(x: point.x - contentOffset.x, y: point.y - contentOffset.y)
         if hypot(local.x - layout.recordCenter.x, local.y - layout.recordCenter.y) <= layout.recordDiameter / 2 { return true }
-        return !layout.sleeveFrame.isEmpty && CGPath(roundedRect: layout.sleeveFrame, cornerWidth: 28, cornerHeight: 28, transform: nil).contains(local)
+        let radius = min(layout.sleeveCornerRadius, layout.sleeveFrame.width / 2, layout.sleeveFrame.height / 2)
+        return !layout.sleeveFrame.isEmpty && CGPath(roundedRect: layout.sleeveFrame, cornerWidth: radius, cornerHeight: radius, transform: nil).contains(local)
     }
 
     private func withoutAnimation(_ body: () -> Void) {

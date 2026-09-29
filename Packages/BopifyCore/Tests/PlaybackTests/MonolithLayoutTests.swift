@@ -31,6 +31,17 @@ struct MonolithLayoutTests {
         #expect(focus.controlsFrame == queue.controlsFrame)
     }
 
+    @Test func restingSleeveIsADiscBehindTheRecord() {
+        let rest = monolithLayout(mode: .compact, availableSize: available)
+        let radius = rest.recordDiameter / 2
+        #expect(rest.sleeveFrame == CGRect(x: rest.recordCenter.x - radius, y: rest.recordCenter.y - radius,
+                                           width: rest.recordDiameter, height: rest.recordDiameter))
+        #expect(rest.sleeveCornerRadius == radius)
+        #expect(rest.controlsFrame == CGRect(origin: rest.recordCenter, size: .zero))
+        #expect(rest.lowerFrame == CGRect(origin: rest.recordCenter, size: .zero))
+        #expect(monolithLayout(mode: .expanded, availableSize: available).sleeveCornerRadius == 28)
+    }
+
     @Test(arguments: [PlayerMode.compact, .expanded, .queue])
     func appKitAnchorUsesInvertedLocalY(_ mode: PlayerMode) {
         let layout = monolithLayout(mode: mode, availableSize: available)

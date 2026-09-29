@@ -11,11 +11,13 @@ struct VinylRecordView: View {
     let rotation: RecordRotation
     var rotationOverride: Double? = nil
     var isScrubbing = false
+    var isEngaged = false
     var reduceMotionOverride = false
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
     @State private var tilt = 0.0
     @State private var depth = 1.0
+    @State private var kick = 0.0
     private var reduceMotion: Bool { systemReduceMotion || reduceMotionOverride }
 
     var body: some View {
@@ -32,6 +34,8 @@ struct VinylRecordView: View {
                         .overlay(Circle().stroke(.black.opacity(0.4), lineWidth: 1))
                 }
                 .rotationEffect(.radians(rotationOverride ?? rotation.angle(at: ProcessInfo.processInfo.systemUptime)))
+                // A separate layer so the animated kick never fights the clock-driven spin or scrubbing.
+                .rotationEffect(.degrees(kick))
                 Circle().fill(AngularGradient(stops: [
                     .init(color: .black.opacity(0.3), location: 0),
                     .init(color: .white.opacity(0.16), location: 0.16),
@@ -61,6 +65,11 @@ struct VinylRecordView: View {
                 tilt = 0
                 depth = 1
             }
+        }
+        .onChange(of: isEngaged) { _, engaged in
+            // Only forward: a record doesn't unwind when the sleeve closes.
+            guard engaged, isVisible, !reduceMotion else { return }
+            withAnimation(.easeOut(duration: 0.9)) { kick += 220 }
         }
         .onChange(of: isVisible) { _, visible in if !visible { tilt = 0; depth = 1 } }
         .onChange(of: reduceMotion) { _, reduced in if reduced { tilt = 0; depth = 1 } }
