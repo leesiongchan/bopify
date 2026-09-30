@@ -59,7 +59,10 @@ struct MonolithPlayerView: View {
                 .animation(isEngaged || reduceMotion ? nil : .easeIn(duration: 0.12).delay(0.3), value: isEngaged)
                 .allowsHitTesting(isEngaged)
             ScrollView(layout.controlsFrame.width < 144 ? [.horizontal, .vertical] : .vertical) {
+                // The scroll view swallows clicks on blank space, so the drag region must live inside it.
                 controls.frame(minWidth: 144)
+                    .frame(minHeight: layout.controlsFrame.height, alignment: .top)
+                    .background(PlayerBackgroundDragRegion())
             }
             .scrollIndicators(.hidden)
             .frame(width: layout.controlsFrame.width, height: layout.controlsFrame.height)
@@ -180,7 +183,6 @@ struct MonolithPlayerView: View {
                         .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                         .help(track?.artists.map(\.name).joined(separator: ", ") ?? "")
                 }.frame(maxWidth: .infinity, alignment: .leading)
-                    .background(PlayerBackgroundDragRegion())
                 // Hidden while mirroring: Bopify still has its own track, and the heart would show that track's saved state.
                 if player.state.mirror == nil {
                     FavoriteButton()
