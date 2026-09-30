@@ -203,8 +203,8 @@ struct MonolithPlayerView: View {
                 Button { player.setShuffle(!player.state.shuffleEnabled) } label: {
                     Image(systemName: "shuffle").frame(width: 28, height: 28)
                         .symbolEffect(.bounce, value: reduceMotion ? false : player.state.shuffleEnabled)
-                        .foregroundStyle(player.state.shuffleEnabled ? .primary : .secondary)
-                }.accessibilityLabel(Text("transport.shuffle"))
+                }.buttonStyle(.playerToggle(isOn: player.state.shuffleEnabled, dimsWhenOff: true))
+                    .accessibilityLabel(Text("transport.shuffle"))
                     .accessibilityValue(Text(player.state.shuffleEnabled ? "control.on" : "control.off"))
                     .disabled(!player.state.isActiveDevice)
                 Button {
@@ -212,15 +212,17 @@ struct MonolithPlayerView: View {
                 } label: {
                     Image(systemName: player.state.repeatMode == .track ? "repeat.1" : "repeat").frame(width: 28, height: 28)
                         .contentTransition(.symbolEffect(.replace))
-                        .foregroundStyle(player.state.repeatMode == .off ? .secondary : .primary)
-                }.accessibilityLabel(Text("transport.repeat"))
+                }.buttonStyle(.playerToggle(isOn: player.state.repeatMode != .off, dimsWhenOff: true))
+                    .accessibilityLabel(Text("transport.repeat"))
                     .accessibilityValue(Text(player.state.repeatMode == .off ? "control.off" : player.state.repeatMode == .track ? "transport.repeat.track" : "transport.repeat.context"))
                     .disabled(!player.state.isActiveDevice)
                 Spacer(minLength: 0)
                 VolumeControl(player: player, presentation: presentation)
                 Button { presentation.requestQueue(presentation.mode != .queue) } label: {
                     Image(systemName: "music.note.list").frame(width: 28, height: 28)
-                }.accessibilityLabel(Text("queue.title"))
+                }.buttonStyle(.playerToggle(isOn: presentation.mode == .queue))
+                    .accessibilityLabel(Text("queue.title"))
+                    .accessibilityValue(Text(presentation.mode == .queue ? "control.on" : "control.off"))
                     .disabled(player.state.mirror != nil && presentation.mode != .queue)
             }
             .modifier(UnfurlRow(index: 3, isEngaged: isEngaged, reduceMotion: reduceMotion))
