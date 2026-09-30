@@ -32,7 +32,7 @@ struct QueueView: View {
             .frame(minHeight: geometry.size.height, alignment: .top)
             .background(PlayerBackgroundDragRegion())
         }
-        .scrollIndicators(.hidden)
+        .scrollIndicators(.visible)
         }
     }
 
