@@ -32,7 +32,15 @@ final class StatusPanel: NSPanel {
         isOpaque = false
         hasShadow = true
         acceptsMouseMovedEvents = true
-        contentView = PlayerHostingView(rootView: content)
+        let host = PlayerHostingView(rootView: content)
+        // The controllers own the panel frame. As the window's direct content view, NSHostingView also animates
+        // the window to its content size from inside the constraints pass, one pass per step, until AppKit aborts.
+        // Nesting it in a plain container keeps SwiftUI from resizing the window at all.
+        host.sizingOptions = []
+        host.autoresizingMask = [.width, .height]
+        let container = NSView(frame: host.frame)
+        container.addSubview(host)
+        contentView = container
     }
 
     override var canBecomeKey: Bool { true }
@@ -80,9 +88,10 @@ private final class PlayerHostingView<Content: View>: NSHostingView<Content> {
         addTrackingArea(area)
         playerTrackingArea = area
     }
-    override func mouseEntered(with event: NSEvent) { updatePointer(event) }
-    override func mouseMoved(with event: NSEvent) { updatePointer(event) }
-    override func mouseExited(with event: NSEvent) { (window as? StatusPanel)?.onPointerChanged?(false) }
+    // Always forward to super: SwiftUI's onHover is driven by these same events.
+    override func mouseEntered(with event: NSEvent) { super.mouseEntered(with: event); updatePointer(event) }
+    override func mouseMoved(with event: NSEvent) { super.mouseMoved(with: event); updatePointer(event) }
+    override func mouseExited(with event: NSEvent) { super.mouseExited(with: event); (window as? StatusPanel)?.onPointerChanged?(false) }
     private func updatePointer(_ event: NSEvent) {
         guard let panel = window as? StatusPanel, let contains = panel.containsPlayerPoint else { return }
         let point = CGPoint(x: event.locationInWindow.x, y: panel.frame.height - event.locationInWindow.y)
