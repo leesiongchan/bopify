@@ -14,6 +14,7 @@ struct VolumeControl: View {
     var body: some View {
         Button { isPopoverPresented.wrappedValue.toggle() } label: {
             Image(systemName: player.displayVolume == 0 ? "speaker.slash" : "speaker.wave.2")
+                .contentTransition(.symbolEffect(.replace))
                 .frame(width: 28, height: 28)
         }
         .accessibilityLabel(Text("transport.volume"))

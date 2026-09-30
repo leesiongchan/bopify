@@ -4,6 +4,9 @@ import BopifyPlayback
 
 struct TransportControls: View {
     let player: PlayerModel
+    @State private var previousTaps = 0
+    @State private var nextTaps = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var state: PlaybackState { player.state }
     private var isPlaying: Bool { state.phase == .playing }
@@ -12,9 +15,13 @@ struct TransportControls: View {
     }
     var body: some View {
         HStack(spacing: 8) {
-            Button(action: player.previous) {
+            Button {
+                if !reduceMotion { previousTaps += 1 }
+                player.previous()
+            } label: {
                 Image(systemName: "backward.fill")
                     .font(.system(size: 18, weight: .semibold))
+                    .symbolEffect(.bounce.down, value: previousTaps)
                     .frame(width: 40, height: 40)
             }
             .disabled(!canControl || !state.canPrevious)
@@ -24,6 +31,7 @@ struct TransportControls: View {
             Button(action: player.togglePlayPause) {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 23, weight: .semibold))
+                    .contentTransition(.symbolEffect(.replace))
                     .offset(x: isPlaying ? 0 : 2)
                     .frame(width: 48, height: 48)
                     .background(.primary.opacity(0.1), in: Circle())
@@ -33,9 +41,13 @@ struct TransportControls: View {
             .accessibilityValue(state.localizedStatusText)
             .help(Text(isPlaying ? "transport.pause" : "transport.play"))
 
-            Button(action: player.next) {
+            Button {
+                if !reduceMotion { nextTaps += 1 }
+                player.next()
+            } label: {
                 Image(systemName: "forward.fill")
                     .font(.system(size: 18, weight: .semibold))
+                    .symbolEffect(.bounce.down, value: nextTaps)
                     .frame(width: 40, height: 40)
             }
             .disabled(!canControl || !state.canNext)

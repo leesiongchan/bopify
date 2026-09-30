@@ -202,6 +202,7 @@ struct MonolithPlayerView: View {
             HStack(spacing: 4) {
                 Button { player.setShuffle(!player.state.shuffleEnabled) } label: {
                     Image(systemName: "shuffle").frame(width: 28, height: 28)
+                        .symbolEffect(.bounce, value: reduceMotion ? false : player.state.shuffleEnabled)
                         .foregroundStyle(player.state.shuffleEnabled ? .primary : .secondary)
                 }.accessibilityLabel(Text("transport.shuffle"))
                     .accessibilityValue(Text(player.state.shuffleEnabled ? "control.on" : "control.off"))
@@ -210,6 +211,7 @@ struct MonolithPlayerView: View {
                     player.setRepeat(player.state.repeatMode == .off ? .context : player.state.repeatMode == .context ? .track : .off)
                 } label: {
                     Image(systemName: player.state.repeatMode == .track ? "repeat.1" : "repeat").frame(width: 28, height: 28)
+                        .contentTransition(.symbolEffect(.replace))
                         .foregroundStyle(player.state.repeatMode == .off ? .secondary : .primary)
                 }.accessibilityLabel(Text("transport.repeat"))
                     .accessibilityValue(Text(player.state.repeatMode == .off ? "control.off" : player.state.repeatMode == .track ? "transport.repeat.track" : "transport.repeat.context"))

@@ -5,17 +5,28 @@ import BopifyPlayback
 
 struct FavoriteButton: View {
     @Environment(AppEnvironment.self) private var environment: AppEnvironment?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var confirmedSaves = 0
 
     var body: some View {
         if let environment, environment.player?.state.currentTrack?.uri.kind == .track {
             let model = environment.favorite
             Button {
                 if model.saved == nil || model.error != nil { environment.presentation.presentPopover(.favorite) }
-                else { Task { await model.toggle() } }
+                else {
+                    Task {
+                        await model.toggle()
+                        if model.saved == true, !reduceMotion { confirmedSaves += 1 }
+                    }
+                }
             } label: {
                 Group {
                     if model.isPending || environment.isEnablingLibrary { ProgressView().controlSize(.mini) }
-                    else { Image(systemName: model.saved == true ? "heart.fill" : model.saved == nil ? "heart.slash" : "heart") }
+                    else {
+                        Image(systemName: model.saved == true ? "heart.fill" : model.saved == nil ? "heart.slash" : "heart")
+                            .contentTransition(.symbolEffect(.replace))
+                            .symbolEffect(.bounce, value: confirmedSaves)
+                    }
                 }
                 .frame(width: 28, height: 28)
             }
