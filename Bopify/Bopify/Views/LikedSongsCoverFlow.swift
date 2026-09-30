@@ -1,5 +1,6 @@
 import Carbon.HIToolbox
 import SwiftUI
+import os
 import BopifyDomain
 import BopifyLibrary
 import BopifyPlayback
@@ -10,10 +11,12 @@ struct LikedSongsCoverFlow: View {
     let onPlay: (Track) -> Void
     @Environment(AppEnvironment.self) private var environment: AppEnvironment?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var dragOffset = 0.0
-    @State private var dragStart: Int?
-    @State private var wheelOffset = 0.0
-    private let spacing = 44.0
+    // Position in covers, driven directly while dragging or scrolling and by the spring after release.
+    @State private var spring = CoverFlowSpring(position: 0, velocity: 0, target: 0)
+    @State private var isAnimating = false
+    @State private var gestureOrigin: Double?
+    @State private var scrollTravel = 0.0
+    @State private var velocity = CoverFlowVelocity()
     private var selectedIndex: Int { model.tracks.firstIndex { $0.uri == model.selectedURI } ?? 0 }
     private var selectedTrack: Track? { model.tracks.indices.contains(selectedIndex) ? model.tracks[selectedIndex] : nil }
 
@@ -35,21 +38,22 @@ struct LikedSongsCoverFlow: View {
                 GeometryReader { geometry in
                     let radius = geometry.size.width < 300 ? 1 : 2
                     ZStack {
-                        ForEach(visibleIndices(radius: radius).map { model.tracks[$0] }, id: \.uri) { track in
-                            let distance = (model.tracks.firstIndex { $0.uri == track.uri } ?? selectedIndex) - selectedIndex
-                            Button {
-                                if let index = model.tracks.firstIndex(where: { $0.uri == track.uri }) { activate(index) }
-                            } label: { cover(for: track) }
+                        ForEach(visibleIndices(radius: radius), id: \.self) { index in
+                            let track = model.tracks[index]
+                            let distance = Double(index) - spring.position
+                            let placement = CoverFlowMotion.transform(distance: distance, reduceMotion: reduceMotion)
+                            // Fades the outermost cover in and out so it never pops at the window edge.
+                            let edge = min(1, max(0, Double(radius) + 1 - abs(distance)))
+                            Button { activate(index) } label: { cover(for: track) }
                                 .buttonStyle(.plain)
                                 .frame(width: 76, height: 76)
-                                .scaleEffect(distance == 0 ? 1 : 0.8)
-                                .rotation3DEffect(.degrees(reduceMotion ? 0 : Double(distance.signum()) * -48),
-                                                  axis: (x: 0, y: 1, z: 0), perspective: 0.6)
-                                .opacity(abs(distance) == 2 ? 0.55 : 1)
-                                .offset(x: Double(distance) * spacing + dragOffset)
-                                .zIndex(Double(3 - abs(distance)))
+                                .scaleEffect(placement.scale)
+                                .rotation3DEffect(.degrees(placement.rotation), axis: (x: 0, y: 1, z: 0), perspective: 0.6)
+                                .opacity(placement.opacity * edge)
+                                .offset(x: placement.offset)
+                                .zIndex(placement.zIndex)
                                 .accessibilityLabel(Text(label(for: track)))
-                                .accessibilityValue(Text(distance == 0 ? "library.selected" : ""))
+                                .accessibilityValue(Text(index == selectedIndex ? "library.selected" : ""))
                                 .accessibilityAction(named: Text("library.play")) { onPlay(track) }
                                 .help(label(for: track))
                                 .task(id: track.artwork?.url) {
@@ -59,25 +63,17 @@ struct LikedSongsCoverFlow: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay {
-                        CoverFlowInput(onClick: { x, width in
+                        CoverFlowInput(isAnimating: isAnimating, onPress: catchMotion, onClick: { x, width in
                             if let relative = coverFlowRelativeIndex(x: x - width / 2, radius: radius) { activate(selectedIndex + relative) }
-                        }, onDrag: { translation in
-                            guard !model.tracks.isEmpty else { return }
-                            if dragStart == nil { dragStart = selectedIndex }
-                            let start = dragStart ?? selectedIndex
-                            let index = min(model.tracks.count - 1, max(0, start - Int((translation / spacing).rounded())))
-                            model.select(model.tracks[index].uri)
-                            dragOffset = min(spacing, max(-spacing, translation + Double(index - start) * spacing))
-                        }, onDragEnd: {
-                            withAnimation(.easeOut(duration: reduceMotion ? 0.12 : 0.28)) { dragOffset = 0; dragStart = nil }
-                        }, onScroll: { delta in
-                            wheelOffset += delta
-                            if abs(wheelOffset) >= 24 {
-                                navigate(by: wheelOffset < 0 ? 1 : -1)
-                                wheelOffset = 0
-                            }
+                        }, onDrag: { translation, time in
+                            if gestureOrigin == nil { beginGesture() }
+                            move(to: (gestureOrigin ?? spring.position) - translation / CoverFlowMotion.spacing, at: time)
+                        }, onRelease: release(at:), onSnap: { settle(on: Int(spring.position.rounded()), velocity: 0) },
+                        onScroll: scroll, onFrame: { dt in
+                            spring.step(dt: dt, reduceMotion: reduceMotion)
+                            if spring.isSettled { isAnimating = false }
                         }, onNavigate: { navigate(by: $0) }, onPlay: { if let selectedTrack { onPlay(selectedTrack) } })
-                        .frame(width: min(geometry.size.width, Double(radius * 2) * spacing + 76))
+                        .frame(width: min(geometry.size.width, Double(radius * 2) * CoverFlowMotion.spacing + 76))
                         .accessibilityHidden(true)
                     }
                 }
@@ -100,25 +96,98 @@ struct LikedSongsCoverFlow: View {
             if let uri = model.selectedURI { await model.loadMoreIfNeeded(near: uri) }
         }
         .onDisappear { model.hide(at: Date()) }
+        .onAppear { jump(to: selectedIndex) }
+        .onChange(of: model.tracks.isEmpty) { _, empty in if !empty { jump(to: selectedIndex) } }
+        // Selection changed elsewhere (list refresh, restored selection): follow it.
+        .onChange(of: selectedIndex) { _, index in
+            guard gestureOrigin == nil, index != Int(spring.target.rounded()) else { return }
+            if model.tracks.count <= 1 { jump(to: index) } else { settle(on: index) }
+        }
         }
     }
 
     func visibleIndices(radius: Int) -> [Int] {
         guard !model.tracks.isEmpty else { return [] }
-        return Array(max(0, selectedIndex - radius)...min(model.tracks.count - 1, selectedIndex + radius))
+        let center = min(model.tracks.count - 1, max(0, Int(spring.position.rounded())))
+        return Array(max(0, center - radius - 1)...min(model.tracks.count - 1, center + radius + 1))
     }
     private func label(for track: Track) -> String {
         ([track.title] + track.artists.map(\.name)).joined(separator: " · ")
     }
     private func activate(_ index: Int) {
         guard model.tracks.indices.contains(index) else { return }
-        if index == selectedIndex { onPlay(model.tracks[index]) }
-        else { navigate(by: index - selectedIndex) }
+        if index == selectedIndex && !isAnimating { onPlay(model.tracks[index]) }
+        else { settle(on: index) }
     }
     private func navigate(by delta: Int) {
+        settle(on: Int(spring.target.rounded()) + delta)
+    }
+
+    private func jump(to index: Int) {
+        spring = CoverFlowSpring(position: Double(index), velocity: 0, target: Double(index))
+        isAnimating = false
+    }
+    /// Springs to a cover, keeping the current velocity so a new target redirects motion instead of restarting it.
+    private func settle(on index: Int, velocity: Double? = nil) {
         guard !model.tracks.isEmpty else { return }
-        let index = min(model.tracks.count - 1, max(0, selectedIndex + delta))
-        withAnimation(.easeOut(duration: reduceMotion ? 0.12 : 0.28)) { model.select(model.tracks[index].uri) }
+        let index = min(model.tracks.count - 1, max(0, index))
+        spring.target = Double(index)
+        if let velocity { spring.velocity = reduceMotion ? 0 : velocity }
+        isAnimating = !spring.isSettled
+        if model.tracks[index].uri != model.selectedURI { model.select(model.tracks[index].uri) }
+    }
+    /// Stops the covers where they are; returns whether they were moving so a catching tap doesn't also select.
+    private func catchMotion() -> Bool {
+        let wasMoving = isAnimating
+        spring = CoverFlowSpring(position: spring.position, velocity: 0, target: spring.position)
+        isAnimating = false
+        return wasMoving
+    }
+    private func beginGesture() {
+        _ = catchMotion()
+        gestureOrigin = spring.position
+        scrollTravel = 0
+        velocity.reset()
+    }
+    private func move(to raw: Double, at time: TimeInterval) {
+        let position = CoverFlowMotion.rubberBanded(raw, count: model.tracks.count)
+        spring = CoverFlowSpring(position: position, velocity: 0, target: position)
+        velocity.add(position: position, at: time)
+        let index = min(model.tracks.count - 1, max(0, Int(position.rounded())))
+        if model.tracks.indices.contains(index), model.tracks[index].uri != model.selectedURI { model.select(model.tracks[index].uri) }
+    }
+    private func release(at time: TimeInterval) {
+        velocity.add(position: spring.position, at: time)
+        let fling = velocity.velocity
+        gestureOrigin = nil
+        BopifyLog.library.debug("cover flow released velocity=\(fling, privacy: .public)")
+        settle(on: CoverFlowMotion.restingIndex(position: spring.position, velocity: fling, count: model.tracks.count), velocity: fling)
+    }
+    private func scroll(_ input: CoverFlowScroll) {
+        guard !model.tracks.isEmpty else { return }
+        switch input {
+        case let .wheel(delta):
+            settle(on: CoverFlowMotion.wheelTarget(from: Int(spring.target.rounded()), delta: delta, count: model.tracks.count))
+        case let .glide(delta):
+            guard gestureOrigin == nil else { return }
+            spring.target = CoverFlowMotion.glideTarget(from: spring.target, delta: delta, count: model.tracks.count)
+            isAnimating = !spring.isSettled
+            let index = Int(spring.target.rounded())
+            if model.tracks[index].uri != model.selectedURI { model.select(model.tracks[index].uri) }
+        case .glideEnded:
+            guard gestureOrigin == nil else { return }
+            settle(on: Int(spring.target.rounded()))
+        case let .began(time):
+            beginGesture()
+            velocity.add(position: spring.position, at: time)
+        case let .changed(delta, time):
+            if gestureOrigin == nil { beginGesture() }
+            scrollTravel -= delta / CoverFlowMotion.spacing
+            move(to: (gestureOrigin ?? spring.position) + scrollTravel, at: time)
+        case let .ended(time):
+            guard gestureOrigin != nil else { return }
+            release(at: time)
+        }
     }
     private func cover(for track: Track) -> some View {
         let face = Group {
@@ -183,42 +252,106 @@ struct LikedSongsCoverFlow: View {
     }
 }
 
+enum CoverFlowScroll {
+    /// A mouse wheel notch: no phases, no precise deltas.
+    case wheel(Double)
+    /// A smoothed wheel's precise but phase-less delta, and the pause after the last one.
+    case glide(Double)
+    case glideEnded
+    case began(TimeInterval)
+    case changed(Double, TimeInterval)
+    case ended(TimeInterval)
+}
+
 struct CoverFlowInput: NSViewRepresentable {
+    var isAnimating: Bool
+    /// Returns whether it caught covers in motion.
+    var onPress: () -> Bool
     var onClick: (_ x: Double, _ width: Double) -> Void
-    var onDrag: (Double) -> Void
-    var onDragEnd: () -> Void
-    var onScroll: (Double) -> Void
+    var onDrag: (_ translation: Double, _ time: TimeInterval) -> Void
+    var onRelease: (TimeInterval) -> Void
+    var onSnap: () -> Void
+    var onScroll: (CoverFlowScroll) -> Void
+    var onFrame: (_ dt: Double) -> Void
     var onNavigate: (Int) -> Void
     var onPlay: () -> Void
     func makeNSView(context: Context) -> InputView { InputView() }
-    func updateNSView(_ view: InputView, context: Context) { view.input = self }
+    func updateNSView(_ view: InputView, context: Context) {
+        view.input = self
+        view.setAnimating(isAnimating)
+    }
     final class InputView: NSControl, PlayerShortcutForwarding {
         var input: CoverFlowInput?
         private var origin: CGPoint?
         private var didDrag = false
+        private var caughtMotion = false
+        private var link: CADisplayLink?
+        private var lastFrame: CFTimeInterval?
         override var acceptsFirstResponder: Bool { true }
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+        // The spring runs on the display link so a grab reads the covers' true position mid-flight.
+        func setAnimating(_ animating: Bool) {
+            guard let link else { return }
+            if animating && link.isPaused { lastFrame = nil }
+            link.isPaused = !animating
+        }
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            link?.invalidate()
+            link = nil
+            guard window != nil else { return }
+            let next = displayLink(target: self, selector: #selector(frame(_:)))
+            next.isPaused = !(input?.isAnimating ?? false)
+            next.add(to: .main, forMode: .common)
+            link = next
+        }
+        @objc private func phaselessScrollEnded() {
+            input?.onScroll(.glideEnded)
+        }
+        @objc private func frame(_ link: CADisplayLink) {
+            let dt = lastFrame.map { link.timestamp - $0 } ?? link.duration
+            lastFrame = link.timestamp
+            input?.onFrame(min(dt, 1.0 / 30))
+        }
+
         override func mouseDown(with event: NSEvent) {
             window?.makeKey()
             window?.makeFirstResponder(self)
             origin = convert(event.locationInWindow, from: nil)
             didDrag = false
+            caughtMotion = input?.onPress() ?? false
         }
         override func mouseDragged(with event: NSEvent) {
             guard let origin else { return }
             let point = convert(event.locationInWindow, from: nil)
             guard didDrag || hypot(point.x - origin.x, point.y - origin.y) > 4 else { return }
             didDrag = true
-            input?.onDrag(point.x - origin.x)
+            input?.onDrag(point.x - origin.x, event.timestamp)
         }
         override func mouseUp(with event: NSEvent) {
-            if didDrag { input?.onDragEnd() }
+            if didDrag { input?.onRelease(event.timestamp) }
+            // A tap that stops moving covers only settles them, like catching a scroll view.
+            else if caughtMotion { input?.onSnap() }
             else if origin != nil { input?.onClick(convert(event.locationInWindow, from: nil).x, bounds.width) }
-            origin = nil; didDrag = false
+            origin = nil; didDrag = false; caughtMotion = false
         }
         override func scrollWheel(with event: NSEvent) {
-            guard abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) else { super.scrollWheel(with: event); return }
-            input?.onScroll(event.scrollingDeltaX)
+            // Our own spring replaces the system's momentum so scrolling and dragging feel identical.
+            guard event.momentumPhase.isEmpty else { return }
+            let delta = abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) ? event.scrollingDeltaX : event.scrollingDeltaY
+            guard event.hasPreciseScrollingDeltas else { input?.onScroll(.wheel(delta)); return }
+            // Smoothed wheels (e.g. Logi Options+) send large precise deltas with no gesture phases and no ended
+            // event: glide toward them and settle once the events stop.
+            if event.phase.isEmpty {
+                input?.onScroll(.glide(delta))
+                NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(phaselessScrollEnded), object: nil)
+                perform(#selector(phaselessScrollEnded), with: nil, afterDelay: 0.12)
+                return
+            }
+            if event.phase.contains(.began) { input?.onScroll(.began(event.timestamp)) }
+            if event.phase.contains(.changed) { input?.onScroll(.changed(delta, event.timestamp)) }
+            if event.phase.contains(.ended) || event.phase.contains(.cancelled) { input?.onScroll(.ended(event.timestamp)) }
         }
         override func keyDown(with event: NSEvent) {
             guard event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty else { window?.keyDown(with: event); return }
