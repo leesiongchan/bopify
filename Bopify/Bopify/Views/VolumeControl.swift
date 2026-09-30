@@ -17,6 +17,7 @@ struct VolumeControl: View {
                 .contentTransition(.symbolEffect(.replace))
                 .frame(width: 28, height: 28)
         }
+        .buttonStyle(.playerToggle(isOn: presentation.activePopover == .volume))
         .accessibilityLabel(Text("transport.volume"))
         .accessibilityValue(Text("\(Int((player.displayVolume * 100).rounded()))%"))
         .disabled(!player.state.isActiveDevice)
