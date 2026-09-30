@@ -31,7 +31,6 @@ struct LikedSongsCoverFlow: View {
                     TimelineView(.periodic(from: .now, by: 1)) { context in retryButton(at: context.date) }
                 }
             }
-            .background(PlayerBackgroundDragRegion())
             if model.tracks.isEmpty {
                 emptyState.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -84,10 +83,13 @@ struct LikedSongsCoverFlow: View {
                         Text(selectedTrack.title).font(.system(size: 11, weight: .medium)).lineLimit(1)
                         Text(selectedTrack.artists.map(\.name).joined(separator: ", "))
                             .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
-                    }.help(label(for: selectedTrack)).background(PlayerBackgroundDragRegion())
+                    }.help(label(for: selectedTrack))
                 }
             }
         }
+        // Covers every gap between header, covers and title; the covers' input view sits above it.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(PlayerBackgroundDragRegion())
         .task {
             guard !Task.isCancelled else { return }
             await model.reveal(at: Date())
