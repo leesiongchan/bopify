@@ -38,6 +38,19 @@ private actor HeldHistory: ListeningHistoryService {
     func waitUntilHeld() async { while held == nil { await Task.yield() } }
 }
 
+/// Liked songs that throw until told to succeed, to exercise Explore's fallback failures.
+private actor FailingSavedTracks: SavedTracksService {
+    private var failure: LibraryError?
+    private let tracks: [Track]
+    init(_ failure: LibraryError, tracks: [Track] = []) { self.failure = failure; self.tracks = tracks }
+
+    func succeed() { failure = nil }
+    func savedTracks(offset: Int, limit: Int) async throws -> SavedTracksPage {
+        if let failure { throw failure }
+        return SavedTracksPage(tracks: Array(tracks.prefix(limit)), nextOffset: nil, total: tracks.count)
+    }
+}
+
 @Suite("ExploreModel") @MainActor
 struct ExploreModelTests {
     private func seed(_ kind: String, _ id: String) -> StationSeed {
@@ -67,6 +80,27 @@ struct ExploreModelTests {
         await explore.reveal(at: Date())
         #expect(explore.chips.map(\.uri) == liked.prefix(5).map(\.uri))
         #expect(await saved.requests == [[0, 5]])
+    }
+
+    @Test(arguments: [LibraryError.authorizationRequired, .forbidden])
+    func withoutLikedSongsConsentExploreHasNoChips(failure: LibraryError) async {
+        let explore = ExploreModel(history: FakeHistory(), savedTracks: FailingSavedTracks(failure),
+                                   radio: { _ in throw RadioFailure.noMix }, now: Date.init)
+        await explore.reveal(at: Date())
+        #expect(explore.chips.isEmpty && explore.error == nil)
+    }
+
+    @Test func aRateLimitedLikedFallbackReportsItsErrorUntilRetried() async {
+        let clock = TestClock()
+        let liked = FailingSavedTracks(.rateLimited(retryAfterSeconds: 30), tracks: [testTrack("l1")])
+        let explore = ExploreModel(history: FakeHistory(), savedTracks: liked,
+                                   radio: { _ in throw RadioFailure.noMix }, now: { clock.date })
+        await explore.reveal(at: clock.date)
+        #expect(explore.error == .rateLimited(retryAfterSeconds: 30))
+        #expect(explore.retryAfter == clock.date.addingTimeInterval(30))
+        await liked.succeed()
+        await explore.retry(at: clock.date.addingTimeInterval(30))
+        #expect(explore.error == nil && explore.chips.map(\.uri) == [testTrack("l1").uri])
     }
 
     @Test func keepsChipsForSixHours() async {

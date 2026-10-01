@@ -136,7 +136,13 @@ public final class ExploreModel: CoverFlowSource {
             var seeds = Self.interleave(try await history.topItems(.tracks), try await history.topItems(.artists))
             if seeds.isEmpty {
                 // Liked songs are only a fallback; without that consent Explore just has no chips.
-                let liked = (try? await savedTracks.savedTracks(offset: 0, limit: 5))?.tracks ?? []
+                // Any other failure is a real error, so it is shown and retried rather than cached as empty.
+                let liked: [Track]
+                do {
+                    liked = try await savedTracks.savedTracks(offset: 0, limit: 5).tracks
+                } catch LibraryError.authorizationRequired, LibraryError.forbidden {
+                    liked = []
+                }
                 seeds = liked.map { StationSeed(uri: $0.uri, name: $0.title) }
                 BopifyLog.library.debug("explore chips from liked songs count=\(seeds.count, privacy: .public)")
             }
