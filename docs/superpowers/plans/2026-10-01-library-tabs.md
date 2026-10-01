@@ -34,6 +34,14 @@
   - Rust logs each station request's seed type, track count and failure category.
   - Never log track IDs, titles, URIs or tokens at `.public`. Rust never logs identifiers.
 
+**Where execution runs**
+- Execute in the main checkout at the repo root, in place. Never in a git worktree.
+- These gitignored inputs exist only there:
+  - `.build/librespot-939dc5e`, needed by every Rust build.
+  - `.superpowers/spikes/`, needed by Task 1.
+  - `artifacts/`, needed from Task 3 onward.
+- Subagents run without `isolation: "worktree"`.
+
 **App target**
 - The app target uses synchronized folder groups. New Swift files under `Bopify/Bopify/` need no `project.pbxproj` edit.
 
@@ -1300,6 +1308,53 @@ git add Packages/BopifyCore/Sources/BopifyDomain/ListeningHistoryService.swift P
 git commit -m "Fetch recently played and top items for the library tabs" -m "Recents needs the recently played list with the context each track came from, and Explore seeds its stations from the user's top tracks and artists. Both go through the shared library cooldown, and one consent grants both new scopes."
 ```
 
+- [ ] **Step 7: Check both endpoints live before building on them**
+
+Tasks 5–8 assume this Development Mode client may call `/me/player/recently-played` and `/me/top/*`. Nothing in this session has shown that yet.
+
+Ask the user first. The run opens a Spotify consent page in the browser for the two new scopes, and they approve it. Then run:
+
+```bash
+root=$(pwd)
+rm -rf /private/tmp/bopify-history-check
+mkdir -p /private/tmp/bopify-history-check/Sources/HistoryCheck
+cat > /private/tmp/bopify-history-check/Package.swift <<EOF
+// swift-tools-version: 6.0
+import PackageDescription
+let package = Package(
+    name: "HistoryCheck",
+    platforms: [.macOS(.v14)],
+    dependencies: [.package(path: "$root/Packages/BopifyCore")],
+    targets: [.executableTarget(name: "HistoryCheck", dependencies: [
+        .product(name: "BopifyAuth", package: "BopifyCore"), .product(name: "BopifyLibrary", package: "BopifyCore")])]
+)
+EOF
+cat > /private/tmp/bopify-history-check/Sources/HistoryCheck/main.swift <<'EOF'
+// Throwaway: counts and error categories only, never tokens, URIs or titles.
+import Foundation
+import BopifyAuth
+import BopifyLibrary
+let auth = SpotifyAuthService(clientID: "25bbd3bacca4412b80f17b892072af71",
+                              store: KeychainTokenStore(service: "com.leesiongchan.bopify.library"),
+                              callbackPort: 8898, callbackPath: "/callback")
+do { _ = try await auth.authorizeLibraryScopes(["user-read-recently-played", "user-top-read"]) }
+catch { print("BLOCKED: consent \(type(of: error))"); exit(77) }
+let library = SpotifyLibraryClient { scopes in try await auth.validAccessToken(requiredScopes: scopes) }
+do { print("PASS: recently played count=\(try await library.recentlyPlayed().count)") } catch { print("BLOCKED: recently played \(error)") }
+do { print("PASS: top tracks count=\(try await library.topItems(.tracks).count)") } catch { print("BLOCKED: top tracks \(error)") }
+do { print("PASS: top artists count=\(try await library.topItems(.artists).count)") } catch { print("BLOCKED: top artists \(error)") }
+EOF
+swift run -q --package-path /private/tmp/bopify-history-check HistoryCheck
+```
+
+Expected: three `PASS:` lines.
+
+A count of 0 still passes. Some accounts have no top items, and Explore falls back to liked songs for that case.
+
+If any line reports `forbidden` or another `BLOCKED` category, stop. Report it to the user before starting Task 5: Recents and Explore's chips depend on these endpoints.
+
+The consent this run grants is the same grant the app's "Enable Recents and Explore" asks for later, so Task 8's consent check will already find it granted. To exercise the Enable button there, the user can sign out and back in first.
+
 ---
 
 ### Task 5: `CoverFlowSource` and `RecentsModel`
@@ -2073,9 +2128,15 @@ Replace:
 with:
 
 ```swift
-                .scaleEffect(min(1, max(0.6, (available.size.height - 46) / 88)))
+                .scaleEffect(min(1, max(0.6, (available.size.height - 31) / 88)))
                 .overlay(alignment: .topTrailing) { status }
 ```
+
+In the same `GeometryReader`, change `.frame(height: max(44, min(88, available.size.height - 46)))` to `.frame(height: max(44, min(88, available.size.height - 31)))`.
+
+The old `46` reserved space for the removed title row as well as the track title block underneath. Keeping it would shrink every cover by about a quarter once the tabs take their height. The new `31` is the title block alone: two caption lines plus the stack spacing.
+
+Measure it in Step 7. Pause in the debugger and run `po` on the title `VStack`'s frame, or take a screenshot. Then adjust the constant to the measured height.
 
 Add this property before `emptyState`:
 
@@ -2145,13 +2206,17 @@ Expected: `** BUILD SUCCEEDED **` with no errors. `docs/superpowers/verification
 
 - [ ] **Step 7: Check that Liked is unchanged**
 
-Ask the user to quit any running Bopify, run the new build, and expand the player. Expected: Liked Songs covers, dragging, the wheel, click-to-play and the empty and Enable states behave as before. The "LIKED SONGS" title no longer appears.
+Ask the user to quit any running Bopify, run the new build, and expand the player. Expected:
+- Liked Songs covers, dragging, the wheel, click-to-play and the empty and Enable states behave as before.
+- The "LIKED SONGS" title no longer appears.
+- Covers are full size (76 pt).
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add Bopify/Bopify/Views/CoverFlowView.swift Bopify/Bopify/Views/LikedSongsCoverFlow.swift \
-        Bopify/Bopify/Views/MonolithPlayerView.swift Bopify/Bopify/Localizable.xcstrings
+# `git mv` already staged the old path's removal; naming it here would abort the add.
+git add Bopify/Bopify/Views/CoverFlowView.swift Bopify/Bopify/Views/MonolithPlayerView.swift Bopify/Bopify/Localizable.xcstrings
+git status --short Bopify/Bopify/Views   # expect "R  …LikedSongsCoverFlow.swift -> …CoverFlowView.swift" and "M  …MonolithPlayerView.swift"
 git commit -m "Let Cover Flow render any library source" -m "Recents and Explore reuse the Liked Songs Cover Flow, so the view now takes any CoverFlowSource with its own empty-state copy and enable action. The tabs will name the shelf, so the fixed title becomes a status overlay."
 ```
 
@@ -2432,7 +2497,14 @@ Ask the user to quit any running Bopify fully, run the new build, expand the pla
 6. Switching tabs keeps each tab's selection. The tab choice survives a relaunch.
 7. With Reduce Motion on, tabs crossfade.
 
-For item 5: if vertical wheel input doesn't scroll the horizontal chip row, record it in the Task 9 report as a follow-up. Don't widen this task. The fix would route `deltaY` to horizontal scrolling in an `NSViewRepresentable`, as `CoverFlowInput` does.
+8. Covers on Liked and Recents are close to full size. Explore's covers are visibly smaller. Report Explore's measured scale to the user: the spec estimated about 15%, but the tab and chip rows may cost closer to 30%.
+
+Item 5 is a spec requirement. If a smoothed wheel's vertical input doesn't scroll the horizontal chip row, stop before committing and report it to the user. The candidate fix:
+- Turn vertical wheel deltas into horizontal scrolling while the pointer is over the row.
+- Use a local `NSEvent` scroll-wheel monitor, installed on hover, that scrolls the row's enclosing `NSScrollView` clip view.
+- Do not use an overlay. An overlay would swallow chip clicks.
+
+That fix depends on SwiftUI's private scroll view hierarchy, so it needs the user's go-ahead.
 
 Capture `log stream --predicate 'subsystem == "com.leesiongchan.bopify"' --level debug` while doing this. Confirm three kinds of lines appear:
 - `library tab changed`.
@@ -2519,7 +2591,9 @@ let dashboardLibraryClientID = "25bbd3bacca4412b80f17b892072af71"
 
 - [ ] **Step 2: Run the probe in a throwaway package**
 
-Run this while nothing else is playing on the account, because the probe briefly registers a Connect device.
+Ask the user before running this, because the probe touches their account. It registers a "Bopify Probe" Connect device with startup restore, so it can take over or restore playback.
+
+The user must quit Bopify fully first, from the menu bar item's Quit, not just pause. Otherwise the probe can take the app's session and leave it on a device that is about to disappear. Nothing should be playing on the account during the run.
 
 ```bash
 root=$(pwd)
