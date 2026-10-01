@@ -33,6 +33,16 @@ pub struct WireRemote {
     pub duration_ms: u32,
 }
 
+/// Why a station could not be built. Swift's `RadioFailure` uses these names as raw values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RadioFailure {
+    NoTopTrack,
+    NoMix,
+    Unavailable,
+    Network,
+}
+
 /// The JSON contract between Rust and Swift. Changing a case or a field
 /// name here is a breaking change: `BopifyDomain.PlaybackEvent` must
 /// change in the same commit.
@@ -108,6 +118,23 @@ pub enum WireEvent {
     },
     RemotePlayback {
         remote: Option<WireRemote>,
+    },
+    /// A radio mix for the request with the same ID; Swift resolves the waiting caller, not the event stream.
+    Radio {
+        #[serde(rename = "requestID")]
+        request_id: u64,
+        #[serde(rename = "seedURI")]
+        seed_uri: String,
+        #[serde(rename = "contextURI")]
+        context_uri: String,
+        tracks: Vec<WireTrack>,
+    },
+    RadioFailed {
+        #[serde(rename = "requestID")]
+        request_id: u64,
+        #[serde(rename = "seedURI")]
+        seed_uri: String,
+        reason: RadioFailure,
     },
 }
 
@@ -556,6 +583,29 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&some).unwrap(),
             r#"{"type":"remotePlayback","remote":{"deviceName":"iPhone","trackUri":"spotify:track:abc","track":null,"isPlaying":true,"positionMs":7500,"durationMs":200000}}"#
+        );
+    }
+
+    #[test]
+    fn radio_events_use_the_swift_key_spellings() {
+        let mix = WireEvent::Radio {
+            request_id: 7,
+            seed_uri: "spotify:artist:a".into(),
+            context_uri: "spotify:playlist:m".into(),
+            tracks: vec![],
+        };
+        assert_eq!(
+            serde_json::to_string(&mix).unwrap(),
+            r#"{"type":"radio","requestID":7,"seedURI":"spotify:artist:a","contextURI":"spotify:playlist:m","tracks":[]}"#
+        );
+        let failed = WireEvent::RadioFailed {
+            request_id: 8,
+            seed_uri: "spotify:track:t".into(),
+            reason: RadioFailure::NoTopTrack,
+        };
+        assert_eq!(
+            serde_json::to_string(&failed).unwrap(),
+            r#"{"type":"radioFailed","requestID":8,"seedURI":"spotify:track:t","reason":"noTopTrack"}"#
         );
     }
 }
