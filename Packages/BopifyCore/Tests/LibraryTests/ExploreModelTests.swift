@@ -103,6 +103,19 @@ struct ExploreModelTests {
         #expect(explore.error == nil && explore.chips.map(\.uri) == [testTrack("l1").uri])
     }
 
+    /// A quick tab round trip can hide the old view after the new one revealed; the model must stay shown.
+    @Test func staysShownWhileAnyRevealIsUnmatched() async {
+        let liked = FailingSavedTracks(.unavailable, tracks: [testTrack("l1")])
+        let explore = ExploreModel(history: FakeHistory(), savedTracks: liked,
+                                   radio: { _ in throw RadioFailure.noMix }, now: Date.init)
+        await explore.reveal(at: Date())
+        await explore.reveal(at: Date())
+        explore.hide(at: Date())
+        await liked.succeed()
+        await explore.retry(at: Date())
+        #expect(explore.error == nil && explore.chips.map(\.uri) == [testTrack("l1").uri])
+    }
+
     @Test func keepsChipsForSixHours() async {
         let history = FakeHistory()
         let clock = TestClock()

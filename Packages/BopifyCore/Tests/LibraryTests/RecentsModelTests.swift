@@ -59,6 +59,19 @@ struct RecentsModelTests {
         #expect(model.error == nil && model.tracks.count == 1)
     }
 
+    /// A quick tab round trip can hide the old view after the new one revealed; the model must stay shown.
+    @Test func staysShownWhileAnyRevealIsUnmatched() async {
+        let history = FakeHistory()
+        await history.setPlays(.failure(.unavailable))
+        let model = RecentsModel(service: history)
+        await model.reveal(at: Date())
+        await model.reveal(at: Date())
+        model.hide(at: Date())
+        await history.setPlays(.success([play("a")]))
+        await model.retry(at: Date())
+        #expect(model.error == nil && model.tracks.count == 1)
+    }
+
     @Test func clearForgetsEverything() async {
         let history = FakeHistory()
         await history.setPlays(.success([play("a", album)]))

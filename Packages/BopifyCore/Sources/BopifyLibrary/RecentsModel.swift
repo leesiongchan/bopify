@@ -12,11 +12,13 @@ public final class RecentsModel: CoverFlowSource {
     public private(set) var error: LibraryError?
     public private(set) var retryAfter: Date?
     public var hasMore: Bool { false }
+    private var visible: Bool { reveals > 0 }
     @ObservationIgnored private let service: any ListeningHistoryService
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private var contexts: [SpotifyURI: SpotifyURI] = [:]
     @ObservationIgnored private var loadedAt: Date?
-    @ObservationIgnored private var visible = false
+    // Counted, not a flag: on a quick tab round trip the old view's hide can land after the new view's reveal.
+    @ObservationIgnored private var reveals = 0
     @ObservationIgnored private var generation = 0
 
     public convenience init(service: any ListeningHistoryService) { self.init(service: service, now: Date.init) }
@@ -26,7 +28,7 @@ public final class RecentsModel: CoverFlowSource {
     }
 
     public func reveal(at date: Date) async {
-        visible = true
+        reveals += 1
         guard !isLoading, retryAfter.map({ $0 <= date }) ?? true else { return }
         if error == nil, let loadedAt, date.timeIntervalSince(loadedAt) < 60 {
             BopifyLog.library.debug("recents cache hit")
@@ -35,7 +37,7 @@ public final class RecentsModel: CoverFlowSource {
         await load()
     }
 
-    public func hide(at date: Date) { visible = false }
+    public func hide(at date: Date) { reveals = max(0, reveals - 1) }
 
     public func select(_ uri: SpotifyURI) {
         guard tracks.contains(where: { $0.uri == uri }) else { return }
@@ -66,7 +68,7 @@ public final class RecentsModel: CoverFlowSource {
         isLoading = false
         error = nil
         retryAfter = nil
-        visible = false
+        reveals = 0
         BopifyLog.library.debug("recents cleared")
     }
 

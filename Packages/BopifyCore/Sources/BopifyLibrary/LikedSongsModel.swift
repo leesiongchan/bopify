@@ -14,7 +14,8 @@ public final class LikedSongsModel {
     @ObservationIgnored private let service: any SavedTracksService
     @ObservationIgnored private var pending: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
-    @ObservationIgnored private var visible = false
+    // Counted, not a flag: on a quick tab round trip the old view's hide can land after the new view's reveal.
+    @ObservationIgnored private var reveals = 0
     @ObservationIgnored private var hiddenAt: Date?
     @ObservationIgnored private var loaded = false
     @ObservationIgnored private var needsRefresh = false
@@ -25,13 +26,14 @@ public final class LikedSongsModel {
     public convenience init(service: any SavedTracksService) { self.init(service: service, now: Date.init) }
     init(service: any SavedTracksService, now: @escaping () -> Date) { self.service = service; self.now = now }
     public var hasMore: Bool { nextOffset != nil }
+    private var visible: Bool { reveals > 0 }
     public func loadMore() async {
         guard visible, !isLoading, error == nil, nextOffset != nil else { return }
         await request(refresh: false)
     }
 
     public func reveal(at date: Date) async {
-        visible = true
+        reveals += 1
         let stale = hiddenAt.map { date.timeIntervalSince($0) >= 60 } ?? false
         hiddenAt = nil
         guard !isLoading, (error == nil || (needsRefresh && error == .authorizationRequired)),
@@ -40,8 +42,9 @@ public final class LikedSongsModel {
     }
 
     public func hide(at date: Date) {
-        if visible { hiddenAt = date }
-        visible = false
+        guard reveals > 0 else { return }
+        reveals -= 1
+        if reveals == 0 { hiddenAt = date }
     }
 
     public func select(_ uri: SpotifyURI) {
@@ -69,7 +72,7 @@ public final class LikedSongsModel {
     public func clear() {
         generation += 1
         pending?.cancel()
-        visible = false
+        reveals = 0
         hiddenAt = nil
         tracks = []
         selectedURI = nil
