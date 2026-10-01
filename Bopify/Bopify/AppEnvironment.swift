@@ -25,6 +25,9 @@ final class AppEnvironment {
     let artworkStore = ArtworkStore()
     let favorite: FavoriteModel
     let likedSongs: LikedSongsModel
+    let recents: RecentsModel
+    let explore: ExploreModel
+    @ObservationIgnored private let stations: StationRoute
     private(set) var isEnablingLibrary = false
     private(set) var libraryAuthorizationNotice: String?
     @ObservationIgnored private let authorizeLibraryScopes: @Sendable (Set<String>) async throws -> Void
@@ -43,7 +46,7 @@ final class AppEnvironment {
 
     @ObservationIgnored private let auth: SpotifyAuthService
     @ObservationIgnored private let libraryAuth: SpotifyAuthService
-    @ObservationIgnored private var engine: LibrespotEngine?
+    @ObservationIgnored private var engine: LibrespotEngine? { didSet { stations.engine = engine } }
 
     /// `engine == nil` cannot serve as a lock: it cannot distinguish "torn
     /// down" from "teardown in flight", and a check at the top of a function
@@ -76,12 +79,17 @@ final class AppEnvironment {
         }
         favorite = FavoriteModel(service: library)
         likedSongs = LikedSongsModel(service: library)
+        let stations = StationRoute()
+        self.stations = stations
+        recents = RecentsModel(service: library)
+        explore = ExploreModel(history: library, savedTracks: library, radio: { try await stations.mix(for: $0) })
         authorizeLibraryScopes = { scopes in _ = try await libraryAuth.authorizeLibraryScopes(scopes) }
     }
 
     #if DEBUG
     init(previewPlayer: PlayerModel, favoriteService: any LibraryService,
          savedTracksService: (any SavedTracksService)? = nil,
+         historyService: (any ListeningHistoryService)? = nil,
          authorizeLibraryScopes: (@Sendable (Set<String>) async throws -> Void)? = nil,
          playbackAuth: SpotifyAuthService? = nil,
          libraryAuth: SpotifyAuthService? = nil) {
@@ -91,6 +99,12 @@ final class AppEnvironment {
             store: KeychainTokenStore(service: "com.leesiongchan.bopify.preview.library.\(UUID().uuidString)"))
         favorite = FavoriteModel(service: favoriteService)
         likedSongs = LikedSongsModel(service: savedTracksService ?? UnavailableSavedTracks())
+        let stations = StationRoute()
+        self.stations = stations
+        recents = RecentsModel(service: historyService ?? UnavailableHistory())
+        explore = ExploreModel(history: historyService ?? UnavailableHistory(),
+                               savedTracks: savedTracksService ?? UnavailableSavedTracks(),
+                               radio: { try await stations.mix(for: $0) })
         self.authorizeLibraryScopes = authorizeLibraryScopes ?? { _ in throw LibraryError.unavailable }
         player = previewPlayer
         authState = .signedIn
@@ -110,6 +124,10 @@ final class AppEnvironment {
         await enableLibrary(scopes: ["user-library-read"])
     }
 
+    func enableListeningHistory() async {
+        await enableLibrary(scopes: ["user-read-recently-played", "user-top-read"])
+    }
+
     private func enableLibrary(scopes: Set<String>) async {
         guard authState == .signedIn, !isEnablingLibrary else { return }
         isEnablingLibrary = true
@@ -122,6 +140,10 @@ final class AppEnvironment {
             await refreshFavorite()
             guard generation == libraryGeneration else { return }
             await likedSongs.refresh()
+            guard generation == libraryGeneration else { return }
+            await recents.refresh()
+            guard generation == libraryGeneration else { return }
+            await explore.refresh()
         } catch {
             guard authState == .signedIn, generation == libraryGeneration else { return }
             libraryAuthorizationNotice = String(localized: "favorite.consentFailed")
@@ -135,6 +157,8 @@ final class AppEnvironment {
         libraryAuthorizationNotice = nil
         favorite.clear()
         likedSongs.clear()
+        recents.clear()
+        explore.clear()
     }
 
     private func serialize(_ operation: @escaping @MainActor () async -> Void) async {
@@ -264,7 +288,23 @@ final class AppEnvironment {
     }
 }
 
+/// Explore's way to the current engine: a token refresh replaces the engine, so the model cannot hold it.
+@MainActor
+private final class StationRoute {
+    var engine: (any PlaybackEngine)?
+
+    func mix(for seed: SpotifyURI) async throws -> RadioMix {
+        guard let engine else { throw RadioFailure.unavailable }
+        return try await engine.requestRadio(seed: seed)
+    }
+}
+
 #if DEBUG
+private struct UnavailableHistory: ListeningHistoryService {
+    func recentlyPlayed() async throws -> [RecentPlay] { throw LibraryError.unavailable }
+    func topItems(_ kind: TopItemKind) async throws -> [StationSeed] { throw LibraryError.unavailable }
+}
+
 private struct UnavailableSavedTracks: SavedTracksService {
     func savedTracks(offset: Int, limit: Int) async throws -> SavedTracksPage { throw LibraryError.unavailable }
 }
