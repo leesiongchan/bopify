@@ -19,6 +19,25 @@ private final class FakeRadio {
     func waitUntilHeld(_ seed: SpotifyURI) async { while held[seed] == nil { await Task.yield() } }
 }
 
+/// Suspends its first top-items request until released, so a test can cancel the caller mid-load.
+private actor HeldHistory: ListeningHistoryService {
+    private let seeds: [StationSeed]
+    private var holdsNext = true
+    private var held: CheckedContinuation<Void, Never>?
+    init(_ seeds: [StationSeed]) { self.seeds = seeds }
+
+    func recentlyPlayed() async throws -> [RecentPlay] { [] }
+    func topItems(_ kind: TopItemKind) async throws -> [StationSeed] {
+        if holdsNext {
+            holdsNext = false
+            await withCheckedContinuation { held = $0 }
+        }
+        return kind == .tracks ? seeds : []
+    }
+    func release() { held?.resume(); held = nil }
+    func waitUntilHeld() async { while held == nil { await Task.yield() } }
+}
+
 @Suite("ExploreModel") @MainActor
 struct ExploreModelTests {
     private func seed(_ kind: String, _ id: String) -> StationSeed {
@@ -121,5 +140,19 @@ struct ExploreModelTests {
         radio.results[a.uri] = .success(mix("ma", ["x"]))
         await explore.retryStation()
         #expect(explore.stationFailure == nil && explore.tracks.map(\.uri) == [testTrack("x").uri])
+    }
+
+    @Test func aCancelledRevealDoesNotBlockTheNextOne() async {
+        let t1 = seed("track", "t1")
+        let history = HeldHistory([t1])
+        let explore = ExploreModel(history: history, savedTracks: FakeSavedTracks([]), radio: { _ in throw RadioFailure.noMix }, now: Date.init)
+        let opening = Task { await explore.reveal(at: Date()) }
+        await history.waitUntilHeld()
+        opening.cancel()
+        await history.release()
+        await opening.value
+        #expect(explore.chips.isEmpty && !explore.isLoading)
+        await explore.reveal(at: Date())
+        #expect(explore.chips.map(\.uri) == [t1.uri])
     }
 }
