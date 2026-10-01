@@ -1,5 +1,6 @@
 import Foundation
 import BopifyDomain
+import os
 
 /// Bridges the Rust event callback onto an `AsyncStream`.
 ///
@@ -12,6 +13,18 @@ import BopifyDomain
 public final class EventBridge: Sendable {
     public let events: AsyncStream<PlaybackEvent>
     private let continuation: AsyncStream<PlaybackEvent>.Continuation
+    private let radioWaiters = OSAllocatedUnfairLock(initialState: RadioWaiters())
+
+    private struct RadioWaiters: Sendable {
+        var lastID: UInt64 = 0
+        var waiting: [UInt64: CheckedContinuation<RadioMix, any Error>] = [:]
+        var finished = false
+    }
+
+    private struct Envelope: Decodable {
+        let type: String
+        let requestID: UInt64?
+    }
 
     public init() {
         var escaped: AsyncStream<PlaybackEvent>.Continuation!
@@ -29,6 +42,48 @@ public final class EventBridge: Sendable {
         Unmanaged.passRetained(self).toOpaque()
     }
 
+    /// Sends one radio request and waits for the reply that carries its ID.
+    ///
+    /// The waiter is registered before `send` runs: the reply can arrive on a
+    /// Rust thread before `send` has even returned.
+    func radio(_ send: (UInt64) throws -> Void) async throws -> RadioMix {
+        let id = radioWaiters.withLock { state in
+            state.lastID += 1
+            return state.lastID
+        }
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let registered = radioWaiters.withLock { state in
+                    guard !state.finished else { return false }
+                    state.waiting[id] = continuation
+                    return true
+                }
+                guard registered else { return continuation.resume(throwing: PlayerError.playbackSessionLost) }
+                if Task.isCancelled { return resolveRadio(id, with: .failure(CancellationError())) }
+                do { try send(id) } catch { resolveRadio(id, with: .failure(error)) }
+            }
+        } onCancel: {
+            resolveRadio(id, with: .failure(CancellationError()))
+        }
+    }
+
+    /// Resumes a waiter at most once; a reply for an ID nobody waits on is dropped.
+    private func resolveRadio(_ id: UInt64, with result: Result<RadioMix, any Error>) {
+        radioWaiters.withLock { $0.waiting.removeValue(forKey: id) }?.resume(with: result)
+    }
+
+    private func deliverRadio(_ data: Data, requestID: UInt64?) {
+        guard let reply = try? JSONDecoder().decode(RadioReply.self, from: data) else {
+            BopifyLog.playback.error("radio reply decode failed")
+            if let requestID { resolveRadio(requestID, with: .failure(RadioFailure.unavailable)) }
+            return
+        }
+        switch reply {
+        case let .mix(id, mix): resolveRadio(id, with: .success(mix))
+        case let .failed(id, reason): resolveRadio(id, with: .failure(reason))
+        }
+    }
+
     /// Balances exactly one `retainedContext()`, and takes that same pointer
     /// so the pairing is visible at the call site.
     ///
@@ -44,6 +99,12 @@ public final class EventBridge: Sendable {
     func yield(rawJSON: UnsafeRawBufferPointer) {
         guard let base = rawJSON.baseAddress, !rawJSON.isEmpty else { return }
         let data = Data(bytes: base, count: rawJSON.count)
+        // Radio replies answer one caller; the playback stream never sees them.
+        if let envelope = try? JSONDecoder().decode(Envelope.self, from: data),
+           RadioReply.eventTypes.contains(envelope.type) {
+            deliverRadio(data, requestID: envelope.requestID)
+            return
+        }
         // A malformed payload is a bug in the wire contract, not a user-facing
         // failure. Drop it rather than tearing down playback.
         guard let event = try? JSONDecoder().decode(PlaybackEvent.self, from: data) else {
@@ -56,9 +117,18 @@ public final class EventBridge: Sendable {
         continuation.yield(event)
     }
 
-    /// Ends the stream for its consumer. Idempotent, and independent of the
-    /// engine: events yielded after it are dropped, not delivered.
-    public func finish() { continuation.finish() }
+    /// Ends the stream for its consumer and fails any radio request still
+    /// waiting. Idempotent, and independent of the engine: events yielded
+    /// after it are dropped, not delivered.
+    public func finish() {
+        continuation.finish()
+        let waiting = radioWaiters.withLock { state in
+            state.finished = true
+            defer { state.waiting = [:] }
+            return Array(state.waiting.values)
+        }
+        for waiter in waiting { waiter.resume(throwing: PlayerError.playbackSessionLost) }
+    }
 
     /// A bridge dropped without an explicit `finish()` would otherwise leave
     /// its consumer awaiting an event that can never arrive.

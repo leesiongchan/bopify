@@ -243,6 +243,7 @@ private actor ControlledVolumeEngine: PlaybackEngine {
     func selectQueueEntry(_ target: QueueTarget) async throws { try await stub.selectQueueEntry(target) }
     func setShuffle(_ enabled: Bool) async throws { try await stub.setShuffle(enabled) }
     func setRepeat(_ mode: RepeatMode) async throws { try await stub.setRepeat(mode) }
+    func requestRadio(seed: SpotifyURI) async throws -> RadioMix { throw RadioFailure.unavailable }
 }
 
 @MainActor private final class VolumeClock {

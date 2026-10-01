@@ -33,5 +33,9 @@ public final class StubPlaybackEngine: PlaybackEngine, @unchecked Sendable {
     public func selectQueueEntry(_ target: QueueTarget) async throws { record("selectQueue:\(target.generation):\(target.rawNextIndex)") }
     public func setShuffle(_ enabled: Bool) async throws { record("setShuffle:\(enabled)") }
     public func setRepeat(_ mode: RepeatMode) async throws { record("setRepeat:\(mode.rawValue)") }
+    public func requestRadio(seed: SpotifyURI) async throws -> RadioMix {
+        record("radio:\(seed.rawValue)")
+        throw RadioFailure.unavailable
+    }
 
 }

@@ -28,4 +28,6 @@ public protocol PlaybackEngine: Sendable {
     func selectQueueEntry(_ target: QueueTarget) async throws
     func setShuffle(_ enabled: Bool) async throws
     func setRepeat(_ mode: RepeatMode) async throws
+    /// Spotify's radio for a track or artist seed. Throws `RadioFailure` when Spotify has none.
+    func requestRadio(seed: SpotifyURI) async throws -> RadioMix
 }

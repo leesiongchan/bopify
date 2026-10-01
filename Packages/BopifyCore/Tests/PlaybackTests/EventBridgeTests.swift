@@ -90,3 +90,68 @@ struct FFISmokeTests {
         #expect(err == -1)
     }
 }
+
+/// Pushes payloads in order from one Rust-like background thread.
+private func push(_ payloads: [String], into bridge: EventBridge) {
+    let encoded = payloads.map { Array($0.utf8) }
+    Thread.detachNewThread {
+        let ctx = bridge.retainedContext()
+        defer { EventBridge.releaseContext(ctx) }
+        for json in encoded {
+            json.withUnsafeBufferPointer { bopifyEventTrampoline($0.baseAddress!, UInt($0.count), ctx) }
+        }
+    }
+}
+
+private func mixJSON(_ id: UInt64) -> String {
+    #"{"type":"radio","requestID":\#(id),"seedURI":"spotify:track:s","contextURI":"spotify:playlist:m","tracks":[{"trackUri":"spotify:track:a","title":"A","artists":["X"],"albumTitle":null,"artworkUrl":null,"durationMs":1000}]}"#
+}
+
+@Suite("EventBridge radio")
+struct EventBridgeRadioTests {
+    @Test func aReplyResumesTheRequestWithItsID() async throws {
+        let bridge = EventBridge()
+        let mix = try await bridge.radio { id in push([mixJSON(id)], into: bridge) }
+        #expect(mix.contextURI.rawValue == "spotify:playlist:m")
+        #expect(mix.tracks.map(\.uri.rawValue) == ["spotify:track:a"])
+    }
+
+    @Test func aFailedReplyThrowsItsReason() async {
+        let bridge = EventBridge()
+        await #expect(throws: RadioFailure.noMix) {
+            _ = try await bridge.radio { id in
+                push([#"{"type":"radioFailed","requestID":\#(id),"seedURI":"spotify:track:s","reason":"noMix"}"#], into: bridge)
+            }
+        }
+    }
+
+    @Test func aRejectedSendThrowsWithoutWaiting() async {
+        let bridge = EventBridge()
+        await #expect(throws: PlayerError.playbackSessionLost) {
+            _ = try await bridge.radio { _ in throw PlayerError.playbackSessionLost }
+        }
+    }
+
+    @Test func finishFailsRequestsStillWaiting() async {
+        let bridge = EventBridge()
+        let waiting = Task { try await bridge.radio { _ in } }
+        try? await Task.sleep(for: .milliseconds(20))
+        bridge.finish()
+        await #expect(throws: PlayerError.playbackSessionLost) { _ = try await waiting.value }
+    }
+
+    @Test func cancellingTheCallerStopsItsWait() async {
+        let bridge = EventBridge()
+        let waiting = Task { try await bridge.radio { _ in } }
+        try? await Task.sleep(for: .milliseconds(20))
+        waiting.cancel()
+        await #expect(throws: CancellationError.self) { _ = try await waiting.value }
+    }
+
+    @Test func radioRepliesNeverReachThePlaybackStream() async {
+        let bridge = EventBridge()
+        push([mixJSON(999), #"{"type":"endOfTrack"}"#], into: bridge)
+        var iterator = bridge.events.makeAsyncIterator()
+        #expect(await iterator.next() == .endOfTrack)
+    }
+}

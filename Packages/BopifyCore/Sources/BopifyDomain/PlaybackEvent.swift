@@ -70,7 +70,7 @@ extension PlaybackEvent: Decodable {
         }
     }
 
-    private static func decodeTrack(from decoder: any Decoder) throws -> Track {
+    static func decodeTrack(from decoder: any Decoder) throws -> Track {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let raw = try c.decode(String.self, forKey: .trackUri)
         guard let uri = SpotifyURI(raw) else {
