@@ -282,5 +282,8 @@ struct LikedSongsModelTests {
         await model.retry(at: now.addingTimeInterval(21))
         #expect(await service.count == 1)
     }
-
+    @Test func playsALikedSongOnItsOwn() {
+        let model = LikedSongsModel(service: ConsentSavedTracks())
+        #expect(model.playRequest(for: track(1)) == PlayRequest(contextURI: track(1).uri))
+    }
 }
