@@ -44,9 +44,11 @@ public enum CoverFlowMotion {
     }
 
     /// Continuous in `distance`, so covers turn smoothly as they cross the center at any speed.
-    public static func transform(distance: Double, reduceMotion: Bool) -> CoverFlowTransform {
+    /// Covers fade out by `reach`, the distance in covers to the strip's edge, so a wider strip shows more of them.
+    public static func transform(distance: Double, reduceMotion: Bool, reach: Double = 3) -> CoverFlowTransform {
         let side = min(1, max(-1, distance))
-        let far = abs(distance)
+        // Stretches the fade past the first side cover so it ends at `reach` rather than three covers out.
+        let far = abs(distance) <= 1 ? abs(distance) : 1 + (abs(distance) - 1) * 2 / (max(2, reach) - 1)
         let opacity = far <= 1 ? 1 : far <= 2 ? 1 - 0.45 * (far - 1) : max(0, 0.55 * (3 - far))
         return CoverFlowTransform(offset: distance * spacing, rotation: reduceMotion ? 0 : -48 * side,
                                   scale: 1 - 0.2 * abs(side), opacity: opacity, zIndex: -far)

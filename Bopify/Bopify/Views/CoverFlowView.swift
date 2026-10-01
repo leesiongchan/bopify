@@ -17,12 +17,21 @@ struct CoverFlowCopy {
     static var explore: Self { .init(permission: "history.permission", enable: "history.enable", empty: "explore.empty", unavailable: "explore.unavailable") }
 }
 
-struct CoverFlowView<Source: CoverFlowSource>: View {
+extension CoverFlowView where Accessory == EmptyView {
+    init(model: Source, copy: CoverFlowCopy, artworkStore: ArtworkStore, onPlay: @escaping (Track) -> Void,
+         onEnable: @escaping @MainActor () async -> Void) {
+        self.init(model: model, copy: copy, artworkStore: artworkStore, onPlay: onPlay, onEnable: onEnable) { EmptyView() }
+    }
+}
+
+struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
     let model: Source
     let copy: CoverFlowCopy
     let artworkStore: ArtworkStore
     let onPlay: (Track) -> Void
     let onEnable: @MainActor () async -> Void
+    /// Follows the artist line, or sits under an empty shelf's message, such as Explore's station menu.
+    @ViewBuilder let accessory: () -> Accessory
     @Environment(AppEnvironment.self) private var environment: AppEnvironment?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Position in covers, driven directly while dragging or scrolling and by the spring after release.
@@ -38,23 +47,23 @@ struct CoverFlowView<Source: CoverFlowSource>: View {
         GeometryReader { available in
         VStack(spacing: 3) {
             if model.tracks.isEmpty {
-                emptyState.frame(maxWidth: .infinity, maxHeight: .infinity)
+                VStack(spacing: 8) { emptyState; accessory() }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 GeometryReader { geometry in
-                    let radius = geometry.size.width < 300 ? 1 : 2
+                    let reach = max(2, geometry.size.width / 2 / CoverFlowMotion.spacing)
+                    // Covers faint enough to sit near the edge aren't click targets.
+                    let radius = max(1, Int(reach - 0.5))
                     ZStack {
-                        ForEach(visibleIndices(radius: radius), id: \.self) { index in
+                        ForEach(visibleIndices(reach: reach), id: \.self) { index in
                             let track = model.tracks[index]
                             let distance = Double(index) - spring.position
-                            let placement = CoverFlowMotion.transform(distance: distance, reduceMotion: reduceMotion)
-                            // Fades the outermost cover in and out so it never pops at the window edge.
-                            let edge = min(1, max(0, Double(radius) + 1 - abs(distance)))
+                            let placement = CoverFlowMotion.transform(distance: distance, reduceMotion: reduceMotion, reach: reach)
                             Button { activate(index) } label: { cover(for: track) }
                                 .buttonStyle(.plain)
                                 .frame(width: 76, height: 76)
                                 .scaleEffect(placement.scale)
                                 .rotation3DEffect(.degrees(placement.rotation), axis: (x: 0, y: 1, z: 0), perspective: 0.6)
-                                .opacity(placement.opacity * edge)
+                                .opacity(placement.opacity)
                                 .offset(x: placement.offset)
                                 .zIndex(placement.zIndex)
                                 .accessibilityLabel(Text(label(for: track)))
@@ -88,8 +97,11 @@ struct CoverFlowView<Source: CoverFlowSource>: View {
                 if let selectedTrack {
                     VStack(spacing: 1) {
                         Text(selectedTrack.title).font(.system(size: 11, weight: .medium)).lineLimit(1)
-                        Text(selectedTrack.artists.map(\.name).joined(separator: ", "))
-                            .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                        HStack(spacing: 4) {
+                            Text(selectedTrack.artists.map(\.name).joined(separator: ", "))
+                                .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                            accessory()
+                        }
                     }.help(label(for: selectedTrack))
                 }
             }
@@ -115,10 +127,11 @@ struct CoverFlowView<Source: CoverFlowSource>: View {
         }
     }
 
-    func visibleIndices(radius: Int) -> [Int] {
+    func visibleIndices(reach: Double) -> [Int] {
         guard !model.tracks.isEmpty else { return [] }
         let center = min(model.tracks.count - 1, max(0, Int(spring.position.rounded())))
-        return Array(max(0, center - radius - 1)...min(model.tracks.count - 1, center + radius + 1))
+        let radius = Int(reach.rounded(.up))
+        return Array(max(0, center - radius)...min(model.tracks.count - 1, center + radius))
     }
     private func label(for track: Track) -> String {
         ([track.title] + track.artists.map(\.name)).joined(separator: " · ")

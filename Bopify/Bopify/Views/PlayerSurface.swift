@@ -29,6 +29,8 @@ struct PlayerSurface<Content: View>: View {
 }
 
 private struct PlayerGlass: ViewModifier {
+    /// Regular glass frosts more than clear glass, keeping text legible over artwork.
+    var prominent = false
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
 
@@ -38,7 +40,7 @@ private struct PlayerGlass: ViewModifier {
                 .background(Color(nsColor: .controlBackgroundColor), in: Capsule())
                 .overlay(Capsule().strokeBorder(.primary.opacity(0.5), lineWidth: 1).allowsHitTesting(false))
         } else if #available(macOS 26.0, *) {
-            content.glassEffect(.clear, in: Capsule())
+            content.glassEffect(prominent ? .regular : .clear, in: Capsule())
         } else {
             content
                 .background(.ultraThinMaterial, in: Capsule())
@@ -48,5 +50,5 @@ private struct PlayerGlass: ViewModifier {
 }
 
 extension View {
-    func playerGlass() -> some View { modifier(PlayerGlass()) }
+    func playerGlass(prominent: Bool = false) -> some View { modifier(PlayerGlass(prominent: prominent)) }
 }
