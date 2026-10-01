@@ -129,6 +129,8 @@ public final class ExploreModel: CoverFlowSource {
         isLoadingChips = true
         error = nil
         retryAfter = nil
+        // Covers the cancelled and superseded early returns; the flag is also cleared before the station step.
+        defer { if generation == current { isLoadingChips = false } }
         BopifyLog.library.debug("explore chips cache miss, loading")
         do {
             var seeds = Self.interleave(try await history.topItems(.tracks), try await history.topItems(.artists))
@@ -144,7 +146,6 @@ public final class ExploreModel: CoverFlowSource {
             if !seeds.contains(where: { $0.uri == selectedSeed }) { selectedSeed = seeds.first?.uri }
         } catch {
             guard generation == current, !Task.isCancelled else { return }
-            isLoadingChips = false
             let failure = error as? LibraryError ?? .unavailable
             self.error = failure
             switch failure {
