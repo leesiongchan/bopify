@@ -72,8 +72,9 @@ struct MonolithPlayerView: View {
             .accessibilityHidden(!isEngaged)
             .accessibilityFocused($accessibilityFocus)
             if presentation.mode == .expanded, let environment {
-                LikedSongsCoverFlow(model: environment.likedSongs, artworkStore: artworkStore,
-                                    onPlay: { player.load(PlayRequest(contextURI: $0.uri)) })
+                CoverFlowView(model: environment.likedSongs, copy: .liked, artworkStore: artworkStore,
+                              onPlay: { player.load(environment.likedSongs.playRequest(for: $0)) },
+                              onEnable: { await environment.enableLikedSongs() })
                     .frame(width: layout.lowerFrame.width, height: layout.lowerFrame.height)
                     .offset(x: layout.lowerFrame.minX, y: layout.lowerFrame.minY)
             }
