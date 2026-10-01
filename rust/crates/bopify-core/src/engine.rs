@@ -41,6 +41,8 @@ pub struct Engine {
     runtime: Runtime,
     spirc: Spirc,
     sink: EventSink,
+    /// For radio lookups. Declared after `runtime`, so the runtime still drops (and joins) first.
+    session: Session,
 }
 
 impl Engine {
@@ -62,7 +64,7 @@ impl Engine {
                 BopifyError::Unknown
             })?;
 
-        let spirc = runtime.block_on(async {
+        let (spirc, session) = runtime.block_on(async {
             // SessionConfig::default() supplies librespot's own client id.
             // A Spotify Developer Dashboard id is rejected by login5 with a
             // raw HTTP 400, so it must not be overridden here.
@@ -123,8 +125,9 @@ impl Engine {
             // The returned future is the event loop. Commands issued before
             // it is driven are queued, so spawning it here is correct.
             tokio::spawn(task);
+            let radio_session = session.clone();
             supervise_forwarder(events, sink.clone(), session);
-            Ok::<_, BopifyError>(spirc)
+            Ok::<_, BopifyError>((spirc, radio_session))
         })?;
 
         log::info!("engine: session connected, spirc running");
@@ -132,6 +135,7 @@ impl Engine {
             runtime,
             spirc,
             sink,
+            session,
         })
     }
 
@@ -214,6 +218,16 @@ impl Engine {
             },
         );
         self.spirc.load(request).map_err(command_failed)
+    }
+
+    /// Queues a station lookup. The answer arrives on the sink as `Radio` or
+    /// `RadioFailed` carrying `request_id`, and the work ends with the runtime.
+    pub fn request_radio(&self, seed_uri: &str, request_id: u64) -> Result<(), BopifyError> {
+        let seed = crate::radio::Seed::parse(seed_uri).ok_or(BopifyError::InvalidArgument)?;
+        let source = crate::radio::SessionRadio(self.session.clone());
+        let sink = self.sink.clone();
+        self.runtime.spawn(async move { sink(crate::radio::resolve(&source, seed, request_id).await) });
+        Ok(())
     }
 }
 

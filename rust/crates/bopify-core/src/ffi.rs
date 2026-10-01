@@ -390,6 +390,29 @@ pub unsafe extern "C" fn bopify_load(
     }
 }
 
+/// Asks for Spotify's radio mix for a track or artist URI. Returns once the
+/// request is queued; the answer is one `radio` or `radioFailed` event with
+/// the same `request_id`.
+///
+/// # Safety
+/// `handle` must be null or a live handle from `bopify_engine_create`, and
+/// `seed_uri` must satisfy `str_from`'s contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn bopify_request_radio(
+    handle: *mut BopifyEngine,
+    seed_uri: *const c_char,
+    request_id: u64,
+) -> i32 {
+    log::debug!("ffi: bopify_request_radio request_id={request_id}");
+    // SAFETY: the seed pointer satisfies `str_from`'s contract per the header,
+    // and the borrow is consumed before this call returns.
+    let Some(seed) = (unsafe { str_from(seed_uri) }) else {
+        return BopifyError::InvalidArgument.code();
+    };
+    // SAFETY: forwards this function's own contract to `with_engine`.
+    unsafe { with_engine(handle, |engine| engine.request_radio(seed, request_id)) }
+}
+
 /// Always fails with `SessionLost`: librespot cannot swap credentials in
 /// place, so the caller has to destroy the engine and create a new one.
 ///
@@ -461,6 +484,11 @@ mod tests {
             assert_eq!(bopify_pause(ptr), lost);
             assert_eq!(bopify_next(ptr), lost);
             assert_eq!(bopify_select_queue(ptr, 1, 0), lost);
+            assert_eq!(bopify_request_radio(ptr, c"spotify:track:6rqhFgbbKwnb9MLmUQDhG6".as_ptr(), 1), lost);
+            assert_eq!(
+                bopify_request_radio(ptr, std::ptr::null(), 1),
+                BopifyError::InvalidArgument.code()
+            );
             assert_eq!(bopify_set_shuffle(ptr, true), lost);
             assert_eq!(bopify_set_repeat(ptr, 2), lost);
             assert_eq!(
