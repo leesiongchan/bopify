@@ -52,7 +52,8 @@ struct LibraryShelf: View {
         case .explore:
             if environment.explore.stationFailure != nil {
                 VStack(spacing: 8) {
-                    Text("explore.stationsUnavailable").font(.caption).foregroundStyle(.secondary)
+                    Text(environment.explore.stationFailure == .unavailable ? "explore.stationsUnavailable" : "explore.stationFailed")
+                        .font(.caption).foregroundStyle(.secondary)
                     Button("explore.retryStation") { Task { await environment.explore.retryStation() } }.font(.caption)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -88,6 +89,10 @@ private struct StationChips: View {
             .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.06),
                                          .init(color: .black, location: 0.94), .init(color: .clear, location: 1)],
                                  startPoint: .leading, endPoint: .trailing))
+            .onAppear {
+                // The row is recreated on every switch into Explore, so the selection must be revealed here too.
+                if let seed = model.selectedSeed { proxy.scrollTo(seed, anchor: .center) }
+            }
             .onChange(of: model.selectedSeed) { _, seed in
                 // Chips are identified by non-optional URIs, so an optional would never match.
                 if let seed { withAnimation(.snappy) { proxy.scrollTo(seed, anchor: .center) } }
