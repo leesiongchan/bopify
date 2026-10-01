@@ -103,8 +103,8 @@ private func push(_ payloads: [String], into bridge: EventBridge) {
     }
 }
 
-private func mixJSON(_ id: UInt64) -> String {
-    #"{"type":"radio","requestID":\#(id),"seedURI":"spotify:track:s","contextURI":"spotify:playlist:m","tracks":[{"trackUri":"spotify:track:a","title":"A","artists":["X"],"albumTitle":null,"artworkUrl":null,"durationMs":1000}]}"#
+private func mixJSON(_ id: UInt64, context: String = "spotify:playlist:m") -> String {
+    #"{"type":"radio","requestID":\#(id),"seedURI":"spotify:track:s","contextURI":"\#(context)","tracks":[{"trackUri":"spotify:track:a","title":"A","artists":["X"],"albumTitle":null,"artworkUrl":null,"durationMs":1000}]}"#
 }
 
 @Suite("EventBridge radio")
@@ -114,6 +114,24 @@ struct EventBridgeRadioTests {
         let mix = try await bridge.radio { id in push([mixJSON(id)], into: bridge) }
         #expect(mix.contextURI.rawValue == "spotify:playlist:m")
         #expect(mix.tracks.map(\.uri.rawValue) == ["spotify:track:a"])
+    }
+
+    /// Replies arrive in reverse order; each must still reach the caller that sent its ID.
+    @Test func concurrentRequestsEachGetTheReplyCarryingTheirID() async throws {
+        let bridge = EventBridge()
+        let (sent, sender) = AsyncStream.makeStream(of: (String, UInt64).self)
+        let first = Task { try await bridge.radio { sender.yield(("first", $0)) } }
+        let second = Task { try await bridge.radio { sender.yield(("second", $0)) } }
+        // The waiter is registered before `send` runs, so two IDs here means both callers are waiting.
+        var ids: [String: UInt64] = [:]
+        for await (label, id) in sent {
+            ids[label] = id
+            if ids.count == 2 { break }
+        }
+        let replies = ids.sorted { $0.value > $1.value }.map { mixJSON($0.value, context: "spotify:playlist:\($0.key)") }
+        push(replies, into: bridge)
+        #expect(try await first.value.contextURI.rawValue == "spotify:playlist:first")
+        #expect(try await second.value.contextURI.rawValue == "spotify:playlist:second")
     }
 
     @Test func aFailedReplyThrowsItsReason() async {
