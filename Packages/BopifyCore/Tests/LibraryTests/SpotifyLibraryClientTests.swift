@@ -275,4 +275,60 @@ struct SpotifyLibraryClientTests {
         await #expect(throws: CancellationError.self) { _ = try await client().savedTracks(offset: 0, limit: 50) }
     }
 
+    private func scopedClient(_ expected: Set<String>) -> SpotifyLibraryClient {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [LibraryProtocol.self]
+        return SpotifyLibraryClient(session: URLSession(configuration: configuration)) { required in
+            #expect(required == expected)
+            return "TEST_TOKEN"
+        }
+    }
+    private func query(_ request: URLRequest?) -> [URLQueryItem]? {
+        request?.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems }
+    }
+    @Test func recentlyPlayedKeepsLoadableContextsAndSkipsBadItems() async throws {
+        var album = savedTrack("a")
+        album["context"] = ["uri": "spotify:album:alb", "type": "album"]
+        var collection = savedTrack("b")
+        collection["context"] = ["uri": "spotify:user:someone:collection", "type": "collection"]
+        var none = savedTrack("c")
+        none["context"] = NSNull()
+        let body = try JSONSerialization.data(withJSONObject: ["items": [album, collection, ["track": NSNull()], none]])
+        LibraryProtocol.fixture.reset(.init(data: body))
+        let plays = try await scopedClient(["user-read-recently-played"]).recentlyPlayed()
+        #expect(plays.map(\.track.uri.rawValue) == ["spotify:track:a", "spotify:track:b", "spotify:track:c"])
+        #expect(plays.map(\.contextURI?.rawValue) == ["spotify:album:alb", nil, nil])
+        let request = LibraryProtocol.fixture.requests.first
+        #expect(request?.url?.path == "/v1/me/player/recently-played")
+        #expect(query(request) == [URLQueryItem(name: "limit", value: "50")])
+    }
+    @Test func topItemsAskForFiveMediumTermItemsWithTheTopReadScope() async throws {
+        let tracks = try JSONSerialization.data(withJSONObject: ["items": [savedTrack("t")["track"]!, ["uri": 1]]])
+        LibraryProtocol.fixture.reset(.init(data: tracks))
+        let client = scopedClient(["user-top-read"])
+        #expect(try await client.topItems(.tracks) == [StationSeed(uri: SpotifyURI("spotify:track:t")!, name: "Song t")])
+        #expect(LibraryProtocol.fixture.requests.first?.url?.path == "/v1/me/top/tracks")
+        #expect(query(LibraryProtocol.fixture.requests.first) == [
+            URLQueryItem(name: "time_range", value: "medium_term"), URLQueryItem(name: "limit", value: "5")])
+        let artists = try JSONSerialization.data(withJSONObject: ["items": [
+            ["uri": "spotify:artist:ar", "name": "Artist"], ["uri": "spotify:track:notAnArtist", "name": "X"], ["uri": "spotify:artist:blank", "name": ""]]])
+        LibraryProtocol.fixture.reset(.init(data: artists))
+        let seeds = try await client.topItems(.artists)
+        #expect(seeds == [StationSeed(uri: SpotifyURI("spotify:artist:ar")!, name: "Artist")])
+        #expect(seeds.first?.isArtist == true)
+        #expect(LibraryProtocol.fixture.requests.first?.url?.path == "/v1/me/top/artists")
+    }
+    @Test func historyRequestsShareTheLibraryCooldown() async {
+        LibraryProtocol.fixture.reset(.init(status: 429, headers: ["Retry-After": "30"]))
+        let client = client()
+        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 30)) { _ = try await client.recentlyPlayed() }
+        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 30)) { _ = try await client.topItems(.artists) }
+        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 30)) { _ = try await client.savedTracks(offset: 0, limit: 50) }
+        #expect(LibraryProtocol.fixture.requests.count == 1)
+    }
+    @Test func malformedHistoryResponsesAreInvalid() async {
+        LibraryProtocol.fixture.reset(.init(data: Data("{}".utf8)))
+        await #expect(throws: LibraryError.invalidResponse) { _ = try await client().recentlyPlayed() }
+        await #expect(throws: LibraryError.invalidResponse) { _ = try await client().topItems(.tracks) }
+    }
 }

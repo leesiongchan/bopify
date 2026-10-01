@@ -2,7 +2,7 @@ import Foundation
 import os
 import BopifyDomain
 
-public struct SpotifyLibraryClient: LibraryService, SavedTracksService {
+public struct SpotifyLibraryClient: LibraryService, SavedTracksService, ListeningHistoryService {
     private let session: URLSession
     private let tokenProvider: @Sendable (Set<String>) async throws -> String
     private let redirects = LibraryRedirectPolicy()
@@ -42,6 +42,29 @@ public struct SpotifyLibraryClient: LibraryService, SavedTracksService {
         let continues = page.next != nil && !page.items.isEmpty && next < page.total
         return SavedTracksPage(tracks: page.items.compactMap { $0.track?.domain },
                                nextOffset: continues ? next : nil, total: page.total)
+    }
+
+    public func recentlyPlayed() async throws -> [RecentPlay] {
+        let data = try await request(method: "GET", path: "/v1/me/player/recently-played",
+                                     query: [URLQueryItem(name: "limit", value: "50")], scope: "user-read-recently-played")
+        guard let page = try? JSONDecoder().decode(RecentPage.self, from: data) else { throw LibraryError.invalidResponse }
+        return page.items.compactMap { item in
+            item.track?.domain.map { RecentPlay(track: $0, contextURI: item.loadableContext) }
+        }
+    }
+
+    public func topItems(_ kind: TopItemKind) async throws -> [StationSeed] {
+        let data = try await request(method: "GET", path: "/v1/me/top/\(kind.rawValue)", query: [
+            URLQueryItem(name: "time_range", value: "medium_term"), URLQueryItem(name: "limit", value: "5")
+        ], scope: "user-top-read")
+        switch kind {
+        case .tracks:
+            guard let page = try? JSONDecoder().decode(TopPage<SavedTrack>.self, from: data) else { throw LibraryError.invalidResponse }
+            return page.items.compactMap { $0.value?.domain }.map { StationSeed(uri: $0.uri, name: $0.title) }
+        case .artists:
+            guard let page = try? JSONDecoder().decode(TopPage<TopArtist>.self, from: data) else { throw LibraryError.invalidResponse }
+            return page.items.compactMap { $0.value?.seed }
+        }
     }
 
     private func request(method: String, uri: SpotifyURI, contains: Bool = false) async throws -> Data {
@@ -165,5 +188,44 @@ private struct SavedTrack: Decodable {
         }.first
         return Track(uri: uri, title: name, artists: artists.map { ArtistSummary(name: $0.name) },
                      albumTitle: album?.name, artwork: artwork, durationMs: duration_ms)
+    }
+}
+
+private struct RecentPage: Decodable { let items: [RecentItem] }
+
+private struct RecentItem: Decodable {
+    struct Context: Decodable { let uri: String }
+    let track: SavedTrack?
+    let context: Context?
+    private enum CodingKeys: String, CodingKey { case track, context }
+    init(from decoder: Decoder) throws {
+        let container = try? decoder.container(keyedBy: CodingKeys.self)
+        track = try? container?.decode(SavedTrack.self, forKey: .track)
+        context = try? container?.decode(Context.self, forKey: .context)
+    }
+    /// Only contexts the engine can load with a start track; a Liked Songs collection URI is not one.
+    var loadableContext: SpotifyURI? {
+        guard let uri = context.flatMap({ SpotifyURI($0.uri) }) else { return nil }
+        switch uri.kind {
+        case .album, .playlist, .artist, .show: return uri
+        default: return nil
+        }
+    }
+}
+
+private struct TopPage<Item: Decodable>: Decodable { let items: [Lenient<Item>] }
+
+/// One malformed item must not discard the rest of the page.
+private struct Lenient<Value: Decodable>: Decodable {
+    let value: Value?
+    init(from decoder: Decoder) throws { value = try? Value(from: decoder) }
+}
+
+private struct TopArtist: Decodable {
+    let uri: String
+    let name: String
+    var seed: StationSeed? {
+        guard let uri = SpotifyURI(uri), uri.kind == .artist, !name.isEmpty else { return nil }
+        return StationSeed(uri: uri, name: name)
     }
 }

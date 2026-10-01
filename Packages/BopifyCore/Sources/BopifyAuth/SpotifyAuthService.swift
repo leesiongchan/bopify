@@ -51,7 +51,7 @@ public actor SpotifyAuthService {
     }
 
     public func authorizeLibraryScopes(_ scopes: Set<String>) async throws -> TokenSet {
-        let libraryScopes: Set<String> = ["user-library-read", "user-library-modify"]
+        let libraryScopes: Set<String> = ["user-library-read", "user-library-modify", "user-read-recently-played", "user-top-read"]
         guard !scopes.isEmpty, scopes.isSubset(of: libraryScopes) else { throw LibraryError.authorizationRequired }
         let existing = (tokens ?? restore())?.grantedScopes.intersection(libraryScopes) ?? []
         let required = existing.union(scopes)

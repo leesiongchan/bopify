@@ -323,6 +323,21 @@ struct SpotifyAuthServiceTests {
         #expect(store.load() == nil)
     }
 
+
+    @Test func listeningHistoryConsentWidensTheLibraryGrant() async throws {
+        let widened = #"{"access_token":"WIDE","token_type":"Bearer","expires_in":3600,"refresh_token":"RT","scope":"user-library-read user-read-recently-played user-top-read"}"#
+        AuthFlowStubProtocol.handler = { _ in (200, Data(widened.utf8)) }
+        let store = InMemoryTokenStore()
+        try store.save(TokenSet(accessToken: "OLD", refreshToken: "RT", expiresAt: Date().addingTimeInterval(3600), grantedScopes: ["user-library-read"]))
+        let service = SpotifyAuthService(clientID: "dashboard", client: makeClient(), store: store, openURL: { url in
+            let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
+            #expect(Set(query["scope"]!.split(separator: " ").map(String.init)) == ["user-library-read", "user-read-recently-played", "user-top-read"])
+            let callback = URL(string: "\(query["redirect_uri"]!)?code=TESTCODE&state=\(query["state"]!)")!
+            Task { _ = try? await URLSession.shared.data(from: callback) }
+        })
+        let token = try await service.authorizeLibraryScopes(["user-read-recently-played", "user-top-read"])
+        #expect(token.grantedScopes == ["user-library-read", "user-read-recently-played", "user-top-read"])
+    }
 }
 
 private final class RefreshGate: @unchecked Sendable {
