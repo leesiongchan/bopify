@@ -148,6 +148,16 @@
         }
       }
     },
+    "explore.stationFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This station couldn’t load."
+          }
+        }
+      }
+    },
     "explore.stationsUnavailable" : {
       "localizations" : {
         "en" : {
