@@ -5,6 +5,7 @@
 use std::{
     future::Future,
     sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
 };
 
 use librespot_core::{Session, SpotifyUri, error::ErrorKind};
@@ -85,9 +86,15 @@ impl RadioSource for SessionRadio {
 
 /// Builds the reply for one request; never fails, because a failure is itself a reply.
 pub(crate) async fn resolve<S: RadioSource>(source: &S, seed: Seed, request_id: u64) -> WireEvent {
+    resolve_within(source, seed, request_id, Duration::from_secs(30)).await
+}
+
+async fn resolve_within<S: RadioSource>(source: &S, seed: Seed, request_id: u64, limit: Duration) -> WireEvent {
     let seed_uri = seed.uri();
     let kind = seed.kind();
-    match mix_for(source, seed).await {
+    // librespot sets no HTTP timeout, so a stalled request would otherwise leave Explore loading forever.
+    let outcome = tokio::time::timeout(limit, mix_for(source, seed)).await.unwrap_or(Err(RadioFailure::Network));
+    match outcome {
         Ok((context_uri, tracks)) => {
             log::info!("radio: resolved seed={kind} tracks={}", tracks.len());
             WireEvent::Radio { request_id, seed_uri, context_uri, tracks }
@@ -162,7 +169,9 @@ async fn resolve_tracks<S: RadioSource>(source: &S, uris: Vec<String>) -> Vec<Wi
 
 fn classify(error: &librespot_core::Error) -> RadioFailure {
     match error.kind {
-        ErrorKind::DeadlineExceeded | ErrorKind::Unavailable | ErrorKind::Aborted => RadioFailure::Network,
+        ErrorKind::DeadlineExceeded | ErrorKind::Unavailable | ErrorKind::Aborted | ErrorKind::ResourceExhausted => RadioFailure::Network,
+        // librespot maps HTTP 404 here: Spotify has no mix for this seed, not a broken endpoint.
+        ErrorKind::NotFound => RadioFailure::NoMix,
         _ => RadioFailure::Unavailable,
     }
 }
@@ -195,12 +204,13 @@ mod tests {
         mix: Result<Vec<u8>, RadioFailure>,
         context: Vec<String>,
         missing: Vec<String>,
+        hang: bool,
         mixed_for: Arc<Mutex<Vec<String>>>,
     }
 
     impl Fake {
         fn new(context: Vec<String>) -> Self {
-            Self { top: None, mix: Ok(MIX.to_vec()), context, missing: vec![], mixed_for: Arc::default() }
+            Self { top: None, mix: Ok(MIX.to_vec()), context, missing: vec![], hang: false, mixed_for: Arc::default() }
         }
     }
 
@@ -210,6 +220,9 @@ mod tests {
         }
         async fn mix(&self, track: &SpotifyUri) -> Result<Vec<u8>, RadioFailure> {
             self.mixed_for.lock().unwrap().push(track.to_uri());
+            if self.hang {
+                std::future::pending::<()>().await;
+            }
             self.mix.clone()
         }
         async fn context_tracks(&self, _context_uri: &str) -> Result<Vec<String>, RadioFailure> {
@@ -313,5 +326,24 @@ mod tests {
         let mut broken = Fake::new(uris(2));
         broken.mix = Err(RadioFailure::Network);
         assert_eq!(failure(broken, SEED_TRACK).await, RadioFailure::Network);
+    }
+
+    #[tokio::test]
+    async fn a_request_that_never_answers_fails_as_a_network_error() {
+        let mut stalled = Fake::new(uris(2));
+        stalled.hang = true;
+        let reply = resolve_within(&stalled, Seed::parse(SEED_TRACK).unwrap(), 7, Duration::from_millis(5));
+        let event = tokio::time::timeout(Duration::from_secs(2), reply).await.expect("resolve never gave up");
+        assert!(matches!(event, WireEvent::RadioFailed { request_id: 7, reason: RadioFailure::Network, .. }), "{event:?}");
+    }
+
+    #[test]
+    fn classify_maps_librespot_errors_to_failure_categories() {
+        use librespot_core::Error;
+        assert_eq!(classify(&Error::not_found("x")), RadioFailure::NoMix);
+        assert_eq!(classify(&Error::resource_exhausted("x")), RadioFailure::Network);
+        assert_eq!(classify(&Error::unavailable("x")), RadioFailure::Network);
+        assert_eq!(classify(&Error::deadline_exceeded("x")), RadioFailure::Network);
+        assert_eq!(classify(&Error::permission_denied("x")), RadioFailure::Unavailable);
     }
 }
