@@ -288,7 +288,7 @@ final class AppEnvironment {
     }
 }
 
-/// Explore's way to the current engine: a token refresh replaces the engine, so the model cannot hold it.
+/// Explore's way to the current engine: the engine is created after the models and replaced on reconnect or sign-out, so the model cannot hold it.
 @MainActor
 private final class StationRoute {
     var engine: (any PlaybackEngine)?

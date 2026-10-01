@@ -94,7 +94,7 @@ struct CoverFlowView<Source: CoverFlowSource>: View {
                 }
             }
         }
-        // Covers every gap between header, covers and title; the covers' input view sits above it.
+        // Covers every gap around the covers and title; the covers' input view sits above it.
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(PlayerBackgroundDragRegion())
         .task {

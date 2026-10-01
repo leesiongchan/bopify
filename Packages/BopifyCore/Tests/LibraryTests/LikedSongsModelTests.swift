@@ -57,6 +57,18 @@ private actor ConsentSavedTracks: SavedTracksService {
     }
 }
 
+/// Answers each offset at once from a fixed set of pages and records what was asked.
+private actor PagedSavedTracks: SavedTracksService {
+    private let pages: [Int: SavedTracksPage]
+    private(set) var offsets: [Int] = []
+    init(_ pages: [Int: SavedTracksPage]) { self.pages = pages }
+
+    func savedTracks(offset: Int, limit: Int) async throws -> SavedTracksPage {
+        offsets.append(offset)
+        return pages[offset] ?? SavedTracksPage(tracks: [], nextOffset: nil, total: 0)
+    }
+}
+
 @Suite("LikedSongsModel") @MainActor
 struct LikedSongsModelTests {
     private let now = Date(timeIntervalSince1970: 1000)
@@ -84,9 +96,21 @@ struct LikedSongsModelTests {
         await more.value
         #expect(model.tracks.map(\.uri) == (0...51).map { track($0).uri })
         model.hide(at: now)
+        model.hide(at: now)
         await model.loadMoreIfNeeded(near: track(51).uri)
         #expect(await service.count == 2)
         #expect(await service.maxConcurrent == 1)
+    }
+    /// A quick tab round trip can hide the old view after the new one revealed; paging must keep working.
+    @Test func staysShownWhileAnyRevealIsUnmatched() async {
+        let service = PagedSavedTracks([0: page([1, 2], next: 50), 50: page([3])])
+        let model = LikedSongsModel(service: service)
+        await model.reveal(at: now)
+        await model.reveal(at: now)
+        model.hide(at: now)
+        await model.loadMoreIfNeeded(near: track(2).uri)
+        #expect(await service.offsets == [0, 50])
+        #expect(model.tracks == [track(1), track(2), track(3)])
     }
     @Test(arguments: [true, false]) func refreshPreservesDeepSelection(stillPresent: Bool) async {
         let service = ControlledSavedTracks()

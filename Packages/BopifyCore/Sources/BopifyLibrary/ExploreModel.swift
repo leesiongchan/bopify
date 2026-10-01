@@ -20,12 +20,14 @@ public final class ExploreModel: CoverFlowSource {
     @ObservationIgnored private let radio: @MainActor (SpotifyURI) async throws -> RadioMix
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private var chipsLoadedAt: Date?
-    @ObservationIgnored private var visible = false
+    // Counted, not a flag: on a quick tab round trip the old view's hide can land after the new view's reveal.
+    @ObservationIgnored private var reveals = 0
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var station: Task<Void, Never>?
 
     public var isLoading: Bool { isLoadingChips || loadingSeed != nil }
     public var hasMore: Bool { false }
+    private var visible: Bool { reveals > 0 }
     public var tracks: [Track] { selectedSeed.flatMap { mixes[$0]?.tracks } ?? [] }
     public var selectedURI: SpotifyURI? { selectedSeed.flatMap { selections[$0] } }
     public var stationFailure: RadioFailure? { selectedSeed.flatMap { stationFailures[$0] } }
@@ -43,7 +45,7 @@ public final class ExploreModel: CoverFlowSource {
     }
 
     public func reveal(at date: Date) async {
-        visible = true
+        reveals += 1
         guard !isLoadingChips, retryAfter.map({ $0 <= date }) ?? true else { return }
         if error == nil, let chipsLoadedAt, date.timeIntervalSince(chipsLoadedAt) < 6 * 60 * 60 {
             BopifyLog.library.debug("explore chips cache hit")
@@ -53,7 +55,7 @@ public final class ExploreModel: CoverFlowSource {
         await loadChips()
     }
 
-    public func hide(at date: Date) { visible = false }
+    public func hide(at date: Date) { reveals = max(0, reveals - 1) }
 
     public func select(_ uri: SpotifyURI) {
         guard let seed = selectedSeed, tracks.contains(where: { $0.uri == uri }) else { return }
@@ -102,7 +104,7 @@ public final class ExploreModel: CoverFlowSource {
         error = nil
         retryAfter = nil
         chipsLoadedAt = nil
-        visible = false
+        reveals = 0
         BopifyLog.library.debug("explore cleared")
     }
 
