@@ -128,6 +128,16 @@
         }
       }
     },
+    "explore.from" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "from"
+          }
+        }
+      }
+    },
     "explore.retryStation" : {
       "localizations" : {
         "en" : {
@@ -154,6 +164,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This station couldn’t load."
+          }
+        }
+      }
+    },
+    "explore.stations" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stations"
           }
         }
       }

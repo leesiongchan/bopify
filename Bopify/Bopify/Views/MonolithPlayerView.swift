@@ -15,6 +15,7 @@ struct MonolithPlayerView: View {
     @State private var isScrubbing = false
     @State private var previousQueue: PlaybackQueue?
     @State private var pendingSelection: QueueSelectionStatus?
+    @State private var controlsContentHeight: CGFloat?
     @AccessibilityFocusState private var accessibilityFocus: Bool
     @Environment(AppEnvironment.self) private var environment: AppEnvironment?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -61,6 +62,7 @@ struct MonolithPlayerView: View {
             ScrollView(layout.controlsFrame.width < 144 ? [.horizontal, .vertical] : .vertical) {
                 // The scroll view swallows clicks on blank space, so the drag region must live inside it.
                 controls.frame(minWidth: 144)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { controlsContentHeight = $0 }
                     .frame(minHeight: layout.controlsFrame.height, alignment: .top)
                     .background(PlayerBackgroundDragRegion())
             }
@@ -72,9 +74,13 @@ struct MonolithPlayerView: View {
             .accessibilityHidden(!isEngaged)
             .accessibilityFocused($accessibilityFocus)
             if presentation.mode == .expanded, let environment {
-                LibraryShelf(environment: environment, artworkStore: artworkStore, onPlay: { player.load($0) })
-                    .frame(width: layout.lowerFrame.width, height: layout.lowerFrame.height)
-                    .offset(x: layout.lowerFrame.minX, y: layout.lowerFrame.minY)
+                // The shelf starts just under the controls' content, so its tabs sit with the controls instead of below their spare height.
+                let top = controlsContentHeight.map { min(layout.lowerFrame.minY, layout.controlsFrame.minY + $0 + 4) } ?? layout.lowerFrame.minY
+                LibraryShelf(environment: environment, artworkStore: artworkStore,
+                             tabsInset: layout.controlsFrame.minX - layout.lowerFrame.minX,
+                             coverBleed: layout.lowerFrame.minX - layout.sleeveFrame.minX, onPlay: { player.load($0) })
+                    .frame(width: layout.lowerFrame.width, height: layout.lowerFrame.maxY - top)
+                    .offset(x: layout.lowerFrame.minX, y: top)
             }
             QueueView(player: player, artworkStore: artworkStore, onSelect: select)
                 .frame(width: layout.lowerFrame.width, height: layout.lowerFrame.height)
@@ -227,7 +233,9 @@ struct MonolithPlayerView: View {
                     .disabled(player.state.mirror != nil && presentation.mode != .queue)
             }
             .modifier(UnfurlRow(index: 3, isEngaged: isEngaged, reduceMotion: reduceMotion))
-            status.font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            // The status keeps its line while empty so the library tabs below don't jump each time a track loads.
+            ZStack(alignment: .leading) { Text(verbatim: " ").hidden(); status }
+                .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 .modifier(UnfurlRow(index: 4, isEngaged: isEngaged, reduceMotion: reduceMotion))
         }
         .buttonStyle(.playerControl)

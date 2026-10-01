@@ -54,6 +54,14 @@ struct CoverFlowMotionTests {
         #expect(CoverFlowMotion.transform(distance: 1, reduceMotion: false).scale == 0.8)
     }
 
+    @Test func coversFadeOutAtTheStripsReach() {
+        let opacity = { CoverFlowMotion.transform(distance: $0, reduceMotion: false, reach: 4).opacity }
+        #expect(opacity(1) == 1)
+        #expect(opacity(3) > 0)
+        #expect(opacity(4) == 0)
+        #expect(CoverFlowMotion.transform(distance: 3, reduceMotion: false).opacity == 0)
+    }
+
     @Test func wheelNotchMovesExactlyOneCover() {
         #expect(CoverFlowMotion.wheelTarget(from: 4, delta: -3, count: 10) == 5)
         #expect(CoverFlowMotion.wheelTarget(from: 4, delta: 0.5, count: 10) == 3)

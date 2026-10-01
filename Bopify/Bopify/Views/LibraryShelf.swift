@@ -15,25 +15,25 @@ enum LibraryTab: String, CaseIterable, Identifiable {
     }
 }
 
-/// Tabs, Explore's station chips and the shared Cover Flow in the sleeve's lower frame.
+/// Tabs, Explore's station menu and the shared Cover Flow in the sleeve's lower frame.
 struct LibraryShelf: View {
     let environment: AppEnvironment
     let artworkStore: ArtworkStore
+    /// How far the controls column starts right of this shelf; the tabs centre on that column so they line up with it.
+    let tabsInset: CGFloat
+    /// How far the sleeve's glass reaches past each side of this shelf; Cover Flow runs out to it.
+    let coverBleed: CGFloat
     let onPlay: (PlayRequest) -> Void
     @AppStorage("library.tab") private var tab: LibraryTab = .liked
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 4) {
-            Picker("library.tabs", selection: $tab) {
-                ForEach(LibraryTab.allCases) { Text($0.title).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.small)
-            .fixedSize()
-            if tab == .explore { StationChips(model: environment.explore) }
-            shelf.transition(reduceMotion ? AnyTransition.opacity : AnyTransition.opacity.combined(with: .scale(scale: 0.94)))
+            LibraryTabBar(tab: $tab)
+                .frame(maxWidth: .infinity)
+                .padding(.leading, tabsInset)
+            shelf.padding(.horizontal, -coverBleed).clipped()
+                .transition(reduceMotion ? AnyTransition.opacity : AnyTransition.opacity.combined(with: .scale(scale: 0.94)))
         }
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : .snappy, value: tab)
         .onChange(of: tab) { _, tab in
@@ -55,6 +55,7 @@ struct LibraryShelf: View {
                     Text(environment.explore.stationFailure == .unavailable ? "explore.stationsUnavailable" : "explore.stationFailed")
                         .font(.caption).foregroundStyle(.secondary)
                     Button("explore.retryStation") { Task { await environment.explore.retryStation() } }.font(.caption)
+                    StationMenu(model: environment.explore)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(PlayerBackgroundDragRegion())
@@ -64,8 +65,10 @@ struct LibraryShelf: View {
             } else {
                 CoverFlowView(model: environment.explore, copy: .explore, artworkStore: artworkStore,
                               onPlay: { onPlay(environment.explore.playRequest(for: $0)) },
-                              onEnable: { await environment.enableListeningHistory() })
-                    .id(environment.explore.selectedSeed)
+                              onEnable: { await environment.enableListeningHistory() }) {
+                    StationMenu(model: environment.explore)
+                }
+                .id(environment.explore.selectedSeed)
             }
         case .liked:
             CoverFlowView(model: environment.likedSongs, copy: .liked, artworkStore: artworkStore,
@@ -76,58 +79,77 @@ struct LibraryShelf: View {
     }
 }
 
-/// Up to ten station chips: ♪ for a track seed, ● for an artist, a retry arrow for a failed station.
-private struct StationChips: View {
+/// Glass tabs with a sliding highlight, in the same glass as the player's other floating controls.
+private struct LibraryTabBar: View {
+    @Binding var tab: LibraryTab
+    @Namespace private var highlight
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(LibraryTab.allCases) { item in
+                Button { tab = item } label: {
+                    Text(item.title)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(item == tab ? .primary : .secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background {
+                            if item == tab {
+                                Capsule().fill(Color.primary.opacity(0.14)).matchedGeometryEffect(id: "tab", in: highlight)
+                            }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(item == tab ? .isSelected : [])
+            }
+        }
+        .padding(2)
+        .playerGlass(prominent: true)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text("library.tabs"))
+    }
+}
+
+/// "from ♪ station" after the artist, like Music's "Playing from": a glass button that opens every station.
+private struct StationMenu: View {
     let model: ExploreModel
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal) {
-                HStack(spacing: 6) {
-                    ForEach(model.chips) { seed in chip(seed) }
+        if let selected = model.chips.first(where: { $0.uri == model.selectedSeed }) {
+            Menu {
+                Picker("explore.stations", selection: Binding(get: { model.selectedSeed }, set: { seed in
+                    if let seed { Task { await model.selectChip(seed) } }
+                })) {
+                    ForEach(model.chips) { seed in
+                        Label(seed.name, systemImage: glyph(seed)).tag(Optional(seed.uri))
+                    }
                 }
-                .padding(.horizontal, 12)
+                .pickerStyle(.inline)
+                .labelsHidden()
+            } label: {
+                HStack(spacing: 3) {
+                    Text("explore.from")
+                    Image(systemName: glyph(selected)).font(.system(size: 7, weight: .semibold)).opacity(0.7)
+                    Text(selected.name).lineLimit(1)
+                    Image(systemName: "chevron.down").font(.system(size: 6, weight: .bold)).opacity(0.6)
+                }
+                .font(.system(size: 10, weight: .medium))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 2)
+                .playerGlass(prominent: true)
+                .contentShape(Capsule())
             }
-            .scrollIndicators(.never)
-            .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.06),
-                                         .init(color: .black, location: 0.94), .init(color: .clear, location: 1)],
-                                 startPoint: .leading, endPoint: .trailing))
-            .onAppear {
-                // The row is recreated on every switch into Explore, so the selection must be revealed here too.
-                if let seed = model.selectedSeed { proxy.scrollTo(seed, anchor: .center) }
-            }
-            .onChange(of: model.selectedSeed) { _, seed in
-                // Chips are identified by non-optional URIs, so an optional would never match.
-                if let seed { withAnimation(.snappy) { proxy.scrollTo(seed, anchor: .center) } }
-            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .layoutPriority(1)
+            .help(Text("explore.stations"))
+            .accessibilityLabel(Text("explore.station \(selected.name)"))
         }
-        .frame(height: 20)
     }
 
-    private func chip(_ seed: StationSeed) -> some View {
-        let selected = seed.uri == model.selectedSeed
-        let failed = model.stationFailures[seed.uri] != nil
-        return Button {
-            Task {
-                if selected && failed { await model.retryStation() } else { await model.selectChip(seed.uri) }
-            }
-        } label: {
-            HStack(spacing: 3) {
-                Image(systemName: failed ? "arrow.clockwise" : seed.isArtist ? "circle.fill" : "music.note")
-                    .font(.system(size: failed ? 8 : 6, weight: .semibold))
-                    .opacity(0.7)
-                Text(seed.name).lineLimit(1)
-            }
-            .font(.system(size: 10, weight: .medium))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .foregroundStyle(selected ? Color.black : Color.primary)
-            .background(Capsule().fill(selected ? Color.white.opacity(0.92) : Color.clear))
-            .overlay(Capsule().strokeBorder(Color.primary.opacity(selected ? 0 : 0.2)))
-        }
-        .buttonStyle(.plain)
-        .id(seed.uri)
-        .accessibilityLabel(Text("explore.station \(seed.name)"))
-        .accessibilityAddTraits(selected ? .isSelected : [])
+    private func glyph(_ seed: StationSeed) -> String {
+        model.stationFailures[seed.uri] != nil ? "arrow.clockwise" : seed.isArtist ? "person.fill" : "music.note"
     }
 }
