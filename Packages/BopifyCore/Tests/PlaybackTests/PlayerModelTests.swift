@@ -533,4 +533,5 @@ private struct FailingSelectionEngine: PlaybackEngine {
     func setVolume(_ value: Double) async throws { try await stub.setVolume(value) }
     func setShuffle(_ enabled: Bool) async throws { try await stub.setShuffle(enabled) }
     func setRepeat(_ mode: RepeatMode) async throws { try await stub.setRepeat(mode) }
+    func requestRadio(seed: SpotifyURI) async throws -> RadioMix { throw RadioFailure.unavailable }
 }

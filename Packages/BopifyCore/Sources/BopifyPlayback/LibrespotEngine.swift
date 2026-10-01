@@ -171,6 +171,14 @@ public final class LibrespotEngine: PlaybackEngine, @unchecked Sendable {
         }
     }
 
+    @concurrent
+    public func requestRadio(seed: SpotifyURI) async throws -> RadioMix {
+        let raw = seed.rawValue
+        return try await bridge.radio { id in
+            try perform("requestRadio") { raw.withCString { bopify_request_radio(handle, $0, id) } }
+        }
+    }
+
     /// librespot's volume is on the `u16::MAX` scale, and the event decoder
     /// divides by that same constant, so a round trip is stable.
     ///
