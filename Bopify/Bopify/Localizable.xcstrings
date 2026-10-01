@@ -118,6 +118,56 @@
         }
       }
     },
+    "explore.empty" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play or like a few songs to get stations."
+          }
+        }
+      }
+    },
+    "explore.retryStation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry Station"
+          }
+        }
+      }
+    },
+    "explore.station %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ station"
+          }
+        }
+      }
+    },
+    "explore.stationsUnavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stations unavailable"
+          }
+        }
+      }
+    },
+    "explore.unavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stations couldn’t load."
+          }
+        }
+      }
+    },
     "favorite.consentFailed" : {
       "localizations" : {
         "en" : {
@@ -258,6 +308,26 @@
         }
       }
     },
+    "history.enable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable Recents and Explore"
+          }
+        }
+      }
+    },
+    "history.permission" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bring your recent plays and stations here."
+          }
+        }
+      }
+    },
     "library.empty" : {
       "localizations" : {
         "en" : {
@@ -378,12 +448,42 @@
         }
       }
     },
-    "library.title" : {
+    "library.tab.explore" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "LIKED SONGS"
+            "value" : "Explore"
+          }
+        }
+      }
+    },
+    "library.tab.liked" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Liked"
+          }
+        }
+      }
+    },
+    "library.tab.recents" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recents"
+          }
+        }
+      }
+    },
+    "library.tabs" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Library"
           }
         }
       }
@@ -657,6 +757,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Track unavailable"
+          }
+        }
+      }
+    },
+    "recents.empty" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Songs you play will appear here."
+          }
+        }
+      }
+    },
+    "recents.unavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recent plays couldn’t load."
           }
         }
       }

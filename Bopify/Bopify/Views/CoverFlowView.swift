@@ -5,10 +5,24 @@ import BopifyDomain
 import BopifyLibrary
 import BopifyPlayback
 
-struct LikedSongsCoverFlow: View {
-    let model: LikedSongsModel
+/// The empty and error copy that differs between library tabs.
+struct CoverFlowCopy {
+    let permission: LocalizedStringKey
+    let enable: LocalizedStringKey
+    let empty: LocalizedStringKey
+    let unavailable: LocalizedStringKey
+
+    static var liked: Self { .init(permission: "library.permission", enable: "library.enable", empty: "library.empty", unavailable: "library.unavailable") }
+    static var recents: Self { .init(permission: "history.permission", enable: "history.enable", empty: "recents.empty", unavailable: "recents.unavailable") }
+    static var explore: Self { .init(permission: "history.permission", enable: "history.enable", empty: "explore.empty", unavailable: "explore.unavailable") }
+}
+
+struct CoverFlowView<Source: CoverFlowSource>: View {
+    let model: Source
+    let copy: CoverFlowCopy
     let artworkStore: ArtworkStore
     let onPlay: (Track) -> Void
+    let onEnable: @MainActor () async -> Void
     @Environment(AppEnvironment.self) private var environment: AppEnvironment?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Position in covers, driven directly while dragging or scrolling and by the spring after release.
@@ -23,14 +37,6 @@ struct LikedSongsCoverFlow: View {
     var body: some View {
         GeometryReader { available in
         VStack(spacing: 3) {
-            HStack {
-                Text("library.title").font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                if model.isLoading && !model.tracks.isEmpty { ProgressView().controlSize(.mini) }
-                if model.error != nil && !model.tracks.isEmpty {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in retryButton(at: context.date) }
-                }
-            }
             if model.tracks.isEmpty {
                 emptyState.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -76,8 +82,9 @@ struct LikedSongsCoverFlow: View {
                         .accessibilityHidden(true)
                     }
                 }
-                .frame(height: max(44, min(88, available.size.height - 46)))
-                .scaleEffect(min(1, max(0.6, (available.size.height - 46) / 88)))
+                .frame(height: max(44, min(88, available.size.height - 31)))
+                .scaleEffect(min(1, max(0.6, (available.size.height - 31) / 88)))
+                .overlay(alignment: .topTrailing) { status }
                 if let selectedTrack {
                     VStack(spacing: 1) {
                         Text(selectedTrack.title).font(.system(size: 11, weight: .medium)).lineLimit(1)
@@ -213,13 +220,22 @@ struct LikedSongsCoverFlow: View {
                 .offset(y: 10).accessibilityHidden(true)
         }
     }
+    /// Loading and retry for a shelf that already shows covers; an empty shelf shows them in `emptyState`.
+    private var status: some View {
+        HStack(spacing: 4) {
+            if model.isLoading { ProgressView().controlSize(.mini) }
+            if model.error != nil {
+                TimelineView(.periodic(from: .now, by: 1)) { context in retryButton(at: context.date) }
+            }
+        }
+    }
     @ViewBuilder private var emptyState: some View {
         if model.isLoading {
             ProgressView { Text("library.loading") }.controlSize(.small)
         } else if model.error == .authorizationRequired {
             VStack(spacing: 8) {
-                Text("library.permission").font(.caption).foregroundStyle(.secondary)
-                Button("library.enable") { Task { await environment?.enableLikedSongs() } }
+                Text(copy.permission).font(.caption).foregroundStyle(.secondary)
+                Button(copy.enable) { Task { await onEnable() } }
                     .disabled(environment?.isEnablingLibrary == true)
                 if let notice = environment?.libraryAuthorizationNotice { Text(notice).font(.caption) }
             }
@@ -231,7 +247,7 @@ struct LikedSongsCoverFlow: View {
                         Text("library.quotaExceeded")
                             .font(.caption).foregroundStyle(.secondary)
                     } else {
-                        Text(model.retryAfter == nil ? "library.unavailable" : "library.rateLimited")
+                        Text(model.retryAfter == nil ? copy.unavailable : "library.rateLimited")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     if remaining > 0 { Text("library.retryIn \(remaining)").font(.caption).foregroundStyle(.secondary) }
@@ -244,7 +260,7 @@ struct LikedSongsCoverFlow: View {
                 Button("library.more") { Task { await model.loadMore() } }
             }
         } else {
-            Text("library.empty").font(.caption).foregroundStyle(.secondary)
+            Text(copy.empty).font(.caption).foregroundStyle(.secondary)
         }
     }
     private func retryButton(at date: Date) -> some View {
