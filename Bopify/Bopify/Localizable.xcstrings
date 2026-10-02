@@ -138,6 +138,16 @@
         }
       }
     },
+    "explore.loading" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading stations…"
+          }
+        }
+      }
+    },
     "explore.retryStation" : {
       "localizations" : {
         "en" : {
@@ -797,6 +807,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Songs you play will appear here."
+          }
+        }
+      }
+    },
+    "recents.loading" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading recent plays…"
           }
         }
       }

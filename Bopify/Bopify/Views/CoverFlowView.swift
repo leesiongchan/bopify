@@ -11,10 +11,11 @@ struct CoverFlowCopy {
     let enable: LocalizedStringKey
     let empty: LocalizedStringKey
     let unavailable: LocalizedStringKey
+    let loading: LocalizedStringKey
 
-    static var liked: Self { .init(permission: "library.permission", enable: "library.enable", empty: "library.empty", unavailable: "library.unavailable") }
-    static var recents: Self { .init(permission: "history.permission", enable: "history.enable", empty: "recents.empty", unavailable: "recents.unavailable") }
-    static var explore: Self { .init(permission: "history.permission", enable: "history.enable", empty: "explore.empty", unavailable: "explore.unavailable") }
+    static var liked: Self { .init(permission: "library.permission", enable: "library.enable", empty: "library.empty", unavailable: "library.unavailable", loading: "library.loading") }
+    static var recents: Self { .init(permission: "history.permission", enable: "history.enable", empty: "recents.empty", unavailable: "recents.unavailable", loading: "recents.loading") }
+    static var explore: Self { .init(permission: "history.permission", enable: "history.enable", empty: "explore.empty", unavailable: "explore.unavailable", loading: "explore.loading") }
 }
 
 extension CoverFlowView where Accessory == EmptyView {
@@ -244,7 +245,7 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
     }
     @ViewBuilder private var emptyState: some View {
         if model.isLoading {
-            ProgressView { Text("library.loading") }.controlSize(.small)
+            ProgressView { Text(copy.loading) }.controlSize(.small)
         } else if model.error == .authorizationRequired {
             VStack(spacing: 8) {
                 Text(copy.permission).font(.caption).foregroundStyle(.secondary)
