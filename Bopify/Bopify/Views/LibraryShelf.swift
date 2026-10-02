@@ -61,8 +61,7 @@ struct LibraryShelf: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(PlayerBackgroundDragRegion())
                 // No Cover Flow here to reveal Explore, yet retry and consent refresh still need it shown.
-                .task { await environment.explore.reveal(at: Date()) }
-                .onDisappear { environment.explore.hide(at: Date()) }
+                .modifier(RevealWhileShown(source: environment.explore))
             } else {
                 CoverFlowView(model: environment.explore, copy: .explore, artworkStore: artworkStore,
                               onPlay: { onPlay(environment.explore.playRequest(for: $0)) },
