@@ -87,6 +87,11 @@ public final class PlayerModel {
         }
     }
 
+    #if DEBUG
+    /// Folds events at once instead of through the engine's stream, so a preview's first frame already shows its scenario.
+    public func applyPreviewEvents(_ events: [PlaybackEvent]) { events.forEach(apply) }
+    #endif
+
     public func stop() {
         cancelVolumeEditing()
         queueSelection = .idle

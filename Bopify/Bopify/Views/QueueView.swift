@@ -81,3 +81,13 @@ struct QueueView: View {
         .task(id: url) { if let url { await artworkStore.load(url) } }
     }
 }
+
+#if DEBUG
+#Preview("Queue list") {
+    let environment = makePreviewEnvironment()
+    QueueView(player: environment.player!, artworkStore: environment.artworkStore) { entry in
+        if let target = entry.target { environment.player?.selectQueueEntry(target) }
+    }
+    .frame(width: 332, height: 140)
+}
+#endif

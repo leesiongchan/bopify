@@ -2,6 +2,7 @@ import SwiftUI
 import os
 import BopifyDomain
 import BopifyLibrary
+import BopifyPlayback
 
 enum LibraryTab: String, CaseIterable, Identifiable {
     case recents, explore, liked
@@ -153,3 +154,20 @@ private struct StationMenu: View {
         model.stationFailures[seed.uri] != nil ? "arrow.clockwise" : seed.isArtist ? "person.fill" : "music.note"
     }
 }
+
+#if DEBUG
+/// The shelf at the full-width player's lower-frame size; its tabs switch live.
+private func previewShelf(_ library: PreviewLibrary) -> some View {
+    let environment = makePreviewEnvironment(library: library)
+    return LibraryShelf(environment: environment, artworkStore: environment.artworkStore, tabsInset: 100, coverBleed: 12,
+                        onPlay: { environment.player?.load($0) })
+        .environment(environment)
+        .frame(width: 332, height: 160)
+        .padding(.horizontal, 12)
+}
+
+#Preview("Library") { previewShelf(.samples) }
+#Preview("Library · empty") { previewShelf(.empty) }
+#Preview("Library · needs permission") { previewShelf(.failing(.authorizationRequired)) }
+#Preview("Library · rate limited") { previewShelf(.failing(.rateLimited(retryAfterSeconds: 30))) }
+#endif

@@ -178,3 +178,9 @@ private struct ScrollablePlayerContent: ViewModifier {
 #Preview("Small display · sign in") {
     PlayerRootView(environment: AppEnvironment()).frame(width: 320, height: 480)
 }
+
+#if DEBUG
+#Preview("Signed in · nothing playing") {
+    PlayerRootView(environment: makePreviewEnvironment(.nothingPlaying)).frame(width: 410, height: 560)
+}
+#endif
