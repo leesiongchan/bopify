@@ -18,6 +18,27 @@ struct CoverFlowCopy {
     static var explore: Self { .init(permission: "history.permission", enable: "history.enable", empty: "explore.empty", unavailable: "explore.unavailable", loading: "explore.loading") }
 }
 
+/// Counts this view in `source`'s reveals only once its reveal has run, so a task cancelled before it starts
+/// neither hides another view's reveal nor leaves one behind.
+struct RevealWhileShown<Source: CoverFlowSource>: ViewModifier {
+    let source: Source
+    @State private var revealed = false
+
+    func body(content: Content) -> some View {
+        content
+            .task {
+                guard !Task.isCancelled else { return }
+                revealed = true
+                await source.reveal(at: Date())
+            }
+            .onDisappear {
+                guard revealed else { return }
+                revealed = false
+                source.hide(at: Date())
+            }
+    }
+}
+
 extension CoverFlowView where Accessory == EmptyView {
     init(model: Source, copy: CoverFlowCopy, artworkStore: ArtworkStore, onPlay: @escaping (Track) -> Void,
          onEnable: @escaping @MainActor () async -> Void) {
@@ -110,14 +131,10 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
         // Covers every gap around the covers and title; the covers' input view sits above it.
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(PlayerBackgroundDragRegion())
-        .task {
-            guard !Task.isCancelled else { return }
-            await model.reveal(at: Date())
-        }
+        .modifier(RevealWhileShown(source: model))
         .task(id: model.selectedURI) {
             if let uri = model.selectedURI { await model.loadMoreIfNeeded(near: uri) }
         }
-        .onDisappear { model.hide(at: Date()) }
         .onAppear { jump(to: selectedIndex) }
         .onChange(of: model.tracks.isEmpty) { _, empty in if !empty { jump(to: selectedIndex) } }
         // Selection changed elsewhere (list refresh, restored selection): follow it.
