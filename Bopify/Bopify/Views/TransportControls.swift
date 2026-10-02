@@ -57,3 +57,9 @@ struct TransportControls: View {
         .buttonStyle(.playerControl)
     }
 }
+
+#if DEBUG
+#Preview("Transport") {
+    TransportControls(player: makePreviewEnvironment().player!).padding().frame(width: 260)
+}
+#endif

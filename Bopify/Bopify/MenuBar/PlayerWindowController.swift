@@ -22,6 +22,14 @@ final class PlayerWindowController {
 
     init(defaults: UserDefaults) { self.defaults = defaults }
 
+    #if DEBUG
+    /// No panel: previews render the player in a fixed frame laid out for `mode`.
+    init(previewMode mode: PlayerMode) {
+        defaults = UserDefaults(suiteName: "com.leesiongchan.bopify.preview.\(UUID().uuidString)")!
+        layout = recordLayout(mode: mode, availableSize: CGSize(width: 484, height: 360))
+    }
+    #endif
+
     func attach(to panel: StatusPanel) {
         self.panel = panel
         // Native shadow traces the record's translucent halo as a second hard outline.

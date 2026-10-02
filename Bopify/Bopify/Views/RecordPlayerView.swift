@@ -338,3 +338,13 @@ struct RecordPointerRegion: NSViewRepresentable {
         override func mouseUp(with event: NSEvent) { origin = nil; isDragging = false; onRelease?() }
     }
 }
+
+#if DEBUG
+#Preview("Playing") { previewRecordPlayer(.playing) }
+#Preview("Paused") { previewRecordPlayer(.paused) }
+#Preview("Loading") { previewRecordPlayer(.loading) }
+#Preview("Playback error") { previewRecordPlayer(.playbackError) }
+#Preview("Mirroring another device") { previewRecordPlayer(.mirroring) }
+#Preview("Queue") { previewRecordPlayer(.playing, mode: .queue) }
+#Preview("Resting") { previewRecordPlayer(.playing, mode: .compact) }
+#endif

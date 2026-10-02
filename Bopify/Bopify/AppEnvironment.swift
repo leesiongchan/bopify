@@ -22,7 +22,7 @@ let dashboardLibraryClientID = "25bbd3bacca4412b80f17b892072af71"
 final class AppEnvironment {
     private(set) var authState: AuthState = .signedOut
     private(set) var player: PlayerModel?
-    let artworkStore = ArtworkStore()
+    let artworkStore: ArtworkStore
     let favorite: FavoriteModel
     let likedSongs: LikedSongsModel
     let recents: RecentsModel
@@ -74,6 +74,7 @@ final class AppEnvironment {
                                              callbackPort: 8898, callbackPath: "/callback")
         self.auth = auth
         self.libraryAuth = libraryAuth
+        artworkStore = ArtworkStore()
         let library = SpotifyLibraryClient { scopes in
             try await libraryAuth.validAccessToken(requiredScopes: scopes)
         }
@@ -92,14 +93,18 @@ final class AppEnvironment {
          historyService: (any ListeningHistoryService)? = nil,
          authorizeLibraryScopes: (@Sendable (Set<String>) async throws -> Void)? = nil,
          playbackAuth: SpotifyAuthService? = nil,
-         libraryAuth: SpotifyAuthService? = nil) {
+         libraryAuth: SpotifyAuthService? = nil,
+         artworkStore: ArtworkStore = ArtworkStore(),
+         radioEngine: (any PlaybackEngine)? = nil) {
         auth = playbackAuth ?? SpotifyAuthService(clientID: librespotClientID,
             store: KeychainTokenStore(service: "com.leesiongchan.bopify.preview.\(UUID().uuidString)"))
         self.libraryAuth = libraryAuth ?? SpotifyAuthService(clientID: dashboardLibraryClientID,
             store: KeychainTokenStore(service: "com.leesiongchan.bopify.preview.library.\(UUID().uuidString)"))
+        self.artworkStore = artworkStore
         favorite = FavoriteModel(service: favoriteService)
         likedSongs = LikedSongsModel(service: savedTracksService ?? UnavailableSavedTracks())
         let stations = StationRoute()
+        stations.engine = radioEngine
         self.stations = stations
         recents = RecentsModel(service: historyService ?? UnavailableHistory())
         explore = ExploreModel(history: historyService ?? UnavailableHistory(),
