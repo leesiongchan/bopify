@@ -1,7 +1,7 @@
 import Foundation
 import CoreGraphics
 
-public struct MonolithLayout: Equatable, Sendable {
+public struct RecordLayout: Equatable, Sendable {
     public let contentSize: CGSize
     public let recordCenter: CGPoint
     public let recordDiameter: CGFloat
@@ -11,7 +11,7 @@ public struct MonolithLayout: Equatable, Sendable {
     public let lowerFrame: CGRect
 }
 
-public func monolithLayout(mode: PlayerMode, availableSize: CGSize) -> MonolithLayout {
+public func recordLayout(mode: PlayerMode, availableSize: CGSize) -> RecordLayout {
     let width = min(484, availableSize.width.isFinite ? max(1, availableSize.width) : 484)
     let height = availableSize.height.isFinite ? max(1, availableSize.height) : 360
     if mode == .compact {
@@ -20,7 +20,7 @@ public func monolithLayout(mode: PlayerMode, availableSize: CGSize) -> MonolithL
         // The sleeve rests as a disc behind the record so opening unfurls it from the record, not the window corner.
         let disc = CGRect(x: center.x - 59, y: center.y - 59, width: 118, height: 118)
         let point = CGRect(origin: center, size: .zero)
-        return MonolithLayout(contentSize: size, recordCenter: center, recordDiameter: 118, sleeveFrame: disc,
+        return RecordLayout(contentSize: size, recordCenter: center, recordDiameter: 118, sleeveFrame: disc,
                               sleeveCornerRadius: 59, controlsFrame: point, lowerFrame: point)
     }
     let narrow = width < 484
@@ -30,12 +30,12 @@ public func monolithLayout(mode: PlayerMode, availableSize: CGSize) -> MonolithL
     let controls = CGRect(x: controlsX, y: 24, width: max(1, width - controlsX - 24), height: min(176, max(1, height - 124)))
     let sleeve = CGRect(x: center.x, y: 12, width: max(1, width - center.x - 12), height: max(1, totalHeight - 24))
     let lower = CGRect(x: center.x + 12, y: controls.maxY + 8, width: max(1, width - center.x - 36), height: max(0, totalHeight - controls.maxY - 20))
-    return MonolithLayout(contentSize: CGSize(width: width, height: totalHeight), recordCenter: center,
+    return RecordLayout(contentSize: CGSize(width: width, height: totalHeight), recordCenter: center,
                           recordDiameter: narrow ? 118 : 182, sleeveFrame: sleeve, sleeveCornerRadius: 28,
                           controlsFrame: controls, lowerFrame: lower)
 }
 
-public func monolithFrame(recordCenter: CGPoint, layout: MonolithLayout, visibleFrame: CGRect) -> CGRect {
+public func playerWindowFrame(recordCenter: CGPoint, layout: RecordLayout, visibleFrame: CGRect) -> CGRect {
     let x = recordCenter.x.isFinite ? recordCenter.x : visibleFrame.midX
     let y = recordCenter.y.isFinite ? recordCenter.y : visibleFrame.midY
     return clampedPlayerFrame(origin: CGPoint(x: x - layout.recordCenter.x,

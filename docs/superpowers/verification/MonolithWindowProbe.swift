@@ -3,7 +3,7 @@ import ScreenCaptureKit
 import BopifyPlayback
 
 private struct WindowScene: View {
-    let controller: MonolithWindowController
+    let controller: PlayerWindowController
     var body: some View {
         let layout = controller.layout
         ZStack(alignment: .topLeading) {
@@ -70,11 +70,11 @@ private struct WindowScene: View {
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
         let defaults = UserDefaults(suiteName: "com.leesiongchan.monolith-probe.\(UUID())")!
         defaults.set("{{200, 300}, {410, 560}}", forKey: "player.frame")
-        try check(MonolithWindowController.restoredAnchor(defaults: defaults) == CGPoint(x: 405, y: 580), "legacy midpoint migration")
+        try check(PlayerWindowController.restoredAnchor(defaults: defaults) == CGPoint(x: 405, y: 580), "legacy midpoint migration")
         defaults.set("{nan, inf}", forKey: "player.recordCenter")
-        try check(MonolithWindowController.restoredAnchor(defaults: defaults) == CGPoint(x: 405, y: 580), "invalid saved center falls back to legacy")
+        try check(PlayerWindowController.restoredAnchor(defaults: defaults) == CGPoint(x: 405, y: 580), "invalid saved center falls back to legacy")
         defaults.set("{420, 440}", forKey: "player.recordCenter")
-        let controller = MonolithWindowController(defaults: defaults)
+        let controller = PlayerWindowController(defaults: defaults)
         let presentation = PlayerPresentation()
         let panel = StatusPanel(content: WindowScene(controller: controller))
         controller.attach(to: panel)
@@ -156,7 +156,7 @@ private struct WindowScene: View {
         try await settle(150)
         try check(abs(spindle().x - original.x - 30) < 1 && abs(spindle().y - original.y - 20) < 1, "background drag translates the record")
         try check(!controller.isDragging, "drag releases attention hold")
-        try check(MonolithWindowController.restoredAnchor(defaults: defaults) == spindle(), "dragged anchor persists")
+        try check(PlayerWindowController.restoredAnchor(defaults: defaults) == spindle(), "dragged anchor persists")
         panel.onPointerChanged = nil
         controller.apply(mode: .queue, reduceMotion: false)
         try await settle()
@@ -171,7 +171,7 @@ private struct WindowScene: View {
         let boundary = CGRect(x: 0, y: 0, width: 1000, height: 700)
         let bottomDefaults = UserDefaults(suiteName: "monolith.bottom.\(UUID())")!
         bottomDefaults.set("{300, 132}", forKey: "player.recordCenter")
-        let bottomController = MonolithWindowController(defaults: bottomDefaults)
+        let bottomController = PlayerWindowController(defaults: bottomDefaults)
         let bottomPanel = StatusPanel(content: WindowScene(controller: bottomController))
         bottomController.attach(to: bottomPanel)
         bottomController.apply(mode: .expanded, reduceMotion: true, visibleFrame: boundary)

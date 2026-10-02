@@ -23,13 +23,13 @@ import BopifyPlayback
         backdrop.orderFrontRegardless()
         let defaults = UserDefaults(suiteName: "monolith.surface.\(UUID())")!
         defaults.set(NSStringFromPoint(CGPoint(x: area.minX + 150, y: area.maxY - 190)), forKey: "player.recordCenter")
-        let controller = MonolithWindowController(defaults: defaults)
+        let controller = PlayerWindowController(defaults: defaults)
         let presentation = PlayerPresentation()
         let engine = StubPlaybackEngine()
         let player = PlayerModel(engine: engine)
         player.start()
         let store = previewArtworkStore()
-        let panel = StatusPanel(content: MonolithPlayerView(player: player, store: store, presentation: presentation, window: controller))
+        let panel = StatusPanel(content: RecordPlayerView(player: player, store: store, presentation: presentation, window: controller))
         controller.attach(to: panel)
         presentation.isVisible = true
         presentation.sendAttention(.keyboardFocus(true))

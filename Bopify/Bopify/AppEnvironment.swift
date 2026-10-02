@@ -35,7 +35,7 @@ final class AppEnvironment {
     let presentation = PlayerPresentation(
         mode: .compact,
         keepOnTop: UserDefaults.standard.bool(forKey: "player.keepOnTop"))
-    let monolithWindowController = MonolithWindowController(defaults: .standard)
+    let playerWindowController = PlayerWindowController(defaults: .standard)
     var isListening: Bool {
         authState == .signedIn && (player?.state.currentTrack != nil || player?.state.mirror != nil)
     }
@@ -217,7 +217,7 @@ final class AppEnvironment {
         await serialize { [self] in
             BopifyLog.auth.info("sign-out starting")
             presentation.resetEngagement()
-            monolithWindowController.invalidateTransition()
+            playerWindowController.invalidateTransition()
             player?.stop()
             player = nil
             artworkStore.clear()

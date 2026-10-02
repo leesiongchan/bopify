@@ -7,10 +7,10 @@ private struct ProbePlayerScene: View {
     let player: PlayerModel
     let environment: AppEnvironment
     let presentation: PlayerPresentation
-    let controller: MonolithWindowController
+    let controller: PlayerWindowController
     let store = previewArtworkStore()
     var body: some View {
-        MonolithPlayerView(player: player, store: store, presentation: presentation, window: controller)
+        RecordPlayerView(player: player, store: store, presentation: presentation, window: controller)
             .environment(\.favoriteEnvironment, environment)
             .onChange(of: presentation.mode) { _, mode in controller.apply(mode: mode, reduceMotion: false) }
     }
@@ -34,7 +34,7 @@ private struct ProbePlayerScene: View {
         player.start()
         defer { player.stop() }
         let presentation = PlayerPresentation()
-        let controller = MonolithWindowController(defaults: UserDefaults(suiteName: "monolith.visual.\(UUID())")!)
+        let controller = PlayerWindowController(defaults: UserDefaults(suiteName: "monolith.visual.\(UUID())")!)
         let environment = AppEnvironment(previewPlayer: player, favoriteService: PreviewLibrary())
         let panel = StatusPanel(content: ProbePlayerScene(player: player, environment: environment, presentation: presentation, controller: controller))
         let backdrop = StatusPanel(content: Color.clear)
@@ -275,8 +275,8 @@ private struct ProbePlayerScene: View {
 
     @MainActor static func recordFixtures() async throws {
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
-        let fixture = MonolithRecordFixture()
-        let panel = StatusPanel(content: MonolithRecordScene(fixture: fixture))
+        let fixture = RecordPreviewFixture()
+        let panel = StatusPanel(content: RecordPreviewScene(fixture: fixture))
         panel.setFrame(CGRect(x: 240, y: 300, width: 264, height: 264), display: true)
         panel.orderFrontRegardless()
         defer { panel.orderOut(nil) }

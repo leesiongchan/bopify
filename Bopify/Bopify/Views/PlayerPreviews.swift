@@ -35,7 +35,7 @@ func makePreviewArtworkStore() -> ArtworkStore {
     }
     return ArtworkStore(previewImages: images)
 }
-@MainActor @Observable final class MonolithRecordFixture {
+@MainActor @Observable final class RecordPreviewFixture {
     let artworkStore = makePreviewArtworkStore()
     var index = 1
     var occurrenceID = "first"
@@ -50,8 +50,8 @@ func makePreviewArtworkStore() -> ArtworkStore {
     }
 }
 
-struct MonolithRecordScene: View {
-    let fixture: MonolithRecordFixture
+struct RecordPreviewScene: View {
+    let fixture: RecordPreviewFixture
     @State private var rotation = RecordRotation()
     private var isSpinning: Bool { fixture.isPlaying && fixture.isVisible && !fixture.reduceMotion }
     var body: some View {
@@ -65,5 +65,5 @@ struct MonolithRecordScene: View {
     }
 }
 
-#Preview("Monolith vinyl") { MonolithRecordScene(fixture: MonolithRecordFixture()).frame(width: 264, height: 264) }
+#Preview("Vinyl record") { RecordPreviewScene(fixture: RecordPreviewFixture()).frame(width: 264, height: 264) }
 #endif
