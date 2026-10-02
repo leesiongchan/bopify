@@ -4,11 +4,11 @@ import BopifyDomain
 import BopifyLibrary
 import BopifyPlayback
 
-struct MonolithPlayerView: View {
+struct RecordPlayerView: View {
     let player: PlayerModel
     let artworkStore: ArtworkStore
     let presentation: PlayerPresentation
-    let windowController: MonolithWindowController
+    let windowController: PlayerWindowController
     @State private var rotation = RecordRotation()
     @State private var scrub: RecordScrub?
     @State private var pressedAngle: Double?

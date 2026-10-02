@@ -12,7 +12,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     private var hasPosition = false
     private var appliedMode: PlayerMode?
     private var isApplyingFrame = false
-    private var isMonolithApplied = false
+    private var isWindowControllerAttached = false
     private let environment: AppEnvironment
 
     init<Content: View>(content: Content, environment: AppEnvironment) {
@@ -45,7 +45,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         panel?.onPointerChanged = { [weak self] in self?.environment.presentation.sendAttention(.pointer($0)) }
         panel?.onWindowDragChanged = { [weak self] active in
             guard let self else { return }
-            self.environment.monolithWindowController.setDragging(active)
+            self.environment.playerWindowController.setDragging(active)
             self.environment.presentation.sendAttention(.interaction(.windowDrag, active))
         }
         if let stored = UserDefaults.standard.string(forKey: "player.frame") {
@@ -73,32 +73,32 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         panel.level = keepOnTop ? .floating : .normal
         UserDefaults.standard.set(keepOnTop, forKey: "player.keepOnTop")
         if environment.isListening {
-            if !isMonolithApplied {
-                if !hasPosition, MonolithWindowController.restoredAnchor(defaults: .standard) == nil,
+            if !isWindowControllerAttached {
+                if !hasPosition, PlayerWindowController.restoredAnchor(defaults: .standard) == nil,
                    let button = statusItem.button,
                    let frame = button.window?.convertToScreen(button.convert(button.bounds, to: nil)) {
                     panel.setFrame(CGRect(x: frame.midX - 71, y: frame.minY - 148, width: 142, height: 142), display: false)
                 }
-                environment.monolithWindowController.attach(to: panel)
+                environment.playerWindowController.attach(to: panel)
                 environment.presentation.sendAttention(.visibility(panel.isVisible))
                 if panel.isKeyWindow { environment.presentation.sendAttention(.keyboardFocus(true)) }
-                isMonolithApplied = true
-                // The new composition has no rendered Monolith geometry to animate from yet.
-                environment.monolithWindowController.apply(mode: environment.presentation.mode, reduceMotion: true)
-                BopifyLog.playback.debug("Monolith listening geometry initialized")
+                isWindowControllerAttached = true
+                // The new composition has no rendered player geometry to animate from yet.
+                environment.playerWindowController.apply(mode: environment.presentation.mode, reduceMotion: true)
+                BopifyLog.playback.debug("Player listening geometry initialized")
             }
-            environment.monolithWindowController.apply(mode: environment.presentation.mode,
+            environment.playerWindowController.apply(mode: environment.presentation.mode,
                                               reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
             return
         }
-        if isMonolithApplied {
-            environment.monolithWindowController.invalidateTransition()
+        if isWindowControllerAttached {
+            environment.playerWindowController.invalidateTransition()
             panel.containsPlayerPoint = nil
             environment.presentation.resetEngagement()
             environment.presentation.sendAttention(.visibility(panel.isVisible))
             panel.styleMask.insert(.resizable)
             panel.hasShadow = true
-            isMonolithApplied = false
+            isWindowControllerAttached = false
             appliedMode = nil
         }
         guard appliedMode != mode else { return }
@@ -138,8 +138,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 
     private func reposition() {
         guard let panel else { return }
-        if isMonolithApplied {
-            environment.monolithWindowController.apply(mode: environment.presentation.mode, reduceMotion: true)
+        if isWindowControllerAttached {
+            environment.playerWindowController.apply(mode: environment.presentation.mode, reduceMotion: true)
             return
         }
         setReachableFrame(origin: panel.frame.origin, size: panel.frame.size)
@@ -147,7 +147,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 
     private func saveFrame() {
         guard let panel, hasPosition, !isApplyingFrame else { return }
-        if isMonolithApplied { return }
+        if isWindowControllerAttached { return }
         UserDefaults.standard.set(NSStringFromRect(panel.frame), forKey: "player.frame")
     }
     func windowDidBecomeKey(_ notification: Notification) { Task { await environment.refreshFavorite() } }
@@ -172,7 +172,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         guard let panel, let button = statusItem.button else { return }
         if panel.isVisible { dismiss(); return }
 
-        if isMonolithApplied {
+        if isWindowControllerAttached {
             hasPosition = true
             reposition()
         } else if !hasPosition, let frame = button.window?.convertToScreen(button.convert(button.bounds, to: nil)) {
@@ -183,14 +183,14 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         }
         environment.presentation.isVisible = true
         environment.presentation.sendAttention(.keyboardFocus(true))
-        if isMonolithApplied { environment.monolithWindowController.apply(mode: .expanded, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion) }
+        if isWindowControllerAttached { environment.playerWindowController.apply(mode: .expanded, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion) }
         panel.makeKeyAndOrderFront(nil)
         BopifyLog.playback.debug("player panel opened")
     }
 
     private func dismiss() {
         saveFrame()
-        if isMonolithApplied { environment.monolithWindowController.persistAnchor(); environment.monolithWindowController.invalidateTransition() }
+        if isWindowControllerAttached { environment.playerWindowController.persistAnchor(); environment.playerWindowController.invalidateTransition() }
         environment.presentation.isVisible = false
         panel?.orderOut(nil)
         BopifyLog.playback.debug("player panel hidden")

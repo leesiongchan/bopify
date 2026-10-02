@@ -9,8 +9,8 @@ struct PlayerRootView: View {
     var body: some View {
         Group {
             if environment.isListening, let player = environment.player {
-                MonolithPlayerView(player: player, artworkStore: environment.artworkStore,
-                                   presentation: environment.presentation, windowController: environment.monolithWindowController)
+                RecordPlayerView(player: player, artworkStore: environment.artworkStore,
+                                   presentation: environment.presentation, windowController: environment.playerWindowController)
                     .id(ObjectIdentifier(player))
             } else {
                 PlayerSurface {

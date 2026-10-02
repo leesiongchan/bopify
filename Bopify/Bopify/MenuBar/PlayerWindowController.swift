@@ -6,8 +6,8 @@ import BopifyPlayback
 import os
 
 @MainActor @Observable
-final class MonolithWindowController {
-    private(set) var layout = monolithLayout(mode: .compact, availableSize: CGSize(width: 484, height: 360))
+final class PlayerWindowController {
+    private(set) var layout = recordLayout(mode: .compact, availableSize: CGSize(width: 484, height: 360))
     private(set) var contentOffset: CGPoint = .zero
     private(set) var transitionID: UInt64 = 0
     private(set) var isTransitioning = false
@@ -62,12 +62,12 @@ final class MonolithWindowController {
         if mode != .compact {
             available.height = min(available.height, max(300, desiredAnchor.y + 132 - visible.minY))
         }
-        let next = monolithLayout(mode: mode, availableSize: available)
-        let target = monolithFrame(recordCenter: desiredAnchor, layout: next, visibleFrame: visible)
+        let next = recordLayout(mode: mode, availableSize: available)
+        let target = playerWindowFrame(recordCenter: desiredAnchor, layout: next, visibleFrame: visible)
         guard next != layout || target != targetFrame || (!isTransitioning && panel.frame != target) else { return }
         lastRequest = (mode, reduceMotion)
         let adjusted = CGPoint(x: target.minX + next.recordCenter.x, y: target.maxY - next.recordCenter.y)
-        if adjusted != desiredAnchor { BopifyLog.playback.debug("Monolith anchor clamped to visible screen") }
+        if adjusted != desiredAnchor { BopifyLog.playback.debug("Player anchor clamped to visible screen") }
         anchor = adjusted
         transitionID &+= 1
         let generation = transitionID
