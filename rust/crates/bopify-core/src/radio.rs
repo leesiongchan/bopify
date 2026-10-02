@@ -61,7 +61,7 @@ pub(crate) struct SessionRadio(pub Session);
 
 impl RadioSource for SessionRadio {
     async fn top_track(&self, artist: &SpotifyUri) -> Result<Option<SpotifyUri>, RadioFailure> {
-        let artist = Artist::get(&self.0, artist).await.map_err(|e| classify(&e))?;
+        let artist = Artist::get(&self.0, artist).await.map_err(|e| classify_artist_lookup(&e))?;
         Ok(pick_top_track(&artist.top_tracks, &self.0.country()))
     }
 
@@ -173,6 +173,14 @@ fn classify(error: &librespot_core::Error) -> RadioFailure {
         // librespot maps HTTP 404 here: Spotify has no mix for this seed, not a broken endpoint.
         ErrorKind::NotFound => RadioFailure::NoMix,
         _ => RadioFailure::Unavailable,
+    }
+}
+
+/// A 404 on the artist lookup means the artist is missing, so there is no top track to seed a mix from.
+fn classify_artist_lookup(error: &librespot_core::Error) -> RadioFailure {
+    match classify(error) {
+        RadioFailure::NoMix => RadioFailure::NoTopTrack,
+        other => other,
     }
 }
 
@@ -335,6 +343,13 @@ mod tests {
         let reply = resolve_within(&stalled, Seed::parse(SEED_TRACK).unwrap(), 7, Duration::from_millis(5));
         let event = tokio::time::timeout(Duration::from_secs(2), reply).await.expect("resolve never gave up");
         assert!(matches!(event, WireEvent::RadioFailed { request_id: 7, reason: RadioFailure::Network, .. }), "{event:?}");
+    }
+
+    #[test]
+    fn a_missing_artist_has_no_top_track() {
+        use librespot_core::Error;
+        assert_eq!(classify_artist_lookup(&Error::not_found("x")), RadioFailure::NoTopTrack);
+        assert_eq!(classify_artist_lookup(&Error::unavailable("x")), RadioFailure::Network);
     }
 
     #[test]
