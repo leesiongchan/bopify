@@ -15,6 +15,7 @@ final class NowPlayingController {
     private var artwork: (url: URL, item: MPMediaItemArtwork)?
     private var isClaimed = false
     private var isStopped = false
+    private var requestedArtwork: URL?
 
     init(player: PlayerModel, artworkStore: ArtworkStore) {
         self.player = player
@@ -47,6 +48,7 @@ final class NowPlayingController {
         guard let info else {
             if isClaimed { BopifyLog.playback.debug("now playing released") }
             isClaimed = false
+            requestedArtwork = nil
             center.nowPlayingInfo = nil
             // macOS cannot infer this from an audio session, so it must be set on every change.
             center.playbackState = .stopped
@@ -55,6 +57,7 @@ final class NowPlayingController {
         }
         if !isClaimed { BopifyLog.playback.debug("now playing claimed") }
         isClaimed = true
+        loadArtworkIfNeeded(info.artworkURL)
         var values: [String: Any] = [
             MPMediaItemPropertyTitle: info.title,
             MPMediaItemPropertyArtist: info.artist,
@@ -68,6 +71,14 @@ final class NowPlayingController {
         center.nowPlayingInfo = values
         center.playbackState = info.isPlaying ? .playing : .paused
         setEnabled(transport: true, next: info.canNext, previous: info.canPrevious, seek: info.canSeek)
+    }
+
+    /// The record view only loads artwork while it is on screen, so the controller asks for it when the URL changes.
+    private func loadArtworkIfNeeded(_ url: URL?) {
+        guard url != requestedArtwork else { return }
+        requestedArtwork = url
+        guard let url, artworkStore.images[url] == nil else { return }
+        Task { await artworkStore.load(url) }
     }
 
     private func artworkItem(for url: URL?) -> MPMediaItemArtwork? {
@@ -93,19 +104,23 @@ final class NowPlayingController {
     }
 
     private func addTargets() {
-        add(commands.playCommand, "play") { player, _ in
-            if player.state.phase != .playing { player.togglePlayPause() }
+        add(commands.playCommand, "play") { player, _ in Self.toggle(player, whenPhaseIs: .paused) }
+        add(commands.pauseCommand, "pause") { player, _ in Self.toggle(player, whenPhaseIs: .playing) }
+        add(commands.togglePlayPauseCommand, "togglePlayPause") { player, _ in
+            Self.toggle(player, whenPhaseIs: .playing, .paused)
         }
-        add(commands.pauseCommand, "pause") { player, _ in
-            if player.state.phase == .playing { player.togglePlayPause() }
-        }
-        add(commands.togglePlayPauseCommand, "togglePlayPause") { player, _ in player.togglePlayPause() }
         add(commands.nextTrackCommand, "next") { player, _ in player.next() }
         add(commands.previousTrackCommand, "previous") { player, _ in player.previous() }
         add(commands.changePlaybackPositionCommand, "changePosition") { player, event in
-            guard let event = event as? MPChangePlaybackPositionCommandEvent else { return }
+            guard let event = event as? MPChangePlaybackPositionCommandEvent, event.positionTime.isFinite else { return }
             player.seek(to: Int64(event.positionTime * 1000))
         }
+    }
+
+    /// Mirrors Bopify's own button and the Space key, which ignore loading and buffering.
+    private static func toggle(_ player: PlayerModel, whenPhaseIs phases: PlaybackPhase...) {
+        guard phases.contains(player.state.phase) else { return }
+        player.togglePlayPause()
     }
 
     private func add(_ command: MPRemoteCommand, _ name: StaticString,
@@ -114,8 +129,8 @@ final class NowPlayingController {
             // The caller blocks until onMain returns, so the event is never used concurrently.
             nonisolated(unsafe) let event = event
             return Self.onMain {
-                guard let self, self.player.state.isActiveDevice else { return .commandFailed }
                 BopifyLog.playback.debug("remote command \(name, privacy: .public)")
+                guard let self, self.player.state.isActiveDevice else { return .commandFailed }
                 perform(self.player, event)
                 return .success
             }

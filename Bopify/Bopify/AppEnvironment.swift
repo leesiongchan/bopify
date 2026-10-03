@@ -283,8 +283,8 @@ final class AppEnvironment {
             // so this teardown is structural rather than load-bearing: the
             // cost of being wrong is a leaked Rust runtime and audio thread
             // for the process lifetime, which no test would catch.
-            await self.engine?.shutdown()
             nowPlaying?.stop()
+            await self.engine?.shutdown()
             player?.stop()
             clearLibrary()
             self.engine = engine

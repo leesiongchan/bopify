@@ -24,7 +24,7 @@ The function returns `nil` when Bopify should not claim Now Playing, and otherwi
 - It re-arms `withObservationTracking`, the pattern `StatusItemController` already uses, over the player's state and the artwork store's images. On each change it computes `nowPlayingInfo` and applies it.
 - **Applying a value** writes `MPNowPlayingInfoCenter.default().nowPlayingInfo`: title, artist, album, duration, elapsed time, a playback rate of 1 or 0, and artwork. It then sets `playbackState` to `.playing` or `.paused`, and enables or disables the next, previous and change-position commands to match.
 - **Applying `nil`** clears `nowPlayingInfo`, sets `playbackState` to `.stopped` and disables every command.
-- **Artwork** is built once per URL as `MPMediaItemArtwork` from the image `ArtworkStore` already holds. The view that shows the record already loads that image, so the controller never fetches artwork itself.
+- **Artwork** is built once per URL as `MPMediaItemArtwork` from the image `ArtworkStore` already holds. The record view may not be on screen, so when the current track's artwork URL changes the controller asks the shared store to load it; the store already deduplicates loads.
 - **Command routing:** in `MPRemoteCommandCenter`, play, pause, toggle play/pause, next, previous and change position route to the existing `PlayerModel` methods:
   - Play and pause call `togglePlayPause()`, but only when that changes the state; otherwise they return success without acting.
   - Change position calls `seek(to:)` with the event's time.
