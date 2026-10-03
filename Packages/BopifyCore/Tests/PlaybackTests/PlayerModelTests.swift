@@ -439,6 +439,19 @@ struct PlayerModelTests {
         #expect(!model.isPositionAdvancing)
     }
 
+    @Test func losingTheSessionWhilePlayingReleasesNowPlaying() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        await settle(model, engine, [.trackChanged(makeTrack()), .playing(positionMs: 0)])
+        #expect(model.state.isActiveDevice)
+        #expect(nowPlayingInfo(for: model.state, positionMs: 0) != nil)
+        await settle(model, engine, [.failed(.playbackSessionLost)])
+        #expect(!model.state.isActiveDevice)
+        #expect(nowPlayingInfo(for: model.state, positionMs: 0) == nil)
+    }
+
     @Test func becomingActiveAlwaysClearsTheMirrorEvenWithoutATakeoverEvent() async {
         let engine = StubPlaybackEngine()
         let model = PlayerModel(engine: engine)
