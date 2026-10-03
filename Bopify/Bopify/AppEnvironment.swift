@@ -22,6 +22,7 @@ let dashboardLibraryClientID = "25bbd3bacca4412b80f17b892072af71"
 final class AppEnvironment {
     private(set) var authState: AuthState = .signedOut
     private(set) var player: PlayerModel?
+    @ObservationIgnored private var nowPlaying: NowPlayingController?
     let artworkStore: ArtworkStore
     let favorite: FavoriteModel
     let likedSongs: LikedSongsModel
@@ -223,6 +224,8 @@ final class AppEnvironment {
             BopifyLog.auth.info("sign-out starting")
             presentation.resetEngagement()
             playerWindowController.invalidateTransition()
+            nowPlaying?.stop()
+            nowPlaying = nil
             player?.stop()
             player = nil
             artworkStore.clear()
@@ -248,6 +251,8 @@ final class AppEnvironment {
         await serialize { [self] in
             BopifyLog.playback.info("prepare for quit starting")
             clearLibrary()
+            nowPlaying?.stop()
+            nowPlaying = nil
             player?.stop()
             player = nil
             if let engine {
@@ -279,10 +284,12 @@ final class AppEnvironment {
             // cost of being wrong is a leaked Rust runtime and audio thread
             // for the process lifetime, which no test would catch.
             await self.engine?.shutdown()
+            nowPlaying?.stop()
             player?.stop()
             clearLibrary()
             self.engine = engine
             player = model
+            nowPlaying = NowPlayingController(player: model, artworkStore: artworkStore)
             authState = .signedIn
             BopifyLog.auth.info("connect succeeded")
         } catch {
