@@ -109,9 +109,11 @@ final class NowPlayingController {
     }
 
     private func add(_ command: MPRemoteCommand, _ name: StaticString,
-                     _ perform: @escaping @MainActor (PlayerModel, MPRemoteCommandEvent) -> Void) {
-        let token = command.addTarget { [weak self] event in
-            Self.onMain {
+                     _ perform: @escaping @Sendable @MainActor (PlayerModel, MPRemoteCommandEvent) -> Void) {
+        let token = command.addTarget { @Sendable [weak self] event in
+            // The caller blocks until onMain returns, so the event is never used concurrently.
+            nonisolated(unsafe) let event = event
+            return Self.onMain {
                 guard let self, self.player.state.isActiveDevice else { return .commandFailed }
                 BopifyLog.playback.debug("remote command \(name, privacy: .public)")
                 perform(self.player, event)
