@@ -109,6 +109,16 @@ private func mixJSON(_ id: UInt64, context: String = "spotify:playlist:m") -> St
 
 @Suite("EventBridge radio")
 struct EventBridgeRadioTests {
+    @Test func sessionLossFailsWaitersAndStillDeliversTheTerminalEvent() async {
+        let bridge = EventBridge()
+        let waiting = Task { try await bridge.radio { _ in
+            push([#"{"type":"sessionLost","reason":"spircEnded"}"#, #"{"type":"sessionLost","reason":"spircEnded"}"#], into: bridge)
+        } }
+        await #expect(throws: PlayerError.playbackSessionLost) { _ = try await waiting.value }
+        var iterator = bridge.events.makeAsyncIterator()
+        #expect(await iterator.next() == .sessionLost(.spircEnded))
+        bridge.finish()
+    }
     @Test func aReplyResumesTheRequestWithItsID() async throws {
         let bridge = EventBridge()
         let mix = try await bridge.radio { id in push([mixJSON(id)], into: bridge) }

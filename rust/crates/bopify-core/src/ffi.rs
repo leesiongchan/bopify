@@ -246,7 +246,12 @@ where
     match guard.as_ref() {
         Some(engine) => match command(engine) {
             Ok(()) => 0,
-            Err(error) => error.code(),
+            Err(error) => {
+                if error == BopifyError::SessionLost {
+                    engine.report_command_loss();
+                }
+                error.code()
+            }
         },
         // Lost the race with destroy between the `alive` read and the lock.
         None => BopifyError::SessionLost.code(),
@@ -484,7 +489,10 @@ mod tests {
             assert_eq!(bopify_pause(ptr), lost);
             assert_eq!(bopify_next(ptr), lost);
             assert_eq!(bopify_select_queue(ptr, 1, 0), lost);
-            assert_eq!(bopify_request_radio(ptr, c"spotify:track:6rqhFgbbKwnb9MLmUQDhG6".as_ptr(), 1), lost);
+            assert_eq!(
+                bopify_request_radio(ptr, c"spotify:track:6rqhFgbbKwnb9MLmUQDhG6".as_ptr(), 1),
+                lost
+            );
             assert_eq!(
                 bopify_request_radio(ptr, std::ptr::null(), 1),
                 BopifyError::InvalidArgument.code()

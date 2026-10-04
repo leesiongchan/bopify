@@ -386,6 +386,8 @@ public final class PlayerModel {
                 state.remote = nil
                 state.staleRemote = nil
             }
+        case .sessionLost:
+            apply(.failed(.playbackSessionLost))
         case let .failed(error):
             freezeDisplayPosition()
             state.phase = .error(error)

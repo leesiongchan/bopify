@@ -1757,6 +1757,61 @@ index 0ecfde2..a7b6c61 100644
 +        assert_eq!(state.request, request);
 +    }
 +}
+diff --git a/core/src/error.rs b/core/src/error.rs
+index 7f29957..5f57119 100644
+--- a/core/src/error.rs
++++ b/core/src/error.rs
+@@ -27,6 +27,27 @@ pub struct Error {
+     pub error: Box<dyn error::Error + Send + Sync>,
+ }
+ 
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum AuthenticationFailure { InvalidCredentials, PremiumRequired }
++
++impl Error {
++    pub fn authentication_failure(&self) -> Option<AuthenticationFailure> {
++        use crate::connection::AuthenticationError;
++        use crate::protocol::{keyexchange::ErrorCode, login5::LoginError};
++        if let Some(AuthenticationError::LoginFailed(code)) = self.error.downcast_ref::<AuthenticationError>() {
++            return match code {
++                ErrorCode::PremiumAccountRequired => Some(AuthenticationFailure::PremiumRequired),
++                ErrorCode::BadCredentials | ErrorCode::CouldNotValidateCredentials => Some(AuthenticationFailure::InvalidCredentials),
++                _ => None,
++            };
++        }
++        if matches!(self.error.downcast_ref::<crate::login5::Login5Error>(), Some(crate::login5::Login5Error::FaultyRequest(LoginError::INVALID_CREDENTIALS))) {
++            return Some(AuthenticationFailure::InvalidCredentials);
++        }
++        None
++    }
++}
++
+ #[derive(Clone, Copy, Debug, Eq, Error, Hash, Ord, PartialEq, PartialOrd)]
+ pub enum ErrorKind {
+     #[error("The operation was cancelled by the caller")]
+diff --git a/core/src/login5.rs b/core/src/login5.rs
+index 9cf7133..af724e4 100644
+--- a/core/src/login5.rs
++++ b/core/src/login5.rs
+@@ -30,7 +30,7 @@ component! {
+ }
+ 
+ #[derive(Debug, Error)]
+-enum Login5Error {
++pub(crate) enum Login5Error {
+     #[error("Login request was denied: {0:?}")]
+     FaultyRequest(LoginError),
+     #[error("Code challenge is not supported")]
+@@ -49,7 +49,8 @@ impl From<Login5Error> for Error {
+             Login5Error::NoStoredCredentials | Login5Error::OnlyForMobile => {
+                 Error::unavailable(err)
+             }
+-            Login5Error::RetriesFailed(_) | Login5Error::FaultyRequest(_) => {
++            Login5Error::RetriesFailed(_) => Error::unavailable(err),
++            Login5Error::FaultyRequest(_) => {
+                 Error::failed_precondition(err)
+             }
+             Login5Error::CodeChallenge => Error::unimplemented(err),
 diff --git a/playback/src/player.rs b/playback/src/player.rs
 index f3d803d..a6b2427 100644
 --- a/playback/src/player.rs

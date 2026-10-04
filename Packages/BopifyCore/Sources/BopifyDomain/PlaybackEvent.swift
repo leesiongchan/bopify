@@ -15,6 +15,7 @@ public enum PlaybackEvent: Hashable, Sendable {
     case loading
     case endOfTrack
     case activeDeviceChanged(isActive: Bool)
+    case sessionLost(SessionLossReason)
     case failed(PlayerError)
     case startupResolved(StartupOutcome)
     case remotePlayback(RemotePlayback?)
@@ -47,6 +48,7 @@ extension PlaybackEvent: Decodable {
         case "loading":            self = .loading
         case "endOfTrack":         self = .endOfTrack
         case "activeDeviceChanged": self = .activeDeviceChanged(isActive: try c.decode(Bool.self, forKey: .isActive))
+        case "sessionLost": self = .sessionLost(try c.decode(SessionLossReason.self, forKey: .reason))
         case "failed":             self = .failed(PlayerError(ffiCode: try c.decode(Int32.self, forKey: .code)))
         case "volumeChanged":
             // librespot uses a u16 volume scale; the domain uses 0...1.

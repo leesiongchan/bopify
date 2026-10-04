@@ -1,5 +1,16 @@
 import Testing
 import Foundation
+
+@Suite("Playback session loss")
+struct SessionLossEventTests {
+    @Test func decodesTerminalReasonsAndLegacyFailure() throws {
+        for reason in ["spircEnded", "spircPanicked", "playerChannelClosed", "forwarderPanicked", "commandFailed", "eventStreamEnded", "readinessTimeout", "legacy"] {
+            let event = try JSONDecoder().decode(PlaybackEvent.self, from: Data("{\"type\":\"sessionLost\",\"reason\":\"\(reason)\"}".utf8))
+            #expect(event == .sessionLost(SessionLossReason(rawValue: reason)!))
+        }
+        #expect(try JSONDecoder().decode(PlaybackEvent.self, from: Data(#"{"type":"failed","code":-2}"#.utf8)) == .failed(.playbackSessionLost))
+    }
+}
 @testable import BopifyDomain
 
 @Suite("PlaybackEvent decoding")

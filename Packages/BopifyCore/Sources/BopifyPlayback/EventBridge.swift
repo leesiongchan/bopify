@@ -114,6 +114,8 @@ public final class EventBridge: Sendable {
             BopifyLog.playback.error("event decode failed payload=\(payload, privacy: .private)")
             return
         }
+        if case .sessionLost = event { failRadioWaiters() }
+        if case .failed(.playbackSessionLost) = event { failRadioWaiters() }
         continuation.yield(event)
     }
 
@@ -122,6 +124,10 @@ public final class EventBridge: Sendable {
     /// after it are dropped, not delivered.
     public func finish() {
         continuation.finish()
+        failRadioWaiters()
+    }
+
+    private func failRadioWaiters() {
         let waiting = radioWaiters.withLock { state in
             state.finished = true
             defer { state.waiting = [:] }
