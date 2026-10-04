@@ -11,3 +11,4 @@ mod logging;
 mod queue;
 mod radio;
 mod remote;
+mod terminal;

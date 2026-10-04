@@ -15,7 +15,11 @@ use librespot_playback::{
 };
 use tokio::runtime::Runtime;
 
-use crate::{error::BopifyError, event::WireEvent};
+use crate::{
+    error::BopifyError,
+    event::WireEvent,
+    terminal::{EngineReporter, SessionLossReason},
+};
 
 /// Called on a librespot runtime thread, never on the caller's. The Swift
 /// side must be safe to invoke from a non-main thread.
@@ -39,6 +43,7 @@ pub struct Engine {
     /// Owns every worker, including selection acknowledgements; Drop joins them
     /// before Swift releases the event callback context.
     runtime: Runtime,
+    reporter: EngineReporter,
     spirc: Spirc,
     sink: EventSink,
     /// For radio lookups. Declared after `runtime`, so the runtime still drops (and joins) first.
@@ -55,6 +60,9 @@ impl Engine {
     ) -> Result<Self, BopifyError> {
         log::info!("engine: creating device_name={device_name}");
 
+        let reporter = EngineReporter::new(sink);
+        let event_reporter = reporter.clone();
+        let sink: EventSink = Arc::new(move |event| event_reporter.event(event));
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .enable_all()
@@ -99,7 +107,7 @@ impl Engine {
             // is spawned, which only happens once the engine really exists.
             let events = player.get_player_event_channel();
 
-            let (spirc, task) = Spirc::new(
+            let (spirc, task) = with_connect_deadline(Spirc::new(
                 ConnectConfig {
                     name: device_name.to_string(),
                     emit_set_queue_events: true,
@@ -112,7 +120,7 @@ impl Engine {
                 credentials,
                 player,
                 mixer,
-            )
+            ))
             .await
             // This is the only place a bad token or a non-Premium account
             // surfaces: librespot reports both through the same failure path,
@@ -120,23 +128,28 @@ impl Engine {
             // 2026 it is the only Premium signal available. Classifying it
             // here, not mapping it to Unknown, is what keeps PremiumRequired
             // and AuthInvalid reachable in the error taxonomy.
-            .map_err(classify_connect_error)?;
+            ?;
 
             // The returned future is the event loop. Commands issued before
             // it is driven are queued, so spawning it here is correct.
-            tokio::spawn(task);
+            supervise_spirc(task, reporter.clone());
             let radio_session = session.clone();
-            supervise_forwarder(events, sink.clone(), session);
+            supervise_forwarder(events, sink.clone(), session, reporter.clone());
             Ok::<_, BopifyError>((spirc, radio_session))
         })?;
 
         log::info!("engine: session connected, spirc running");
         Ok(Self {
             runtime,
+            reporter,
             spirc,
             sink,
             session,
         })
+    }
+
+    pub fn report_command_loss(&self) {
+        self.reporter.session_lost(SessionLossReason::CommandFailed);
     }
 
     pub fn play(&self) -> Result<(), BopifyError> {
@@ -226,7 +239,8 @@ impl Engine {
         let seed = crate::radio::Seed::parse(seed_uri).ok_or(BopifyError::InvalidArgument)?;
         let source = crate::radio::SessionRadio(self.session.clone());
         let sink = self.sink.clone();
-        self.runtime.spawn(async move { sink(crate::radio::resolve(&source, seed, request_id).await) });
+        self.runtime
+            .spawn(async move { sink(crate::radio::resolve(&source, seed, request_id).await) });
         Ok(())
     }
 }
@@ -236,19 +250,24 @@ impl Engine {
 /// Without the watcher a panic anywhere in translation or serialisation would
 /// kill the task, tokio would swallow it, and event delivery would stop for
 /// good with no terminal `Failed` -- the UI would sit on stale state forever.
-fn supervise_forwarder(events: PlayerEventChannel, sink: EventSink, session: Session) {
+fn supervise_forwarder(
+    events: PlayerEventChannel,
+    sink: EventSink,
+    session: Session,
+    reporter: EngineReporter,
+) {
     let metadata = crate::queue::start(session.clone(), sink.clone());
     let remote = crate::remote::start(session, sink.clone());
     let forwarder = tokio::spawn(forward_events(events, sink.clone(), metadata, remote));
     tokio::spawn(async move {
         match forwarder.await {
-            Ok(()) => {}
+            Ok(()) => reporter.session_lost(SessionLossReason::PlayerChannelClosed),
             // Cancellation is the normal teardown path -- the runtime is going
             // away and Swift is not listening any more, so stay quiet.
             Err(why) if why.is_cancelled() => {}
             Err(_) => {
                 log::error!("engine: event forwarder panicked, reporting SessionLost");
-                sink(session_lost_event());
+                reporter.session_lost(SessionLossReason::ForwarderPanicked);
             }
         }
     });
@@ -278,14 +297,12 @@ async fn forward_events(
     // The channel only closes when the player thread is gone, which during a
     // normal teardown never gets here: runtime shutdown drops this task
     // rather than polling it.
-    log::error!("engine: player event channel closed, reporting SessionLost");
-    sink(session_lost_event());
+    log::error!("engine: player event channel closed");
 }
 
 fn session_lost_event() -> WireEvent {
-    WireEvent::Failed {
-        code: BopifyError::SessionLost.code(),
-        message: BopifyError::SessionLost.message().to_string(),
+    WireEvent::SessionLost {
+        reason: SessionLossReason::CommandFailed,
     }
 }
 
@@ -296,26 +313,97 @@ fn command_failed<E>(_err: E) -> BopifyError {
     BopifyError::SessionLost
 }
 
-fn classify_connect_error<E: std::fmt::Debug>(err: E) -> BopifyError {
-    // Classification only. This string can carry login5 payload, so it must
-    // never be logged or put on the wire -- only the verdict below escapes.
-    let text = format!("{err:?}").to_lowercase();
-    let error = if text.contains("premium") {
-        BopifyError::PremiumRequired
-    } else if text.contains("token") || text.contains("credential") || text.contains("unauthor") {
-        BopifyError::AuthInvalid
-    } else if text.contains("dns") || text.contains("connect") || text.contains("network") {
-        BopifyError::NetworkUnavailable
-    } else {
-        BopifyError::Unknown
+fn classify_connect_error(err: librespot_core::Error) -> BopifyError {
+    use librespot_core::error::{AuthenticationFailure, ErrorKind};
+    let error = match err.authentication_failure() {
+        Some(AuthenticationFailure::PremiumRequired) => BopifyError::PremiumRequired,
+        Some(AuthenticationFailure::InvalidCredentials) => BopifyError::AuthInvalid,
+        None => match err.kind {
+            ErrorKind::Unavailable
+            | ErrorKind::DeadlineExceeded
+            | ErrorKind::ResourceExhausted
+            | ErrorKind::Aborted => BopifyError::NetworkUnavailable,
+            _ => BopifyError::Unknown,
+        },
     };
     log::error!("engine: spirc connect failed error={error:?}");
     error
 }
 
+async fn with_connect_deadline<T>(
+    operation: impl std::future::Future<Output = Result<T, librespot_core::Error>>,
+) -> Result<T, BopifyError> {
+    match tokio::time::timeout(std::time::Duration::from_secs(30), operation).await {
+        Ok(result) => result.map_err(classify_connect_error),
+        Err(_) => {
+            log::error!("engine: login deadline expired");
+            Err(BopifyError::NetworkUnavailable)
+        }
+    }
+}
+
+fn supervise_spirc(
+    task: impl std::future::Future<Output = ()> + Send + 'static,
+    reporter: EngineReporter,
+) {
+    let task = tokio::spawn(task);
+    tokio::spawn(async move {
+        match task.await {
+            Ok(()) => reporter.session_lost(SessionLossReason::SpircEnded),
+            Err(why) if why.is_cancelled() => {}
+            Err(_) => reporter.session_lost(SessionLossReason::SpircPanicked),
+        }
+    });
+}
+
+impl Drop for Engine {
+    fn drop(&mut self) {
+        self.reporter.begin_teardown();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test(start_paused = true)]
+    async fn login_deadline_expires_without_waiting_forever() {
+        let result =
+            with_connect_deadline(std::future::pending::<Result<(), librespot_core::Error>>())
+                .await;
+        assert_eq!(result, Err(BopifyError::NetworkUnavailable));
+    }
+
+    #[test]
+    fn network_error_mentioning_credentials_is_not_a_token_rejection() {
+        assert_eq!(
+            classify_connect_error(librespot_core::Error::unavailable(
+                "credentials network lookup failed"
+            )),
+            BopifyError::NetworkUnavailable
+        );
+    }
+
+    #[tokio::test]
+    async fn spirc_completion_and_panic_report_even_with_the_player_alive() {
+        for panics in [false, true] {
+            let (output, mut received) = tokio::sync::mpsc::unbounded_channel();
+            let reporter = crate::terminal::EngineReporter::new(Arc::new(move |event| {
+                output.send(event).unwrap();
+            }));
+            supervise_spirc(
+                async move {
+                    if panics {
+                        panic!("test spirc");
+                    }
+                },
+                reporter,
+            );
+            let event = received.recv().await.unwrap();
+            assert!(
+                matches!(event, WireEvent::SessionLost { reason } if reason == if panics { crate::terminal::SessionLossReason::SpircPanicked } else { crate::terminal::SessionLossReason::SpircEnded })
+            );
+        }
+    }
     use librespot_playback::player::{PlayerEvent, RemoteState};
     #[tokio::test]
     async fn transport_drain_publishes_structure_before_metadata_without_waiting() {
@@ -323,13 +411,34 @@ mod tests {
         let (metadata, mut requests) = tokio::sync::watch::channel(None);
         let (remote, _mirror) = tokio::sync::watch::channel(None);
         let (output, mut received) = tokio::sync::mpsc::unbounded_channel();
-        let sink: EventSink = Arc::new(move |event| { output.send(event).unwrap(); });
-        tx.send(PlayerEvent::SetQueue { generation: 9, context_uri: String::new(), current_track: None, next_tracks: vec![], prev_tracks: vec![] }).unwrap();
-        tx.send(PlayerEvent::Paused { play_request_id: 0, track_id: librespot_core::SpotifyUri::from_uri("spotify:track:6rqhFgbbKwnb9MLmUQDhG6").unwrap(), position_ms: 250 }).unwrap();
+        let sink: EventSink = Arc::new(move |event| {
+            output.send(event).unwrap();
+        });
+        tx.send(PlayerEvent::SetQueue {
+            generation: 9,
+            context_uri: String::new(),
+            current_track: None,
+            next_tracks: vec![],
+            prev_tracks: vec![],
+        })
+        .unwrap();
+        tx.send(PlayerEvent::Paused {
+            play_request_id: 0,
+            track_id: librespot_core::SpotifyUri::from_uri("spotify:track:6rqhFgbbKwnb9MLmUQDhG6")
+                .unwrap(),
+            position_ms: 250,
+        })
+        .unwrap();
         drop(tx);
         forward_events(rx, sink, metadata, remote).await;
-        assert!(matches!(received.recv().await.unwrap(), WireEvent::QueueChanged { generation: 9, .. }));
-        assert!(matches!(received.recv().await.unwrap(), WireEvent::Paused { position_ms: 250 }));
+        assert!(matches!(
+            received.recv().await.unwrap(),
+            WireEvent::QueueChanged { generation: 9, .. }
+        ));
+        assert!(matches!(
+            received.recv().await.unwrap(),
+            WireEvent::Paused { position_ms: 250 }
+        ));
         assert!(requests.borrow_and_update().is_some());
     }
 
@@ -339,13 +448,27 @@ mod tests {
         let (metadata, _requests) = tokio::sync::watch::channel(None);
         let (remote, mirrored) = tokio::sync::watch::channel(None);
         let (output, mut received) = tokio::sync::mpsc::unbounded_channel();
-        let sink: EventSink = Arc::new(move |event| { output.send(event).unwrap(); });
-        tx.send(PlayerEvent::RemotePlayback { remote: Some(RemoteState { device_name: "iPhone".into(), track_uri: "spotify:track:abc".into(), is_playing: true, position_ms: 0, duration_ms: 1000 }) }).unwrap();
+        let sink: EventSink = Arc::new(move |event| {
+            output.send(event).unwrap();
+        });
+        tx.send(PlayerEvent::RemotePlayback {
+            remote: Some(RemoteState {
+                device_name: "iPhone".into(),
+                track_uri: "spotify:track:abc".into(),
+                is_playing: true,
+                position_ms: 0,
+                duration_ms: 1000,
+            }),
+        })
+        .unwrap();
         drop(tx);
         forward_events(rx, sink, metadata, remote).await;
         let mirrored = mirrored.borrow().clone();
-        assert_eq!(mirrored.map(|remote| remote.track_uri), Some("spotify:track:abc".to_string()));
-        // Only the drain's closing SessionLost went straight to Swift.
-        assert!(matches!(received.recv().await.unwrap(), WireEvent::Failed { .. }));
+        assert_eq!(
+            mirrored.map(|remote| remote.track_uri),
+            Some("spotify:track:abc".to_string())
+        );
+        // The remote event waits for metadata; the supervisor reports channel loss.
+        assert!(received.try_recv().is_err());
     }
 }

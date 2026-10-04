@@ -49,6 +49,9 @@ pub enum RadioFailure {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum WireEvent {
+    SessionLost {
+        reason: crate::terminal::SessionLossReason,
+    },
     QueueChanged {
         generation: u64,
         previous: Vec<WireQueueEntry>,
