@@ -282,6 +282,75 @@ struct SpotifyAuthServiceTests {
         }
     }
 
+    @Test func rejectedUnexpiredTokenRefreshes() async throws {
+        AuthFlowStubProtocol.handler = { _ in (200, Data(#"{"access_token":"NEW_FAKE","expires_in":3600}"#.utf8)) }
+        let store = InMemoryTokenStore()
+        try store.save(TokenSet(accessToken: "OLD_FAKE", refreshToken: "RT", expiresAt: .distantFuture, grantedScopes: ["streaming"]))
+        let service = SpotifyAuthService(clientID: "test", client: makeClient(), store: store)
+        #expect(try await service.validAccessToken(rejecting: "OLD_FAKE") == "NEW_FAKE")
+        #expect(store.load()?.refreshToken == "RT")
+    }
+
+    @Test func rejectedOldTokenUsesNewerCredential() async throws {
+        AuthFlowStubProtocol.handler = { _ in Issue.record("Unexpected refresh"); return (500, Data()) }
+        let store = InMemoryTokenStore()
+        try store.save(TokenSet(accessToken: "NEW_FAKE", refreshToken: "RT", expiresAt: .distantFuture, grantedScopes: ["streaming"]))
+        let service = SpotifyAuthService(clientID: "test", client: makeClient(), store: store)
+        #expect(try await service.validAccessToken(rejecting: "OLD_FAKE") == "NEW_FAKE")
+    }
+
+    @Test func forcedAndOrdinaryRefreshShareRequest() async throws {
+        let gate = RefreshGate()
+        ControlledRefreshProtocol.gate = gate
+        let store = InMemoryTokenStore()
+        try store.save(TokenSet(accessToken: "OLD", refreshToken: "RT", expiresAt: .distantPast, grantedScopes: ["streaming"]))
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [ControlledRefreshProtocol.self]
+        let service = SpotifyAuthService(clientID: "test", client: TokenClient(clientID: "test", session: URLSession(configuration: config)), store: store)
+        let first = Task { try await service.validAccessToken() }
+        for await _ in gate.started.stream { break }
+        let second = Task { try await service.validAccessToken(rejecting: "OLD") }
+        for _ in 0..<100 { await Task.yield() }
+        gate.release()
+        #expect(try await first.value == "NEW_FAKE")
+        #expect(try await second.value == "NEW_FAKE")
+        #expect(gate.requestCount == 1)
+    }
+
+    @Test func signOutDuringForcedRefreshCannotSave() async throws {
+        let gate = RefreshGate()
+        ControlledRefreshProtocol.gate = gate
+        let store = InMemoryTokenStore()
+        try store.save(TokenSet(accessToken: "OLD", refreshToken: "RT", expiresAt: .distantFuture, grantedScopes: ["streaming"]))
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [ControlledRefreshProtocol.self]
+        let service = SpotifyAuthService(clientID: "test", client: TokenClient(clientID: "test", session: URLSession(configuration: config)), store: store)
+        let request = Task { try await service.validAccessToken(rejecting: "OLD") }
+        for await _ in gate.started.stream { break }
+        await service.signOut()
+        gate.release()
+        do { _ = try await request.value; Issue.record("Stale forced refresh returned") } catch {}
+        #expect(store.load() == nil)
+    }
+
+    @Test func newConsentInvalidatesForcedRefresh() async throws {
+        let gate = RefreshGate()
+        ControlledRefreshProtocol.gate = gate
+        let store = InMemoryTokenStore()
+        try store.save(TokenSet(accessToken: "OLD", refreshToken: "RT", expiresAt: .distantFuture, grantedScopes: ["streaming"]))
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [ControlledRefreshProtocol.self]
+        let binding = LateBinding<SpotifyAuthService>()
+        let service = SpotifyAuthService(clientID: "test", client: TokenClient(clientID: "test", session: URLSession(configuration: config)), store: store, openURL: { _ in Task { await binding.value?.signOut() } })
+        binding.value = service
+        let request = Task { try await service.validAccessToken(rejecting: "OLD") }
+        for await _ in gate.started.stream { break }
+        do { _ = try await service.signIn(); Issue.record("Expected cancelled consent") } catch {}
+        gate.release()
+        do { _ = try await request.value; Issue.record("Old refresh survived consent") } catch {}
+        #expect(store.load() == nil)
+    }
+
     @Test func overlappingConsumersShareRefresh() async throws {
         let gate = RefreshGate()
         ControlledRefreshProtocol.gate = gate

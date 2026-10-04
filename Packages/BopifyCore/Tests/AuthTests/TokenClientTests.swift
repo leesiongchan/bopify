@@ -89,6 +89,30 @@ struct TokenClientTests {
         }
     }
 
+    @Test func unknownOAuthFailureDoesNotMisidentifyRevokedCredentials() async {
+        StubProtocol.handler = { _ in (400, Data(#"{"error":"invalid_client"}"#.utf8)) }
+        await #expect(throws: PlayerError.unknown) { _ = try await makeClient().refresh(refreshToken: "RT") }
+    }
+
+    @Test func throttlingIsRetryable() async {
+        StubProtocol.handler = { _ in (429, Data(#"{"error":"temporarily_unavailable"}"#.utf8)) }
+        await #expect(throws: PlayerError.networkUnavailable) { _ = try await makeClient().refresh(refreshToken: "RT") }
+    }
+
+    @Test func malformedSuccessIsUnknown() async {
+        StubProtocol.handler = { _ in (200, Data("{}".utf8)) }
+        await #expect(throws: PlayerError.unknown) { _ = try await makeClient().refresh(refreshToken: "RT") }
+    }
+
+    @Test func cancelledRefreshRemainsCancellation() async {
+        let task = Task { () throws -> TokenSet in
+            try Task.checkCancellation()
+            return try await makeClient().refresh(refreshToken: "RT")
+        }
+        task.cancel()
+        await #expect(throws: CancellationError.self) { _ = try await task.value }
+    }
+
     @Test func mapsServerFailureToNetworkUnavailable() async {
         StubProtocol.handler = { _ in (503, Data()) }
         await #expect(throws: PlayerError.networkUnavailable) {
