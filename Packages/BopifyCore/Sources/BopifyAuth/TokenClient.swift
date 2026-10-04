@@ -42,9 +42,14 @@ public struct TokenClient: Sendable {
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         request.httpBody = Data(fields.map { "\($0.key)=\(Self.escape($0.value))" }.joined(separator: "&").utf8)
 
+        try Task.checkCancellation()
         let (data, response): (Data, URLResponse)
         do { (data, response) = try await session.data(for: request) }
-        catch { throw PlayerError.networkUnavailable }
+        catch is CancellationError { throw CancellationError() }
+        catch {
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled { throw CancellationError() }
+            throw PlayerError.networkUnavailable
+        }
 
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         switch status {
@@ -58,10 +63,13 @@ public struct TokenClient: Sendable {
                 expiresAt: Date().addingTimeInterval(TimeInterval(decoded.expires_in)),
                 grantedScopes: decoded.scope.map { Set($0.split(separator: " ").map(String.init)) } ?? fallbackScopes
             )
-        case 400, 401:
-            throw PlayerError.authExpired
-        default:
+        case 429, 500...599:
             throw PlayerError.networkUnavailable
+        default:
+            struct OAuthFailure: Decodable { let error: String }
+            let failure = try? JSONDecoder().decode(OAuthFailure.self, from: data)
+            if failure?.error == "invalid_grant" { throw PlayerError.authExpired }
+            throw PlayerError.unknown
         }
     }
 

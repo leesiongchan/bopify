@@ -135,13 +135,21 @@ public actor SpotifyAuthService {
         try await validAccessToken(requiredScopes: [])
     }
 
+    public func validAccessToken(rejecting rejectedAccessToken: String) async throws -> String {
+        try await validAccessToken(requiredScopes: [], rejecting: rejectedAccessToken)
+    }
+
     public func validAccessToken(requiredScopes: Set<String>) async throws -> String {
+        try await validAccessToken(requiredScopes: requiredScopes, rejecting: nil)
+    }
+
+    private func validAccessToken(requiredScopes: Set<String>, rejecting rejectedAccessToken: String?) async throws -> String {
         guard let current = tokens ?? restore() else {
             if !requiredScopes.isEmpty { throw LibraryError.authorizationRequired }
             throw PlayerError.authExpired
         }
         guard requiredScopes.isSubset(of: current.grantedScopes) else { throw LibraryError.authorizationRequired }
-        if !current.needsRefresh() { return current.accessToken }
+        if !current.needsRefresh(), current.accessToken != rejectedAccessToken { return current.accessToken }
         guard let refreshToken = current.refreshToken else { throw PlayerError.authExpired }
         let myGeneration = generation
         let pending: (id: UUID, generation: Int, task: Task<TokenSet, Error>)
