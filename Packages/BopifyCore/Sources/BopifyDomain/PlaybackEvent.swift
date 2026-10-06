@@ -15,6 +15,8 @@ public enum PlaybackEvent: Hashable, Sendable {
     case loading
     case endOfTrack
     case activeDeviceChanged(isActive: Bool)
+    case recoveryIdentity(PlaybackIdentity)
+    case connectionReady(PlaybackBootstrapOutcome)
     case sessionLost(SessionLossReason)
     case failed(PlayerError)
     case startupResolved(StartupOutcome)
@@ -26,7 +28,7 @@ extension PlaybackEvent: Decodable {
         case type, positionMs, volume, isActive, code
         case generation, entryID, track, enabled, mode, reason
         case trackUri, title, artists, albumTitle, artworkUrl, durationMs
-        case outcome, deviceName, remote, isPlaying
+        case outcome, deviceName, remote, isPlaying, identity
     }
 
     public init(from decoder: any Decoder) throws {
@@ -48,6 +50,14 @@ extension PlaybackEvent: Decodable {
         case "loading":            self = .loading
         case "endOfTrack":         self = .endOfTrack
         case "activeDeviceChanged": self = .activeDeviceChanged(isActive: try c.decode(Bool.self, forKey: .isActive))
+        case "recoveryIdentity": self = .recoveryIdentity(try c.decode(PlaybackIdentity.self, forKey: .identity))
+        case "connectionReady":
+            switch try c.decode(String.self, forKey: .outcome) {
+            case "local": self = .connectionReady(.local(try c.decode(PlaybackIdentity.self, forKey: .identity)))
+            case "remote": self = .connectionReady(.remote)
+            case "unavailable": self = .connectionReady(.unavailable)
+            default: throw DecodingError.dataCorruptedError(forKey: .outcome, in: c, debugDescription: "invalid connection outcome")
+            }
         case "sessionLost": self = .sessionLost(try c.decode(SessionLossReason.self, forKey: .reason))
         case "failed":             self = .failed(PlayerError(ffiCode: try c.decode(Int32.self, forKey: .code)))
         case "volumeChanged":

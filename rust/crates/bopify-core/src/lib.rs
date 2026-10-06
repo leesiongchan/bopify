@@ -12,3 +12,4 @@ mod queue;
 mod radio;
 mod remote;
 mod terminal;
+mod recovery;
