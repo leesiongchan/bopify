@@ -27,9 +27,8 @@ use crate::{engine::Engine, error::BopifyError, event::WireEvent};
 /// command racing `bopify_engine_destroy` safe: destroy drops the `Engine`
 /// out of the `Option` under the write lock and leaves the shell behind, so
 /// a concurrent or late call still reads live memory and gets `SessionLost`.
-/// The shell is tens of bytes and an engine is created about as often as a
-/// token expires, so the leak is not worth a registry or a generation
-/// counter.
+/// Each successful replacement retains one small shell. Runtime and callback
+/// resources are reclaimed; the retained shell protects late callers.
 pub struct BopifyEngine {
     /// Read without the lock so a late command fails fast instead of queueing
     /// behind a write lock that is held across a multi-second runtime drop.
@@ -115,6 +114,40 @@ pub unsafe extern "C" fn bopify_engine_create(
     ctx: *mut c_void,
     out_err: *mut i32,
 ) -> *mut BopifyEngine {
+    // SAFETY: forwards the legacy creator's borrowed pointer contract.
+    unsafe { create_engine(access_token, device_name, None, callback, ctx, out_err) }
+}
+
+/// Creates a device with validated JSON startup options. String storage is borrowed only during this call.
+/// # Safety
+/// Pointers and callback context obey the same contract as `bopify_engine_create`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn bopify_engine_create_with_options(
+    access_token: *const c_char,
+    device_name: *const c_char,
+    options_json: *const c_char,
+    callback: Option<extern "C" fn(json: *const u8, len: usize, ctx: *mut c_void)>,
+    ctx: *mut c_void,
+    out_err: *mut i32,
+) -> *mut BopifyEngine {
+    // SAFETY: options_json is a borrowed NUL-terminated string for this call.
+    let options = unsafe { str_from(options_json) }.ok_or(BopifyError::InvalidArgument)
+        .and_then(crate::recovery::EngineCreateOptions::parse);
+    match options {
+        // SAFETY: remaining arguments forward the creator's contract.
+        Ok(options) => unsafe { create_engine(access_token, device_name, Some(options), callback, ctx, out_err) },
+        Err(error) => { unsafe { write_err(out_err, error.code()) }; std::ptr::null_mut() }
+    }
+}
+
+unsafe fn create_engine(
+    access_token: *const c_char,
+    device_name: *const c_char,
+    options: Option<crate::recovery::EngineCreateOptions>,
+    callback: Option<extern "C" fn(json: *const u8, len: usize, ctx: *mut c_void)>,
+    ctx: *mut c_void,
+    out_err: *mut i32,
+) -> *mut BopifyEngine {
     crate::logging::install();
     log::info!("ffi: bopify_engine_create");
 
@@ -147,7 +180,11 @@ pub unsafe extern "C" fn bopify_engine_create(
         callback(json.as_ptr(), json.len(), ctx.as_ptr());
     });
 
-    match Engine::new(token, name, sink) {
+    let result = match options {
+        Some(options) => Engine::new_with_options(token, name, options, sink),
+        None => Engine::new(token, name, sink),
+    };
+    match result {
         Ok(inner) => {
             // SAFETY: as above.
             unsafe { write_err(out_err, 0) };

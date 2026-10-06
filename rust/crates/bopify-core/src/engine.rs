@@ -58,7 +58,16 @@ impl Engine {
         device_name: &str,
         sink: EventSink,
     ) -> Result<Self, BopifyError> {
-        log::info!("engine: creating device_name={device_name}");
+        Self::create(access_token, device_name, None, sink)
+    }
+
+    pub fn new_with_options(access_token: &str, device_name: &str, options: crate::recovery::EngineCreateOptions, sink: EventSink) -> Result<Self, BopifyError> {
+        options.validate()?;
+        Self::create(access_token, device_name, Some(options), sink)
+    }
+
+    fn create(access_token: &str, device_name: &str, options: Option<crate::recovery::EngineCreateOptions>, sink: EventSink) -> Result<Self, BopifyError> {
+        log::info!("engine: creating Connect device");
 
         let reporter = EngineReporter::new(sink);
         let event_reporter = reporter.clone();
@@ -76,7 +85,9 @@ impl Engine {
             // SessionConfig::default() supplies librespot's own client id.
             // A Spotify Developer Dashboard id is rejected by login5 with a
             // raw HTTP 400, so it must not be overridden here.
-            let session = Session::new(SessionConfig::default(), None);
+            let mut session_config = SessionConfig::default();
+            if let Some(options) = &options { session_config.device_id = options.device_id.clone(); }
+            let session = Session::new(session_config, None);
             let credentials = Credentials::with_access_token(access_token);
 
             // Do NOT call session.connect() here. Spirc::new() connects the
@@ -113,7 +124,9 @@ impl Engine {
                     emit_set_queue_events: true,
                     // Decides from the first connect cluster what to load, so the
                     // device is never active without content (see the startup-restore spec).
+                    initial_volume: options.as_ref().and_then(|o| o.snapshot.as_ref()).map_or(u16::MAX / 2, |s| (s.volume * f64::from(u16::MAX)).round() as u16),
                     startup_restore: true,
+                    startup_mode: options.as_ref().map_or(librespot_connect::StartupMode::ColdLaunch, |o| o.native_startup()),
                     ..Default::default()
                 },
                 session.clone(),
@@ -319,6 +332,7 @@ fn classify_connect_error(err: librespot_core::Error) -> BopifyError {
         Some(AuthenticationFailure::PremiumRequired) => BopifyError::PremiumRequired,
         Some(AuthenticationFailure::InvalidCredentials) => BopifyError::AuthInvalid,
         None => match err.kind {
+            ErrorKind::Unauthenticated => BopifyError::AuthInvalid,
             ErrorKind::Unavailable
             | ErrorKind::DeadlineExceeded
             | ErrorKind::ResourceExhausted

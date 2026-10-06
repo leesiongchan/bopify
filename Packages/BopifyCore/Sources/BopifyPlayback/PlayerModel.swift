@@ -20,6 +20,8 @@ public enum QueueSelectionStatus: Equatable, Sendable {
 @MainActor
 @Observable
 public final class PlayerModel {
+    public private(set) var recoveryIdentity: PlaybackIdentity?
+    @ObservationIgnored public var onConnectionReady: (@MainActor (PlaybackBootstrapOutcome) -> Void)?
     public private(set) var state = PlaybackState()
     public private(set) var commandNotice: String?
     public private(set) var queueSelection: QueueSelectionStatus = .idle
@@ -386,6 +388,8 @@ public final class PlayerModel {
                 state.remote = nil
                 state.staleRemote = nil
             }
+        case let .recoveryIdentity(identity): recoveryIdentity = identity
+        case let .connectionReady(outcome): onConnectionReady?(outcome)
         case .sessionLost:
             apply(.failed(.playbackSessionLost))
         case let .failed(error):
