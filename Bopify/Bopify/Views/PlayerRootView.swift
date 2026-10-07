@@ -25,7 +25,12 @@ struct PlayerRootView: View {
                             SignInView(status: .error(error), onSignIn: requestSignIn)
                         case .signedIn:
                             if let player = environment.player {
-                                StartupPlayerContent(player: player)
+                                if environment.connectionStatus != .ready || player.restorationUnavailable {
+                                    PlaybackConnectionStatusView(status: environment.connectionStatus, restorationUnavailable: player.restorationUnavailable, onRetry: environment.retryPlaybackConnection, onReconnect: { Task { await environment.reconnectSpotify() } })
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                                } else {
+                                    StartupPlayerContent(player: player)
+                                }
                             } else {
                                 SignInView(status: .authenticating, onSignIn: requestSignIn)
                             }
@@ -59,7 +64,7 @@ struct PlayerRootView: View {
                                if editing { player.beginVolumeEditing() } else { player.endVolumeEditing() }
                                environment.presentation.sendAttention(.interaction(.volume, editing))
                            }) { Text("transport.volume") }
-                        .disabled(!player.state.isActiveDevice)
+                        .disabled(!player.isEngineReady || !player.state.isActiveDevice)
                     Divider()
                 }
                 Button("menu.signOut") { Task { await environment.signOut() } }.disabled(environment.authState != .signedIn)

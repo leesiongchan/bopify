@@ -24,8 +24,8 @@ public struct NowPlayingInfo: Equatable, Sendable {
 
 /// Nil unless Bopify is the device playing, so media keys reach other apps while it only mirrors another device.
 /// `positionMs` is the player's display position, so Now Playing's clock matches Bopify's own.
-public func nowPlayingInfo(for state: PlaybackState, positionMs: Int64) -> NowPlayingInfo? {
-    guard state.isActiveDevice, let track = state.currentTrack else { return nil }
+public func nowPlayingInfo(for state: PlaybackState, positionMs: Int64, connectionReady: Bool = true) -> NowPlayingInfo? {
+    guard connectionReady, state.isActiveDevice, let track = state.currentTrack else { return nil }
     return NowPlayingInfo(title: track.title, artist: track.artists.map(\.name).joined(separator: ", "),
                           album: track.albumTitle, artworkURL: track.artwork?.url, durationMs: state.durationMs,
                           elapsedMs: positionMs, isPlaying: state.phase == .playing, canNext: state.canNext,
