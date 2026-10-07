@@ -20,6 +20,14 @@ public enum QueueSelectionStatus: Equatable, Sendable {
 @MainActor
 @Observable
 public final class PlayerModel {
+    public private(set) var engineEpoch: UInt64 = 0
+    public private(set) var isEngineReady = false
+    public private(set) var restorationUnavailable = false
+    @ObservationIgnored public var onSessionLost: (@MainActor (SessionLossReason, PlaybackRecoverySnapshot) -> Void)?
+    @ObservationIgnored private var managedAttachment = false
+    @ObservationIgnored private var reportedLoss = false
+    @ObservationIgnored private var stagedEvents: [PlaybackEvent] = []
+    private var lastConfirmedPlaying = false
     public private(set) var recoveryIdentity: PlaybackIdentity?
     @ObservationIgnored public var onConnectionReady: (@MainActor (PlaybackBootstrapOutcome) -> Void)?
     public private(set) var state = PlaybackState()
@@ -33,7 +41,7 @@ public final class PlayerModel {
     private(set) var remoteUpdatedAt = Date.now
     private var frozenDisplayPositionMs: Int64?
 
-    @ObservationIgnored private let engine: any PlaybackEngine
+    @ObservationIgnored private var engine: (any PlaybackEngine)?
     @ObservationIgnored private var consumer: Task<Void, Never>?
     @ObservationIgnored private var pendingCommand: Task<Void, Never>?
     @ObservationIgnored private var commandGeneration: UInt64 = 0
@@ -46,14 +54,19 @@ public final class PlayerModel {
     @ObservationIgnored private let volumeNow: @MainActor () -> TimeInterval
     @ObservationIgnored private let volumeSleep: @Sendable (Duration) async throws -> Void
 
+    public convenience init() {
+        self.init(engine: nil, volumeNow: { ProcessInfo.processInfo.systemUptime }, volumeSleep: { try await Task.sleep(for: $0) })
+    }
+
     public convenience init(engine: any PlaybackEngine) {
         self.init(engine: engine, volumeNow: { ProcessInfo.processInfo.systemUptime },
                   volumeSleep: { try await Task.sleep(for: $0) })
     }
 
-    init(engine: any PlaybackEngine, volumeNow: @escaping @MainActor () -> TimeInterval,
+    init(engine: (any PlaybackEngine)?, volumeNow: @escaping @MainActor () -> TimeInterval,
          volumeSleep: @escaping @Sendable (Duration) async throws -> Void) {
         self.engine = engine
+        self.isEngineReady = engine != nil
         self.volumeNow = volumeNow
         self.volumeSleep = volumeSleep
     }
@@ -75,18 +88,89 @@ public final class PlayerModel {
     public var displayDurationMs: Int64 { state.mirror?.durationMs ?? state.durationMs }
 
     /// Views run a display clock only while this is true.
-    public var isPositionAdvancing: Bool { state.mirror?.isPlaying ?? (state.phase == .playing) }
+    public var isPositionAdvancing: Bool { isEngineReady && (state.mirror?.isPlaying ?? (state.phase == .playing)) }
 
     /// One consumer for the model's lifetime. A per-view .task would
     /// resubscribe whenever view identity changed.
     public func start() {
-        guard consumer == nil else { return }
-        BopifyLog.playback.info("player model starting")
-        consumer = Task { [engine] in
+        guard consumer == nil, let engine else { return }
+        let epoch = engineEpoch
+        BopifyLog.playback.info("player model starting epoch=\(epoch, privacy: .public)")
+        consumer = Task { [weak self] in
             for await event in engine.events {
-                self.apply(event)
+                guard let self, !Task.isCancelled, engineEpoch == epoch else { return }
+                if reportedLoss && (managedAttachment || onSessionLost != nil) { continue }
+                if managedAttachment && !isEngineReady {
+                    switch event {
+                    case .sessionLost, .failed(.playbackSessionLost), .connectionReady, .recoveryIdentity: apply(event)
+                    default: stagedEvents.append(event)
+                    }
+                } else { apply(event) }
             }
+            guard let self, !Task.isCancelled, engineEpoch == epoch else { return }
+            reportSessionLoss(.eventStreamEnded)
         }
+    }
+
+    public func attachEngine(_ engine: any PlaybackEngine, epoch: UInt64) {
+        detachEngine()
+        engineEpoch = epoch
+        self.engine = engine
+        managedAttachment = true
+        reportedLoss = false
+        stagedEvents = []
+        restorationUnavailable = false
+        recoveryIdentity = nil
+        start()
+    }
+
+    public func detachEngine() {
+        freezeDisplayPosition()
+        stop()
+        volumeTask?.cancel()
+        volumeTask = nil
+        engine = nil
+        isEngineReady = false
+        stagedEvents = []
+        state.isActiveDevice = false
+        if let remote = state.remote { state.staleRemote = stalled(remote); state.remote = nil }
+        if state.phase == .playing || state.phase == .loading { state.phase = .idle }
+    }
+
+    public func setConnectionReady(_ outcome: PlaybackBootstrapOutcome) {
+        guard !reportedLoss else { return }
+        isEngineReady = true
+        restorationUnavailable = outcome == .unavailable
+        let pending = stagedEvents
+        stagedEvents = []
+        if outcome != .unavailable { pending.forEach(apply) }
+        switch outcome {
+        case let .local(identity): recoveryIdentity = identity; state.isActiveDevice = true
+        case .remote: state.isActiveDevice = false; lastConfirmedPlaying = false
+        case .unavailable: state.isActiveDevice = false; state.phase = .idle; lastConfirmedPlaying = false
+        }
+        onConnectionReady?(outcome)
+    }
+
+    public func captureRecoverySnapshot(at date: Date) -> PlaybackRecoverySnapshot {
+        let identity = recoveryIdentity.flatMap { $0.trackURI == state.currentTrack?.uri ? $0 : nil }
+        return PlaybackRecoverySnapshot(wasActive: state.isActiveDevice,
+            shouldResume: state.isActiveDevice && lastConfirmedPlaying && identity != nil,
+            identity: identity, positionMs: displayPositionMs(at: date), volume: state.volume,
+            shuffleEnabled: state.shuffleEnabled, repeatMode: state.repeatMode)
+    }
+
+    private func reportSessionLoss(_ reason: SessionLossReason) {
+        guard !reportedLoss else { return }
+        let snapshot = captureRecoverySnapshot(at: .now)
+        reportedLoss = true
+        isEngineReady = false
+        commandGeneration &+= 1
+        pendingCommand?.cancel()
+        cancelVolumeEditing()
+        apply(.failed(.playbackSessionLost))
+        BopifyLog.playback.error("player session lost reason=\(reason.rawValue, privacy: .public) epoch=\(self.engineEpoch, privacy: .public)")
+        onSessionLost?(reason, snapshot)
     }
 
     #if DEBUG
@@ -109,17 +193,19 @@ public final class PlayerModel {
 
     /// Play takes the session over while Bopify is inactive, from a mirror or a stale track.
     public var canPlayHere: Bool {
-        guard !state.isActiveDevice, state.mirror != nil || state.currentTrack != nil else { return false }
+        guard isEngineReady, !state.isActiveDevice, state.mirror != nil || state.currentTrack != nil else { return false }
         if case .error = state.phase { return false }
         return true
     }
 
     public func playHere() {
+        guard isEngineReady, let engine else { return; }
         guard canPlayHere else { return }
         enqueue("playHere") { [engine] in try await engine.playHere() }
     }
 
     public func togglePlayPause() {
+        guard isEngineReady, let engine else { return; }
         guard state.isActiveDevice else { playHere(); return }
         let shouldPause = state.phase == .playing
         enqueue(shouldPause ? "pause" : "resume", requiresActive: true) { [engine] in
@@ -128,20 +214,24 @@ public final class PlayerModel {
     }
 
     public func next() {
+        guard isEngineReady, let engine else { return; }
         guard state.isActiveDevice, state.canNext else { return }
         enqueue("next", requiresActive: true) { [engine] in try await engine.next() }
     }
 
     public func previous() {
+        guard isEngineReady, let engine else { return; }
         guard state.isActiveDevice, state.canPrevious else { return }
         enqueue("previous", requiresActive: true) { [engine] in try await engine.previous() }
     }
 
     public func load(_ request: PlayRequest) {
+        guard isEngineReady, let engine else { return; }
         enqueue("load") { [engine] in try await engine.load(request) }
     }
 
     public func seek(to milliseconds: Int64) {
+        guard isEngineReady, let engine else { return; }
         guard state.isActiveDevice, state.canSeek, state.durationMs > 0 else { return }
         let target = min(max(0, milliseconds), state.durationMs)
         enqueue("seek", requiresActive: true) { [engine] in try await engine.seek(to: target) }
@@ -153,8 +243,9 @@ public final class PlayerModel {
     }
 
     public func selectQueueEntry(_ target: QueueTarget) {
-        guard consumer != nil, state.isActiveDevice else { return }
-        guard state.queue?.generation == target.generation,
+        guard isEngineReady, let engine else { return; }
+        guard isEngineReady, consumer != nil, state.isActiveDevice else { return }
+        guard target.engineEpoch == engineEpoch, state.queue?.generation == target.generation,
               let entry = state.queue?.next.first(where: { $0.target == target }) else {
             queueSelection = .failed
             commandNotice = String(localized: "queue.changed", defaultValue: "The queue changed. Choose the track again.")
@@ -168,17 +259,19 @@ public final class PlayerModel {
     }
 
     public func setShuffle(_ enabled: Bool) {
+        guard isEngineReady, let engine else { return; }
         guard state.isActiveDevice else { return }
         enqueue("setShuffle", requiresActive: true) { [engine] in try await engine.setShuffle(enabled) }
     }
 
     public func setRepeat(_ mode: RepeatMode) {
+        guard isEngineReady, let engine else { return; }
         guard state.isActiveDevice else { return }
         enqueue("setRepeat", requiresActive: true) { [engine] in try await engine.setRepeat(mode) }
     }
 
     public func setVolume(_ value: Double) {
-        guard consumer != nil, state.isActiveDevice, value.isFinite else { return }
+        guard isEngineReady, consumer != nil, state.isActiveDevice, value.isFinite else { return }
         let volume = max(0, min(1, value))
         guard volume != (volumeRequest?.value ?? volumeDraft ?? state.volume) else { return }
         volumeDraft = volume
@@ -187,7 +280,7 @@ public final class PlayerModel {
     }
 
     public func beginVolumeEditing() {
-        guard consumer != nil, state.isActiveDevice else { return }
+        guard isEngineReady, consumer != nil, state.isActiveDevice else { return }
         isEditingVolume = true
         volumeDraft = volumeDraft ?? state.volume
     }
@@ -218,12 +311,14 @@ public final class PlayerModel {
 
     private func startVolumeWorker() {
         guard volumeTask == nil else { return }
-        volumeTask = Task { [weak self] in await self?.drainVolume() }
+        guard isEngineReady, let engine else { return }
+        let epoch = engineEpoch
+        volumeTask = Task { [weak self] in await self?.drainVolume(engine: engine, epoch: epoch) }
     }
 
-    private func drainVolume() async {
-        defer { volumeTask = nil }
-        while let request = volumeRequest {
+    private func drainVolume(engine: any PlaybackEngine, epoch: UInt64) async {
+        defer { if engineEpoch == epoch { volumeTask = nil } }
+        while !Task.isCancelled, engineEpoch == epoch, let request = volumeRequest {
             if !request.immediate, let last = volumeDispatchedAt {
                 let delay = last + 0.150 - volumeNow()
                 if delay > 0 {
@@ -236,7 +331,7 @@ public final class PlayerModel {
                 }
             }
             volumeRequest = nil
-            guard consumer != nil, state.isActiveDevice else { cancelVolumeEditing(); return }
+            guard isEngineReady, engineEpoch == epoch, consumer != nil, state.isActiveDevice else { cancelVolumeEditing(); return }
             if request.value == (lastVolumeSent ?? state.volume) { continue }
             let generation = volumeGeneration
             volumeDispatchedAt = volumeNow()
@@ -244,7 +339,9 @@ public final class PlayerModel {
             BopifyLog.playback.debug("volume command dispatched")
             do { try await engine.setVolume(request.value) }
             catch {
+                guard engineEpoch == epoch else { return }
                 guard generation == volumeGeneration else { continue }
+                if error as? PlayerError == .playbackSessionLost { reportSessionLoss(.commandFailed); return }
                 lastVolumeSent = nil
                 if volumeRequest == nil { volumeDraft = nil }
                 commandNotice = String(localized: "command.unavailable", defaultValue: "That action is unavailable.")
@@ -259,17 +356,19 @@ public final class PlayerModel {
     private func enqueue(_ name: String, requiresActive: Bool = false,
                          selection: QueueSelectionStatus? = nil,
                          _ operation: @escaping @Sendable () async throws -> Void) {
-        guard consumer != nil else { return }
+        guard isEngineReady, consumer != nil else { return }
+        let epoch = engineEpoch
         let previous = pendingCommand
         let generation = commandGeneration
         pendingCommand = Task { [weak self] in
             await previous?.value
-            guard let self, !Task.isCancelled, generation == commandGeneration,
+            guard let self, !Task.isCancelled, generation == commandGeneration, engineEpoch == epoch, isEngineReady,
                   !requiresActive || state.isActiveDevice else { return }
             BopifyLog.playback.debug("command enqueued command=\(name, privacy: .public)")
             do { try await operation() }
             catch {
-                guard generation == commandGeneration else { return }
+                guard generation == commandGeneration, engineEpoch == epoch else { return }
+                if error as? PlayerError == .playbackSessionLost { reportSessionLoss(.commandFailed); return }
                 if let selection {
                     guard queueSelection == selection else { return }
                     queueSelection = .failed
@@ -294,6 +393,11 @@ public final class PlayerModel {
         let oldPhase = state.phase
         switch event {
         case var .queueChanged(queue):
+            queue.next = queue.next.map { entry in
+                QueueEntry(id: entry.id, uri: entry.uri,
+                    target: entry.target.map { QueueTarget(generation: $0.generation, rawNextIndex: $0.rawNextIndex, engineEpoch: engineEpoch) },
+                    track: entry.track, metadataFailed: entry.metadataFailed)
+            }
             let cached = (state.queue?.previous ?? []) + (state.queue?.current.map { [$0] } ?? []) + (state.queue?.next ?? [])
             func retainingMetadata(_ entry: QueueEntry) -> QueueEntry {
                 guard let old = cached.first(where: { $0.id == entry.id && $0.uri == entry.uri }) else { return entry }
@@ -349,12 +453,16 @@ public final class PlayerModel {
             state.canPrevious = true
             state.canSeek = true
         case let .playing(position):
+            lastConfirmedPlaying = true
+            if !managedAttachment { isEngineReady = true }
             frozenDisplayPositionMs = nil
             positionUpdatedAt = .now
             state.phase = .playing; state.positionMs = position
             state.isActiveDevice = true
             state.remote = nil; state.staleRemote = nil
         case let .paused(position):
+            lastConfirmedPlaying = false
+            if !managedAttachment { isEngineReady = true }
             frozenDisplayPositionMs = nil
             positionUpdatedAt = .now
             state.phase = .paused; state.positionMs = position
@@ -374,11 +482,13 @@ public final class PlayerModel {
             freezeDisplayPosition()
             state.phase = .loading
         case .endOfTrack:
+            lastConfirmedPlaying = false
             frozenDisplayPositionMs = nil
             state.phase = .ended; state.positionMs = state.durationMs
         case let .activeDeviceChanged(isActive):
             state.isActiveDevice = isActive
             if !isActive {
+                lastConfirmedPlaying = false
                 cancelVolumeEditing()
                 if case .pending = queueSelection { queueSelection = .failed }
                 freezeDisplayPosition()
@@ -389,10 +499,10 @@ public final class PlayerModel {
                 state.staleRemote = nil
             }
         case let .recoveryIdentity(identity): recoveryIdentity = identity
-        case let .connectionReady(outcome): onConnectionReady?(outcome)
-        case .sessionLost:
-            apply(.failed(.playbackSessionLost))
+        case let .connectionReady(outcome): setConnectionReady(outcome)
+        case let .sessionLost(reason): reportSessionLoss(reason)
         case let .failed(error):
+            if error == .playbackSessionLost && !reportedLoss { reportSessionLoss(.legacy); return }
             freezeDisplayPosition()
             state.phase = .error(error)
             let description = String(describing: error)
