@@ -108,7 +108,7 @@ public final class PlayerModel {
                 } else { apply(event) }
             }
             guard let self, !Task.isCancelled, engineEpoch == epoch else { return }
-            reportSessionLoss(.eventStreamEnded)
+            if managedAttachment || onSessionLost != nil { reportSessionLoss(.eventStreamEnded) }
         }
     }
 
