@@ -20,9 +20,9 @@ struct RecordPlayerView: View {
     @Environment(AppEnvironment.self) private var environment: AppEnvironment?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var canScrub: Bool { player.state.canSeek && player.state.isActiveDevice && player.displayDurationMs > 0 }
+    private var canScrub: Bool { player.isEngineReady && player.state.canSeek && player.state.isActiveDevice && player.displayDurationMs > 0 }
     private var shouldSpin: Bool {
-        player.state.phase == .playing && player.state.isActiveDevice && presentation.isVisible && !reduceMotion && pressedAngle == nil
+        player.isEngineReady && player.state.phase == .playing && player.state.isActiveDevice && presentation.isVisible && !reduceMotion && pressedAngle == nil
     }
     private var isEngaged: Bool { presentation.mode != .compact }
     // Bopify's queue says nothing about which way a mirrored device moved.
@@ -40,10 +40,17 @@ struct RecordPlayerView: View {
     }
     private var image: Image? { track?.artwork.flatMap { artworkStore.images[$0.url] }.map { Image(nsImage: $0) } }
     private var recordStatus: Text {
+        if let connectionStatus, connectionStatus.isVisible { return connectionStatus.message }
         if let notice = player.commandNotice { return Text(notice) }
         return player.state.localizedStatusText
     }
+    private var connectionStatus: PlaybackConnectionStatusView? {
+        guard let environment else { return nil }
+        return PlaybackConnectionStatusView(status: environment.connectionStatus, restorationUnavailable: player.restorationUnavailable,
+            onRetry: environment.retryPlaybackConnection, onReconnect: { Task { await environment.reconnectSpotify() } })
+    }
     private var needsAttention: Bool {
+        if let connectionStatus, connectionStatus.isVisible { return false }
         if case .error = player.state.phase { return true }
         return player.commandNotice != nil
     }
@@ -122,7 +129,7 @@ struct RecordPlayerView: View {
 
     private func record(diameter: CGFloat) -> some View {
         VinylRecordView(image: image, occurrenceID: occurrenceID, direction: direction, diameter: diameter,
-                        isPlaying: player.state.phase == .playing && player.state.isActiveDevice,
+                        isPlaying: player.isEngineReady && player.state.phase == .playing && player.state.isActiveDevice,
                         isVisible: presentation.isVisible, rotation: rotation,
                         rotationOverride: pressedAngle.map { $0 + (scrub?.angleDelta ?? 0) }, isScrubbing: pressedAngle != nil,
                         isEngaged: isEngaged)
@@ -163,12 +170,20 @@ struct RecordPlayerView: View {
                 if isEngaged {
                     TimelineView(PlaybackClockSchedule(isRunning: player.isPositionAdvancing && presentation.isVisible, reduceMotion: reduceMotion)) { context in
                         RadialProgressView(positionMs: isScrubbing ? (scrub?.positionMs ?? 0) : player.displayPositionMs(at: context.date), durationMs: player.displayDurationMs,
-                                           canSeek: player.state.canSeek && player.state.isActiveDevice,
+                                           canSeek: player.isEngineReady && player.state.canSeek && player.state.isActiveDevice,
                                            onSeek: player.seek(to:), onInteractionChanged: { presentation.sendAttention(.interaction(.seek, $0)) },
                                            isVisible: presentation.isVisible, showsTime: false, isPointerEnabled: false)
                             .allowsHitTesting(false)
                             .id(occurrenceID)
                     }
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if !isEngaged, let connectionStatus, connectionStatus.isVisible {
+                    CompactPlaybackConnectionMenu(connection: connectionStatus)
+                        .frame(width: diameter - 24, height: 24)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .padding(.bottom, 12)
                 }
             }
             .overlay {
@@ -213,7 +228,7 @@ struct RecordPlayerView: View {
                 }.buttonStyle(.playerToggle(isOn: player.state.shuffleEnabled, dimsWhenOff: true))
                     .accessibilityLabel(Text("transport.shuffle"))
                     .accessibilityValue(Text(player.state.shuffleEnabled ? "control.on" : "control.off"))
-                    .disabled(!player.state.isActiveDevice)
+                    .disabled(!player.isEngineReady || !player.state.isActiveDevice)
                 Button {
                     player.setRepeat(player.state.repeatMode == .off ? .context : player.state.repeatMode == .context ? .track : .off)
                 } label: {
@@ -222,7 +237,7 @@ struct RecordPlayerView: View {
                 }.buttonStyle(.playerToggle(isOn: player.state.repeatMode != .off, dimsWhenOff: true))
                     .accessibilityLabel(Text("transport.repeat"))
                     .accessibilityValue(Text(player.state.repeatMode == .off ? "control.off" : player.state.repeatMode == .track ? "transport.repeat.track" : "transport.repeat.context"))
-                    .disabled(!player.state.isActiveDevice)
+                    .disabled(!player.isEngineReady || !player.state.isActiveDevice)
                 Spacer(minLength: 0)
                 VolumeControl(player: player, presentation: presentation)
                 Button { presentation.requestQueue(presentation.mode != .queue) } label: {
@@ -243,7 +258,8 @@ struct RecordPlayerView: View {
     }
 
     @ViewBuilder private var status: some View {
-        if let notice = player.commandNotice { Text(notice) }
+        if let connectionStatus, connectionStatus.isVisible { connectionStatus }
+        else if let notice = player.commandNotice { Text(notice) }
         else {
             switch player.state.phase {
             case .loading, .buffering:

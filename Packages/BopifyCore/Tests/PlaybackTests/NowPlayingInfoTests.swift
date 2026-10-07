@@ -22,6 +22,13 @@ struct NowPlayingInfoTests {
         return state
     }
 
+    @Test func unreadyPlayerReleasesNowPlaying() {
+        #expect(nowPlayingInfo(for: state(.playing, track: track), positionMs: 12_000, connectionReady: false) == nil)
+    }
+    @Test func readyLocalPlayerReclaimsNowPlaying() {
+        #expect(nowPlayingInfo(for: state(.playing, track: track), positionMs: 12_000, connectionReady: true) != nil)
+    }
+
     @Test func playingClaimsNowPlayingWithTheTrack() {
         let info = nowPlayingInfo(for: state(.playing, track: track), positionMs: 64_000)
         #expect(info == NowPlayingInfo(title: "Night Bloom", artist: "The Lanterns, Odile", album: "Lanterns",

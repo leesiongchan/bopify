@@ -20,7 +20,7 @@ struct VolumeControl: View {
         .buttonStyle(.playerToggle(isOn: presentation.activePopover == .volume))
         .accessibilityLabel(Text("transport.volume"))
         .accessibilityValue(Text("\(Int((player.displayVolume * 100).rounded()))%"))
-        .disabled(!player.state.isActiveDevice)
+        .disabled(!player.isEngineReady || !player.state.isActiveDevice)
         .popover(isPresented: isPopoverPresented, arrowEdge: .bottom) {
             VStack(spacing: 10) {
                 Text("\(Int((player.displayVolume * 100).rounded()))%")

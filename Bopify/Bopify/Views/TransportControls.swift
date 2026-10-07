@@ -11,7 +11,7 @@ struct TransportControls: View {
     private var state: PlaybackState { player.state }
     private var isPlaying: Bool { state.phase == .playing }
     private var canControl: Bool {
-        state.isActiveDevice && state.currentTrack != nil
+        player.isEngineReady && state.isActiveDevice && state.currentTrack != nil
     }
     var body: some View {
         HStack(spacing: 8) {

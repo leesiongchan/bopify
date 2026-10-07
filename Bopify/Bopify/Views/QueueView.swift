@@ -73,7 +73,7 @@ struct QueueView: View {
                 Button {
                     onSelect(entry)
                 } label: { label }
-                .disabled(entry.target == nil || !state.isActiveDevice)
+                .disabled(entry.target == nil || !player.isEngineReady || !state.isActiveDevice)
             }
         }
         .buttonStyle(.plain)

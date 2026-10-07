@@ -34,7 +34,7 @@ final class NowPlayingController {
     private func observe() {
         guard !isStopped else { return }
         let info = withObservationTracking {
-            let info = nowPlayingInfo(for: player.state, positionMs: player.displayPositionMs(at: .now))
+            let info = nowPlayingInfo(for: player.state, positionMs: player.displayPositionMs(at: .now), connectionReady: player.isEngineReady)
             // Read the image so artwork that finishes loading later triggers another write.
             _ = info?.artworkURL.flatMap { artworkStore.images[$0] }
             return info
@@ -130,7 +130,7 @@ final class NowPlayingController {
             nonisolated(unsafe) let event = event
             return Self.onMain {
                 BopifyLog.playback.debug("remote command \(name, privacy: .public)")
-                guard let self, self.player.state.isActiveDevice else { return .commandFailed }
+                guard let self, self.player.isEngineReady, self.player.state.isActiveDevice else { return .commandFailed }
                 perform(self.player, event)
                 return .success
             }

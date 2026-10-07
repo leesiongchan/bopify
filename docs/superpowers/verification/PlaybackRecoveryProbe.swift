@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ScreenCaptureKit
 import BopifyAuth
 import BopifyDomain
 import BopifyPlayback
@@ -7,9 +8,19 @@ import BopifyLibrary
 
 @main struct PlaybackRecoveryProbe {
     nonisolated static let uri = SpotifyURI("spotify:track:6rqhFgbbKwnb9MLmUQDhG6")!
-    nonisolated static var track: Track { Track(uri: uri, title: "Recovery test", artists: [ArtistSummary(name: "Bopify")], albumTitle: nil, artwork: nil, durationMs: 240_000) }
+    nonisolated static var track: Track { Track(uri: uri, title: "Recovery test", artists: [ArtistSummary(name: "Bopify")], albumTitle: nil, artwork: Artwork(url: previewArtworkURL(0)), durationMs: 240_000) }
     @MainActor static func settle() async { for _ in 0..<300 { await Task.yield() } }
-    @MainActor static func main() async {
+    @MainActor static func main() {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.regular)
+        Task { @MainActor in
+            await run()
+            app.terminate(nil)
+        }
+        app.run()
+    }
+    @MainActor static func run() async {
+        _ = PlaybackConnectionStatusView(status: .offline, restorationUnavailable: false, onRetry: {}, onReconnect: {})
         let store = ProbeTokenStore(), libraryStore = ProbeTokenStore()
         let saved = TokenSet(accessToken: "PLAYBACK_FAKE", refreshToken: "RT_FAKE", expiresAt: .distantFuture, grantedScopes: ["streaming"])
         try! store.save(saved); try! libraryStore.save(saved)
@@ -17,7 +28,7 @@ import BopifyLibrary
         let player = PlayerModel()
         let environment = AppEnvironment(previewPlayer: player, favoriteService: library, savedTracksService: library, historyService: library,
             playbackAuth: SpotifyAuthService(clientID: "probe", store: store, openURL: { _ in opened.record() }),
-            libraryAuth: SpotifyAuthService(clientID: "probe", store: libraryStore),
+            libraryAuth: SpotifyAuthService(clientID: "probe", store: libraryStore), artworkStore: makePreviewArtworkStore(),
             recoveryEngineFactory: { token, options in try await factory.create(token, options) })
         await environment.restoreOrPromptSignIn(); await factory.waitForCount(1)
         precondition(environment.authState == .signedIn && environment.player === player)
@@ -46,8 +57,103 @@ import BopifyLibrary
         precondition(late.shutdownCount == 1 && environment.player == nil)
         precondition(store.load() == nil && libraryStore.load() == nil)
         await checkQuitAndInitialNetworkFailure()
+        await checkPresentation()
         print("PASS: stable player/library, serialized replacement, stable device ID, late-create sign-out, no unsolicited browser")
     }
+    @MainActor static func render() async { try? await Task.sleep(for: .milliseconds(700)) }
+    @MainActor static func checkPresentation() async {
+        let store = ProbeTokenStore(), factory = ProbeFactory(), library = ProbeLibrary()
+        try! store.save(TokenSet(accessToken: "FAKE", refreshToken: "FAKE", expiresAt: .distantFuture, grantedScopes: ["streaming"]))
+        let player = PlayerModel()
+        let environment = AppEnvironment(previewPlayer: player, favoriteService: library, savedTracksService: library, historyService: library,
+            playbackAuth: SpotifyAuthService(clientID: "probe", store: store, openURL: { _ in preconditionFailure("Unexpected browser") }), artworkStore: makePreviewArtworkStore(),
+            recoveryEngineFactory: { token, options in try await factory.create(token, options) })
+        await environment.restoreOrPromptSignIn(); await factory.waitForCount(1)
+        var engine = ProbeEngine(); factory.release(engine); await settle(); engine.ready(); await settle()
+        let status = StatusItemController(content: PlayerRootView(environment: environment), environment: environment)
+        status.perform(NSSelectorFromString("statusItemClicked:"), with: nil)
+        let panel = NSApp.windows.compactMap { $0 as? StatusPanel }.first!
+        for mode in [PlayerMode.compact, .expanded, .queue] {
+            environment.presentation.resetEngagement()
+            environment.presentation.sendAttention(.visibility(true))
+            if mode != .compact { environment.presentation.sendAttention(.accessibilityFocus(true)) }
+            environment.presentation.requestQueue(mode == .queue)
+            await render()
+            for _ in 0..<30 where environment.playerWindowController.isTransitioning {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            precondition(!environment.playerWindowController.isTransitioning)
+            let frame = panel.frame
+            precondition(environment.presentation.mode == mode)
+            await capture(panel, "\(mode.rawValue)-before")
+            engine.emit(.sessionLost(.spircEnded)); await factory.waitForCount(factory.options.count + 1)
+            await render()
+            precondition(panel.frame == frame && environment.player === player)
+            let frozen = player.displayPositionMs(at: .now)
+            precondition(player.displayPositionMs(at: .now.addingTimeInterval(20)) == frozen)
+            let commands = engine.recordedCommands
+            panel.keyDown(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: panel.windowNumber, context: nil, characters: " ", charactersIgnoringModifiers: " ", isARepeat: false, keyCode: 49)!)
+            player.next(); player.seek(to: 1000); player.setVolume(0.5)
+            await settle(); precondition(engine.recordedCommands == commands)
+            await capture(panel, "\(mode.rawValue)-reconnecting")
+            if mode != .compact {
+                precondition(enabled("Play", panel) == false)
+                precondition(enabled("Retry now", panel) == true)
+            } else { precondition(element("Reconnecting…", panel) != nil) }
+
+            print("PASS: \(mode.rawValue) stable frame=\(frame.size), frozen position, blocked commands, accessible recovery action")
+            environment.recovery!.setNetworkAvailable(false); await render()
+            precondition(environment.connectionStatus == .offline && panel.frame == frame)
+            await capture(panel, "\(mode.rawValue)-offline")
+            environment.recovery!.setNetworkAvailable(true)
+            engine = ProbeEngine(); factory.release(engine); await settle()
+            engine.emit(.connectionReady(.unavailable)); await render()
+            precondition(player.restorationUnavailable && panel.frame == frame)
+            await capture(panel, "\(mode.rawValue)-unavailable")
+            environment.retryPlaybackConnection(); await factory.waitForCount(factory.options.count + 1)
+            factory.fail(.authDenied); await render()
+            precondition(environment.connectionStatus == .needsReauthentication && panel.frame == frame)
+            await capture(panel, "\(mode.rawValue)-reauthorization")
+            if mode != .compact { precondition(enabled("Reconnect Spotify", panel) == true) }
+            environment.recovery!.start(); await factory.waitForCount(factory.options.count + 1)
+            engine = ProbeEngine(); factory.release(engine); await settle(); engine.ready(); await render()
+            precondition(panel.frame == frame && player.isEngineReady)
+        }
+        await environment.prepareForQuit()
+        withExtendedLifetime(status) {}
+    }
+    @MainActor static func capture(_ panel: StatusPanel, _ name: String) async {
+        do {
+            let content = try await SCShareableContent.currentProcess
+            let window = content.windows.first { $0.windowID == panel.windowNumber }!
+            let config = SCStreamConfiguration()
+            config.width = Int(panel.frame.width * 2); config.height = Int(panel.frame.height * 2)
+            config.ignoreShadowsSingleWindow = true
+            let image = try await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(desktopIndependentWindow: window), configuration: config)
+            let url = URL(fileURLWithPath: CommandLine.arguments[1]).appendingPathComponent(name + ".png")
+            try NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])!.write(to: url)
+            print("capture: \(name)")
+        } catch { preconditionFailure("Capture failed: \(error)") }
+    }
+    @MainActor static func attribute(_ object: NSObject, _ name: String) -> Any? {
+        let selector = NSSelectorFromString(name)
+        return object.responds(to: selector) ? object.perform(selector)?.takeUnretainedValue() : nil
+    }
+    @MainActor static func tree(_ object: Any) -> [NSObject] {
+        guard let object = object as? NSObject else { return [] }
+        return [object] + ((attribute(object, "accessibilityChildren") as? [Any]) ?? []).flatMap(tree)
+    }
+    @MainActor static func element(_ label: String, _ panel: StatusPanel) -> NSObject? {
+        tree(panel.contentView!).first { (attribute($0, "accessibilityLabel") as? String == label || attribute($0, "accessibilityTitle") as? String == label) }
+    }
+    @MainActor static func enabled(_ label: String, _ panel: StatusPanel) -> Bool? {
+        guard let object = element(label, panel) else { return nil }
+        let selector = NSSelectorFromString("isAccessibilityEnabled")
+        typealias Action = @convention(c) (AnyObject, Selector) -> Bool
+        return unsafeBitCast(object.method(for: selector), to: Action.self)(object, selector)
+    }
+
     @MainActor static func checkQuitAndInitialNetworkFailure() async {
         let store = ProbeTokenStore(), opened = ProbeBrowser(), factory = ProbeFactory()
         let saved = TokenSet(accessToken: "SAVED_FAKE", refreshToken: "RT_FAKE", expiresAt: .distantFuture, grantedScopes: ["streaming"])
@@ -113,6 +219,9 @@ nonisolated final class ProbeEngine: ManagedPlaybackEngine, @unchecked Sendable 
     nonisolated func emit(_ event: PlaybackEvent) { continuation.yield(event) }
     nonisolated func ready() {
         emit(.trackChanged(PlaybackRecoveryProbe.track)); emit(.recoveryIdentity(PlaybackIdentity(trackURI: PlaybackRecoveryProbe.uri)))
+        emit(.queueChanged(PlaybackQueue(generation: 1, previous: [],
+            current: QueueEntry(id: "probe-current", uri: PlaybackRecoveryProbe.uri, target: nil, track: PlaybackRecoveryProbe.track, metadataFailed: false),
+            next: [QueueEntry(id: "probe-next", uri: PlaybackRecoveryProbe.uri, target: QueueTarget(generation: 1, rawNextIndex: 0), track: PlaybackRecoveryProbe.track, metadataFailed: false)])))
         emit(.playing(positionMs: 12_000)); emit(.connectionReady(.local(PlaybackIdentity(trackURI: PlaybackRecoveryProbe.uri))))
     }
     nonisolated func shutdown() async { lock.withLock { shutdowns += 1 }; continuation.finish() }
