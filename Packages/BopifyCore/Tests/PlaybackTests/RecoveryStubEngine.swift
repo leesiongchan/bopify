@@ -9,13 +9,14 @@ final class RecoveryStubEngine: ManagedPlaybackEngine, @unchecked Sendable {
     private var commands: [String] = []
     private var shutdowns = 0
     var commandError: PlayerError?
+    var shutdownGate: (@Sendable () async -> Void)?
     var commandGate: (@Sendable () async -> Void)?
     var recordedCommands: [String] { lock.withLock { commands } }
     var shutdownCount: Int { lock.withLock { shutdowns } }
     init() { (events, continuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded) }
     func emit(_ event: PlaybackEvent) { continuation.yield(event) }
     func finishEvents() { continuation.finish() }
-    func shutdown() async { lock.withLock { shutdowns += 1 }; continuation.finish() }
+    func shutdown() async { lock.withLock { shutdowns += 1 }; continuation.finish(); await shutdownGate?() }
     private func record(_ value: String) async throws {
         lock.withLock { commands.append(value) }
         await commandGate?()
