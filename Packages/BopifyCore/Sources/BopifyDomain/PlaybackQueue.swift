@@ -3,9 +3,11 @@ import Foundation
 public enum RepeatMode: String, Codable, Hashable, Sendable { case off, context, track }
 
 public struct QueueTarget: Hashable, Sendable {
+    public let engineEpoch: UInt64
     public let generation: UInt64
     public let rawNextIndex: UInt32
-    public init(generation: UInt64, rawNextIndex: UInt32) {
+    public init(generation: UInt64, rawNextIndex: UInt32, engineEpoch: UInt64 = 0) {
+        self.engineEpoch = engineEpoch
         self.generation = generation
         self.rawNextIndex = rawNextIndex
     }

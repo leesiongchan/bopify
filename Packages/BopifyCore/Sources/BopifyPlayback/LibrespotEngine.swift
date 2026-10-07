@@ -22,7 +22,7 @@ import CBopifyCore
 /// `@unchecked Sendable`: the two pointers are immutable after `init`, Rust
 /// synchronises every entry point internally, and the only mutable state
 /// here — the release claim — is lock-guarded.
-public final class LibrespotEngine: PlaybackEngine, @unchecked Sendable {
+public final class LibrespotEngine: ManagedPlaybackEngine, @unchecked Sendable {
     public var events: AsyncStream<PlaybackEvent> { bridge.events }
 
     private let bridge: EventBridge
@@ -36,14 +36,21 @@ public final class LibrespotEngine: PlaybackEngine, @unchecked Sendable {
     /// Blocks for the whole network login, so it runs on the global executor
     /// rather than the caller's actor.
     @concurrent
-    public init(accessToken: String, deviceName: String) async throws {
+    public init(accessToken: String, deviceName: String, configuration: PlaybackEngineConfiguration? = nil) async throws {
+        let options = try configuration.map { String(decoding: try JSONEncoder().encode($0), as: UTF8.self) }
         let bridge = EventBridge()
         // The +1 is taken before the pointer can reach Rust: the callback may
         // fire during login, before this call returns.
         let ctx = bridge.retainedContext()
         var code: Int32 = 0
         BopifyLog.playback.info("engine create starting")
-        guard let handle = bopify_engine_create(accessToken, deviceName, bopifyEventTrampoline, ctx, &code) else {
+        let created: OpaquePointer?
+        if let options {
+            created = options.withCString { bopify_engine_create_with_options(accessToken, deviceName, $0, bopifyEventTrampoline, ctx, &code) }
+        } else {
+            created = bopify_engine_create(accessToken, deviceName, bopifyEventTrampoline, ctx, &code)
+        }
+        guard let handle = created else {
             // A null return means `Engine::new` failed, and it only fails
             // after its `Runtime` local has been dropped — which joins every
             // worker thread — so no callback has fired and none can. The +1
