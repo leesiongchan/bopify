@@ -8,15 +8,7 @@ import BopifyLibrary
 
 let dashboardLibraryClientID = "25bbd3bacca4412b80f17b892072af71"
 
-/// The only place concrete implementations are chosen.
-///
-/// Holds the concrete `LibrespotEngine` alongside the type-erased
-/// `PlayerModel`, not just the model: `shutdown()` is not on the
-/// `PlaybackEngine` protocol, so `PlayerModel`'s `any PlaybackEngine` erases
-/// the only route to teardown. This is the composition root, so its
-/// lifetime is the app's — engine creation belongs here, not in a view's
-/// `.task`, because `LibrespotEngine.init` blocks for a whole network login
-/// with no cancellation check.
+/// Chooses concrete services and owns the stable player across engine replacements.
 @MainActor
 @Observable
 final class AppEnvironment {
@@ -47,16 +39,16 @@ final class AppEnvironment {
 
     @ObservationIgnored private let auth: SpotifyAuthService
     @ObservationIgnored private let libraryAuth: SpotifyAuthService
-    @ObservationIgnored private var engine: LibrespotEngine? { didSet { stations.engine = engine } }
+    private(set) var recovery: PlaybackRecoveryCoordinator?
+    var connectionStatus: PlaybackConnectionStatus { recovery?.status ?? .ready }
+    @ObservationIgnored private var connectionMonitor: PlaybackConnectionMonitor?
+    @ObservationIgnored private var sessionGeneration = 0
+    @ObservationIgnored private var makeRecoveryEngine: @Sendable (String, PlaybackEngineConfiguration) async throws -> any ManagedPlaybackEngine = { token, options in
+        try await LibrespotEngine(accessToken: token, deviceName: "Bopify", configuration: options)
+    }
+    @ObservationIgnored private var monitorEnabled = true
 
-    /// `engine == nil` cannot serve as a lock: it cannot distinguish "torn
-    /// down" from "teardown in flight", and a check at the top of a function
-    /// says nothing about what happens across the awaits below it. Every
-    /// operation that touches `engine`, `player`, or the auth session is
-    /// funneled through `serialize` instead, so each one runs only after
-    /// the previous one has fully finished — including quit waiting out an
-    /// in-flight sign-out so the keychain actually clears before the app
-    /// terminates, rather than racing it.
+    // Authorization and final teardown remain serialized; recovery has its own worker.
     @ObservationIgnored private var pending: Task<Void, Never> = Task {}
 
     /// `signIn()`'s in-flight guard used to read `authState`, but `authState`
@@ -96,7 +88,8 @@ final class AppEnvironment {
          playbackAuth: SpotifyAuthService? = nil,
          libraryAuth: SpotifyAuthService? = nil,
          artworkStore: ArtworkStore = ArtworkStore(),
-         radioEngine: (any PlaybackEngine)? = nil) {
+         radioEngine: (any PlaybackEngine)? = nil,
+         recoveryEngineFactory: (@Sendable (String, PlaybackEngineConfiguration) async throws -> any ManagedPlaybackEngine)? = nil) {
         auth = playbackAuth ?? SpotifyAuthService(clientID: librespotClientID,
             store: KeychainTokenStore(service: "com.leesiongchan.bopify.preview.\(UUID().uuidString)"))
         self.libraryAuth = libraryAuth ?? SpotifyAuthService(clientID: dashboardLibraryClientID,
@@ -114,6 +107,7 @@ final class AppEnvironment {
         self.authorizeLibraryScopes = authorizeLibraryScopes ?? { _ in throw LibraryError.unavailable }
         player = previewPlayer
         authState = .signedIn
+        if let recoveryEngineFactory { makeRecoveryEngine = recoveryEngineFactory; monitorEnabled = false }
     }
     #endif
 
@@ -179,49 +173,67 @@ final class AppEnvironment {
     }
 
     func restoreOrPromptSignIn() async {
+        let generation = sessionGeneration
         await serialize { [self] in
-            // Shown as authenticating rather than left signedOut: a restore
-            // that finds a token still has to reach Spotify before playback
-            // can start, and signedOut would offer a redundant "Sign In"
-            // button for the whole restore window.
+            guard generation == sessionGeneration else { return }
             authState = .authenticating
-            if await auth.restore() != nil {
-                await connect()
-            } else {
-                authState = .signedOut
-            }
+            let restored = await auth.restore()
+            guard generation == sessionGeneration else { return }
+            if restored != nil { connect() } else { authState = .signedOut }
         }
     }
 
     func signIn() async {
-        // Not redundant with `serialize`: this rejects a second whole OAuth
-        // round-trip while one is already open, rather than just running
-        // two of them back to back. Guards on its own flag, not `authState`
-        // — an operation ahead of this one in the chain (a sign-out) can
-        // still be running when this is called, and it owns `authState`
-        // until its block finishes.
-        guard !isSignInInFlight else {
-            BopifyLog.auth.notice("sign-in skipped: already authenticating")
-            return
-        }
+        guard !isSignInInFlight else { return }
         isSignInInFlight = true
+        let generation = sessionGeneration
         await serialize { [self] in
             defer { isSignInInFlight = false }
+            guard generation == sessionGeneration else { return }
             authState = .authenticating
             do {
                 _ = try await auth.signIn()
-                await connect()
+                guard generation == sessionGeneration else { return }
+                connect()
             } catch {
-                let playerError = error as? PlayerError ?? .unknown
-                BopifyLog.auth.error("sign-in failed error=\(String(describing: playerError), privacy: .public)")
-                authState = .error(playerError)
+                guard generation == sessionGeneration else { return }
+                authState = .error(error as? PlayerError ?? .unknown)
+            }
+        }
+    }
+
+    func retryPlaybackConnection() { recovery?.retryNow() }
+
+    func reconnectSpotify() async {
+        guard !isSignInInFlight, authState == .signedIn else { return }
+        isSignInInFlight = true
+        let generation = sessionGeneration
+        await serialize { [self] in
+            defer { isSignInInFlight = false }
+            guard generation == sessionGeneration else { return }
+            do {
+                _ = try await auth.signIn()
+                guard generation == sessionGeneration else { return }
+                recovery?.start()
+            } catch {
+                BopifyLog.auth.notice("playback reauthorization did not complete")
             }
         }
     }
 
     func signOut() async {
+        sessionGeneration += 1
+        connectionMonitor?.stop()
+        recovery?.invalidate()
+        authState = .signedOut
+        let clearingAuth = Task { [auth] in await auth.signOut() }
         await serialize { [self] in
+            await clearingAuth.value
             BopifyLog.auth.info("sign-out starting")
+            await recovery?.stop()
+            recovery = nil
+            connectionMonitor = nil
+            stations.engine = nil
             presentation.resetEngagement()
             playerWindowController.invalidateTransition()
             nowPlaying?.stop()
@@ -230,84 +242,79 @@ final class AppEnvironment {
             player = nil
             artworkStore.clear()
             clearLibrary()
-            // Block new library consent before any teardown await can
-            // suspend this actor and let an Enable action run.
-            authState = .signedOut
             await libraryAuth.signOut()
-            if let engine {
-                self.engine = nil
-                await engine.shutdown()
-            }
-            await auth.signOut()
         }
     }
 
-    /// Quit tears the engine down but must not sign out: AUTH-05 requires
-    /// the session to survive a quit and relaunch, so the keychain is left
-    /// alone. Do not reuse `signOut()` here. Going through `serialize` means
-    /// a quit that lands mid-sign-out waits for that sign-out's keychain
-    /// clear to actually run before this returns and the caller terminates.
     func prepareForQuit() async {
+        sessionGeneration += 1
+        connectionMonitor?.stop()
+        recovery?.invalidate()
+        let cancellingAuth = Task { [auth, libraryAuth] in
+            await auth.cancelPendingWork()
+            await libraryAuth.cancelPendingWork()
+        }
         await serialize { [self] in
-            BopifyLog.playback.info("prepare for quit starting")
+            await cancellingAuth.value
+            await recovery?.stop()
+            recovery = nil
+            connectionMonitor = nil
+            stations.engine = nil
             clearLibrary()
             nowPlaying?.stop()
             nowPlaying = nil
             player?.stop()
             player = nil
-            if let engine {
-                self.engine = nil
-                await engine.shutdown()
-            }
             BopifyLog.playback.info("prepare for quit complete")
         }
     }
 
-    /// Only ever called from inside a `serialize`d operation above. Never
-    /// enqueue another one from in here — that would await a chain link
-    /// that is itself still waiting to run.
-    private func connect() async {
-        do {
-            let token = try await auth.validAccessToken()
-            // Runs off the main actor: the package is built in Swift 6
-            // language mode without NonisolatedNonsendingByDefault, so a
-            // `nonisolated async` initialiser already hops to the global
-            // executor. The `@concurrent` on it guards against that default
-            // changing, rather than being what saves us today.
-            let engine = try await LibrespotEngine(accessToken: token, deviceName: "Bopify")
-            let model = PlayerModel(engine: engine)
-            model.start()
-            // No activate(): the engine restores the last session or loads Liked Songs itself,
-            // and stays inactive when another device is playing so it is not interrupted.
-            // Today the UI and `serialize` make a second connect unreachable,
-            // so this teardown is structural rather than load-bearing: the
-            // cost of being wrong is a leaked Rust runtime and audio thread
-            // for the process lifetime, which no test would catch.
-            nowPlaying?.stop()
-            await self.engine?.shutdown()
-            player?.stop()
-            clearLibrary()
-            self.engine = engine
-            player = model
-            nowPlaying = NowPlayingController(player: model, artworkStore: artworkStore)
-            authState = .signedIn
-            BopifyLog.auth.info("connect succeeded")
-        } catch {
-            let playerError = error as? PlayerError ?? .unknown
-            BopifyLog.auth.error("connect failed error=\(String(describing: playerError), privacy: .public)")
-            authState = .error(playerError)
+    // Called only inside serialize; the retry loop returns immediately and owns its lifetime.
+    private func connect() {
+        if recovery != nil { recovery?.start(); authState = .signedIn; return }
+        let model = player ?? PlayerModel()
+        player = model
+        let auth = self.auth
+        let coordinator = PlaybackRecoveryCoordinator(player: model, tokenProvider: { rejected in
+            if let rejected { return try await auth.validAccessToken(rejecting: rejected) }
+            return try await auth.validAccessToken()
+        }, makeEngine: makeRecoveryEngine)
+        coordinator.onEngineChange = { [weak stations, weak coordinator] engine in
+            stations?.engine = engine
+            stations?.coordinator = coordinator
+            stations?.epoch = model.engineEpoch
         }
+        recovery = coordinator
+        nowPlaying = NowPlayingController(player: model, artworkStore: artworkStore)
+        authState = .signedIn
+        if monitorEnabled {
+            let monitor = PlaybackConnectionMonitor(coordinator: coordinator)
+            connectionMonitor = monitor
+            monitor.start()
+        }
+        coordinator.start()
+        BopifyLog.auth.info("credentials restored; playback connection scheduled")
     }
+
 }
 
 /// Explore's way to the current engine: the engine is created after the models and replaced on reconnect or sign-out, so the model cannot hold it.
 @MainActor
 private final class StationRoute {
     var engine: (any PlaybackEngine)?
+    weak var coordinator: PlaybackRecoveryCoordinator?
+    var epoch: UInt64 = 0
 
     func mix(for seed: SpotifyURI) async throws -> RadioMix {
-        guard let engine else { throw RadioFailure.unavailable }
-        return try await engine.requestRadio(seed: seed)
+        guard let engine, coordinator?.player.isEngineReady != false else { throw RadioFailure.unavailable }
+        let dispatchedEpoch = epoch
+        do { return try await engine.requestRadio(seed: seed) }
+        catch {
+            if error as? PlayerError == .playbackSessionLost {
+                coordinator?.reportSessionLoss(.commandFailed, epoch: dispatchedEpoch)
+            }
+            throw error
+        }
     }
 }
 

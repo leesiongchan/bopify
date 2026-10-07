@@ -65,6 +65,21 @@ struct SpotifyAuthServiceTests {
         return TokenClient(clientID: "client123", session: URLSession(configuration: config))
     }
 
+    @Test func cancellingPendingAuthorizationPreservesSavedCredentials() async throws {
+        let store = InMemoryTokenStore()
+        let saved = TokenSet(accessToken: "SAVED_FAKE", refreshToken: "RT", expiresAt: .distantFuture, grantedScopes: ["streaming"])
+        try store.save(saved)
+        let opened = AsyncStream<URL>.makeStream()
+        let service = SpotifyAuthService(clientID: "test", client: makeClient(), store: store, openURL: { opened.continuation.yield($0) })
+        let signIn = Task { try await service.signIn() }
+        var iterator = opened.stream.makeAsyncIterator()
+        _ = await iterator.next()
+        await service.cancelPendingWork()
+        await #expect(throws: PlayerError.authDenied) { _ = try await signIn.value }
+        #expect(store.load() == saved)
+        #expect(try await service.validAccessToken() == "SAVED_FAKE")
+    }
+
     @Test func libraryConsentStartsWithoutPlaybackGrant() async throws {
         AuthFlowStubProtocol.handler = { _ in (200, Data(self.librarySuccess.utf8)) }
         let store = InMemoryTokenStore()

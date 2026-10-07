@@ -177,6 +177,16 @@ public actor SpotifyAuthService {
         return refreshed.accessToken
     }
 
+    public func cancelPendingWork() async {
+        generation += 1
+        refresh?.task.cancel()
+        refresh = nil
+        let listener = activeListener
+        activeListener = nil
+        if let listener { await listener.stop() }
+        BopifyLog.auth.debug("pending authorization cancelled")
+    }
+
     public func signOut() async {
         generation += 1
         refresh?.task.cancel()
