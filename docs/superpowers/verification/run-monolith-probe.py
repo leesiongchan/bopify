@@ -4,7 +4,7 @@ import subprocess, shutil, sys, argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--derived-data", required=True)
 parser.add_argument("--output", required=True)
-parser.add_argument("--probe", choices=["window", "visual", "artwork", "composition", "mirror", "surface", "library", "live-library", "refinement", "input-routing"], required=True)
+parser.add_argument("--probe", choices=["window", "visual", "artwork", "composition", "mirror", "surface", "library", "live-library", "refinement", "input-routing", "recovery"], required=True)
 parser.add_argument("--measure-ambient", action="store_true")
 options = parser.parse_args()
 root = Path(__file__).resolve().parents[3]
@@ -35,7 +35,7 @@ args = ['swiftc', '-parse-as-library', '-D', 'DEBUG', '-swift-version', '6', '-d
 if options.measure_ambient: args += ['-D', 'MONOLITH_MEASURE']
 for framework in ['AudioToolbox', 'CoreAudio', 'IOKit', 'CoreFoundation', 'Foundation', 'SystemConfiguration', 'Security']:
     args += ['-framework', framework]
-args += sources + [str(root / 'docs/superpowers/verification' / {'window': 'MonolithWindowProbe.swift', 'visual': 'MonolithVisualProbe.swift', 'artwork': 'ArtworkMorphProbe.swift', 'composition': 'MonolithCompositionProbe.swift', 'mirror': 'MonolithMirrorProbe.swift', 'surface': 'MonolithSurfaceProbe.swift', 'library': 'MonolithLibraryProbe.swift', 'live-library': 'MonolithLiveLibraryProbe.swift', 'refinement': 'MonolithRefinementProbe.swift', 'input-routing': 'MonolithInputRoutingProbe.swift'}[options.probe])] + [str(products / (name + '.o')) for name in ['BopifyDomain', 'BopifyPlayback', 'BopifyAuth', 'BopifyLibrary', 'CBopifyCore']]
+args += sources + [str(root / 'docs/superpowers/verification' / {'window': 'MonolithWindowProbe.swift', 'visual': 'MonolithVisualProbe.swift', 'artwork': 'ArtworkMorphProbe.swift', 'composition': 'MonolithCompositionProbe.swift', 'mirror': 'MonolithMirrorProbe.swift', 'surface': 'MonolithSurfaceProbe.swift', 'library': 'MonolithLibraryProbe.swift', 'live-library': 'MonolithLiveLibraryProbe.swift', 'refinement': 'MonolithRefinementProbe.swift', 'input-routing': 'MonolithInputRoutingProbe.swift', 'recovery': 'PlaybackRecoveryProbe.swift'}[options.probe])] + [str(products / (name + '.o')) for name in ['BopifyDomain', 'BopifyPlayback', 'BopifyAuth', 'BopifyLibrary', 'CBopifyCore']]
 args += ['-o', str(app / 'MacOS/MonolithProbe')]
 subprocess.run(args, check=True)
 if instrumented: instrumented.unlink()
