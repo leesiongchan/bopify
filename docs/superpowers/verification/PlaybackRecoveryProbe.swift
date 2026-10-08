@@ -73,7 +73,8 @@ import BopifyLibrary
         for index in 0..<100 {
             let old = engine, target = player.state.queue!.next[0].target!
             let next = factory.options.count + 1
-            old.emit(.sessionLost(.spircEnded)); await factory.waitForCount(next)
+            old.emit(.sessionLost(.spircEnded)); await settle()
+            environment.retryPlaybackConnection(); await factory.waitForCount(next)
             precondition(old.shutdownCount == 1 && old.terminationCount == 1)
             let frozen = player.displayPositionMs(at: .now)
             let volume = player.state.volume
@@ -148,11 +149,38 @@ import BopifyLibrary
             engine.emit(.connectionReady(.unavailable)); await render()
             precondition(player.restorationUnavailable && panel.frame == frame)
             await capture(panel, "\(mode.rawValue)-unavailable")
-            environment.retryPlaybackConnection(); await factory.waitForCount(factory.options.count + 1)
+            let nextCreation = factory.options.count + 1
+            if mode == .compact {
+                let button = popups(panel.contentView!).first!
+                precondition(button.title == "Retry now", "Compact unavailable caption must fit")
+                precondition(abs(button.bounds.width - (environment.playerWindowController.layout.recordDiameter - 24)) < 0.5,
+                    "Compact native menu must honor its capsule width, actual=\(button.bounds.width)")
+                precondition(captionFits(button) && button.accessibilityLabel() == "Playback couldn't be restored.")
+                let item = button.menu!.items.dropFirst().first { $0.title == "Retry restoration" && $0.action != nil }!
+                precondition(item.target is CompactPlaybackConnectionMenu.Handler, "Compact action lost its target")
+                precondition(NSStringFromSelector(item.action!) == "performRecoveryAction:")
+                precondition(NSApp.sendAction(item.action!, to: item.target, from: item))
+                await settle()
+                precondition(factory.options.count == nextCreation, "Compact retry did not create: \(environment.connectionStatus), unavailable=\(player.restorationUnavailable)")
+            } else { environment.retryPlaybackConnection() }
+            await factory.waitForCount(nextCreation)
             factory.fail(.authDenied); await render()
             precondition(environment.connectionStatus == .needsReauthentication && panel.frame == frame)
             await capture(panel, "\(mode.rawValue)-reauthorization")
             if mode != .compact { precondition(enabled("Reconnect Spotify", panel) == true) }
+            if mode == .compact {
+                let reconnectButton = popups(panel.contentView!).first!
+                precondition(abs(reconnectButton.bounds.width - (environment.playerWindowController.layout.recordDiameter - 24)) < 0.5)
+                precondition(reconnectButton.cell?.lineBreakMode == .byTruncatingTail)
+                environment.recovery!.start(); await factory.waitForCount(factory.options.count + 1)
+                factory.fail(.premiumRequired); await render()
+                let button = popups(panel.contentView!).first!
+                precondition(button.menu!.items.first!.image != nil && button.imagePosition == .imageOnly)
+                precondition(button.menu!.items.dropFirst().contains { $0.title == String(localized: "error.premiumRequired") }, "Permanent error explanation must be visible in the menu")
+                precondition(button.accessibilityLabel() == String(localized: "error.premiumRequired"))
+                precondition(panel.frame == frame)
+                await capture(panel, "compact-permanent")
+            }
             environment.recovery!.start(); await factory.waitForCount(factory.options.count + 1)
             engine = ProbeEngine(); factory.release(engine); await settle(); engine.ready(); await render()
             precondition(panel.frame == frame && player.isEngineReady)
@@ -176,6 +204,12 @@ import BopifyLibrary
     @MainActor static func attribute(_ object: NSObject, _ name: String) -> Any? {
         let selector = NSSelectorFromString(name)
         return object.responds(to: selector) ? object.perform(selector)?.takeUnretainedValue() : nil
+    }
+    @MainActor static func popups(_ view: NSView) -> [NSPopUpButton] {
+        (view as? NSPopUpButton).map { [$0] } ?? view.subviews.flatMap(popups)
+    }
+    @MainActor static func captionFits(_ button: NSPopUpButton) -> Bool {
+        (button.title as NSString).size(withAttributes: [.font: button.font!]).width + 16 <= button.bounds.width
     }
     @MainActor static func tree(_ object: Any) -> [NSObject] {
         guard let object = object as? NSObject else { return [] }

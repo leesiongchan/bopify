@@ -62,29 +62,54 @@ struct PlaybackConnectionStatusView: View {
 struct CompactPlaybackConnectionMenu: NSViewRepresentable {
     let connection: PlaybackConnectionStatusView
     func makeCoordinator() -> Handler { Handler(connection: connection) }
-    func makeNSView(context: Context) -> NSPopUpButton {
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSView, context: Context) -> CGSize? {
+        guard let width = proposal.width else { return nil }
+        return CGSize(width: width, height: proposal.height ?? 24)
+    }
+    func makeNSView(context: Context) -> NSView {
+        // The container allows the compact frame to be narrower than AppKit's intrinsic menu width.
+        let container = NSView(frame: .zero)
         let button = NSPopUpButton(frame: .zero, pullsDown: true)
+        button.autoresizingMask = [.width, .height]
         button.isBordered = false
         button.font = .systemFont(ofSize: 10)
         button.controlSize = .small
-        return button
+        button.cell?.lineBreakMode = .byTruncatingTail
+        button.cell?.usesSingleLineMode = true
+        container.addSubview(button)
+        return container
     }
-    func updateNSView(_ button: NSPopUpButton, context: Context) {
+    func updateNSView(_ container: NSView, context: Context) {
+        let button = container.subviews[0] as! NSPopUpButton
         context.coordinator.connection = connection
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: connection.messageString, action: nil, keyEquivalent: ""))
+        let caption = connection.restorationUnavailable && connection.status == .ready
+            ? String(localized: "connection.retry") : connection.messageString
+        let title = NSMenuItem(title: caption, action: nil, keyEquivalent: "")
+        if case .failed = connection.status {
+            title.image = NSImage(systemSymbolName: "exclamationmark.circle", accessibilityDescription: connection.messageString)
+        }
+        menu.addItem(title)
+        if caption != connection.messageString || title.image != nil {
+            menu.addItem(NSMenuItem(title: connection.messageString, action: nil, keyEquivalent: ""))
+        }
         if let action = connection.actionKey {
-            let item = NSMenuItem(title: String(localized: String.LocalizationValue(action)), action: #selector(Handler.perform(_:)), keyEquivalent: "")
+            let item = NSMenuItem(title: String(localized: String.LocalizationValue(action)), action: #selector(Handler.performRecoveryAction(_:)), keyEquivalent: "")
             item.target = context.coordinator
             menu.addItem(item)
         }
         button.menu = menu
+        if case .failed = connection.status {
+            button.imagePosition = .imageOnly
+        } else {
+            button.imagePosition = .noImage
+        }
         button.setAccessibilityLabel(connection.messageString)
         button.setAccessibilityHelp(connection.messageString)
     }
     final class Handler: NSObject {
         var connection: PlaybackConnectionStatusView
         init(connection: PlaybackConnectionStatusView) { self.connection = connection }
-        @objc func perform(_ sender: Any?) { connection.performAction() }
+        @objc func performRecoveryAction(_ sender: Any?) { connection.performAction() }
     }
 }

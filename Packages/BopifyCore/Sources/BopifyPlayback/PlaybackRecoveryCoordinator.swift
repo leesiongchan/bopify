@@ -49,6 +49,8 @@ public final class PlaybackRecoveryCoordinator {
     private var hasBeenReady = false
     private var snapshot: PlaybackRecoverySnapshot?
     private var failureCount = 0
+    private var immediateRecoveryUsed = false
+    private var retryBeforeCreate = false
     private var forcedRefreshUsed = false
     private var rejectedToken: String?
 
@@ -72,6 +74,7 @@ public final class PlaybackRecoveryCoordinator {
             self.reportSessionLoss(reason, epoch: self.player.engineEpoch)
         }
         player.onConnectionReady = { [weak self] outcome in self?.bootstrap?.yield(.ready(outcome)) }
+        player.onRestorationResolved = { [weak self] in self?.snapshot = nil }
     }
 
     public func start(recovery: PlaybackRecoverySnapshot? = nil) {
@@ -90,6 +93,7 @@ public final class PlaybackRecoveryCoordinator {
         if case .needsReauthentication = status { return }
         if case .failed = status { return }
         if status == .ready && !player.restorationUnavailable { return }
+        retryBeforeCreate = false
         delay?.cancel()
         wakeWaiter?.yield(())
         if worker == nil { launch() }
@@ -98,6 +102,10 @@ public final class PlaybackRecoveryCoordinator {
     public func setNetworkAvailable(_ available: Bool) {
         guard networkAvailable != available else { return }
         networkAvailable = available
+        switch status {
+        case .needsReauthentication, .failed: return
+        default: break
+        }
         if status != .ready && active && !available { status = .offline }
         delay?.cancel()
         wakeWaiter?.yield(())
@@ -114,7 +122,14 @@ public final class PlaybackRecoveryCoordinator {
 
     public func reportSessionLoss(_ reason: SessionLossReason, epoch: UInt64) {
         guard active, epoch == player.engineEpoch, currentEngine != nil else { return }
+        guard bootstrap != nil || status == .ready else { return }
         if snapshot == nil, hasBeenReady { snapshot = player.captureRecoverySnapshot(at: .now) }
+        if bootstrap == nil {
+            if immediateRecoveryUsed {
+                failureCount = min(6, failureCount + 1)
+                retryBeforeCreate = true
+            } else { immediateRecoveryUsed = true }
+        }
         stableReady?.cancel()
         player.detachEngine()
         status = networkAvailable ? .reconnecting : .offline
@@ -183,6 +198,12 @@ public final class PlaybackRecoveryCoordinator {
                 wakeWaiter = nil
                 continue
             }
+            if retryBeforeCreate {
+                retryBeforeCreate = false
+                await waitForRetry()
+                guard live(mine) else { return }
+                if !networkAvailable || sleeping { continue }
+            }
             status = hasBeenReady ? .reconnecting : .connecting
             let started = now()
             var token: String?
@@ -223,6 +244,7 @@ public final class PlaybackRecoveryCoordinator {
                         do { try await sleep(.seconds(60)) } catch { return }
                         guard let self, generation == mine, status == .ready, player.engineEpoch == readyEpoch else { return }
                         failureCount = 0
+                        immediateRecoveryUsed = false
                     }
                     return
                 case let .lost(reason):
@@ -250,14 +272,18 @@ public final class PlaybackRecoveryCoordinator {
                 failureCount = min(6, failureCount + 1)
                 status = networkAvailable ? .reconnecting : .offline
                 guard networkAvailable, !sleeping else { continue }
-                let retry = recoveryRetryDelay(failureCount: failureCount, jitterUnit: randomUnit())
-                BopifyLog.playback.info("recovery retry failureCount=\(self.failureCount, privacy: .public) delay=\(String(describing: retry), privacy: .public)")
-                let sleep = self.sleep
-                let waiting = Task { try await sleep(retry) }
-                delay = waiting
-                try? await waiting.value
-                delay = nil
+                await waitForRetry()
             }
         }
+    }
+
+    private func waitForRetry() async {
+        let retry = recoveryRetryDelay(failureCount: failureCount, jitterUnit: randomUnit())
+        BopifyLog.playback.info("recovery retry failureCount=\(self.failureCount, privacy: .public) delay=\(String(describing: retry), privacy: .public)")
+        let sleep = self.sleep
+        let waiting = Task { try await sleep(retry) }
+        delay = waiting
+        try? await waiting.value
+        delay = nil
     }
 }
