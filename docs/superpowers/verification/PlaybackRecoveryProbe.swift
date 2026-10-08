@@ -37,6 +37,7 @@ import BopifyLibrary
         first.emit(.volumeChanged(volume: 0)); first.emit(.shuffleChanged(true)); first.emit(.repeatChanged(.context)); await settle()
         let contents = environment.likedSongs.tracks
         let mode = environment.presentation.mode
+        let artwork = environment.artworkStore.images[previewArtworkURL(0)]!
         first.emit(.sessionLost(.spircEnded)); await factory.waitForCount(2)
         precondition(first.shutdownCount == 1)
         precondition(factory.options[1].snapshot?.shouldResume == true)
@@ -44,6 +45,7 @@ import BopifyLibrary
         precondition(factory.options[1].snapshot?.shuffleEnabled == true)
         precondition(environment.player === player && environment.presentation.mode == mode)
         precondition(environment.likedSongs.tracks == contents && libraryStore.load() == saved)
+        precondition(environment.artworkStore.images[previewArtworkURL(0)] === artwork)
         let second = ProbeEngine(); factory.release(second); await settle(); second.ready(); await settle()
         precondition(environment.connectionStatus == .ready && player.isEngineReady)
         precondition(factory.options[0].deviceID == factory.options[1].deviceID)
@@ -58,8 +60,43 @@ import BopifyLibrary
         precondition(store.load() == nil && libraryStore.load() == nil)
         await checkQuitAndInitialNetworkFailure()
         await checkPresentation()
+        await checkRepeatedRecovery()
         print("PASS: stable player/library, serialized replacement, stable device ID, late-create sign-out, no unsolicited browser")
     }
+    @MainActor static func checkRepeatedRecovery() async {
+        let store = ProbeTokenStore(), factory = ProbeFactory()
+        try! store.save(TokenSet(accessToken: "FAKE", refreshToken: "FAKE", expiresAt: .distantFuture, grantedScopes: ["streaming"]))
+        let player = PlayerModel()
+        let environment = AppEnvironment(previewPlayer: player, favoriteService: ProbeLibrary(), playbackAuth: SpotifyAuthService(clientID: "probe", store: store), artworkStore: makePreviewArtworkStore(), recoveryEngineFactory: { token, options in try await factory.create(token, options) })
+        await environment.restoreOrPromptSignIn(); await factory.waitForCount(1)
+        var engine = ProbeEngine(); factory.release(engine); await settle(); engine.ready(); await settle()
+        for index in 0..<100 {
+            let old = engine, target = player.state.queue!.next[0].target!
+            let next = factory.options.count + 1
+            old.emit(.sessionLost(.spircEnded)); await factory.waitForCount(next)
+            precondition(old.shutdownCount == 1 && old.terminationCount == 1)
+            let frozen = player.displayPositionMs(at: .now)
+            let volume = player.state.volume
+            old.emit(.trackChanged(Track(uri: uri, title: "Stale engine", artists: [], albumTitle: nil, artwork: nil, durationMs: 1000)))
+            old.emit(.playing(positionMs: 999_000)); old.emit(.volumeChanged(volume: 1)); old.emit(.sessionLost(.playerChannelClosed))
+            player.togglePlayPause(); player.next(); player.setVolume(0.5); await settle()
+            precondition(player.displayPositionMs(at: .now) == frozen && old.recordedCommands.isEmpty)
+            if index % 10 == 0 {
+                factory.fail(.networkUnavailable); await settle()
+                environment.retryPlaybackConnection(); await factory.waitForCount(next + 1)
+            }
+            engine = ProbeEngine(); factory.release(engine); await settle(); engine.ready(); await settle()
+            player.selectQueueEntry(target); await settle()
+            precondition(engine.recordedCommands.isEmpty && engine.terminationCount == 0 && player.isEngineReady)
+            precondition(player.state.currentTrack?.title == "Recovery test" && player.state.volume == volume)
+            precondition(environment.player === player && environment.connectionStatus == .ready)
+        }
+        await environment.prepareForQuit()
+        precondition(factory.maximumLiveEngines == 1 && factory.maximumConcurrentCreations == 1)
+        precondition(factory.engines.allSatisfy { $0.shutdownCount == 1 && $0.terminationCount == 1 })
+        print("PASS: 100 replacements + 10 failed creates; maximum one live engine/create/consumer, stale inputs ignored, every engine torn down")
+    }
+
     @MainActor static func render() async { try? await Task.sleep(for: .milliseconds(700)) }
     @MainActor static func checkPresentation() async {
         let store = ProbeTokenStore(), factory = ProbeFactory(), library = ProbeLibrary()
@@ -194,17 +231,28 @@ nonisolated final class ProbeBrowser: @unchecked Sendable {
 }
 @MainActor final class ProbeFactory {
     var options: [PlaybackEngineConfiguration] = []
+    var engines: [ProbeEngine] = []
+    var maximumLiveEngines = 0
+    var maximumConcurrentCreations = 0
+    private var concurrentCreations = 0
     private var pending: CheckedContinuation<any ManagedPlaybackEngine, any Error>?
     private var waiters: [(Int, CheckedContinuation<Void, Never>)] = []
     func create(_ token: String, _ options: PlaybackEngineConfiguration) async throws -> any ManagedPlaybackEngine {
         self.options.append(options)
+        concurrentCreations += 1
+        maximumConcurrentCreations = max(maximumConcurrentCreations, concurrentCreations)
+        defer { concurrentCreations -= 1 }
         return try await withCheckedThrowingContinuation { pending = $0
             for (count, waiter) in waiters where self.options.count >= count { waiter.resume() }
             waiters.removeAll { self.options.count >= $0.0 }
         }
     }
     func waitForCount(_ count: Int) async { if options.count >= count { return }; await withCheckedContinuation { waiters.append((count, $0)) } }
-    func release(_ engine: ProbeEngine) { pending?.resume(returning: engine); pending = nil }
+    func release(_ engine: ProbeEngine) {
+        engines.append(engine)
+        maximumLiveEngines = max(maximumLiveEngines, engines.filter { $0.shutdownCount == 0 }.count)
+        pending?.resume(returning: engine); pending = nil
+    }
     func fail(_ error: PlayerError) { pending?.resume(throwing: error); pending = nil }
 }
 nonisolated final class ProbeEngine: ManagedPlaybackEngine, @unchecked Sendable {
@@ -212,10 +260,15 @@ nonisolated final class ProbeEngine: ManagedPlaybackEngine, @unchecked Sendable 
     nonisolated private let continuation: AsyncStream<PlaybackEvent>.Continuation
     private let lock = NSLock()
     private var shutdowns = 0
+    private var terminations = 0
     private var commands: [String] = []
     nonisolated var shutdownCount: Int { lock.withLock { shutdowns } }
+    nonisolated var terminationCount: Int { lock.withLock { terminations } }
     nonisolated var recordedCommands: [String] { lock.withLock { commands } }
-    nonisolated init() { (events, continuation) = AsyncStream.makeStream() }
+    nonisolated init() {
+        (events, continuation) = AsyncStream.makeStream()
+        continuation.onTermination = { [weak self] _ in self?.lock.withLock { self?.terminations += 1 } }
+    }
     nonisolated func emit(_ event: PlaybackEvent) { continuation.yield(event) }
     nonisolated func ready() {
         emit(.trackChanged(PlaybackRecoveryProbe.track)); emit(.recoveryIdentity(PlaybackIdentity(trackURI: PlaybackRecoveryProbe.uri)))

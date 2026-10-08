@@ -49,8 +49,14 @@ pub enum RadioFailure {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum WireEvent {
-    RecoveryIdentity { identity: crate::recovery::RecoveryIdentity },
-    ConnectionReady { outcome: &'static str, #[serde(skip_serializing_if = "Option::is_none")] identity: Option<crate::recovery::RecoveryIdentity> },
+    RecoveryIdentity {
+        identity: crate::recovery::RecoveryIdentity,
+    },
+    ConnectionReady {
+        outcome: &'static str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        identity: Option<crate::recovery::RecoveryIdentity>,
+    },
     SessionLost {
         reason: crate::terminal::SessionLossReason,
     },
@@ -151,7 +157,9 @@ pub enum WireEvent {
 /// oversight.
 pub fn translate(event: PlayerEvent) -> Option<WireEvent> {
     match event {
-        PlayerEvent::RecoveryIdentity { identity } => Some(WireEvent::RecoveryIdentity { identity: identity.into() }),
+        PlayerEvent::RecoveryIdentity { identity } => Some(WireEvent::RecoveryIdentity {
+            identity: identity.into(),
+        }),
         PlayerEvent::ConnectionReady { outcome } => {
             use librespot_playback::player::ConnectionOutcome;
             let (outcome, identity) = match outcome {
@@ -161,7 +169,7 @@ pub fn translate(event: PlayerEvent) -> Option<WireEvent> {
             };
             log::info!("event: connection ready outcome={outcome}");
             Some(WireEvent::ConnectionReady { outcome, identity })
-        },
+        }
         PlayerEvent::TrackChanged { audio_item } => Some(track_changed(*audio_item)),
         PlayerEvent::Playing { position_ms, .. } => Some(WireEvent::Playing { position_ms }),
         PlayerEvent::Paused { position_ms, .. } => Some(WireEvent::Paused { position_ms }),

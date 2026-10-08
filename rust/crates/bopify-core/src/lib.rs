@@ -10,6 +10,6 @@ pub mod ffi;
 mod logging;
 mod queue;
 mod radio;
+mod recovery;
 mod remote;
 mod terminal;
-mod recovery;

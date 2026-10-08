@@ -12,49 +12,57 @@ index bc5267f..650640d 100644
  uuid = { version = "1.18", default-features = false, features = ["v4"] }
  
 diff --git a/connect/src/context_resolver.rs b/connect/src/context_resolver.rs
-index ce3ecda..2696a26 100644
+index ce3ecda..f34804a 100644
 --- a/connect/src/context_resolver.rs
 +++ b/connect/src/context_resolver.rs
-@@ -255,6 +255,7 @@ impl ContextResolver {
+@@ -255,6 +255,9 @@ impl ContextResolver {
      ) -> Result<Option<Vec<ResolveContext>>, Error> {
          let (next, _, _) = self.find_next().ok_or(ContextResolverError::NoNext)?;
  
-+        let native_queue = state.preserve_recovery_queue.then(|| state.player().clone());
++        let native_queue = state
++            .preserve_recovery_queue
++            .then(|| state.player().clone());
          let remaining = match next.action {
              ContextAction::Append if context.pages.len() == 1 => state
                  .fill_context_from_page(context.pages.remove(0))
-@@ -273,6 +274,8 @@ impl ContextResolver {
+@@ -273,6 +276,10 @@ impl ContextResolver {
              }
          }?;
  
-+        if let Some(native) = native_queue { state.restore_recovery_player_state(native)?; }
++        if let Some(native) = native_queue {
++            state.restore_recovery_player_state(native)?;
++        }
 +
          Ok(remaining.map(|remaining| {
              remaining
                  .into_iter()
-@@ -315,6 +318,7 @@ impl ContextResolver {
+@@ -315,6 +322,9 @@ impl ContextResolver {
              }
          }
  
-+        if state.preserve_recovery_queue { return true; }
++        if state.preserve_recovery_queue {
++            return true;
++        }
          let active_ctx = state.get_context(state.active_context);
          let res = if let Some(transfer_state) = transfer_state.take() {
              state.finish_transfer(transfer_state)
 diff --git a/connect/src/lib.rs b/connect/src/lib.rs
-index ba00aa4..0ee2615 100644
+index ba00aa4..0686981 100644
 --- a/connect/src/lib.rs
 +++ b/connect/src/lib.rs
-@@ -12,8 +12,12 @@ mod context_resolver;
+@@ -10,10 +10,14 @@ use librespot_protocol as protocol;
+ 
+ mod context_resolver;
  mod model;
++mod queue;
++mod recovery;
  mod shuffle_vec;
  mod spirc;
-+mod queue;
 +mod startup;
-+mod recovery;
  mod state;
  
-+pub use recovery::{StartupMode, RecoveryCheckpoint, RecoveryIdentity};
  pub use model::*;
++pub use recovery::{RecoveryCheckpoint, RecoveryIdentity, StartupMode};
  pub use spirc::*;
  pub use state::*;
 diff --git a/connect/src/queue.rs b/connect/src/queue.rs
@@ -332,12 +340,15 @@ index 0000000..1e7dd3d
 +}
 diff --git a/connect/src/recovery.rs b/connect/src/recovery.rs
 new file mode 100644
-index 0000000..1078db5
+index 0000000..a179c6d
 --- /dev/null
 +++ b/connect/src/recovery.rs
-@@ -0,0 +1,91 @@
-+use crate::{protocol::{connect::Cluster, player::PlayerState, transfer_state::TransferState}, startup::{startup_decision, StartupDecision}};
+@@ -0,0 +1,127 @@
 +pub use crate::playback::player::RecoveryIdentity;
++use crate::{
++    protocol::{connect::Cluster, player::PlayerState, transfer_state::TransferState},
++    startup::{StartupDecision, startup_decision},
++};
 +
 +/// Startup policy chosen by the owner of the Connect session.
 +#[derive(Debug, Clone, Default)]
@@ -377,9 +388,15 @@ index 0000000..1078db5
 +
 +pub(crate) fn recovery_decision(cluster: &Cluster, own: &str) -> RecoveryDecision {
 +    if !cluster.active_device_id.is_empty() {
-+        if cluster.active_device_id != own { return RecoveryDecision::Foreign; }
-+        return cluster.player_state.as_ref().filter(|state| !state.track.uri.is_empty())
-+            .cloned().map_or(RecoveryDecision::NoSession, RecoveryDecision::OwnState);
++        if cluster.active_device_id != own {
++            return RecoveryDecision::Foreign;
++        }
++        return cluster
++            .player_state
++            .as_ref()
++            .filter(|state| !state.track.uri.is_empty())
++            .cloned()
++            .map_or(RecoveryDecision::NoSession, RecoveryDecision::OwnState);
 +    }
 +    match startup_decision(cluster, own) {
 +        StartupDecision::Restore(transfer) => RecoveryDecision::Transfer(transfer),
@@ -389,33 +406,57 @@ index 0000000..1078db5
 +
 +impl RecoveryCheckpoint {
 +    pub(crate) fn matches(&self, identity: &RecoveryIdentity) -> bool {
-+        self.was_active && self.identity.as_ref().is_some_and(|saved| {
-+            saved.track_uri == identity.track_uri &&
-+            saved.track_uid.as_ref().filter(|uid| !uid.is_empty()).is_none_or(|uid| identity.track_uid.as_ref() == Some(uid)) &&
-+            saved.context_uri.as_ref().filter(|uri| !uri.is_empty()).is_none_or(|uri| identity.context_uri.as_ref() == Some(uri))
-+        })
++        self.was_active
++            && self.identity.as_ref().is_some_and(|saved| {
++                saved.track_uri == identity.track_uri
++                    && saved
++                        .track_uid
++                        .as_ref()
++                        .filter(|uid| !uid.is_empty())
++                        .is_none_or(|uid| identity.track_uid.as_ref() == Some(uid))
++                    && saved
++                        .context_uri
++                        .as_ref()
++                        .filter(|uri| !uri.is_empty())
++                        .is_none_or(|uri| identity.context_uri.as_ref() == Some(uri))
++            })
 +    }
 +}
 +
 +#[cfg(test)]
 +mod tests {
 +    use super::*;
-+    use crate::protocol::{connect::Cluster, player::{PlayerState, ProvidedTrack}};
++    use crate::protocol::{
++        connect::Cluster,
++        player::{PlayerState, ProvidedTrack},
++    };
 +    use protobuf::MessageField;
 +
 +    #[test]
 +    fn recovery_foreign_trackless_device_never_falls_back() {
 +        let mut cluster = Cluster::new();
 +        cluster.active_device_id = "foreign".into();
-+        assert!(matches!(recovery_decision(&cluster, "own"), RecoveryDecision::Foreign));
++        assert!(matches!(
++            recovery_decision(&cluster, "own"),
++            RecoveryDecision::Foreign
++        ));
 +    }
 +
 +    #[test]
 +    fn recovery_own_id_uses_raw_player_state_not_transfer_stub() {
 +        let mut cluster = Cluster::new();
 +        cluster.active_device_id = "own".into();
-+        cluster.player_state = MessageField::some(PlayerState { track: MessageField::some(ProvidedTrack { uri: "spotify:track:x".into(), uid: "occurrence2".into(), ..Default::default() }), ..Default::default() });
-+        assert!(matches!(recovery_decision(&cluster, "own"), RecoveryDecision::OwnState(state) if state.track.uid == "occurrence2"));
++        cluster.player_state = MessageField::some(PlayerState {
++            track: MessageField::some(ProvidedTrack {
++                uri: "spotify:track:x".into(),
++                uid: "occurrence2".into(),
++                ..Default::default()
++            }),
++            ..Default::default()
++        });
++        assert!(
++            matches!(recovery_decision(&cluster, "own"), RecoveryDecision::OwnState(state) if state.track.uid == "occurrence2")
++        );
 +    }
 +
 +    #[test]
@@ -423,12 +464,15 @@ index 0000000..1078db5
 +        for data in [vec![], vec![0xff]] {
 +            let mut cluster = Cluster::new();
 +            cluster.transfer_data = data;
-+            assert!(matches!(recovery_decision(&cluster, "own"), RecoveryDecision::NoSession));
++            assert!(matches!(
++                recovery_decision(&cluster, "own"),
++                RecoveryDecision::NoSession
++            ));
 +        }
 +    }
 +}
 diff --git a/connect/src/spirc.rs b/connect/src/spirc.rs
-index c7c195b..4722550 100644
+index c7c195b..48c64fe 100644
 --- a/connect/src/spirc.rs
 +++ b/connect/src/spirc.rs
 @@ -14,7 +14,7 @@ use crate::{
@@ -642,27 +686,43 @@ index c7c195b..4722550 100644
          }
  
          if !self.shutdown && self.connect_state.is_active() {
-@@ -653,6 +768,19 @@ impl SpircTask {
+@@ -653,6 +768,35 @@ impl SpircTask {
              false
          };
  
-+        if self.recovery_native.is_some() && self.connect_state.get_context(self.connect_state.active_context).is_ok() {
++        if self.recovery_native.is_some()
++            && self
++                .connect_state
++                .get_context(self.connect_state.active_context)
++                .is_ok()
++        {
 +            if let Some(native) = self.recovery_native.take() {
-+                if self.foreign_owner() { return false; }
-+                if self.connect_state.restore_recovery_player_state(native).is_err() || self.start_recovered_track().is_err() {
++                if self.foreign_owner() {
++                    return false;
++                }
++                if self
++                    .connect_state
++                    .restore_recovery_player_state(native)
++                    .is_err()
++                    || self.start_recovered_track().is_err()
++                {
 +                    self.bootstrap_pending = false;
-+                    self.player.emit_connection_ready(crate::playback::player::ConnectionOutcome::Unavailable);
++                    self.player.emit_connection_ready(
++                        crate::playback::player::ConnectionOutcome::Unavailable,
++                    );
 +                    return false;
 +                }
 +                self.bootstrap_queue_ready = true;
 +            }
-+        } else if update_state { self.bootstrap_queue_ready = true; }
++        } else if update_state {
++            self.bootstrap_queue_ready = true;
++        }
 +        self.maybe_finish_bootstrap();
 +
          // Fire set queue event if context was successfully loaded
          if update_state {
              self.emit_set_queue_event();
-@@ -662,41 +790,30 @@ impl SpircTask {
+@@ -662,41 +806,30 @@ impl SpircTask {
          update_state
      }
  
@@ -725,7 +785,7 @@ index c7c195b..4722550 100644
      }
  
      // todo: is the time_delta still necessary?
-@@ -711,6 +828,27 @@ impl SpircTask {
+@@ -711,6 +844,27 @@ impl SpircTask {
      async fn handle_command(&mut self, cmd: SpircCommand) -> Result<(), Error> {
          trace!("Received SpircCommand::{cmd:?}");
          match cmd {
@@ -753,7 +813,7 @@ index c7c195b..4722550 100644
              SpircCommand::Shutdown => {
                  trace!("Received SpircCommand::Shutdown");
                  self.handle_pause();
-@@ -733,6 +871,10 @@ impl SpircTask {
+@@ -733,6 +887,10 @@ impl SpircTask {
                  self.handle_activate();
                  return self.notify().await;
              }
@@ -764,7 +824,7 @@ index c7c195b..4722550 100644
              SpircCommand::Transfer(..) | SpircCommand::Activate => {
                  warn!("SpircCommand::{cmd:?} will be ignored while already active")
              }
-@@ -745,7 +887,7 @@ impl SpircTask {
+@@ -745,7 +903,7 @@ impl SpircTask {
                  }
                  return self.handle_disconnect().await;
              }
@@ -773,7 +833,7 @@ index c7c195b..4722550 100644
              SpircCommand::PlayPause => self.handle_play_pause(),
              SpircCommand::Pause => self.handle_pause(),
              SpircCommand::Prev => self.handle_prev()?,
-@@ -826,6 +968,7 @@ impl SpircTask {
+@@ -826,6 +984,7 @@ impl SpircTask {
              }
              PlayerEvent::Playing { position_ms, .. }
              | PlayerEvent::PositionCorrection { position_ms, .. } => {
@@ -781,7 +841,7 @@ index c7c195b..4722550 100644
                  trace!("==> Playing");
                  let new_nominal_start_time = self.now_ms() - position_ms as i64;
                  match self.play_status {
-@@ -838,6 +981,7 @@ impl SpircTask {
+@@ -838,6 +997,7 @@ impl SpircTask {
                              self.connect_state
                                  .update_position(position_ms, self.now_ms());
                          } else {
@@ -789,18 +849,21 @@ index c7c195b..4722550 100644
                              return Ok(());
                          }
                      }
-@@ -898,6 +1042,10 @@ impl SpircTask {
+@@ -898,6 +1058,13 @@ impl SpircTask {
          }
  
          self.update_state = true;
-+        if matches!(self.play_status, SpircPlayStatus::Paused { .. } | SpircPlayStatus::Playing { .. }) {
++        if matches!(
++            self.play_status,
++            SpircPlayStatus::Paused { .. } | SpircPlayStatus::Playing { .. }
++        ) {
 +            self.bootstrap_playback_confirmed = true;
 +            self.maybe_finish_bootstrap();
 +        }
          Ok(())
      }
  
-@@ -924,6 +1072,23 @@ impl SpircTask {
+@@ -924,6 +1091,30 @@ impl SpircTask {
          );
  
          self.connect_established = true;
@@ -814,9 +877,16 @@ index c7c195b..4722550 100644
 +            }
 +            let outcome = self.resolve_startup(&cluster).await;
 +            match &outcome {
-+                StartupOutcome::Remote { .. } => self.player.emit_connection_ready(crate::playback::player::ConnectionOutcome::Remote),
-+                StartupOutcome::Nothing => self.player.emit_connection_ready(crate::playback::player::ConnectionOutcome::Unavailable),
-+                _ => { self.bootstrap_pending = true; self.bootstrap_queue_ready = !self.context_resolver.has_next(); }
++                StartupOutcome::Remote { .. } => self
++                    .player
++                    .emit_connection_ready(crate::playback::player::ConnectionOutcome::Remote),
++                StartupOutcome::Nothing => self
++                    .player
++                    .emit_connection_ready(crate::playback::player::ConnectionOutcome::Unavailable),
++                _ => {
++                    self.bootstrap_pending = true;
++                    self.bootstrap_queue_ready = !self.context_resolver.has_next();
++                }
 +            }
 +            self.player.emit_startup_resolved_event(outcome);
 +            return Ok(());
@@ -824,7 +894,7 @@ index c7c195b..4722550 100644
  
          let same_session = cluster.player_state.session_id == self.session.session_id()
              || cluster.player_state.session_id.is_empty();
-@@ -953,6 +1118,260 @@ impl SpircTask {
+@@ -953,6 +1144,302 @@ impl SpircTask {
          Ok(())
      }
  
@@ -855,17 +925,20 @@ index c7c195b..4722550 100644
 +    fn local_identity(&self) -> Option<crate::RecoveryIdentity> {
 +        let state = self.connect_state.player();
 +        let track = state.track.as_ref()?;
-+        if track.uri.is_empty() { return None; }
++        if track.uri.is_empty() {
++            return None;
++        }
 +        Some(crate::RecoveryIdentity {
 +            track_uri: track.uri.clone(),
 +            track_uid: (!track.uid.is_empty()).then(|| track.uid.clone()),
-+            context_uri: (!state.context_uri.is_empty() && state.context_uri != "-").then(|| state.context_uri.clone()),
++            context_uri: (!state.context_uri.is_empty() && state.context_uri != "-")
++                .then(|| state.context_uri.clone()),
 +        })
 +    }
 +
 +    fn resolve_recovery(&mut self, cluster: &Cluster) -> Result<(), Error> {
-+        use crate::recovery::{recovery_decision, RecoveryDecision};
 +        use crate::playback::player::ConnectionOutcome;
++        use crate::recovery::{RecoveryDecision, recovery_decision};
 +        self.bootstrap_pending = true;
 +        match recovery_decision(cluster, self.session.device_id()) {
 +            RecoveryDecision::Foreign => {
@@ -877,14 +950,16 @@ index c7c195b..4722550 100644
 +            RecoveryDecision::NoSession => {
 +                info!("recovery: no usable session");
 +                self.bootstrap_pending = false;
-+                self.player.emit_connection_ready(ConnectionOutcome::Unavailable);
++                self.player
++                    .emit_connection_ready(ConnectionOutcome::Unavailable);
 +            }
 +            RecoveryDecision::Transfer(transfer) => {
 +                info!("recovery: restore paused transfer");
 +                let supplied_options = transfer.options.is_some();
 +                if !self.restore_session(transfer) {
 +                    self.bootstrap_pending = false;
-+                    self.player.emit_connection_ready(ConnectionOutcome::Unavailable);
++                    self.player
++                        .emit_connection_ready(ConnectionOutcome::Unavailable);
 +                } else {
 +                    self.apply_recovery_options(supplied_options);
 +                    self.apply_recovery_position();
@@ -897,14 +972,25 @@ index c7c195b..4722550 100644
 +                native.is_playing = false;
 +                native.is_paused = true;
 +                native.is_buffering = false;
-+                self.connect_state.restore_recovery_player_state(native.clone())?;
++                self.connect_state
++                    .restore_recovery_player_state(native.clone())?;
 +                self.apply_recovery_options(supplied_options);
 +                self.recovery_native = Some(self.connect_state.player().clone());
 +                let context = self.connect_state.context_uri().clone();
 +                let track = self.connect_state.current_track(|t| t.uri.clone());
-+                self.context_resolver.add(ResolveContext::from_uri(context.clone(), track.clone(), ContextType::Default, ContextAction::Replace));
++                self.context_resolver.add(ResolveContext::from_uri(
++                    context.clone(),
++                    track.clone(),
++                    ContextType::Default,
++                    ContextAction::Replace,
++                ));
 +                if self.connect_state.active_context == ContextType::Autoplay {
-+                    self.context_resolver.add(ResolveContext::from_uri(context, track, ContextType::Autoplay, ContextAction::Replace));
++                    self.context_resolver.add(ResolveContext::from_uri(
++                        context,
++                        track,
++                        ContextType::Autoplay,
++                        ContextAction::Replace,
++                    ));
 +                }
 +            }
 +        }
@@ -912,10 +998,18 @@ index c7c195b..4722550 100644
 +    }
 +
 +    fn apply_recovery_options(&mut self, supplied: bool) {
-+        if supplied { return; }
-+        if let (crate::StartupMode::Recovery(Some(checkpoint)), Some(identity)) = (&self.startup_mode, self.local_identity()) {
++        if supplied {
++            return;
++        }
++        if let (crate::StartupMode::Recovery(Some(checkpoint)), Some(identity)) =
++            (&self.startup_mode, self.local_identity())
++        {
 +            if checkpoint.matches(&identity) {
-+                let options = self.connect_state.player_mut().options.mut_or_insert_default();
++                let options = self
++                    .connect_state
++                    .player_mut()
++                    .options
++                    .mut_or_insert_default();
 +                options.shuffling_context = checkpoint.shuffle_enabled;
 +                options.repeating_context = checkpoint.repeat_mode == "context";
 +                options.repeating_track = checkpoint.repeat_mode == "track";
@@ -926,10 +1020,16 @@ index c7c195b..4722550 100644
 +    fn recovery_position(&self) -> u32 {
 +        let state = self.connect_state.player();
 +        let mut position = state.position_as_of_timestamp.max(0);
-+        if let (crate::StartupMode::Recovery(Some(checkpoint)), Some(identity)) = (&self.startup_mode, self.local_identity()) {
-+            if checkpoint.matches(&identity) { position = checkpoint.position_ms; }
++        if let (crate::StartupMode::Recovery(Some(checkpoint)), Some(identity)) =
++            (&self.startup_mode, self.local_identity())
++        {
++            if checkpoint.matches(&identity) {
++                position = checkpoint.position_ms;
++            }
 +        }
-+        if state.duration > 0 { position = position.min(state.duration); }
++        if state.duration > 0 {
++            position = position.min(state.duration);
++        }
 +        u32::try_from(position).unwrap_or(u32::MAX)
 +    }
 +
@@ -940,7 +1040,9 @@ index c7c195b..4722550 100644
 +    }
 +
 +    fn start_recovered_track(&mut self) -> Result<(), Error> {
-+        if self.foreign_owner() { return Ok(()); }
++        if self.foreign_owner() {
++            return Ok(());
++        }
 +        let position = self.recovery_position();
 +        self.load_track(false, position)?;
 +        self.handle_activate();
@@ -949,8 +1051,17 @@ index c7c195b..4722550 100644
 +    }
 +
 +    fn maybe_finish_bootstrap(&mut self) {
-+        if !self.bootstrap_pending || !self.bootstrap_queue_ready || !self.bootstrap_playback_confirmed || (self.foreign_owner() && matches!(self.startup_mode, crate::StartupMode::Recovery(_))) { return; }
-+        let Some(identity) = self.local_identity() else { return; };
++        if !self.bootstrap_pending
++            || !self.bootstrap_queue_ready
++            || !self.bootstrap_playback_confirmed
++            || (self.foreign_owner()
++                && matches!(self.startup_mode, crate::StartupMode::Recovery(_)))
++        {
++            return;
++        }
++        let Some(identity) = self.local_identity() else {
++            return;
++        };
 +        if !self.recovery_resume_requested {
 +            if let crate::StartupMode::Recovery(Some(checkpoint)) = &self.startup_mode {
 +                if checkpoint.should_resume && checkpoint.matches(&identity) {
@@ -963,7 +1074,8 @@ index c7c195b..4722550 100644
 +        }
 +        self.emit_set_queue_event();
 +        self.bootstrap_pending = false;
-+        self.player.emit_connection_ready(crate::playback::player::ConnectionOutcome::Local(identity));
++        self.player
++            .emit_connection_ready(crate::playback::player::ConnectionOutcome::Local(identity));
 +        info!("recovery: local playback confirmed");
 +    }
 +
@@ -1085,22 +1197,26 @@ index c7c195b..4722550 100644
      fn handle_user_attributes_update(&mut self, update: UserAttributesUpdate) {
          trace!("Received attributes update: {update:#?}");
          let attributes: UserAttributes = update
-@@ -1012,6 +1431,14 @@ impl SpircTask {
+@@ -1012,6 +1499,18 @@ impl SpircTask {
          );
  
          if let Some(cluster) = cluster_update.cluster.take() {
 +            self.latest_owner.clone_from(&cluster.active_device_id);
-+            if self.bootstrap_pending && self.foreign_owner() && matches!(self.startup_mode, crate::StartupMode::Recovery(_)) {
++            if self.bootstrap_pending
++                && self.foreign_owner()
++                && matches!(self.startup_mode, crate::StartupMode::Recovery(_))
++            {
 +                self.recovery_native = None;
 +                self.bootstrap_pending = false;
 +                self.context_resolver.clear();
 +                self.transfer_state = None;
-+                self.player.emit_connection_ready(crate::playback::player::ConnectionOutcome::Remote);
++                self.player
++                    .emit_connection_ready(crate::playback::player::ConnectionOutcome::Remote);
 +            }
              let became_inactive = self.connect_state.is_active()
                  && cluster.active_device_id != self.session.device_id();
              if became_inactive {
-@@ -1024,6 +1451,12 @@ impl SpircTask {
+@@ -1024,6 +1523,12 @@ impl SpircTask {
                  //  tried: providing session_id, playback_id, track-metadata "track_player"
                  self.update_state = true;
              }
@@ -1113,7 +1229,7 @@ index c7c195b..4722550 100644
          } else if self.connect_state.is_active() {
              self.connect_state.became_inactive(&self.session).await?;
          }
-@@ -1083,7 +1516,17 @@ impl SpircTask {
+@@ -1083,7 +1588,17 @@ impl SpircTask {
              }
              // modification and update of the connect_state
              Transfer(transfer) => {
@@ -1131,7 +1247,7 @@ index c7c195b..4722550 100644
                  return self.notify().await;
              }
              Play(mut play) => {
-@@ -1181,6 +1624,7 @@ impl SpircTask {
+@@ -1181,6 +1696,7 @@ impl SpircTask {
      }
  
      fn handle_transfer(&mut self, mut transfer: TransferState) -> Result<(), Error> {
@@ -1139,7 +1255,7 @@ index c7c195b..4722550 100644
          let mut ctx_uri = match transfer.current_session.context.uri {
              None => Err(SpircError::NoUri("transfer context"))?,
              // can apparently happen when a state is transferred and was started with "uris" via the api
-@@ -1254,17 +1698,7 @@ impl SpircTask {
+@@ -1254,17 +1770,7 @@ impl SpircTask {
              ContextType::Default
          };
  
@@ -1158,7 +1274,7 @@ index c7c195b..4722550 100644
  
          let is_playing = !transfer.playback.is_paused();
  
-@@ -1329,6 +1763,11 @@ impl SpircTask {
+@@ -1329,6 +1835,11 @@ impl SpircTask {
      }
  
      fn handle_activate(&mut self) {
@@ -1170,7 +1286,7 @@ index c7c195b..4722550 100644
          self.connect_state.set_active(true);
          self.player
              .emit_session_connected_event(self.session.connection_id(), self.session.username());
-@@ -1363,6 +1802,7 @@ impl SpircTask {
+@@ -1363,6 +1874,7 @@ impl SpircTask {
          page: Option<ContextPage>,
          fallback_index: Option<usize>,
      ) -> Result<(), Error> {
@@ -1178,7 +1294,7 @@ index c7c195b..4722550 100644
          self.connect_state
              .reset_context(if let PlayContext::Uri(ref uri) = cmd.context {
                  ResetContext::WhenDifferent(uri)
-@@ -1621,6 +2061,7 @@ impl SpircTask {
+@@ -1621,6 +2133,7 @@ impl SpircTask {
      }
  
      fn handle_shuffle(&mut self, shuffle: bool) -> Result<(), Error> {
@@ -1186,7 +1302,7 @@ index c7c195b..4722550 100644
          self.player.emit_shuffle_changed_event(shuffle);
          self.connect_state.handle_shuffle(shuffle)
      }
-@@ -1731,6 +2172,7 @@ impl SpircTask {
+@@ -1731,6 +2244,7 @@ impl SpircTask {
      }
  
      fn handle_next(&mut self, track_uri: Option<String>) -> Result<(), Error> {
@@ -1194,7 +1310,7 @@ index c7c195b..4722550 100644
          let continue_playing = self.connect_state.is_playing();
  
          let current_uri = self.connect_state.current_track(|t| &t.uri);
-@@ -1761,6 +2203,7 @@ impl SpircTask {
+@@ -1761,6 +2275,7 @@ impl SpircTask {
      }
  
      fn handle_prev(&mut self) -> Result<(), Error> {
@@ -1202,7 +1318,7 @@ index c7c195b..4722550 100644
          // Previous behaves differently based on the position
          // Under 3s it goes to the previous song (starts playing)
          // Over 3s it seeks to zero (retains previous play status)
-@@ -1896,7 +2339,11 @@ impl SpircTask {
+@@ -1896,7 +2411,11 @@ impl SpircTask {
          let current_uri = self.connect_state.current_track(|t| &t.uri);
          let id = SpotifyUri::from_uri(current_uri)?;
          self.player.load(id, start_playing, position_ms);
@@ -1214,7 +1330,7 @@ index c7c195b..4722550 100644
          self.connect_state
              .update_position(position_ms, self.now_ms());
          if start_playing {
-@@ -1905,11 +2352,10 @@ impl SpircTask {
+@@ -1905,11 +2424,10 @@ impl SpircTask {
              self.play_status = SpircPlayStatus::LoadingPause { position_ms };
          }
          self.connect_state.set_status(&self.play_status);
@@ -1227,7 +1343,7 @@ index c7c195b..4722550 100644
          self.connect_state.set_status(&self.play_status);
  
          if self.connect_state.is_playing() {
-@@ -1950,3 +2396,83 @@ impl Drop for SpircTask {
+@@ -1950,3 +2468,165 @@ impl Drop for SpircTask {
          debug!("drop Spirc[{}]", self.spirc_id);
      }
  }
@@ -1235,36 +1351,102 @@ index c7c195b..4722550 100644
 +#[cfg(test)]
 +mod recovery_tests {
 +    use super::*;
-+    use crate::playback::{audio_backend::{Sink, SinkResult}, convert::Converter, decoder::AudioPacket, config::PlayerConfig, mixer::{MixerConfig, softmixer::SoftMixer}, player::ConnectionOutcome};
++    use crate::playback::{
++        audio_backend::{Sink, SinkResult},
++        config::PlayerConfig,
++        convert::Converter,
++        decoder::AudioPacket,
++        mixer::{MixerConfig, softmixer::SoftMixer},
++        player::ConnectionOutcome,
++    };
 +    struct SilentSink;
 +    impl Sink for SilentSink {
-+        fn write(&mut self, _: AudioPacket, _: &mut Converter) -> SinkResult<()> { Ok(()) }
++        fn write(&mut self, _: AudioPacket, _: &mut Converter) -> SinkResult<()> {
++            Ok(())
++        }
 +    }
 +    fn fixture(should_resume: bool) -> (SpircTask, PlayerEventChannel) {
 +        let session = Session::new(crate::core::SessionConfig::default(), None);
 +        let mixer: Arc<dyn Mixer> = Arc::new(SoftMixer::open(MixerConfig::default()).unwrap());
-+        let player = Player::new(PlayerConfig::default(), session.clone(), mixer.get_soft_volume(), || Box::new(SilentSink));
++        let player = Player::new(
++            PlayerConfig::default(),
++            session.clone(),
++            mixer.get_soft_volume(),
++            || Box::new(SilentSink),
++        );
 +        let output = player.get_player_event_channel();
 +        let mut state = ConnectState::new(ConnectConfig::default(), &session);
-+        state.player_mut().track = MessageField::some(ProvidedTrack { uri: "spotify:track:6rqhFgbbKwnb9MLmUQDhG6".into(), uid: "occurrence".into(), ..Default::default() });
++        state.player_mut().track = MessageField::some(ProvidedTrack {
++            uri: "spotify:track:6rqhFgbbKwnb9MLmUQDhG6".into(),
++            uid: "occurrence".into(),
++            ..Default::default()
++        });
 +        state.player_mut().context_uri = "spotify:playlist:37i9dQZF1E8NDRt5R5oIbG".into();
-+        let identity = crate::RecoveryIdentity { track_uri: state.player().track.uri.clone(), track_uid: Some("occurrence".into()), context_uri: Some(state.context_uri().clone()) };
-+        let checkpoint = crate::RecoveryCheckpoint { was_active: true, should_resume, identity: Some(identity), position_ms: 3200, volume: 0., ..Default::default() };
-+        (SpircTask {
-+            queue_tracker: Default::default(), observed_repeat: None, player, mixer, connect_state: state, connect_established: true,
-+            play_request_id: Some(1), play_status: SpircPlayStatus::LoadingPause { position_ms: 3200 },
-+            connection_id_update: futures_util::stream::pending().boxed(), connect_state_update: futures_util::stream::pending().boxed(),
-+            connect_state_volume_update: futures_util::stream::pending().boxed(), connect_state_logout_request: futures_util::stream::pending().boxed(),
-+            playlist_update: futures_util::stream::pending().boxed(), session_update: futures_util::stream::pending().boxed(), connect_state_command: futures_util::stream::pending().boxed(),
-+            user_attributes_update: futures_util::stream::pending().boxed(), user_attributes_mutation: futures_util::stream::pending().boxed(), commands: None, player_events: None,
-+            context_resolver: ContextResolver::new(session.clone()), emit_set_queue_events: true, startup_restore: true, startup_mode: crate::StartupMode::Recovery(Some(checkpoint)),
-+            latest_owner: session.device_id().into(), recovery_native: None, bootstrap_pending: true, bootstrap_queue_ready: false, bootstrap_playback_confirmed: false,
-+            recovery_resume_requested: false, last_identity: None, startup_resolved: true, last_remote: None, play_here_requested_at: None,
-+            shutdown: false, session, transfer_state: None, update_volume: false, update_state: false, spirc_id: 0,
-+        }, output)
++        let identity = crate::RecoveryIdentity {
++            track_uri: state.player().track.uri.clone(),
++            track_uid: Some("occurrence".into()),
++            context_uri: Some(state.context_uri().clone()),
++        };
++        let checkpoint = crate::RecoveryCheckpoint {
++            was_active: true,
++            should_resume,
++            identity: Some(identity),
++            position_ms: 3200,
++            volume: 0.,
++            ..Default::default()
++        };
++        (
++            SpircTask {
++                queue_tracker: Default::default(),
++                observed_repeat: None,
++                player,
++                mixer,
++                connect_state: state,
++                connect_established: true,
++                play_request_id: Some(1),
++                play_status: SpircPlayStatus::LoadingPause { position_ms: 3200 },
++                connection_id_update: futures_util::stream::pending().boxed(),
++                connect_state_update: futures_util::stream::pending().boxed(),
++                connect_state_volume_update: futures_util::stream::pending().boxed(),
++                connect_state_logout_request: futures_util::stream::pending().boxed(),
++                playlist_update: futures_util::stream::pending().boxed(),
++                session_update: futures_util::stream::pending().boxed(),
++                connect_state_command: futures_util::stream::pending().boxed(),
++                user_attributes_update: futures_util::stream::pending().boxed(),
++                user_attributes_mutation: futures_util::stream::pending().boxed(),
++                commands: None,
++                player_events: None,
++                context_resolver: ContextResolver::new(session.clone()),
++                emit_set_queue_events: true,
++                startup_restore: true,
++                startup_mode: crate::StartupMode::Recovery(Some(checkpoint)),
++                latest_owner: session.device_id().into(),
++                recovery_native: None,
++                bootstrap_pending: true,
++                bootstrap_queue_ready: false,
++                bootstrap_playback_confirmed: false,
++                recovery_resume_requested: false,
++                last_identity: None,
++                startup_resolved: true,
++                last_remote: None,
++                play_here_requested_at: None,
++                shutdown: false,
++                session,
++                transfer_state: None,
++                update_volume: false,
++                update_state: false,
++                spirc_id: 0,
++            },
++            output,
++        )
 +    }
 +    fn paused(task: &mut SpircTask) {
-+        task.handle_player_event(PlayerEvent::Paused { play_request_id: 1, track_id: SpotifyUri::from_uri("spotify:track:6rqhFgbbKwnb9MLmUQDhG6").unwrap(), position_ms: 3200 }).unwrap();
++        task.handle_player_event(PlayerEvent::Paused {
++            play_request_id: 1,
++            track_id: SpotifyUri::from_uri("spotify:track:6rqhFgbbKwnb9MLmUQDhG6").unwrap(),
++            position_ms: 3200,
++        })
++        .unwrap();
 +    }
 +    #[tokio::test]
 +    async fn recovery_waits_for_queue_and_confirms_resumed_playback_once() {
@@ -1277,14 +1459,24 @@ index c7c195b..4722550 100644
 +        assert!(task.recovery_resume_requested);
 +        assert!(task.bootstrap_pending);
 +        let position = task.position();
-+        task.handle_player_event(PlayerEvent::Playing { play_request_id: 1, track_id: SpotifyUri::from_uri("spotify:track:6rqhFgbbKwnb9MLmUQDhG6").unwrap(), position_ms: position }).unwrap();
++        task.handle_player_event(PlayerEvent::Playing {
++            play_request_id: 1,
++            track_id: SpotifyUri::from_uri("spotify:track:6rqhFgbbKwnb9MLmUQDhG6").unwrap(),
++            position_ms: position,
++        })
++        .unwrap();
 +        assert!(!task.bootstrap_pending);
 +        let mut queue_seen = false;
 +        while let Some(event) = output.recv().await {
 +            match event {
 +                PlayerEvent::SetQueue { .. } => queue_seen = true,
-+                PlayerEvent::ConnectionReady { outcome: ConnectionOutcome::Local(_) } => { assert!(queue_seen); break; },
-+                _ => {},
++                PlayerEvent::ConnectionReady {
++                    outcome: ConnectionOutcome::Local(_),
++                } => {
++                    assert!(queue_seen);
++                    break;
++                }
++                _ => {}
 +            }
 +        }
 +        task.maybe_finish_bootstrap();
@@ -1294,7 +1486,13 @@ index c7c195b..4722550 100644
 +    async fn recovery_paused_or_changed_occurrence_never_resumes() {
 +        for (resume, changed) in [(false, false), (true, true)] {
 +            let (mut task, _) = fixture(resume);
-+            if changed { task.connect_state.player_mut().track.mut_or_insert_default().uid = "other".into(); }
++            if changed {
++                task.connect_state
++                    .player_mut()
++                    .track
++                    .mut_or_insert_default()
++                    .uid = "other".into();
++            }
 +            task.bootstrap_queue_ready = true;
 +            paused(&mut task);
 +            assert!(!task.recovery_resume_requested);
@@ -1706,17 +1904,17 @@ index 0000000..c36abc2
 +    }
 +}
 diff --git a/connect/src/state.rs b/connect/src/state.rs
-index f810d85..415bbad 100644
+index f810d85..67201e2 100644
 --- a/connect/src/state.rs
 +++ b/connect/src/state.rs
-@@ -6,6 +6,7 @@ pub(super) mod provider;
+@@ -3,6 +3,7 @@ mod handle;
+ mod metadata;
+ mod options;
+ pub(super) mod provider;
++mod recovery;
  mod restrictions;
  mod tracks;
  mod transfer;
-+mod recovery;
- 
- use crate::{
-     core::{
 @@ -92,6 +93,11 @@ pub struct ConnectConfig {
      pub volume_steps: u16,
      /// Emit `SetQueue` player events when the queue changes (default: false)
@@ -1793,26 +1991,47 @@ index efb8376..dd526dd 100644
      pub initial_track: String,
 diff --git a/connect/src/state/recovery.rs b/connect/src/state/recovery.rs
 new file mode 100644
-index 0000000..db28943
+index 0000000..e626477
 --- /dev/null
 +++ b/connect/src/state/recovery.rs
-@@ -0,0 +1,72 @@
+@@ -0,0 +1,174 @@
 +use super::{ConnectState, context::ContextType, metadata::Metadata, provider::IsProvider};
-+use crate::{core::{Error, SpotifyUri}, protocol::player::PlayerState};
++use crate::{
++    core::{Error, SpotifyUri},
++    protocol::player::PlayerState,
++};
 +
 +impl ConnectState {
 +    pub fn restore_recovery_player_state(&mut self, mut native: PlayerState) -> Result<(), Error> {
 +        SpotifyUri::from_uri(&native.track.uri)?;
 +        // Device/session bookkeeping belongs to the replacement, not the vanished runtime.
 +        native.session_id = self.player().session_id.clone();
-+        self.active_context = if (native.track.is_from_autoplay() || native.track.is_autoplay()) { ContextType::Autoplay } else { ContextType::Default };
++        self.active_context = if native.track.is_from_autoplay() || native.track.is_autoplay() {
++            ContextType::Autoplay
++        } else {
++            ContextType::Default
++        };
 +        self.fill_up_context = self.active_context;
-+        if let (Some(index), Ok(context)) = (native.index.as_ref(), self.get_context_mut(self.active_context)) {
++        if let (Some(index), Ok(context)) = (
++            native.index.as_ref(),
++            self.get_context_mut(self.active_context),
++        ) {
 +            context.index = index.clone();
 +        }
-+        self.queue_count = native.prev_tracks.iter().chain(native.next_tracks.iter()).chain(native.track.iter())
-+            .filter_map(|track| track.uid.strip_prefix('q').and_then(|n| n.parse::<u64>().ok()))
-+            .max().map_or(0, |n| n.saturating_add(1)).max(self.queue_count);
++        self.queue_count = native
++            .prev_tracks
++            .iter()
++            .chain(native.next_tracks.iter())
++            .chain(native.track.iter())
++            .filter_map(|track| {
++                track
++                    .uid
++                    .strip_prefix('q')
++                    .and_then(|n| n.parse::<u64>().ok())
++            })
++            .max()
++            .map_or(0, |n| n.saturating_add(1))
++            .max(self.queue_count);
 +        *self.player_mut() = native;
 +        self.preserve_recovery_queue = true;
 +        self.update_queue_revision();
@@ -1823,21 +2042,67 @@ index 0000000..db28943
 +#[cfg(test)]
 +mod tests {
 +    use super::*;
-+    use crate::{ConnectConfig, core::{Session, SessionConfig}, protocol::player::{PlayerState, ProvidedTrack, ContextIndex}};
++    use crate::{
++        ConnectConfig,
++        core::{Session, SessionConfig},
++        protocol::player::{ContextIndex, PlayerState, ProvidedTrack},
++    };
 +    use protobuf::MessageField;
 +
 +    #[tokio::test]
 +    async fn recovery_autoplay_provider_and_delayed_pages_preserve_live_queue() {
-+        use crate::{context_resolver::{ContextResolver, ResolveContext, ContextAction}, protocol::{context::Context, context_page::ContextPage, context_track::ContextTrack}};
++        use crate::{
++            context_resolver::{ContextAction, ContextResolver, ResolveContext},
++            protocol::{context::Context, context_page::ContextPage, context_track::ContextTrack},
++        };
 +        let session = Session::new(SessionConfig::default(), None);
 +        let mut state = ConnectState::new(ConnectConfig::default(), &session);
 +        let uri = "spotify:track:6rqhFgbbKwnb9MLmUQDhG6";
-+        let native = PlayerState { track: MessageField::some(ProvidedTrack { uri: uri.into(), uid: "second".into(), provider: "autoplay".into(), ..Default::default() }), next_tracks: vec![ProvidedTrack { uri: uri.into(), uid: "q5".into(), provider: "queue".into(), ..Default::default() }], context_uri: "spotify:playlist:37i9dQZF1E8NDRt5R5oIbG".into(), is_playing: true, is_paused: false, ..Default::default() };
++        let native = PlayerState {
++            track: MessageField::some(ProvidedTrack {
++                uri: uri.into(),
++                uid: "second".into(),
++                provider: "autoplay".into(),
++                ..Default::default()
++            }),
++            next_tracks: vec![ProvidedTrack {
++                uri: uri.into(),
++                uid: "q5".into(),
++                provider: "queue".into(),
++                ..Default::default()
++            }],
++            context_uri: "spotify:playlist:37i9dQZF1E8NDRt5R5oIbG".into(),
++            is_playing: true,
++            is_paused: false,
++            ..Default::default()
++        };
 +        state.restore_recovery_player_state(native.clone()).unwrap();
 +        assert_eq!(state.active_context, ContextType::Autoplay);
-+        let context = Context { uri: Some(native.context_uri.clone()), pages: vec![ContextPage { tracks: vec![ContextTrack { uri: Some(uri.into()), uid: Some("first".into()), ..Default::default() }, ContextTrack { uri: Some(uri.into()), uid: Some("second".into()), ..Default::default() }], ..Default::default() }], ..Default::default() };
++        let context = Context {
++            uri: Some(native.context_uri.clone()),
++            pages: vec![ContextPage {
++                tracks: vec![
++                    ContextTrack {
++                        uri: Some(uri.into()),
++                        uid: Some("first".into()),
++                        ..Default::default()
++                    },
++                    ContextTrack {
++                        uri: Some(uri.into()),
++                        uid: Some("second".into()),
++                        ..Default::default()
++                    },
++                ],
++                ..Default::default()
++            }],
++            ..Default::default()
++        };
 +        let mut resolver = ContextResolver::new(session);
-+        resolver.add(ResolveContext::from_context(context.clone(), ContextType::Autoplay, ContextAction::Replace));
++        resolver.add(ResolveContext::from_context(
++            context.clone(),
++            ContextType::Autoplay,
++            ContextAction::Replace,
++        ));
 +        resolver.apply_next_context(&mut state, context).unwrap();
 +        assert_eq!(state.player().track, native.track);
 +        assert_eq!(state.player().next_tracks, native.next_tracks);
@@ -1853,11 +2118,34 @@ index 0000000..db28943
 +        let mut native = PlayerState::new();
 +        native.session_id = "old".into();
 +        native.context_uri = "spotify:playlist:p".into();
-+        native.index = MessageField::some(ContextIndex { track: 12, ..Default::default() });
-+        native.track = MessageField::some(ProvidedTrack { uri: "spotify:track:6rqhFgbbKwnb9MLmUQDhG6".into(), uid: "second".into(), provider: "context".into(), ..Default::default() });
-+        native.prev_tracks.push(ProvidedTrack { uri: "spotify:track:6rqhFgbbKwnb9MLmUQDhG6".into(), uid: "first".into(), provider: "context".into(), ..Default::default() });
-+        native.next_tracks.push(ProvidedTrack { uri: "".into(), uid: "delimiter7".into(), provider: "queue".into(), ..Default::default() });
-+        native.next_tracks.push(ProvidedTrack { uri: "spotify:track:6rqhFgbbKwnb9MLmUQDhG6".into(), uid: "q7".into(), provider: "queue".into(), ..Default::default() });
++        native.index = MessageField::some(ContextIndex {
++            track: 12,
++            ..Default::default()
++        });
++        native.track = MessageField::some(ProvidedTrack {
++            uri: "spotify:track:6rqhFgbbKwnb9MLmUQDhG6".into(),
++            uid: "second".into(),
++            provider: "context".into(),
++            ..Default::default()
++        });
++        native.prev_tracks.push(ProvidedTrack {
++            uri: "spotify:track:6rqhFgbbKwnb9MLmUQDhG6".into(),
++            uid: "first".into(),
++            provider: "context".into(),
++            ..Default::default()
++        });
++        native.next_tracks.push(ProvidedTrack {
++            uri: "".into(),
++            uid: "delimiter7".into(),
++            provider: "queue".into(),
++            ..Default::default()
++        });
++        native.next_tracks.push(ProvidedTrack {
++            uri: "spotify:track:6rqhFgbbKwnb9MLmUQDhG6".into(),
++            uid: "q7".into(),
++            provider: "queue".into(),
++            ..Default::default()
++        });
 +        state.restore_recovery_player_state(native.clone()).unwrap();
 +        assert_eq!(state.player().track, native.track);
 +        assert_eq!(state.player().prev_tracks, native.prev_tracks);
@@ -1865,8 +2153,20 @@ index 0000000..db28943
 +        assert_eq!(state.player().index, native.index);
 +        assert_eq!(state.player().options, native.options);
 +        assert_eq!(state.player().session_id, session_id);
-+        state.add_to_queue(ProvidedTrack { uri: "spotify:track:6rqhFgbbKwnb9MLmUQDhG6".into(), ..Default::default() }, false);
-+        assert!(state.player().next_tracks.iter().any(|track| track.uid == "q8"));
++        state.add_to_queue(
++            ProvidedTrack {
++                uri: "spotify:track:6rqhFgbbKwnb9MLmUQDhG6".into(),
++                ..Default::default()
++            },
++            false,
++        );
++        assert!(
++            state
++                .player()
++                .next_tracks
++                .iter()
++                .any(|track| track.uid == "q8")
++        );
 +    }
 +}
 diff --git a/connect/src/state/tracks.rs b/connect/src/state/tracks.rs
@@ -2310,28 +2610,40 @@ index 0ecfde2..364567b 100644
 +    }
 +}
 diff --git a/core/src/error.rs b/core/src/error.rs
-index 7f29957..5f57119 100644
+index 7f29957..0bdd560 100644
 --- a/core/src/error.rs
 +++ b/core/src/error.rs
-@@ -27,6 +27,27 @@ pub struct Error {
+@@ -27,6 +27,39 @@ pub struct Error {
      pub error: Box<dyn error::Error + Send + Sync>,
  }
  
 +#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-+pub enum AuthenticationFailure { InvalidCredentials, PremiumRequired }
++pub enum AuthenticationFailure {
++    InvalidCredentials,
++    PremiumRequired,
++}
 +
 +impl Error {
 +    pub fn authentication_failure(&self) -> Option<AuthenticationFailure> {
 +        use crate::connection::AuthenticationError;
 +        use crate::protocol::{keyexchange::ErrorCode, login5::LoginError};
-+        if let Some(AuthenticationError::LoginFailed(code)) = self.error.downcast_ref::<AuthenticationError>() {
++        if let Some(AuthenticationError::LoginFailed(code)) =
++            self.error.downcast_ref::<AuthenticationError>()
++        {
 +            return match code {
 +                ErrorCode::PremiumAccountRequired => Some(AuthenticationFailure::PremiumRequired),
-+                ErrorCode::BadCredentials | ErrorCode::CouldNotValidateCredentials => Some(AuthenticationFailure::InvalidCredentials),
++                ErrorCode::BadCredentials | ErrorCode::CouldNotValidateCredentials => {
++                    Some(AuthenticationFailure::InvalidCredentials)
++                }
 +                _ => None,
 +            };
 +        }
-+        if matches!(self.error.downcast_ref::<crate::login5::Login5Error>(), Some(crate::login5::Login5Error::FaultyRequest(LoginError::INVALID_CREDENTIALS))) {
++        if matches!(
++            self.error.downcast_ref::<crate::login5::Login5Error>(),
++            Some(crate::login5::Login5Error::FaultyRequest(
++                LoginError::INVALID_CREDENTIALS
++            ))
++        ) {
 +            return Some(AuthenticationFailure::InvalidCredentials);
 +        }
 +        None
@@ -2342,7 +2654,7 @@ index 7f29957..5f57119 100644
  pub enum ErrorKind {
      #[error("The operation was cancelled by the caller")]
 diff --git a/core/src/login5.rs b/core/src/login5.rs
-index 9cf7133..af724e4 100644
+index 9cf7133..30aa105 100644
 --- a/core/src/login5.rs
 +++ b/core/src/login5.rs
 @@ -30,7 +30,7 @@ component! {
@@ -2354,18 +2666,20 @@ index 9cf7133..af724e4 100644
      #[error("Login request was denied: {0:?}")]
      FaultyRequest(LoginError),
      #[error("Code challenge is not supported")]
-@@ -49,7 +49,8 @@ impl From<Login5Error> for Error {
+@@ -49,9 +49,8 @@ impl From<Login5Error> for Error {
              Login5Error::NoStoredCredentials | Login5Error::OnlyForMobile => {
                  Error::unavailable(err)
              }
 -            Login5Error::RetriesFailed(_) | Login5Error::FaultyRequest(_) => {
+-                Error::failed_precondition(err)
+-            }
 +            Login5Error::RetriesFailed(_) => Error::unavailable(err),
-+            Login5Error::FaultyRequest(_) => {
-                 Error::failed_precondition(err)
-             }
++            Login5Error::FaultyRequest(_) => Error::failed_precondition(err),
              Login5Error::CodeChallenge => Error::unimplemented(err),
+         }
+     }
 diff --git a/playback/src/player.rs b/playback/src/player.rs
-index f3d803d..53a19f7 100644
+index f3d803d..58ed8eb 100644
 --- a/playback/src/player.rs
 +++ b/playback/src/player.rs
 @@ -139,11 +139,16 @@ enum PlayerCommand {
@@ -2385,7 +2699,7 @@ index f3d803d..53a19f7 100644
  }
  
  /// Represents a track in the queue with its URI and provider.
-@@ -151,6 +156,54 @@ enum PlayerCommand {
+@@ -151,6 +156,58 @@ enum PlayerCommand {
  pub struct QueueTrack {
      pub uri: String,
      pub provider: String,
@@ -2404,7 +2718,11 @@ index f3d803d..53a19f7 100644
 +
 +/// Registration or local playback confirmed by Spirc's bootstrap.
 +#[derive(Clone, Debug, PartialEq, Eq)]
-+pub enum ConnectionOutcome { Local(RecoveryIdentity), Remote, Unavailable }
++pub enum ConnectionOutcome {
++    Local(RecoveryIdentity),
++    Remote,
++    Unavailable,
++}
 +
 +/// What `Spirc` did with the account's last session when its first connect
 +/// cluster arrived. Emitted once, and only when `ConnectConfig::startup_restore` is set.
@@ -2440,7 +2758,7 @@ index f3d803d..53a19f7 100644
  }
  
  #[derive(Debug, Clone)]
-@@ -263,11 +316,22 @@ pub enum PlayerEvent {
+@@ -263,11 +320,26 @@ pub enum PlayerEvent {
      },
      /// Fired when the queue is set or context is loaded with its track list.
      SetQueue {
@@ -2450,8 +2768,12 @@ index f3d803d..53a19f7 100644
          next_tracks: Vec<QueueTrack>,
          prev_tracks: Vec<QueueTrack>,
      },
-+    RecoveryIdentity { identity: RecoveryIdentity },
-+    ConnectionReady { outcome: ConnectionOutcome },
++    RecoveryIdentity {
++        identity: RecoveryIdentity,
++    },
++    ConnectionReady {
++        outcome: ConnectionOutcome,
++    },
 +    /// Fired once, after the connect-time startup decision.
 +    StartupResolved {
 +        outcome: StartupOutcome,
@@ -2463,7 +2785,7 @@ index f3d803d..53a19f7 100644
  }
  
  impl PlayerEvent {
-@@ -670,18 +734,37 @@ impl Player {
+@@ -670,18 +742,37 @@ impl Player {
  
      pub fn emit_set_queue_event(
          &self,
@@ -2501,7 +2823,7 @@ index f3d803d..53a19f7 100644
  }
  
  impl Drop for Player {
-@@ -2371,17 +2454,29 @@ impl PlayerInternal {
+@@ -2371,17 +2462,33 @@ impl PlayerInternal {
              }
  
              PlayerCommand::EmitSetQueueEvent {
@@ -2518,8 +2840,12 @@ index f3d803d..53a19f7 100644
                  prev_tracks,
              }),
  
-+            PlayerCommand::EmitRecoveryIdentity(identity) => self.send_event(PlayerEvent::RecoveryIdentity { identity }),
-+            PlayerCommand::EmitConnectionReady(outcome) => self.send_event(PlayerEvent::ConnectionReady { outcome }),
++            PlayerCommand::EmitRecoveryIdentity(identity) => {
++                self.send_event(PlayerEvent::RecoveryIdentity { identity })
++            }
++            PlayerCommand::EmitConnectionReady(outcome) => {
++                self.send_event(PlayerEvent::ConnectionReady { outcome })
++            }
 +            PlayerCommand::EmitStartupResolvedEvent(outcome) => {
 +                self.send_event(PlayerEvent::StartupResolved { outcome })
 +            }
@@ -2531,7 +2857,7 @@ index f3d803d..53a19f7 100644
              PlayerCommand::EmitFilterExplicitContentChangedEvent(filter) => {
                  self.send_event(PlayerEvent::FilterExplicitContentChanged { filter });
  
-@@ -2584,16 +2679,29 @@ impl fmt::Debug for PlayerCommand {
+@@ -2584,16 +2691,29 @@ impl fmt::Debug for PlayerCommand {
                  .field(&auto_play)
                  .finish(),
              PlayerCommand::EmitSetQueueEvent {

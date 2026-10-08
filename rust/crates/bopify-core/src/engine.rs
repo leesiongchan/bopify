@@ -61,12 +61,22 @@ impl Engine {
         Self::create(access_token, device_name, None, sink)
     }
 
-    pub fn new_with_options(access_token: &str, device_name: &str, options: crate::recovery::EngineCreateOptions, sink: EventSink) -> Result<Self, BopifyError> {
+    pub fn new_with_options(
+        access_token: &str,
+        device_name: &str,
+        options: crate::recovery::EngineCreateOptions,
+        sink: EventSink,
+    ) -> Result<Self, BopifyError> {
         options.validate()?;
         Self::create(access_token, device_name, Some(options), sink)
     }
 
-    fn create(access_token: &str, device_name: &str, options: Option<crate::recovery::EngineCreateOptions>, sink: EventSink) -> Result<Self, BopifyError> {
+    fn create(
+        access_token: &str,
+        device_name: &str,
+        options: Option<crate::recovery::EngineCreateOptions>,
+        sink: EventSink,
+    ) -> Result<Self, BopifyError> {
         log::info!("engine: creating Connect device");
 
         let reporter = EngineReporter::new(sink);
