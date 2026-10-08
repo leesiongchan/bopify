@@ -47,9 +47,11 @@ struct PlaybackConnectionStatusView: View {
 
     var body: some View {
         if isVisible {
-            VStack(alignment: .leading, spacing: 3) {
-                message
-                actions.buttonStyle(.link)
+            HStack(spacing: 8) {
+                if messageKey != actionKey {
+                    message.lineLimit(1).help(messageString)
+                }
+                actions.buttonStyle(.link).fixedSize()
             }
             .font(.system(size: 12))
             .foregroundStyle(.secondary)
