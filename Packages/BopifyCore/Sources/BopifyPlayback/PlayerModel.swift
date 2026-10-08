@@ -30,6 +30,7 @@ public final class PlayerModel {
     private var lastConfirmedPlaying = false
     public private(set) var recoveryIdentity: PlaybackIdentity?
     @ObservationIgnored public var onConnectionReady: (@MainActor (PlaybackBootstrapOutcome) -> Void)?
+    @ObservationIgnored var onRestorationResolved: (@MainActor () -> Void)?
     public private(set) var state = PlaybackState()
     public private(set) var commandNotice: String?
     public private(set) var queueSelection: QueueSelectionStatus = .idle
@@ -146,7 +147,7 @@ public final class PlayerModel {
         if outcome != .unavailable { pending.forEach(apply) }
         switch outcome {
         case let .local(identity): recoveryIdentity = identity; state.isActiveDevice = true
-        case .remote: state.isActiveDevice = false; lastConfirmedPlaying = false
+        case .remote: state.isActiveDevice = false; state.phase = .idle; lastConfirmedPlaying = false
         case .unavailable: state.isActiveDevice = false; state.phase = .idle; lastConfirmedPlaying = false
         }
         onConnectionReady?(outcome)
@@ -460,6 +461,7 @@ public final class PlayerModel {
             state.phase = .playing; state.positionMs = position
             state.isActiveDevice = true
             state.remote = nil; state.staleRemote = nil
+            resolveUnavailableRestoration()
         case let .paused(position):
             lastConfirmedPlaying = false
             if !managedAttachment { isEngineReady = true }
@@ -468,6 +470,7 @@ public final class PlayerModel {
             state.phase = .paused; state.positionMs = position
             state.isActiveDevice = true
             state.remote = nil; state.staleRemote = nil
+            resolveUnavailableRestoration()
         case let .seeked(position), let .positionCorrection(position):
             frozenDisplayPositionMs = nil
             positionUpdatedAt = .now
@@ -537,5 +540,12 @@ public final class PlayerModel {
             let new = String(describing: state.phase)
             BopifyLog.playback.debug("phase transition old=\(old, privacy: .public) new=\(new, privacy: .public)")
         }
+    }
+
+    private func resolveUnavailableRestoration() {
+        guard isEngineReady, restorationUnavailable else { return }
+        restorationUnavailable = false
+        BopifyLog.playback.info("unavailable restoration resolved by local playback")
+        onRestorationResolved?()
     }
 }

@@ -185,6 +185,83 @@ struct PlaybackRecoveryCoordinatorTests {
         #expect(gate.configurations.count == 1)
         await recovery.stop()
     }
+
+    @Test(arguments: [PlayerError.authDenied, .authExpired, .premiumRequired]) func networkChangesPreservePermanentFailure(_ error: PlayerError) async {
+        let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
+        let recovery = coordinator(gate, clock)
+        recovery.start(); await gate.waitForCreationCount(1); gate.failNext(with: error)
+        if error == .authExpired {
+            await gate.waitForCreationCount(2); gate.failNext(with: error)
+        }
+        await settle()
+        let expected: PlaybackConnectionStatus = error == .premiumRequired ? .failed(error) : .needsReauthentication
+        let creations = gate.configurations.count
+        #expect(recovery.status == expected)
+        recovery.setNetworkAvailable(false); await settle()
+        #expect(recovery.status == expected)
+        recovery.retryNow(); await settle()
+        #expect(recovery.status == expected && gate.configurations.count == creations)
+        recovery.setNetworkAvailable(true); recovery.wake(); recovery.retryNow(); await settle()
+        #expect(recovery.status == expected)
+        #expect(gate.configurations.count == creations)
+        recovery.invalidate()
+        if gate.configurations.count > creations { gate.failNext(with: error) }
+        await recovery.stop()
+    }
+
+    @Test(arguments: [true, false]) func explicitPlaybackResolvesUnavailableAndReplacesSnapshot(_ playing: Bool) async {
+        let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
+        let recovery = coordinator(gate, clock)
+        let original = PlaybackRecoverySnapshot(wasActive: true, shouldResume: true, identity: identity,
+            positionMs: 1000, volume: 0, shuffleEnabled: true, repeatMode: .off)
+        recovery.start(recovery: original); await gate.waitForCreationCount(1)
+        let engine = RecoveryStubEngine(); gate.succeedNext(with: engine); await settle()
+        engine.emit(.connectionReady(.unavailable)); await settle()
+        #expect(recovery.player.restorationUnavailable)
+        let newTrack = Track(uri: SpotifyURI("spotify:track:4uLU6hMCjMI75M1A2tKUQC")!, title: "New selection",
+            artists: [], albumTitle: nil, artwork: nil, durationMs: 200_000)
+        let newIdentity = PlaybackIdentity(trackURI: newTrack.uri, trackUID: "new-occurrence", contextURI: "spotify:playlist:new")
+        recovery.player.load(PlayRequest(contextURI: newTrack.uri)); await settle()
+        #expect(engine.recordedCommands == ["load"])
+        engine.emit(.trackChanged(newTrack)); engine.emit(.recoveryIdentity(newIdentity))
+        engine.emit(playing ? .playing(positionMs: 5000) : .paused(positionMs: 5000)); await settle()
+        #expect(!recovery.player.restorationUnavailable)
+        #expect(recovery.status == .ready)
+        engine.emit(.sessionLost(.spircEnded)); await gate.waitForCreationCount(2)
+        let snapshot = gate.configurations[1].snapshot
+        #expect(snapshot?.identity == newIdentity)
+        #expect(snapshot?.shouldResume == playing)
+        #expect(snapshot?.wasActive == true)
+        #expect((snapshot?.positionMs ?? 0) >= 5000)
+        gate.failNext(with: .networkUnavailable); await settle(); await recovery.stop()
+    }
+
+    @Test func readyThenDeadSessionsBackOffUntilStable() async {
+        let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
+        let recovery = coordinator(gate, clock)
+        recovery.start(); await gate.waitForCreationCount(1)
+        var engine = RecoveryStubEngine(); gate.succeedNext(with: engine); await settle()
+        engine.emit(.connectionReady(.remote)); await settle()
+        for interruption in 0..<8 {
+            engine.emit(.sessionLost(.spircEnded)); await settle()
+            if interruption > 0 {
+                let expected = recoveryRetryDelay(failureCount: interruption, jitterUnit: 1)
+                #expect(clock.pendingDelays.contains(expected))
+                #expect(gate.configurations.count == interruption + 1)
+                clock.advance(by: expected)
+            }
+            await gate.waitForCreationCount(interruption + 2)
+            #expect(engine.shutdownCount == 1)
+            engine = RecoveryStubEngine(); gate.succeedNext(with: engine); await settle()
+            engine.emit(.connectionReady(.remote)); await settle()
+        }
+        clock.advance(by: .seconds(60)); await settle()
+        engine.emit(.sessionLost(.spircEnded)); await gate.waitForCreationCount(10)
+        #expect(!clock.pendingDelays.contains(.seconds(30)))
+        gate.failNext(with: .networkUnavailable); await settle()
+        #expect(clock.pendingDelays.contains(.seconds(1)))
+        await recovery.stop()
+    }
 }
 private actor TokenLookups {
     var rejections: [String?] = []

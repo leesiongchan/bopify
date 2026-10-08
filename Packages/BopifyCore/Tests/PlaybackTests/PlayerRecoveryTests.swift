@@ -107,4 +107,28 @@ struct PlayerRecoveryTests {
         #expect(!model.isEngineReady)
         model.stop()
     }
+
+    @Test(arguments: [true, false]) func remoteRecoveryClearsLossAndAllowsExplicitPlayHere(_ hasRemoteTrack: Bool) async {
+        let old = RecoveryStubEngine(), replacement = RecoveryStubEngine()
+        let model = PlayerModel(engine: old)
+        model.start()
+        old.emit(.trackChanged(track())); old.emit(.playing(positionMs: 3200)); old.emit(.recoveryIdentity(identity))
+        await settle()
+        old.emit(.sessionLost(.spircEnded)); await settle()
+        #expect(model.state.phase == .error(.playbackSessionLost))
+        model.attachEngine(replacement, epoch: 1)
+        if hasRemoteTrack {
+            replacement.emit(.remotePlayback(RemotePlayback(deviceName: "Phone", trackURI: track().uri,
+                track: track("Remote"), isPlaying: true, positionMs: 500, durationMs: 200_000)))
+        }
+        replacement.emit(.connectionReady(.remote)); await settle()
+        #expect(model.state.phase == .idle)
+        #expect(model.isEngineReady && !model.state.isActiveDevice)
+        #expect(!model.captureRecoverySnapshot(at: .now).shouldResume)
+        #expect(model.canPlayHere)
+        model.playHere(); await settle()
+        #expect(replacement.recordedCommands == ["playHere"])
+        #expect(old.recordedCommands.isEmpty)
+        model.stop()
+    }
 }
