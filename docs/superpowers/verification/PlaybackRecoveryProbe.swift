@@ -7,6 +7,7 @@ import BopifyPlayback
 import BopifyLibrary
 
 @main struct PlaybackRecoveryProbe {
+    @MainActor static var statusRowFailures: [String] = []
     nonisolated static let uri = SpotifyURI("spotify:track:6rqhFgbbKwnb9MLmUQDhG6")!
     nonisolated static var track: Track { Track(uri: uri, title: "Recovery test", artists: [ArtistSummary(name: "Bopify")], albumTitle: nil, artwork: Artwork(url: previewArtworkURL(0)), durationMs: 240_000) }
     @MainActor static func settle() async { for _ in 0..<300 { await Task.yield() } }
@@ -138,17 +139,20 @@ import BopifyLibrary
             if mode != .compact {
                 precondition(enabled("Play", panel) == false)
                 precondition(enabled("Retry now", panel) == true)
+                checkStatusRow(message: "Reconnecting…", action: "Retry now", panel: panel)
             } else { precondition(element("Reconnecting…", panel) != nil) }
 
             print("PASS: \(mode.rawValue) stable frame=\(frame.size), frozen position, blocked commands, accessible recovery action")
             environment.recovery!.setNetworkAvailable(false); await render()
             precondition(environment.connectionStatus == .offline && panel.frame == frame)
             await capture(panel, "\(mode.rawValue)-offline")
+            if mode != .compact { checkStatusRow(message: "You're offline", action: "Retry now", panel: panel) }
             environment.recovery!.setNetworkAvailable(true)
             engine = ProbeEngine(); factory.release(engine); await settle()
             engine.emit(.connectionReady(.unavailable)); await render()
             precondition(player.restorationUnavailable && panel.frame == frame)
             await capture(panel, "\(mode.rawValue)-unavailable")
+            if mode != .compact { checkStatusRow(message: "Playback couldn't be restored.", action: "Retry restoration", panel: panel) }
             let nextCreation = factory.options.count + 1
             if mode == .compact {
                 let button = popups(panel.contentView!).first!
@@ -167,7 +171,10 @@ import BopifyLibrary
             factory.fail(.authDenied); await render()
             precondition(environment.connectionStatus == .needsReauthentication && panel.frame == frame)
             await capture(panel, "\(mode.rawValue)-reauthorization")
-            if mode != .compact { precondition(enabled("Reconnect Spotify", panel) == true) }
+            if mode != .compact {
+                precondition(enabled("Reconnect Spotify", panel) == true)
+                checkStatusRow(message: "Reconnect Spotify", action: "Reconnect Spotify", panel: panel)
+            }
             if mode == .compact {
                 let reconnectButton = popups(panel.contentView!).first!
                 precondition(abs(reconnectButton.bounds.width - (environment.playerWindowController.layout.recordDiameter - 24)) < 0.5)
@@ -187,6 +194,7 @@ import BopifyLibrary
         }
         await environment.prepareForQuit()
         withExtendedLifetime(status) {}
+        precondition(statusRowFailures.isEmpty, statusRowFailures.joined(separator: "; "))
     }
     @MainActor static func capture(_ panel: StatusPanel, _ name: String) async {
         do {
@@ -216,7 +224,28 @@ import BopifyLibrary
         return [object] + ((attribute(object, "accessibilityChildren") as? [Any]) ?? []).flatMap(tree)
     }
     @MainActor static func element(_ label: String, _ panel: StatusPanel) -> NSObject? {
-        tree(panel.contentView!).first { (attribute($0, "accessibilityLabel") as? String == label || attribute($0, "accessibilityTitle") as? String == label) }
+        tree(panel.contentView!).first { hasText($0, label) }
+    }
+    @MainActor static func hasText(_ object: NSObject, _ text: String) -> Bool {
+        ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].contains { attribute(object, $0) as? String == text }
+    }
+    @MainActor static func checkStatusRow(message: String, action: String, panel: StatusPanel) {
+        let messages = tree(panel.contentView!).filter { hasText($0, message) }
+        if message == action {
+            let labels = messages.filter { attribute($0, "accessibilityRole") as? String == "AXStaticText" }
+            if !labels.isEmpty { statusRowFailures.append("Reconnect Spotify must have only its action, redundant text count=\(labels.count)") }
+            return
+        }
+        guard let messageView = messages.first, let actionView = element(action, panel) else {
+            statusRowFailures.append("Missing status/action: \(message)"); return
+        }
+        let selector = NSSelectorFromString("accessibilityFrame")
+        typealias FrameGetter = @convention(c) (AnyObject, Selector) -> CGRect
+        let messageFrame = unsafeBitCast(messageView.method(for: selector), to: FrameGetter.self)(messageView, selector)
+        let actionFrame = unsafeBitCast(actionView.method(for: selector), to: FrameGetter.self)(actionView, selector)
+        if abs(messageFrame.midY - actionFrame.midY) > 2 {
+            statusRowFailures.append("Status/action must share a row: \(message), center difference=\(abs(messageFrame.midY - actionFrame.midY))")
+        }
     }
     @MainActor static func enabled(_ label: String, _ panel: StatusPanel) -> Bool? {
         guard let object = element(label, panel) else { return nil }
