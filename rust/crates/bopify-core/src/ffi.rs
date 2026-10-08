@@ -131,12 +131,25 @@ pub unsafe extern "C" fn bopify_engine_create_with_options(
     out_err: *mut i32,
 ) -> *mut BopifyEngine {
     // SAFETY: options_json is a borrowed NUL-terminated string for this call.
-    let options = unsafe { str_from(options_json) }.ok_or(BopifyError::InvalidArgument)
+    let options = unsafe { str_from(options_json) }
+        .ok_or(BopifyError::InvalidArgument)
         .and_then(crate::recovery::EngineCreateOptions::parse);
     match options {
         // SAFETY: remaining arguments forward the creator's contract.
-        Ok(options) => unsafe { create_engine(access_token, device_name, Some(options), callback, ctx, out_err) },
-        Err(error) => { unsafe { write_err(out_err, error.code()) }; std::ptr::null_mut() }
+        Ok(options) => unsafe {
+            create_engine(
+                access_token,
+                device_name,
+                Some(options),
+                callback,
+                ctx,
+                out_err,
+            )
+        },
+        Err(error) => {
+            unsafe { write_err(out_err, error.code()) };
+            std::ptr::null_mut()
+        }
     }
 }
 
