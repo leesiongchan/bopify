@@ -2678,11 +2678,214 @@ index 9cf7133..30aa105 100644
              Login5Error::CodeChallenge => Error::unimplemented(err),
          }
      }
+diff --git a/playback/src/audio_backend/mod.rs b/playback/src/audio_backend/mod.rs
+index f8f43e3..a8dc59e 100644
+--- a/playback/src/audio_backend/mod.rs
++++ b/playback/src/audio_backend/mod.rs
+@@ -1,6 +1,7 @@
+ use crate::config::AudioFormat;
+ use crate::convert::Converter;
+ use crate::decoder::AudioPacket;
++use std::sync::{Arc, atomic::AtomicBool};
+ use thiserror::Error;
+ 
+ #[derive(Debug, Error)]
+@@ -24,6 +25,8 @@ pub trait Open {
+ }
+ 
+ pub trait Sink {
++    /// Allows teardown to interrupt an output wait before joining the player thread.
++    fn set_shutdown_signal(&mut self, _shutdown: Arc<AtomicBool>) {}
+     fn start(&mut self) -> SinkResult<()> {
+         Ok(())
+     }
+diff --git a/playback/src/audio_backend/rodio.rs b/playback/src/audio_backend/rodio.rs
+index b6cd346..937b302 100644
+--- a/playback/src/audio_backend/rodio.rs
++++ b/playback/src/audio_backend/rodio.rs
+@@ -1,4 +1,8 @@
+ use std::process::exit;
++use std::sync::{
++    Arc,
++    atomic::{AtomicBool, Ordering},
++};
+ use std::thread;
+ use std::time::Duration;
+ 
+@@ -74,6 +78,7 @@ impl From<cpal::SupportedStreamConfigsError> for RodioError {
+ pub struct RodioSink {
+     rodio_sink: rodio::Sink,
+     _stream: rodio::OutputStream,
++    shutdown: Option<Arc<AtomicBool>>,
+ }
+ 
+ fn list_formats(device: &cpal::Device) {
+@@ -225,22 +230,36 @@ pub fn open(host: cpal::Host, device: Option<String>, format: AudioFormat) -> Ro
+     RodioSink {
+         rodio_sink: sink,
+         _stream: stream,
++        shutdown: None,
+     }
+ }
+ 
+ impl Sink for RodioSink {
++    fn set_shutdown_signal(&mut self, shutdown: Arc<AtomicBool>) {
++        self.shutdown = Some(shutdown);
++    }
+     fn start(&mut self) -> SinkResult<()> {
+         self.rodio_sink.play();
+         Ok(())
+     }
+ 
+     fn stop(&mut self) -> SinkResult<()> {
+-        self.rodio_sink.sleep_until_end();
++        if !wait_for_output(|| !self.rodio_sink.empty(), self.shutdown.as_deref()) {
++            self.rodio_sink.stop();
++        }
+         self.rodio_sink.pause();
+         Ok(())
+     }
+ 
+     fn write(&mut self, packet: AudioPacket, converter: &mut Converter) -> SinkResult<()> {
++        if self
++            .shutdown
++            .as_ref()
++            .is_some_and(|shutdown| shutdown.load(Ordering::Acquire))
++        {
++            self.rodio_sink.stop();
++            return Ok(());
++        }
+         let samples = packet
+             .samples()
+             .map_err(|e| RodioError::Samples(e.to_string()))?;
+@@ -255,14 +274,94 @@ impl Sink for RodioSink {
+         // Chunk sizes seem to be about 256 to 3000 ish items long.
+         // Assuming they're on average 1628 then a half second buffer is:
+         // 44100 elements --> about 27 chunks
+-        while self.rodio_sink.len() > 26 {
+-            // sleep and wait for rodio to drain a bit
+-            thread::sleep(Duration::from_millis(10));
++        if !wait_for_output(|| self.rodio_sink.len() > 26, self.shutdown.as_deref()) {
++            self.rodio_sink.stop();
+         }
+         Ok(())
+     }
+ }
+ 
++fn wait_for_output(mut pending: impl FnMut() -> bool, shutdown: Option<&AtomicBool>) -> bool {
++    while pending() {
++        if shutdown.is_some_and(|shutdown| shutdown.load(Ordering::Acquire)) {
++            return false;
++        }
++        thread::sleep(Duration::from_millis(10));
++    }
++    true
++}
++
++#[cfg(test)]
++mod teardown_tests {
++    use super::*;
++    use std::sync::{
++        Arc,
++        atomic::{AtomicUsize, Ordering},
++        mpsc,
++    };
++
++    fn stalled_wait(
++        buffered: usize,
++        limit: usize,
++    ) -> (
++        Arc<AtomicUsize>,
++        Arc<AtomicBool>,
++        mpsc::Receiver<bool>,
++        thread::JoinHandle<()>,
++    ) {
++        let queued = Arc::new(AtomicUsize::new(buffered));
++        let shutdown = Arc::new(AtomicBool::new(false));
++        let (started_tx, started_rx) = mpsc::channel();
++        let (done_tx, done_rx) = mpsc::channel();
++        let pending = queued.clone();
++        let cancelled = shutdown.clone();
++        let thread = thread::spawn(move || {
++            let mut started = Some(started_tx);
++            let drained = wait_for_output(
++                || {
++                    if let Some(started) = started.take() {
++                        started.send(()).unwrap();
++                    }
++                    pending.load(Ordering::Acquire) > limit
++                },
++                Some(&cancelled),
++            );
++            done_tx.send(drained).unwrap();
++        });
++        started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
++        (queued, shutdown, done_rx, thread)
++    }
++
++    #[test]
++    fn teardown_cancels_a_stalled_drain() {
++        let (queued, shutdown, done, thread) = stalled_wait(1, 0);
++        shutdown.store(true, Ordering::Release);
++        let result = done.recv_timeout(Duration::from_secs(1));
++        queued.store(0, Ordering::Release);
++        thread.join().unwrap();
++        assert_eq!(result, Ok(false));
++    }
++
++    #[test]
++    fn teardown_cancels_stalled_backpressure() {
++        let (queued, shutdown, done, thread) = stalled_wait(27, 26);
++        shutdown.store(true, Ordering::Release);
++        let result = done.recv_timeout(Duration::from_secs(1));
++        queued.store(0, Ordering::Release);
++        thread.join().unwrap();
++        assert_eq!(result, Ok(false));
++    }
++
++    #[test]
++    fn normal_stop_waits_for_output_to_drain() {
++        let (queued, _shutdown, done, thread) = stalled_wait(1, 0);
++        assert!(matches!(done.try_recv(), Err(mpsc::TryRecvError::Empty)));
++        queued.store(0, Ordering::Release);
++        assert_eq!(done.recv_timeout(Duration::from_secs(1)), Ok(true));
++        thread.join().unwrap();
++    }
++}
++
+ impl RodioSink {
+     #[allow(dead_code)]
+     pub const NAME: &'static str = "rodio";
 diff --git a/playback/src/player.rs b/playback/src/player.rs
-index f3d803d..58ed8eb 100644
+index f3d803d..a59d915 100644
 --- a/playback/src/player.rs
 +++ b/playback/src/player.rs
-@@ -139,11 +139,16 @@ enum PlayerCommand {
+@@ -10,7 +10,7 @@ use std::{
+     sync::Mutex,
+     sync::{
+         Arc,
+-        atomic::{AtomicUsize, Ordering},
++        atomic::{AtomicBool, AtomicUsize, Ordering},
+     },
+     task::{Context, Poll},
+     thread,
+@@ -56,6 +56,7 @@ pub type PlayerResult = Result<(), Error>;
+ 
+ pub struct Player {
+     commands: Option<mpsc::UnboundedSender<PlayerCommand>>,
++    shutdown: Arc<AtomicBool>,
+     thread_handle: Option<thread::JoinHandle<()>>,
+ }
+ 
+@@ -72,6 +73,7 @@ struct PlayerInternal {
+     session: Session,
+     config: PlayerConfig,
+     commands: mpsc::UnboundedReceiver<PlayerCommand>,
++    shutdown: Arc<AtomicBool>,
+     load_handles: Arc<Mutex<HashMap<thread::ThreadId, thread::JoinHandle<()>>>>,
+ 
+     state: PlayerState,
+@@ -139,11 +141,16 @@ enum PlayerCommand {
      },
      EmitAutoPlayChangedEvent(bool),
      EmitSetQueueEvent {
@@ -2699,7 +2902,7 @@ index f3d803d..58ed8eb 100644
  }
  
  /// Represents a track in the queue with its URI and provider.
-@@ -151,6 +156,58 @@ enum PlayerCommand {
+@@ -151,6 +158,58 @@ enum PlayerCommand {
  pub struct QueueTrack {
      pub uri: String,
      pub provider: String,
@@ -2758,7 +2961,7 @@ index f3d803d..58ed8eb 100644
  }
  
  #[derive(Debug, Clone)]
-@@ -263,11 +320,26 @@ pub enum PlayerEvent {
+@@ -263,11 +322,26 @@ pub enum PlayerEvent {
      },
      /// Fired when the queue is set or context is loaded with its track list.
      SetQueue {
@@ -2785,7 +2988,45 @@ index f3d803d..58ed8eb 100644
  }
  
  impl PlayerEvent {
-@@ -670,18 +742,37 @@ impl Player {
+@@ -463,6 +537,8 @@ impl Player {
+         F: FnOnce() -> Box<dyn Sink> + Send + 'static,
+     {
+         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
++        let shutdown = Arc::new(AtomicBool::new(false));
++        let sink_shutdown = shutdown.clone();
+ 
+         if config.normalisation {
+             debug!("Normalisation Type: {:?}", config.normalisation_type);
+@@ -502,16 +578,19 @@ impl Player {
+             // must be created for any new local files to be playable.
+             let local_file_lookup =
+                 create_local_file_lookup(config.local_file_directories.as_slice());
++            let mut sink = sink_builder();
++            sink.set_shutdown_signal(sink_shutdown.clone());
+ 
+             let internal = PlayerInternal {
+                 session,
+                 config,
+                 commands: cmd_rx,
++                shutdown: sink_shutdown,
+                 load_handles: Arc::new(Mutex::new(HashMap::new())),
+ 
+                 state: PlayerState::Stopped,
+                 preload: PlayerPreload::None,
+-                sink: sink_builder(),
++                sink,
+                 sink_status: SinkStatus::Closed,
+                 sink_event_callback: None,
+                 volume_getter,
+@@ -542,6 +621,7 @@ impl Player {
+ 
+         Arc::new(Self {
+             commands: Some(cmd_tx),
++            shutdown,
+             thread_handle: Some(handle),
+         })
+     }
+@@ -670,23 +750,44 @@ impl Player {
  
      pub fn emit_set_queue_event(
          &self,
@@ -2823,7 +3064,25 @@ index f3d803d..58ed8eb 100644
  }
  
  impl Drop for Player {
-@@ -2371,17 +2462,33 @@ impl PlayerInternal {
+     fn drop(&mut self) {
+         debug!("Shutting down player thread ...");
++        // Closing commands alone cannot release a sink waiting for suspended audio output.
++        self.shutdown.store(true, Ordering::Release);
+         self.commands = None;
+         if let Some(handle) = self.thread_handle.take() {
+             if let Err(e) = handle.join() {
+@@ -1357,6 +1458,10 @@ impl Future for PlayerInternal {
+         let passthrough = self.config.passthrough;
+ 
+         loop {
++            if self.shutdown.load(Ordering::Acquire) {
++                self.ensure_sink_stopped(false);
++                return Poll::Ready(());
++            }
+             let mut all_futures_completed_or_not_ready = true;
+ 
+             // process commands that were sent to us
+@@ -2371,17 +2476,33 @@ impl PlayerInternal {
              }
  
              PlayerCommand::EmitSetQueueEvent {
@@ -2857,7 +3116,7 @@ index f3d803d..58ed8eb 100644
              PlayerCommand::EmitFilterExplicitContentChangedEvent(filter) => {
                  self.send_event(PlayerEvent::FilterExplicitContentChanged { filter });
  
-@@ -2584,16 +2691,29 @@ impl fmt::Debug for PlayerCommand {
+@@ -2584,16 +2705,29 @@ impl fmt::Debug for PlayerCommand {
                  .field(&auto_play)
                  .finish(),
              PlayerCommand::EmitSetQueueEvent {
@@ -2887,3 +3146,49 @@ index f3d803d..58ed8eb 100644
          }
      }
  }
+@@ -2702,3 +2836,45 @@ where
+         Some(self.length)
+     }
+ }
++
++#[cfg(test)]
++mod teardown_tests {
++    use super::*;
++    use crate::{audio_backend::SinkResult, mixer::NoOpVolume};
++    use std::sync::{atomic::AtomicBool, mpsc as std_mpsc};
++
++    struct ShutdownCaptureSink(std_mpsc::Sender<Arc<AtomicBool>>);
++    impl Sink for ShutdownCaptureSink {
++        fn set_shutdown_signal(&mut self, shutdown: Arc<AtomicBool>) {
++            self.0.send(shutdown.clone()).unwrap();
++            while !shutdown.load(Ordering::Acquire) {
++                thread::sleep(Duration::from_millis(10));
++            }
++        }
++        fn write(&mut self, _: AudioPacket, _: &mut Converter) -> SinkResult<()> {
++            unreachable!("this idle player has no audio")
++        }
++    }
++
++    #[tokio::test]
++    async fn player_drop_signals_the_sink_before_joining() {
++        let (tx, rx) = std_mpsc::channel();
++        let player = Player::new(
++            PlayerConfig::default(),
++            Session::new(librespot_core::SessionConfig::default(), None),
++            Box::new(NoOpVolume),
++            move || Box::new(ShutdownCaptureSink(tx)),
++        );
++        let signal = rx.recv_timeout(Duration::from_secs(1));
++        let signal = signal.unwrap();
++        let (done_tx, done_rx) = std_mpsc::channel();
++        let joined = thread::spawn(move || {
++            drop(player);
++            done_tx.send(()).unwrap();
++        });
++        let result = done_rx.recv_timeout(Duration::from_secs(1));
++        signal.store(true, Ordering::Release);
++        joined.join().unwrap();
++        assert_eq!(result, Ok(()));
++    }
++}
