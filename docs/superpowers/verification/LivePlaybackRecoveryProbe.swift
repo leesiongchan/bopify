@@ -59,8 +59,21 @@ import BopifyPlayback
             return try await LibrespotEngine(accessToken: token, deviceName: "Bopify Recovery Check",
                 configuration: PlaybackEngineConfiguration(deviceID: options.deviceID, startup: .recovery, snapshot: options.snapshot))
         })
+        var lossSnapshot: PlaybackRecoverySnapshot?
+        let onSessionLost = player.onSessionLost
+        player.onSessionLost = { reason, snapshot in
+            lossSnapshot = snapshot
+            record("CHECK: loss checkpoint active=\(snapshot.wasActive), resume=\(snapshot.shouldResume), identityPresent=\(snapshot.identity != nil)")
+            onSessionLost?(reason, snapshot)
+        }
         coordinator.onStatusChange = {
             record("STATE: \(String(describing: $0)), active=\(player.state.isActiveDevice), phase=\(String(describing: player.state.phase)), restorationUnavailable=\(player.restorationUnavailable)")
+            if $0 == .ready, let lossSnapshot, let saved = lossSnapshot.identity, let recovered = player.recoveryIdentity {
+                let uriMatches = saved.trackURI == recovered.trackURI
+                let uidMatches = saved.trackUID == nil || saved.trackUID == "" || saved.trackUID == recovered.trackUID
+                let contextMatches = saved.contextURI == nil || saved.contextURI == "" || saved.contextURI == recovered.contextURI
+                record("CHECK: recovered identity uriMatches=\(uriMatches), uidMatches=\(uidMatches), contextMatches=\(contextMatches), requestedResume=\(lossSnapshot.shouldResume)")
+            }
         }
         let platform = PlaybackConnectionMonitor(coordinator: coordinator)
         platform.start()
@@ -104,6 +117,7 @@ import BopifyPlayback
                 defer { signals.stop() }
                 record("WAIT: turn off the Mac network for 30 seconds, reconnect it, then confirm the network step")
                 await continueManualCheck()
+                record("CHECK: network confirmation status=\(String(describing: coordinator.status)), active=\(player.state.isActiveDevice), phase=\(String(describing: player.state.phase)), epoch=\(player.engineEpoch)")
                 try check(signals.offlinePaths > 0, "physical network loss observed")
                 try await wait("network return playback") { coordinator.status == .ready && player.state.isActiveDevice && player.state.phase == .playing }
                 try check(signals.networkAvailable, "physical network return observed with local playback")
@@ -180,6 +194,7 @@ import BopifyPlayback
             record("PASS: live acceptance complete; host network and physical sleep were not changed")
         } catch {
             control.hold = false
+            record("CHECK: failure status=\(String(describing: coordinator.status)), active=\(player.state.isActiveDevice), phase=\(String(describing: player.state.phase)), epoch=\(player.engineEpoch)")
             if case let CheckFailure.failed(message) = error { record("BLOCKED: \(message)") }
             else if let error = error as? PlayerError { record("BLOCKED: \(String(describing: error))") }
             else { record("BLOCKED: unclassified live service failure") }
@@ -239,7 +254,7 @@ import BopifyPlayback
                 guard let self else { return }
                 self.networkAvailable = available
                 if !available { self.offlinePaths += 1 }
-                LivePlaybackRecoveryProbe.record("CHECK: physical network available=\(available)")
+                LivePlaybackRecoveryProbe.record("CHECK: physical network available=\(available), active=\(coordinator.player.state.isActiveDevice), phase=\(String(describing: coordinator.player.state.phase)), epoch=\(coordinator.player.engineEpoch)")
             }
         }
         path.start(queue: DispatchQueue(label: "bopify.probe.path"))
