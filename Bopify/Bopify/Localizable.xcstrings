@@ -18,7 +18,7 @@
       }
     },
     "command.unavailable" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -28,7 +28,30 @@
         }
       }
     },
+    "connection.offline" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You're offline"
+          }
+        }
+      }
+    },
+    "connection.reconnect" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconnect Spotify"
+          }
+        }
+      }
+    },
     "connection.reconnecting" : {
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -38,12 +61,13 @@
         }
       }
     },
-    "connection.offline" : {
+    "connection.restoreUnavailable" : {
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You're offline"
+            "value" : "Playback couldn't be restored."
           }
         }
       }
@@ -58,27 +82,8 @@
         }
       }
     },
-    "connection.reconnect" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reconnect Spotify"
-          }
-        }
-      }
-    },
-    "connection.restoreUnavailable" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Playback couldn't be restored."
-          }
-        }
-      }
-    },
     "connection.retryRestoration" : {
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -799,7 +804,7 @@
       }
     },
     "queue.changed" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -830,7 +835,7 @@
       }
     },
     "queue.loadingTrack" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -851,7 +856,7 @@
       }
     },
     "queue.unavailable" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
