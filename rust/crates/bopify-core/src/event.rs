@@ -180,13 +180,19 @@ pub fn translate(event: PlayerEvent) -> Option<WireEvent> {
         PlayerEvent::Loading { .. } => Some(WireEvent::Loading),
         PlayerEvent::EndOfTrack { .. } => Some(WireEvent::EndOfTrack),
         PlayerEvent::VolumeChanged { volume } => Some(WireEvent::VolumeChanged { volume }),
-        // The only source of "another device took over": spirc emits it from
-        // handle_disconnect (connect/src/spirc.rs:1316), reached when a cluster
-        // update shows a different active device. `connection_id` and
-        // `user_name` are discarded -- `user_name` is the numeric Spotify user
-        // id and must not cross the boundary.
-        PlayerEvent::SessionDisconnected { .. } => {
-            Some(WireEvent::ActiveDeviceChanged { is_active: false })
+        // Connection cleanup must not erase resume intent as if a foreign device took over.
+        // Connection and user identifiers stay inside the native boundary.
+        PlayerEvent::SessionDisconnected {
+            connection_lost, ..
+        } => {
+            log::info!("event: session disconnected connection_lost={connection_lost}");
+            if connection_lost {
+                Some(WireEvent::SessionLost {
+                    reason: crate::terminal::SessionLossReason::Legacy,
+                })
+            } else {
+                Some(WireEvent::ActiveDeviceChanged { is_active: false })
+            }
         }
 
         // Deliberately dropped, by name. Each of these is either internal to
@@ -484,11 +490,42 @@ mod tests {
         let wire = translate(PlayerEvent::SessionDisconnected {
             connection_id: "conn".into(),
             user_name: "31abcdef".into(),
+            connection_lost: false,
         });
         assert_eq!(
             serde_json::to_string(&wire.unwrap()).unwrap(),
             r#"{"type":"activeDeviceChanged","isActive":false}"#
         );
+    }
+
+    #[test]
+    fn lost_connection_is_terminal_before_late_cleanup_events() {
+        use crate::terminal::{EngineReporter, SessionLossReason};
+        use std::sync::{Arc, Mutex};
+
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let output = events.clone();
+        let reporter =
+            EngineReporter::new(Arc::new(move |event| output.lock().unwrap().push(event)));
+        reporter.event(
+            translate(PlayerEvent::SessionDisconnected {
+                connection_id: "conn".into(),
+                user_name: "31abcdef".into(),
+                connection_lost: true,
+            })
+            .unwrap(),
+        );
+        reporter.event(WireEvent::ActiveDeviceChanged { is_active: false });
+        reporter.event(WireEvent::Paused { position_ms: 250 });
+        reporter.session_lost(SessionLossReason::PlayerChannelClosed);
+        let events = events.lock().unwrap();
+        assert_eq!(events.len(), 1);
+        assert!(matches!(
+            events[0],
+            WireEvent::SessionLost {
+                reason: SessionLossReason::Legacy
+            }
+        ));
     }
 
     #[test]

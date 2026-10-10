@@ -463,6 +463,7 @@ public final class PlayerModel {
             state.remote = nil; state.staleRemote = nil
             resolveUnavailableRestoration()
         case let .paused(position):
+            BopifyLog.playback.info("player paused epoch=\(self.engineEpoch, privacy: .public)")
             lastConfirmedPlaying = false
             if !managedAttachment { isEngineReady = true }
             frozenDisplayPositionMs = nil
@@ -485,10 +486,12 @@ public final class PlayerModel {
             freezeDisplayPosition()
             state.phase = .loading
         case .endOfTrack:
+            BopifyLog.playback.info("player end of track epoch=\(self.engineEpoch, privacy: .public)")
             lastConfirmedPlaying = false
             frozenDisplayPositionMs = nil
             state.phase = .ended; state.positionMs = state.durationMs
         case let .activeDeviceChanged(isActive):
+            BopifyLog.playback.info("player ownership active=\(isActive, privacy: .public) epoch=\(self.engineEpoch, privacy: .public)")
             state.isActiveDevice = isActive
             if !isActive {
                 lastConfirmedPlaying = false
