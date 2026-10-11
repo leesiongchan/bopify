@@ -7,8 +7,14 @@ CAPTURE identity-b-pending
 CAPTURE identity-c
 CAPTURE identity-c-repeat
 CAPTURE dissolve-b-200ms
+OPACITY ordinary dissolve: minimum annulus alpha 1.0, 2716 samples
 CAPTURE dissolve-interrupted-200ms
+OPACITY interrupted dissolve: minimum annulus alpha 1.0, 2716 samples
 MOTOR pressing dissolve settled: two zero-tick windows
+CAPTURE dissolve-reduce-transparency-200ms
+OPACITY Reduce Transparency dissolve: minimum annulus alpha 1.0, 2716 samples
+CAPTURE dissolve-reduce-transparency-interrupted-200ms
+OPACITY Reduce Transparency interrupted dissolve: minimum annulus alpha 1.0, 2716 samples
 MOTOR mirror without metadata: two zero-tick windows
 MOTOR Reduce Motion pressing: two zero-tick windows
 IDENTITY: repeat/shared art, delayed and stale palettes, interrupted dissolve, late URL, failures, mirror URI, Reduce Motion PASS
@@ -51,43 +57,41 @@ MOTOR accessibility Reduce Motion: two zero-tick windows
 CAPTURE accessibility-reduce-transparency
 MOTOR accessibility Reduce Transparency: two zero-tick windows
 VISUAL MATRIX: colourful/warm attention/greyscale/missing, 118/182pt, light/dark PASS
-MOTOR playing: 10 ticks
-MOTOR pause coast: 8 ticks
+MOTOR playing: 7 ticks
+MOTOR pause coast: 5 ticks
 MOTOR paused: two zero-tick windows
-MOTOR resume survives old deadline: 10 ticks
-MOTOR new brake survives old deadline: 4 ticks
+MOTOR resume survives old deadline: 7 ticks
+MOTOR new brake survives old deadline: 3 ticks
 MOTOR replacement brake settled: two zero-tick windows
 MOTOR Reduce Motion during spin-up: two zero-tick windows
-MOTOR scrub release: 8 ticks
+MOTOR scrub release: 7 ticks
 SCRUB: continuous angle, zero release speed, one seek
 MOTOR hidden false: two zero-tick windows
 MOTOR Reduce Motion false: two zero-tick windows
 MOTOR pointer press false: two zero-tick windows
-MOTOR pointer release spins up: 10 ticks
+MOTOR pointer release spins up: 8 ticks
 MOTOR loading false: two zero-tick windows
 MOTOR hidden true: two zero-tick windows
 MOTOR Reduce Motion true: two zero-tick windows
 MOTOR pointer press true: two zero-tick windows
 MOTOR loading true: two zero-tick windows
-MOTOR end/error coast: 8 ticks
+MOTOR end/error coast: 7 ticks
 MOTOR end/error settled: two zero-tick windows
 MOTOR end/error coast: 7 ticks
 MOTOR end/error settled: two zero-tick windows
-MOTOR device loss coast: 8 ticks
+MOTOR device loss coast: 5 ticks
 MOTOR device loss settled: two zero-tick windows
 MOTOR disappeared false: two zero-tick windows
 MOTOR disappeared true: two zero-tick windows
-MOTOR remounted: 10 ticks
+MOTOR remounted: 7 ticks
 MOTOR recovery overrides error brake: two zero-tick windows
 MOTOR engine detached: two zero-tick windows
-MOTOR detachment control: 9 ticks
+MOTOR detachment control: 7 ticks
 MOTOR detachment false: two zero-tick windows
-MOTOR detachment control: 10 ticks
+MOTOR detachment control: 7 ticks
 MOTOR detachment true: two zero-tick windows
 MOTOR detachment control: 8 ticks
 MOTOR recovery false: two zero-tick windows
-MOTOR detachment control: 9 ticks
+MOTOR detachment control: 7 ticks
 MOTOR recovery true: two zero-tick windows
 VINYL PRESSING PASS
-/private/tmp/bopify-pressing-native/MonolithProbe.app/Contents/MacOS/MonolithProbe
-Report/captures: /private/tmp/bopify-pressing-native

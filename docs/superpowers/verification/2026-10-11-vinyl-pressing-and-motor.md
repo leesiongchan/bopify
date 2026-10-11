@@ -23,7 +23,7 @@ python3 docs/superpowers/verification/run-monolith-probe.py --derived-data /priv
 VINYL_PROBE_COMPARE_DIR="$PWD/docs/superpowers/verification/assets/vinyl-pressing-2026-10-11" python3 docs/superpowers/verification/run-monolith-probe.py --derived-data /private/tmp/bopify-pressing-build --output /private/tmp/bopify-pressing-native --probe pressing --measure-ambient
 ~~~
 
-Saved output: [package](assets/vinyl-pressing-2026-10-11/package-results.txt), [cache](assets/vinyl-pressing-2026-10-11/cache-results.txt), [native](assets/vinyl-pressing-2026-10-11/native-results.txt). Xcode emitted its existing “Supported platforms for the buildables in the current scheme is empty” notice and exited successfully.
+Saved output: [build](assets/vinyl-pressing-2026-10-11/build-results.txt), [package](assets/vinyl-pressing-2026-10-11/package-results.txt), [cache](assets/vinyl-pressing-2026-10-11/cache-results.txt), [native](assets/vinyl-pressing-2026-10-11/native-results.txt). Xcode emitted its existing “Supported platforms for the buildables in the current scheme is empty” notice and exited successfully.
 
 ## Native visual matrix
 
@@ -46,7 +46,7 @@ Accessibility inputs use writable backing keys exposed by the local Xcode 27 Swi
 
 Annulus comparisons exclude the label and rim. Repeating URI C with a different occurrence produces the [same pressing](assets/vinyl-pressing-2026-10-11/identity-c-repeat.png) as [C](assets/vinyl-pressing-2026-10-11/identity-c.png). [A](assets/vinyl-pressing-2026-10-11/identity-a.png) and C share artwork but have different seeded swirls. All 16 matrix annuli had mean RGB difference **0.0** across two independent processes on this hardware.
 
-While B's extractor is suspended, [A stays visible](assets/vinyl-pressing-2026-10-11/identity-b-pending.png), with its original seed. C remains selected when B finishes late. [B at 200 ms](assets/vinyl-pressing-2026-10-11/dissolve-b-200ms.png) and an [interrupted dissolve](assets/vinyl-pressing-2026-10-11/dissolve-interrupted-200ms.png) retain colour. At least two layers exist during a dissolve and exactly one after settling. Missing URL, extraction/HTTP failure, late URL, late Track metadata with known queue URI and mirror URI without metadata resolve to the expected seed/palette pair.
+While B's extractor is suspended, [A stays visible](assets/vinyl-pressing-2026-10-11/identity-b-pending.png), with its original seed. C remains selected when B finishes late. [B at 200 ms](assets/vinyl-pressing-2026-10-11/dissolve-b-200ms.png) and an [interrupted dissolve](assets/vinyl-pressing-2026-10-11/dissolve-interrupted-200ms.png) retain colour and opacity. Their annuli, and both [ordinary](assets/vinyl-pressing-2026-10-11/dissolve-reduce-transparency-200ms.png) and [interrupted](assets/vinyl-pressing-2026-10-11/dissolve-reduce-transparency-interrupted-200ms.png) Reduce Transparency dissolves, each have minimum alpha 1.0 across 2,716 sampled pixels. At least two pressing layers exist during a dissolve and exactly one after settling. Missing URL, extraction/HTTP failure, late URL, late Track metadata with known queue URI and mirror URI without metadata resolve to the expected seed/palette pair.
 
 Cache checks cover image-only thumbnails, one extraction for ten overlapping requests, decoded-image reuse, published/pending palette eviction, clear/replacement races, negative-cache lifetimes, 640 px decoding and the 112-entry cap. Four fixed extraction inputs produced identical values/order in two processes. A solid sRGB fixture pins the readback boundary; it exposed and corrected alpha division and double colour conversion.
 
@@ -89,7 +89,19 @@ Compositor observations only; display labels are local to each trace:
 4. Check buffering policy directly because no model event produces that phase. Risk: the live buffering transition remains unverified.
 5. Use the displayed queue URI while Track metadata is absent; mirror URI has priority. Risk: a neutral pressing takes a pending song seed before metadata confirms it.
 6. Replace the app override with fixture-only SDK backing keys; NSAppearance alone did not change contrast. Risk: the fixture may need adaptation to a future SDK; no underscored API ships.
+7. Leave record-specific GPU regression unverified because the owned-process traces lack attributed GPU intervals. Risk: an undetected GPU regression.
+8. Leave live Spotify buffering/recovery unverified because no live session or buffering event path was exercised; playback-model changes remain outside scope. Risk: live transitions could differ from fixtures.
+9. Leave macOS 14 runtime behavior unverified; its deployment target builds, but native execution covers macOS 27.0.1. Risk: an older-runtime rendering or lifecycle defect.
+10. Leave actual system accessibility preference notification delivery unverified; fixture inputs exercise the unchanged production environment reads. Risk: real preference changes could fail to update the record.
+11. Claim pixel identity across launches on tested hardware, without promising identical pixels across devices; that is beyond the approved requirement. Risk: swirls could vary between GPUs or OS versions.
+12. Keep an opaque dark circle beneath all pressing transitions to preserve the approved interruption behavior. Risk: intermediate colours could look slightly darker; native saturation checks guard neutral flashes.
 
 Whole-worktree diff checking is clean. The original checkout's unrelated changes were preserved; its earlier whitespace baseline does not apply here.
 
-Independent whole-branch review is pending. Live Spotify buffering/recovery and attributable record GPU timing remain acceptance follow-ups.
+## Independent review and correction
+
+One fresh whole-branch reviewer found no Critical or Minor issues and one Important issue: opacity transitions made the record itself translucent during skips. Readback of the original captures confirmed alpha 0.835–0.843 during a dissolve and 0.710–0.722 during an interruption. The new native regression [failed before the fix](assets/vinyl-pressing-2026-10-11/opacity-red-results.txt), with minimum annulus alpha 0.843, as shown in the [before capture](assets/vinyl-pressing-2026-10-11/dissolve-opacity-before.png).
+
+An opaque backing now stays beneath the keyed pressing layers. Ordinary and interrupted dissolves, including Reduce Transparency, pass the new alpha assertion. The label, grooves, colour retention and outgoing-layer lifetime checks also pass. The full 314-test suite, app build, native cache fixture and full player fixture pass after the correction. No second review was dispatched; the finding was verified RED→GREEN. Deferred minors: none.
+
+The GPU recordings predate this final backing correction and remain unattributed. Live Spotify buffering/recovery and attributable record GPU timing remain acceptance follow-ups.

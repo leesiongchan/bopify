@@ -27,6 +27,7 @@ struct VinylRecordView: View {
             ZStack {
                 ZStack {
                     ZStack {
+                        Circle().fill(Color(red: 0.035, green: 0.055, blue: 0.05))
                         VinylPressingView(seed: pressingSeed, palette: palette, diameter: diameter)
                             .id(PressingAppearance(seed: pressingSeed, palette: palette))
                             .transition(.opacity)
