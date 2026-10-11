@@ -13,7 +13,7 @@ The package suite, macOS build, native cache fixture and native player fixture p
 | 3. Tests and build | 175 Playback + 56 Library + 28 Domain + 55 Auth; macOS build exit 0 | Pass, 314 tests |
 | 4. Appearance and identity | 118/182 pt × light/dark × colourful/warm attention/greyscale/missing; repeat occurrence and fresh-process pixels | Pass, native fixtures |
 | 5. Lifecycle and ambient work | Production RecordPlayerView, controlled PlayerModel events and native pointer handlers | Native fixture pass; live Spotify and buffering transition unverified |
-| 6. GPU comparison | Matched 182 pt scene, Metal System Trace and Animation Hitches, 12 s before/after | Record-specific comparison unverified; compositor statistics retained separately |
+| 6. GPU comparison | [Three optimized matched pairs with app/frame correlation](2026-10-11-vinyl-gpu-profile.md), 182 pt over Liquid Glass | Scene comparison recorded; isolated record cost and general no-regression verdict unverified |
 | 7. Coverage report | Unit, native fixture, SDK fixture inputs and unavailable checks distinguished here | Recorded |
 
 ~~~sh
@@ -54,7 +54,7 @@ Temporary instrumentation observes the production timeline. Playing controls are
 
 **Unavailable:** no live Spotify playback/recovery session was exercised. Buffering has no event path in current PlayerModel, so RecordMotorRequest's buffering snap is checked directly rather than through a native phase transition. Native runtime evidence covers macOS 27.0.1; the macOS 14 deployment target builds, but the older runtime was not exercised.
 
-## GPU evidence and limitation
+## Initial GPU evidence and limitation
 
 Mac mini, M4 Pro with 16 GPU cores, 48 GB; macOS 27.0.1 (26A434); Xcode 27.0 (27A266a). Both scenes use steady playback, a 182 pt record in the expanded production PlayerSurface/Liquid Glass path, dark appearance and 2× backing scale. Each recording lasts 12 s; statistics discard the first 2 s.
 
@@ -104,4 +104,8 @@ One fresh whole-branch reviewer found no Critical or Minor issues and one Import
 
 An opaque backing now stays beneath the keyed pressing layers. Ordinary and interrupted dissolves, including Reduce Transparency, pass the new alpha assertion. The label, grooves, colour retention and outgoing-layer lifetime checks also pass. The full 314-test suite, app build, native cache fixture and full player fixture pass after the correction. No second review was dispatched; the finding was verified RED→GREEN. Deferred minors: none.
 
-The GPU recordings predate this final backing correction and remain unattributed. Live Spotify buffering/recovery and attributable record GPU timing remain acceptance follow-ups.
+The initial GPU recordings predate this final backing correction and remain unattributed. Live Spotify buffering/recovery and attributable record GPU timing remain acceptance follow-ups.
+
+## Optimized GPU follow-up
+
+[The follow-up report](2026-10-11-vinyl-gpu-profile.md) records three matched optimized pairs after the backing correction, correlates app updates to compositor GPU frames, and retains every run's hitch count. Record-only GPU cost remains unverified; hitches occur in both variants, so this evidence does not establish general performance parity.
