@@ -1,0 +1,1482 @@
+{
+  "process_pid": 76761,
+  "window_seconds": [
+    5,
+    15
+  ],
+  "swiftui_intervals_over500us_count": 52,
+  "long_intervals": [
+    {
+      "start_s": 9.668556458,
+      "duration_ms": 73.711,
+      "description": "UpdateFilter<AnimationTimelineSchedule, ModifiedContent<ZStack, _ClipEffect>>",
+      "severity": "High",
+      "main_sample_count": 1,
+      "main_sample_weight_ms": 0.1,
+      "max_main_sample_gap_ms": 73.671,
+      "sample_relative_ms": [
+        0.04
+      ],
+      "leaf_weight_ms": {
+        "_stdlib_isOSVersionAtLeastOrVariantVersionAtLeast(_:_:_:_:_:_:)": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "closure #1 in MorphingArtworkView.body.getter": 0.1,
+        "main": 0.1,
+        "specialized closure #1 in TimelineView<>.init(_:content:)": 0.1,
+        "static VinylPressingProbe.$main()": 0.1,
+        "static VinylPressingProbe.main()": 0.1
+      }
+    },
+    {
+      "start_s": 9.337179042,
+      "duration_ms": 44.599916,
+      "description": "DisplayList Item: PairPreferenceCombiner<DisplayList.Key>",
+      "severity": "High",
+      "main_sample_count": 0,
+      "main_sample_weight_ms": 0.0,
+      "max_main_sample_gap_ms": 44.599916,
+      "sample_relative_ms": [],
+      "leaf_weight_ms": {},
+      "own_inclusive_weight_ms": {}
+    },
+    {
+      "start_s": 8.928509041,
+      "duration_ms": 38.344,
+      "description": "DynamicBody<ViewBodyAccessor<MorphingArtworkView>, MainThreadFlags>",
+      "severity": "High",
+      "main_sample_count": 2,
+      "main_sample_weight_ms": 0.2,
+      "max_main_sample_gap_ms": 38.188042,
+      "sample_relative_ms": [
+        38.18804,
+        38.28783
+      ],
+      "leaf_weight_ms": {
+        "SetAlgebra.init<A>(_:)": 0.1,
+        "swift::MetadataCacheKey::operator==(swift::MetadataCacheKey const&) const": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "MorphingArtworkView.body.getter": 0.2,
+        "main": 0.2,
+        "static VinylPressingProbe.$main()": 0.2,
+        "static VinylPressingProbe.main()": 0.2
+      }
+    },
+    {
+      "start_s": 8.967140959,
+      "duration_ms": 35.757416,
+      "description": "UpdateFilter<PlaybackClockSchedule, IDView<ModifiedContent, String>>",
+      "severity": "High",
+      "main_sample_count": 3,
+      "main_sample_weight_ms": 0.3,
+      "max_main_sample_gap_ms": 35.601083,
+      "sample_relative_ms": [
+        0.05529,
+        35.65637,
+        35.75508
+      ],
+      "leaf_weight_ms": {
+        "@objc end_value_update(raw:_:_:)": 0.1,
+        "_platform_memmove": 0.1,
+        "swift_storeEnumTagMultiPayload": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.3,
+        "static VinylPressingProbe.$main()": 0.3,
+        "static VinylPressingProbe.main()": 0.3,
+        "PlaybackState.mirror.getter": 0.1,
+        "RecordPlayerView.occurrenceID.getter": 0.1,
+        "closure #1 in closure #3 in RecordPlayerView.record(diameter:)": 0.1,
+        "initializeWithCopy for RadialProgressView": 0.1,
+        "specialized closure #1 in TimelineView<>.init(_:content:)": 0.1
+      }
+    },
+    {
+      "start_s": 9.640622334,
+      "duration_ms": 27.895541,
+      "description": "DynamicBody<ViewBodyAccessor<MorphingArtworkView>, MainThreadFlags>",
+      "severity": "High",
+      "main_sample_count": 3,
+      "main_sample_weight_ms": 0.3,
+      "max_main_sample_gap_ms": 27.073416,
+      "sample_relative_ms": [
+        27.07342,
+        27.67567,
+        27.87271
+      ],
+      "leaf_weight_ms": {
+        "_xzm_free_tc": 0.1,
+        "assignWithCopy for Optional": 0.1,
+        "initializeWithCopy for ClosedRange<>.Index": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.3,
+        "static VinylPressingProbe.$main()": 0.3,
+        "static VinylPressingProbe.main()": 0.3
+      }
+    },
+    {
+      "start_s": 9.408429709,
+      "duration_ms": 26.791541,
+      "description": "StaticLayoutComputer<GeometryReaderLayout>",
+      "severity": "High",
+      "main_sample_count": 0,
+      "main_sample_weight_ms": 0.0,
+      "max_main_sample_gap_ms": 26.791541,
+      "sample_relative_ms": [],
+      "leaf_weight_ms": {},
+      "own_inclusive_weight_ms": {}
+    },
+    {
+      "start_s": 9.389984708,
+      "duration_ms": 16.887833,
+      "description": "UpdateFilter<AnimationTimelineSchedule, ModifiedContent<ZStack, _ClipEffect>>",
+      "severity": "High",
+      "main_sample_count": 1,
+      "main_sample_weight_ms": 0.1,
+      "max_main_sample_gap_ms": 16.875541,
+      "sample_relative_ms": [
+        0.01229
+      ],
+      "leaf_weight_ms": {
+        "TimelineView<>.UpdateFilter.updateValue()": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.1,
+        "static VinylPressingProbe.$main()": 0.1,
+        "static VinylPressingProbe.main()": 0.1
+      }
+    },
+    {
+      "start_s": 6.161843292,
+      "duration_ms": 6.136416,
+      "description": "UpdateFilter<AnimationTimelineSchedule, ZStack<TupleView>>",
+      "severity": "High",
+      "main_sample_count": 3,
+      "main_sample_weight_ms": 0.3,
+      "max_main_sample_gap_ms": 5.702333,
+      "sample_relative_ms": [
+        0.05283,
+        0.15167,
+        5.854
+      ],
+      "leaf_weight_ms": {
+        "<deduplicated_symbol>": 0.1,
+        "ccrng_schedule_tree_read": 0.1,
+        "customRR_retain": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.3,
+        "static VinylPressingProbe.$main()": 0.3,
+        "static VinylPressingProbe.main()": 0.3,
+        "closure #1 in VinylRecordView.body.getter": 0.2,
+        "closure #1 in closure #1 in VinylRecordView.body.getter": 0.2,
+        "partial apply for closure #1 in VinylRecordView.body.getter": 0.2,
+        "specialized ZStack.init(alignment:content:)": 0.2,
+        "specialized _VariadicView.Tree.init(_:content:)": 0.2
+      }
+    },
+    {
+      "start_s": 7.570512875,
+      "duration_ms": 5.042791,
+      "description": "View Creation / Reuse",
+      "severity": "High",
+      "main_sample_count": 3,
+      "main_sample_weight_ms": 0.3,
+      "max_main_sample_gap_ms": 3.8005,
+      "sample_relative_ms": [
+        1.08183,
+        4.88233,
+        4.98517
+      ],
+      "leaf_weight_ms": {
+        "<deduplicated_symbol>": 0.1,
+        "ModifiedViewList.applyNodes(from:style:list:transform:to:)": 0.1,
+        "protocol witness for ViewList.applyNodes(from:style:list:transform:to:) in conformance BaseViewList": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.3,
+        "static VinylPressingProbe.$main()": 0.3,
+        "static VinylPressingProbe.main()": 0.3
+      }
+    },
+    {
+      "start_s": 9.831679584,
+      "duration_ms": 4.291916,
+      "description": "View Creation / Reuse",
+      "severity": "High",
+      "main_sample_count": 2,
+      "main_sample_weight_ms": 0.2,
+      "max_main_sample_gap_ms": 4.000917,
+      "sample_relative_ms": [
+        0.21725,
+        4.21817
+      ],
+      "leaf_weight_ms": {
+        "swift::MetadataCacheEntryBase<swift::GenericCacheEntry, void const*>::awaitSatisfyingState(swift::ConcurrencyControl&, swift::MetadataRequest)": 0.1,
+        "swift_release": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.2,
+        "static VinylPressingProbe.$main()": 0.2,
+        "static VinylPressingProbe.main()": 0.2
+      }
+    },
+    {
+      "start_s": 9.140284625,
+      "duration_ms": 4.0855,
+      "description": "Action Callback",
+      "severity": "High",
+      "main_sample_count": 0,
+      "main_sample_weight_ms": 0.0,
+      "max_main_sample_gap_ms": 4.0855,
+      "sample_relative_ms": [],
+      "leaf_weight_ms": {},
+      "own_inclusive_weight_ms": {}
+    },
+    {
+      "start_s": 7.576428042,
+      "duration_ms": 3.951583,
+      "description": "ValueActionDispatcher<_ValueActionModifier2<Bool>>",
+      "severity": "High",
+      "main_sample_count": 0,
+      "main_sample_weight_ms": 0.0,
+      "max_main_sample_gap_ms": 3.951583,
+      "sample_relative_ms": [],
+      "leaf_weight_ms": {},
+      "own_inclusive_weight_ms": {}
+    },
+    {
+      "start_s": 9.828045792,
+      "duration_ms": 3.600416,
+      "description": "View List ForEachList<Range, Int, ModifiedContent>.Init",
+      "severity": "High",
+      "main_sample_count": 0,
+      "main_sample_weight_ms": 0.0,
+      "max_main_sample_gap_ms": 3.600416,
+      "sample_relative_ms": [],
+      "leaf_weight_ms": {},
+      "own_inclusive_weight_ms": {}
+    },
+    {
+      "start_s": 9.742547125,
+      "duration_ms": 2.8135,
+      "description": "UpdateFilter<PlaybackClockSchedule, IDView<ModifiedContent, String>>",
+      "severity": "High",
+      "main_sample_count": 2,
+      "main_sample_weight_ms": 0.2,
+      "max_main_sample_gap_ms": 2.700625,
+      "sample_relative_ms": [
+        0.04933,
+        2.74996
+      ],
+      "leaf_weight_ms": {
+        "objc_msgSend": 0.1,
+        "type metadata accessor for RemotePlayback": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.2,
+        "static VinylPressingProbe.$main()": 0.2,
+        "static VinylPressingProbe.main()": 0.2,
+        "PlayerModel.displayPositionMs(at:)": 0.1,
+        "closure #1 in closure #3 in RecordPlayerView.record(diameter:)": 0.1,
+        "specialized closure #1 in TimelineView<>.init(_:content:)": 0.1,
+        "type metadata accessor for RemotePlayback": 0.1
+      }
+    },
+    {
+      "start_s": 9.198733708,
+      "duration_ms": 2.477333,
+      "description": "DynamicPreferenceCombiner<DisplayList.Key>",
+      "severity": "High",
+      "main_sample_count": 3,
+      "main_sample_weight_ms": 0.3,
+      "max_main_sample_gap_ms": 2.266375,
+      "sample_relative_ms": [
+        2.26638,
+        2.36217,
+        2.46217
+      ],
+      "leaf_weight_ms": {
+        "AGGraphGetValue": 0.1,
+        "mach_absolute_time": 0.1,
+        "specialized Trace_Handle.write<A>(struct:)": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.3,
+        "static VinylPressingProbe.$main()": 0.3,
+        "static VinylPressingProbe.main()": 0.3
+      }
+    },
+    {
+      "start_s": 9.387167292,
+      "duration_ms": 2.253583,
+      "description": "View Creation / Reuse",
+      "severity": "High",
+      "main_sample_count": 1,
+      "main_sample_weight_ms": 0.1,
+      "max_main_sample_gap_ms": 2.230374,
+      "sample_relative_ms": [
+        2.23037
+      ],
+      "leaf_weight_ms": {
+        "__swift_noop_void_return": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.1,
+        "static VinylPressingProbe.$main()": 0.1,
+        "static VinylPressingProbe.main()": 0.1
+      }
+    },
+    {
+      "start_s": 12.245252209,
+      "duration_ms": 2.070166,
+      "description": "GeometryReader<ModifiedContent>.Child",
+      "severity": "High",
+      "main_sample_count": 3,
+      "main_sample_weight_ms": 0.3,
+      "max_main_sample_gap_ms": 1.901167,
+      "sample_relative_ms": [
+        0.04125,
+        1.94242,
+        2.04196
+      ],
+      "leaf_weight_ms": {
+        "0x1a43a8181": 0.1,
+        "AG::IndirectNode::size() const": 0.1,
+        "swift_release": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.3,
+        "static VinylPressingProbe.$main()": 0.3,
+        "static VinylPressingProbe.main()": 0.3,
+        "closure #1 in RadialProgressView.body.getter": 0.1
+      }
+    },
+    {
+      "start_s": 6.168988,
+      "duration_ms": 2.02625,
+      "description": "DynamicBody<ViewBodyAccessor<MorphingArtworkView>, MainThreadFlags>",
+      "severity": "High",
+      "main_sample_count": 3,
+      "main_sample_weight_ms": 0.3,
+      "max_main_sample_gap_ms": 1.700416,
+      "sample_relative_ms": [
+        0.00575,
+        1.70617,
+        2.00604
+      ],
+      "leaf_weight_ms": {
+        "AG::LayoutDescriptor::Compare::operator()(unsigned char const*, unsigned char const*, unsigned char const*, unsigned long, unsigned long, unsigned int)": 0.1,
+        "getEnumTag for Optional": 0.1,
+        "static BoxVTable.update(elt:property:phase:)": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.3,
+        "static VinylPressingProbe.$main()": 0.3,
+        "static VinylPressingProbe.main()": 0.3
+      }
+    },
+    {
+      "start_s": 9.297988125,
+      "duration_ms": 1.848916,
+      "description": "FlexCoreInteractionModifier.FlexValue",
+      "severity": "High",
+      "main_sample_count": 1,
+      "main_sample_weight_ms": 0.1,
+      "max_main_sample_gap_ms": 1.842416,
+      "sample_relative_ms": [
+        0.0065
+      ],
+      "leaf_weight_ms": {
+        "swift_allocObject": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.1,
+        "static VinylPressingProbe.$main()": 0.1,
+        "static VinylPressingProbe.main()": 0.1
+      }
+    },
+    {
+      "start_s": 6.173034333,
+      "duration_ms": 1.714333,
+      "description": "FlexCoreInteractionModifier.FlexValue",
+      "severity": "High",
+      "main_sample_count": 0,
+      "main_sample_weight_ms": 0.0,
+      "max_main_sample_gap_ms": 1.714333,
+      "sample_relative_ms": [],
+      "leaf_weight_ms": {},
+      "own_inclusive_weight_ms": {}
+    },
+    {
+      "start_s": 7.014390583,
+      "duration_ms": 1.429458,
+      "description": "GeometryReader<ModifiedContent>.Child",
+      "severity": "High",
+      "main_sample_count": 5,
+      "main_sample_weight_ms": 0.5,
+      "max_main_sample_gap_ms": 0.499167,
+      "sample_relative_ms": [
+        0.10608,
+        0.60525,
+        0.704,
+        1.10379,
+        1.20558
+      ],
+      "leaf_weight_ms": {
+        "<deduplicated_symbol>": 0.1,
+        "_swift_release_dealloc": 0.1,
+        "customRR_retain": 0.1,
+        "getCache(swift::TargetTypeContextDescriptor<swift::InProcess> const&)": 0.1,
+        "specialized Trace_Handle.write<A>(struct:)": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.5,
+        "static VinylPressingProbe.$main()": 0.5,
+        "static VinylPressingProbe.main()": 0.5,
+        "closure #1 in RadialProgressView.body.getter": 0.2
+      }
+    },
+    {
+      "start_s": 9.335230625,
+      "duration_ms": 1.343416,
+      "description": "FlexCoreInteractionModifier.FlexValue",
+      "severity": "High",
+      "main_sample_count": 0,
+      "main_sample_weight_ms": 0.0,
+      "max_main_sample_gap_ms": 1.343416,
+      "sample_relative_ms": [],
+      "leaf_weight_ms": {},
+      "own_inclusive_weight_ms": {}
+    },
+    {
+      "start_s": 12.428104209,
+      "duration_ms": 1.283791,
+      "description": "RootGeometry",
+      "severity": "High",
+      "main_sample_count": 11,
+      "main_sample_weight_ms": 1.1,
+      "max_main_sample_gap_ms": 0.200166,
+      "sample_relative_ms": [
+        0.09008,
+        0.18942,
+        0.38958,
+        0.48942,
+        0.58946,
+        0.68942,
+        0.78929,
+        0.88925,
+        0.98933,
+        1.08958,
+        1.18942
+      ],
+      "leaf_weight_ms": {
+        "u_strFromUTF8WithSub": 0.4,
+        "-[NSConcreteMutableAttributedString string]": 0.1,
+        "-[__NSCFString isEqual:]": 0.1,
+        "TGlyphIterator::CurrentGlyphIsIgnored(OTL::Lookup const*) const": 0.1,
+        "_platform_strlen": 0.1,
+        "_xzm_xzone_malloc_tiny": 0.1,
+        "closure #1 in closure #1 in ViewLayoutEngine.explicitAlignment(_:at:)": 0.1,
+        "ucptrie_openFromBinary": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 1.1,
+        "static VinylPressingProbe.$main()": 1.1,
+        "static VinylPressingProbe.main()": 1.1
+      }
+    },
+    {
+      "start_s": 9.129049208,
+      "duration_ms": 1.282083,
+      "description": "Text Content",
+      "severity": "High",
+      "main_sample_count": 5,
+      "main_sample_weight_ms": 0.5,
+      "max_main_sample_gap_ms": 0.400208,
+      "sample_relative_ms": [
+        0.04587,
+        0.345,
+        0.44688,
+        0.54663,
+        0.94683
+      ],
+      "leaf_weight_ms": {
+        "AGGraphGetValueType": 0.1,
+        "CFStringGetBytes": 0.1,
+        "lazy protocol witness table accessor for type EnvironmentPropertyKey<EnvironmentValues.StringResolutionDate> and conformance EnvironmentPropertyKey<A>": 0.1,
+        "objc_claimAutoreleasedReturnValue": 0.1,
+        "objc_msgSend": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.5,
+        "static VinylPressingProbe.$main()": 0.5,
+        "static VinylPressingProbe.main()": 0.5
+      }
+    },
+    {
+      "start_s": 7.013205416,
+      "duration_ms": 1.18175,
+      "description": "DynamicBody<ViewBodyAccessor<RadialProgressView>, MainThreadFlags>",
+      "severity": "High",
+      "main_sample_count": 2,
+      "main_sample_weight_ms": 0.2,
+      "max_main_sample_gap_ms": 0.801208,
+      "sample_relative_ms": [
+        0.09042,
+        0.89163
+      ],
+      "leaf_weight_ms": {
+        "MutableBox.__deallocating_deinit": 0.1,
+        "swift::metadataimpl::ValueWitnesses<swift::metadataimpl::OpaqueExistentialBox<1u>>::destroy(swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*)": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.2,
+        "static VinylPressingProbe.$main()": 0.2,
+        "static VinylPressingProbe.main()": 0.2,
+        "RadialProgressView.body.getter": 0.1
+      }
+    },
+    {
+      "start_s": 12.402046125,
+      "duration_ms": 1.165625,
+      "description": "DynamicBody<ViewBodyAccessor<RecordPlayerView>, MainThreadFlags>",
+      "severity": "High",
+      "main_sample_count": 12,
+      "main_sample_weight_ms": 1.2,
+      "max_main_sample_gap_ms": 0.101791,
+      "sample_relative_ms": [
+        0.04804,
+        0.14796,
+        0.24846,
+        0.34842,
+        0.44896,
+        0.54817,
+        0.64825,
+        0.74808,
+        0.84788,
+        0.94967,
+        1.04804,
+        1.14867
+      ],
+      "leaf_weight_ms": {
+        "AG::LayoutDescriptor::find_partial(unsigned char const*, unsigned long, unsigned long)": 0.1,
+        "_CFRetain": 0.1,
+        "__swift_memcpy48_8": 0.1,
+        "__swift_noop_void_return": 0.1,
+        "_swift_release_dealloc": 0.1,
+        "bool swift::RefCounts<swift::RefCountBitsT<(swift::RefCountInlinedness)1>>::doDecrementSlow<(swift::PerformDeinit)1>(swift::RefCountBitsT<(swift::RefCountInlinedness)1>, unsigned int)": 0.1,
+        "destroy for LazyState.Storage": 0.1,
+        "destroy for PlaybackState": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "@objc StatusPanel.sendEvent(_:)": 1.2,
+        "StatusPanel.sendEvent(_:)": 1.2,
+        "main": 1.2,
+        "static VinylPressingProbe.$main()": 1.2,
+        "static VinylPressingProbe.main()": 1.2,
+        "RecordPlayerView.body.getter": 0.8,
+        "closure #1 in RecordPlayerView.body.getter": 0.5,
+        "specialized ZStack.init(alignment:content:)": 0.5
+      }
+    },
+    {
+      "start_s": 9.332168542,
+      "duration_ms": 1.140833,
+      "description": "DynamicBody<ViewBodyAccessor<MorphingArtworkView>, MainThreadFlags>",
+      "severity": "High",
+      "main_sample_count": 0,
+      "main_sample_weight_ms": 0.0,
+      "max_main_sample_gap_ms": 1.140833,
+      "sample_relative_ms": [],
+      "leaf_weight_ms": {},
+      "own_inclusive_weight_ms": {}
+    },
+    {
+      "start_s": 8.815752791,
+      "duration_ms": 1.018,
+      "description": "FlexCoreInteractionModifier.FlexValue",
+      "severity": "High",
+      "main_sample_count": 0,
+      "main_sample_weight_ms": 0.0,
+      "max_main_sample_gap_ms": 1.018,
+      "sample_relative_ms": [],
+      "leaf_weight_ms": {},
+      "own_inclusive_weight_ms": {}
+    },
+    {
+      "start_s": 12.440082792,
+      "duration_ms": 0.996458,
+      "description": "RootDisplayList",
+      "severity": "Moderate",
+      "main_sample_count": 10,
+      "main_sample_weight_ms": 1.0,
+      "max_main_sample_gap_ms": 0.107709,
+      "sample_relative_ms": [
+        0.01108,
+        0.11067,
+        0.21062,
+        0.31833,
+        0.41071,
+        0.51067,
+        0.61067,
+        0.71067,
+        0.81096,
+        0.91175
+      ],
+      "leaf_weight_ms": {
+        "__lseek": 0.1,
+        "write": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.2,
+        "static VinylPressingProbe.$main()": 0.2,
+        "static VinylPressingProbe.main()": 0.2
+      }
+    },
+    {
+      "start_s": 9.115984875,
+      "duration_ms": 0.986708,
+      "description": "View Creation / Reuse",
+      "severity": "Moderate",
+      "main_sample_count": 1,
+      "main_sample_weight_ms": 0.1,
+      "max_main_sample_gap_ms": 0.976333,
+      "sample_relative_ms": [
+        0.01038
+      ],
+      "leaf_weight_ms": {
+        "<deduplicated_symbol>": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.1,
+        "static VinylPressingProbe.$main()": 0.1,
+        "static VinylPressingProbe.main()": 0.1
+      }
+    },
+    {
+      "start_s": 9.229798375,
+      "duration_ms": 0.975,
+      "description": "View Creation / Reuse",
+      "severity": "Moderate",
+      "main_sample_count": 0,
+      "main_sample_weight_ms": 0.0,
+      "max_main_sample_gap_ms": 0.975,
+      "sample_relative_ms": [],
+      "leaf_weight_ms": {},
+      "own_inclusive_weight_ms": {}
+    },
+    {
+      "start_s": 12.413456042,
+      "duration_ms": 0.896833,
+      "description": "DynamicBody<ViewBodyAccessor<RecordPlayerView>, MainThreadFlags>",
+      "severity": "Moderate",
+      "main_sample_count": 8,
+      "main_sample_weight_ms": 0.8,
+      "max_main_sample_gap_ms": 0.200292,
+      "sample_relative_ms": [
+        0.03758,
+        0.13779,
+        0.23758,
+        0.3375,
+        0.53779,
+        0.63762,
+        0.73796,
+        0.83758
+      ],
+      "leaf_weight_ms": {
+        "<deduplicated_symbol>": 0.1,
+        "AccessibilityValueStorage.init(description:)": 0.1,
+        "ObservationTracking._AccessList.addAccess<A>(keyPath:context:)": 0.1,
+        "_platform_memcmp": 0.1,
+        "closure #1 in closure #1 in closure #1 in RecordPlayerView.controls.getter": 0.1,
+        "getEnumTagSinglePayload for QueueEntry": 0.1,
+        "initializeWithCopy for PlayerSurface": 0.1,
+        "swift::metadataimpl::FixedSizeBufferValueWitnesses<swift::metadataimpl::ValueWitnesses<swift::metadataimpl::ClassExistentialBox<1u>>, true, 16ul, 8ul, true>::getEnumTagSinglePayload(swift::OpaqueValue const*, unsigned int, swift::TargetMetadata<swift::InProcess> const*)": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "@objc StatusPanel.sendEvent(_:)": 0.8,
+        "StatusPanel.sendEvent(_:)": 0.8,
+        "main": 0.8,
+        "static VinylPressingProbe.$main()": 0.8,
+        "static VinylPressingProbe.main()": 0.8,
+        "RecordPlayerView.body.getter": 0.5,
+        "closure #1 in RecordPlayerView.body.getter": 0.4,
+        "specialized ZStack.init(alignment:content:)": 0.4
+      }
+    },
+    {
+      "start_s": 7.051243667,
+      "duration_ms": 0.873291,
+      "description": "FlexCoreInteractionModifier.FlexValue",
+      "severity": "Moderate",
+      "main_sample_count": 1,
+      "main_sample_weight_ms": 0.1,
+      "max_main_sample_gap_ms": 0.852624,
+      "sample_relative_ms": [
+        0.85262
+      ],
+      "leaf_weight_ms": {
+        "UpdateGroup.begin()": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.1,
+        "static VinylPressingProbe.$main()": 0.1,
+        "static VinylPressingProbe.main()": 0.1
+      }
+    },
+    {
+      "start_s": 9.745446625,
+      "duration_ms": 0.869708,
+      "description": "DynamicBody<ViewBodyAccessor<RadialProgressView>, MainThreadFlags>",
+      "severity": "Moderate",
+      "main_sample_count": 3,
+      "main_sample_weight_ms": 0.3,
+      "max_main_sample_gap_ms": 0.600792,
+      "sample_relative_ms": [
+        0.04942,
+        0.65021,
+        0.84954
+      ],
+      "leaf_weight_ms": {
+        "swift::Demangle::__runtime::Demangler::DemangleInitRAII::DemangleInitRAII(swift::Demangle::__runtime::Demangler&, __swift::__runtime::llvm::StringRef, std::__1::function<swift::Demangle::__runtime::Node* (swift::Demangle::__runtime::SymbolicReferenceKind, swift::Demangle::__runtime::Directness, int, void const*)>)": 0.1,
+        "swift::Demangle::__runtime::makeSymbolicMangledNameStringRef(char const*)": 0.1,
+        "xzm_malloc_zone_size": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.3,
+        "static VinylPressingProbe.$main()": 0.3,
+        "static VinylPressingProbe.main()": 0.3,
+        "RadialProgressView.body.getter": 0.2
+      }
+    },
+    {
+      "start_s": 8.129315583,
+      "duration_ms": 0.817458,
+      "description": "DynamicBody<ViewBodyAccessor<MorphingArtworkView>, MainThreadFlags>",
+      "severity": "Moderate",
+      "main_sample_count": 2,
+      "main_sample_weight_ms": 0.2,
+      "max_main_sample_gap_ms": 0.698459,
+      "sample_relative_ms": [
+        0.08146,
+        0.77992
+      ],
+      "leaf_weight_ms": {
+        "specialized Trace_Handle.write<A>(_:omit:)": 0.1,
+        "swift::Demangle::__runtime::Demangler::demangleType(__swift::__runtime::llvm::StringRef, std::__1::function<swift::Demangle::__runtime::Node* (swift::Demangle::__runtime::SymbolicReferenceKind, swift::Demangle::__runtime::Directness, int, void const*)>)": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.2,
+        "static VinylPressingProbe.$main()": 0.2,
+        "static VinylPressingProbe.main()": 0.2,
+        "MorphingArtworkView.body.getter": 0.1
+      }
+    },
+    {
+      "start_s": 9.750662209,
+      "duration_ms": 0.786541,
+      "description": "DisplayList Item: GeometryEffectDisplayList<_RotationEffect>",
+      "severity": "Moderate",
+      "main_sample_count": 0,
+      "main_sample_weight_ms": 0.0,
+      "max_main_sample_gap_ms": 0.786541,
+      "sample_relative_ms": [],
+      "leaf_weight_ms": {},
+      "own_inclusive_weight_ms": {}
+    },
+    {
+      "start_s": 9.196208917,
+      "duration_ms": 0.727791,
+      "description": "DynamicBody<ViewBodyAccessor<MorphingArtworkView>, MainThreadFlags>",
+      "severity": "Moderate",
+      "main_sample_count": 3,
+      "main_sample_weight_ms": 0.3,
+      "max_main_sample_gap_ms": 0.488583,
+      "sample_relative_ms": [
+        0.48858,
+        0.58746,
+        0.68775
+      ],
+      "leaf_weight_ms": {
+        "View.modifier<A>(_:)": 0.1,
+        "View.onChange<A>(of:initial:_:)": 0.1,
+        "util::UntypedTable::lookup(void*, void**) const": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.3,
+        "static VinylPressingProbe.$main()": 0.3,
+        "static VinylPressingProbe.main()": 0.3,
+        "MorphingArtworkView.body.getter": 0.1
+      }
+    },
+    {
+      "start_s": 9.407703833,
+      "duration_ms": 0.719083,
+      "description": "StaticLayoutComputer<_ZStackLayout>",
+      "severity": "Moderate",
+      "main_sample_count": 1,
+      "main_sample_weight_ms": 0.1,
+      "max_main_sample_gap_ms": 0.690625,
+      "sample_relative_ms": [
+        0.69063
+      ],
+      "leaf_weight_ms": {
+        "objc_opt_self": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.1,
+        "static VinylPressingProbe.$main()": 0.1,
+        "static VinylPressingProbe.main()": 0.1
+      }
+    },
+    {
+      "start_s": 9.115257875,
+      "duration_ms": 0.6825,
+      "description": "UpdateFilter<AnimationTimelineSchedule, ZStack<TupleView>>",
+      "severity": "Moderate",
+      "main_sample_count": 4,
+      "main_sample_weight_ms": 0.4,
+      "max_main_sample_gap_ms": 0.398875,
+      "sample_relative_ms": [
+        0.03837,
+        0.43725,
+        0.5385,
+        0.63842
+      ],
+      "leaf_weight_ms": {
+        "<deduplicated_symbol>": 0.2,
+        "0x2bc373b41": 0.1,
+        "ExternalTrace::compare_failed(AG::data::ptr<AG::Node>, void const*, void const*, unsigned long, unsigned long, AG::swift::metadata const*)": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.4,
+        "static VinylPressingProbe.$main()": 0.4,
+        "static VinylPressingProbe.main()": 0.4,
+        "closure #1 in VinylRecordView.body.getter": 0.2,
+        "closure #1 in closure #1 in VinylRecordView.body.getter": 0.2,
+        "partial apply for closure #1 in VinylRecordView.body.getter": 0.2,
+        "specialized ZStack.init(alignment:content:)": 0.2,
+        "specialized _VariadicView.Tree.init(_:content:)": 0.2
+      }
+    },
+    {
+      "start_s": 9.746317292,
+      "duration_ms": 0.660083,
+      "description": "GeometryReader<ModifiedContent>.Child",
+      "severity": "Moderate",
+      "main_sample_count": 2,
+      "main_sample_weight_ms": 0.2,
+      "max_main_sample_gap_ms": 0.481666,
+      "sample_relative_ms": [
+        0.48167,
+        0.57879
+      ],
+      "leaf_weight_ms": {
+        "outlined init with take of ObservationTracking._AccessList?": 0.1,
+        "swift::swift_slowAllocTyped(unsigned long, unsigned long, unsigned long long)": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.2,
+        "static VinylPressingProbe.$main()": 0.2,
+        "static VinylPressingProbe.main()": 0.2,
+        "closure #1 in RadialProgressView.body.getter": 0.1,
+        "closure #2 in closure #1 in RadialProgressView.body.getter": 0.1,
+        "specialized View.background<A>(alignment:content:)": 0.1,
+        "specialized _allocateUninitializedArray<A>(_:)": 0.1
+      }
+    },
+    {
+      "start_s": 9.117225292,
+      "duration_ms": 0.653791,
+      "description": "DynamicBody<ViewBodyAccessor<MorphingArtworkView>, MainThreadFlags>",
+      "severity": "Moderate",
+      "main_sample_count": 0,
+      "main_sample_weight_ms": 0.0,
+      "max_main_sample_gap_ms": 0.653791,
+      "sample_relative_ms": [],
+      "leaf_weight_ms": {},
+      "own_inclusive_weight_ms": {}
+    },
+    {
+      "start_s": 6.167983666,
+      "duration_ms": 0.64625,
+      "description": "ForEachState<Range, Int, ModifiedContent>.ForEachState.Info.Init",
+      "severity": "Moderate",
+      "main_sample_count": 2,
+      "main_sample_weight_ms": 0.2,
+      "max_main_sample_gap_ms": 0.599875,
+      "sample_relative_ms": [
+        0.01038,
+        0.61025
+      ],
+      "leaf_weight_ms": {
+        "ForEachState.update(view:flags:)": 0.1,
+        "swift_beginAccess": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.2,
+        "static VinylPressingProbe.$main()": 0.2,
+        "static VinylPressingProbe.main()": 0.2
+      }
+    },
+    {
+      "start_s": 9.836800125,
+      "duration_ms": 0.638125,
+      "description": "DynamicBody<ViewBodyAccessor<RadialProgressView>, MainThreadFlags>",
+      "severity": "Moderate",
+      "main_sample_count": 3,
+      "main_sample_weight_ms": 0.3,
+      "max_main_sample_gap_ms": 0.397458,
+      "sample_relative_ms": [
+        0.39746,
+        0.49496,
+        0.59604
+      ],
+      "leaf_weight_ms": {
+        "0x1a43aa2d1": 0.1,
+        "swift::Demangle::__runtime::makeSymbolicMangledNameStringRef(char const*)": 0.1,
+        "swift::MetadataCacheEntryBase<swift::GenericCacheEntry, void const*>::awaitSatisfyingState(swift::ConcurrencyControl&, swift::MetadataRequest)": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.3,
+        "static VinylPressingProbe.$main()": 0.3,
+        "static VinylPressingProbe.main()": 0.3,
+        "RadialProgressView.body.getter": 0.2
+      }
+    },
+    {
+      "start_s": 9.23355525,
+      "duration_ms": 0.580666,
+      "description": "UpdateFilter<PlaybackClockSchedule, IDView<ModifiedContent, String>>",
+      "severity": "Moderate",
+      "main_sample_count": 1,
+      "main_sample_weight_ms": 0.1,
+      "max_main_sample_gap_ms": 0.542208,
+      "sample_relative_ms": [
+        0.54221
+      ],
+      "leaf_weight_ms": {
+        "Hasher._finalize()": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.1,
+        "static VinylPressingProbe.$main()": 0.1,
+        "static VinylPressingProbe.main()": 0.1
+      }
+    },
+    {
+      "start_s": 7.569907875,
+      "duration_ms": 0.573125,
+      "description": "ForEachState<Range, Int, ModifiedContent>.ForEachState.Info.Init",
+      "severity": "Moderate",
+      "main_sample_count": 1,
+      "main_sample_weight_ms": 0.1,
+      "max_main_sample_gap_ms": 0.386417,
+      "sample_relative_ms": [
+        0.18671
+      ],
+      "leaf_weight_ms": {
+        "AGGraphGetValue": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.1,
+        "static VinylPressingProbe.$main()": 0.1,
+        "static VinylPressingProbe.main()": 0.1
+      }
+    },
+    {
+      "start_s": 8.711631416,
+      "duration_ms": 0.572375,
+      "description": "DynamicBody<ViewBodyAccessor<RadialProgressView>, MainThreadFlags>",
+      "severity": "Moderate",
+      "main_sample_count": 1,
+      "main_sample_weight_ms": 0.1,
+      "max_main_sample_gap_ms": 0.507708,
+      "sample_relative_ms": [
+        0.06467
+      ],
+      "leaf_weight_ms": {
+        "closure #1 in String.init(format:locale:arguments:)": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "RadialProgressView.body.getter": 0.1,
+        "main": 0.1,
+        "static VinylPressingProbe.$main()": 0.1,
+        "static VinylPressingProbe.main()": 0.1
+      }
+    },
+    {
+      "start_s": 9.138487083,
+      "duration_ms": 0.561458,
+      "description": "Layout: LeafLayoutComputer<AnimatedShape<_StrokedShape>>",
+      "severity": "Moderate",
+      "main_sample_count": 1,
+      "main_sample_weight_ms": 0.1,
+      "max_main_sample_gap_ms": 0.552708,
+      "sample_relative_ms": [
+        0.00875
+      ],
+      "leaf_weight_ms": {
+        "specialized closure #1 in closure #1 in Trace_Handle.write<A>(attachment:)": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.1,
+        "static VinylPressingProbe.$main()": 0.1,
+        "static VinylPressingProbe.main()": 0.1
+      }
+    },
+    {
+      "start_s": 9.294916917,
+      "duration_ms": 0.537333,
+      "description": "UpdateFilter<AnimationTimelineSchedule, ZStack<TupleView>>",
+      "severity": "Moderate",
+      "main_sample_count": 2,
+      "main_sample_weight_ms": 0.2,
+      "max_main_sample_gap_ms": 0.25775,
+      "sample_relative_ms": [
+        0.08021,
+        0.27958
+      ],
+      "leaf_weight_ms": {
+        "<deduplicated_symbol>": 0.1,
+        "_swift_pod_copy": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "<deduplicated_symbol>": 0.2,
+        "main": 0.2,
+        "static VinylPressingProbe.$main()": 0.2,
+        "static VinylPressingProbe.main()": 0.2,
+        "closure #1 in VinylRecordView.body.getter": 0.1,
+        "closure #1 in closure #1 in VinylRecordView.body.getter": 0.1,
+        "closure #1 in closure #1 in closure #1 in VinylRecordView.body.getter": 0.1,
+        "closure #1 in closure #1 in closure #1 in closure #1 in VinylRecordView.body.getter": 0.1
+      }
+    },
+    {
+      "start_s": 10.294905167,
+      "duration_ms": 0.519833,
+      "description": "View Creation / Reuse",
+      "severity": "Moderate",
+      "main_sample_count": 1,
+      "main_sample_weight_ms": 0.1,
+      "max_main_sample_gap_ms": 0.488833,
+      "sample_relative_ms": [
+        0.48883
+      ],
+      "leaf_weight_ms": {
+        "<deduplicated_symbol>": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.1,
+        "static VinylPressingProbe.$main()": 0.1,
+        "static VinylPressingProbe.main()": 0.1
+      }
+    },
+    {
+      "start_s": 9.812464458,
+      "duration_ms": 0.515875,
+      "description": "FlexCoreInteractionModifier.FlexValue",
+      "severity": "Moderate",
+      "main_sample_count": 1,
+      "main_sample_weight_ms": 0.1,
+      "max_main_sample_gap_ms": 0.433583,
+      "sample_relative_ms": [
+        0.43358
+      ],
+      "leaf_weight_ms": {
+        "_tlv_get_addr": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.1,
+        "static VinylPressingProbe.$main()": 0.1,
+        "static VinylPressingProbe.main()": 0.1
+      }
+    },
+    {
+      "start_s": 10.495416208,
+      "duration_ms": 0.501,
+      "description": "DynamicPreferenceCombiner<DisplayList.Key>",
+      "severity": "Moderate",
+      "main_sample_count": 1,
+      "main_sample_weight_ms": 0.1,
+      "max_main_sample_gap_ms": 0.2805,
+      "sample_relative_ms": [
+        0.2805
+      ],
+      "leaf_weight_ms": {
+        "mach_absolute_time": 0.1
+      },
+      "own_inclusive_weight_ms": {
+        "main": 0.1,
+        "static VinylPressingProbe.$main()": 0.1,
+        "static VinylPressingProbe.main()": 0.1
+      }
+    },
+    {
+      "start_s": 8.429545917,
+      "duration_ms": 0.500708,
+      "description": "View Creation / Reuse",
+      "severity": "Moderate",
+      "main_sample_count": 0,
+      "main_sample_weight_ms": 0.0,
+      "max_main_sample_gap_ms": 0.500708,
+      "sample_relative_ms": [],
+      "leaf_weight_ms": {},
+      "own_inclusive_weight_ms": {}
+    }
+  ],
+  "body_evaluation_gaps_over100ms": {
+    "motor_child": [
+      {
+        "start_s": 8.928509041,
+        "end_s": 9.117225292,
+        "duration_ms": 188.716251,
+        "main_sample_count": 36,
+        "main_sample_weight_ms": 3.6,
+        "all_process_sample_weight_ms": 3.8,
+        "max_main_sample_gap_ms": 90.401417,
+        "main_leaf_weight_ms": {
+          "AG::Graph::UpdateStack::update()": 0.6,
+          "<deduplicated_symbol>": 0.4,
+          "AG::Graph::propagate_dirty(AG::AttributeID)": 0.3,
+          "AG::Subgraph::update(unsigned int)": 0.2,
+          "_xzm_free_zone": 0.2
+        },
+        "own_inclusive_weight_ms": {
+          "main": 3.6,
+          "static VinylPressingProbe.$main()": 3.6,
+          "static VinylPressingProbe.main()": 3.6,
+          "specialized closure #1 in TimelineView<>.init(_:content:)": 0.4,
+          "specialized ZStack.init(alignment:content:)": 0.3,
+          "specialized _VariadicView.Tree.init(_:content:)": 0.3,
+          "specialized closure #1 in ZStack.init(alignment:content:)": 0.3,
+          "MorphingArtworkView.body.getter": 0.2
+        }
+      },
+      {
+        "start_s": 9.389859542,
+        "end_s": 9.640622334,
+        "duration_ms": 250.762792,
+        "main_sample_count": 38,
+        "main_sample_weight_ms": 3.8,
+        "all_process_sample_weight_ms": 3.8,
+        "max_main_sample_gap_ms": 68.0995,
+        "main_leaf_weight_ms": {
+          "AG::Graph::UpdateStack::update()": 0.4,
+          "AG::Graph::propagate_dirty(AG::AttributeID)": 0.4,
+          "objc_opt_self": 0.2,
+          "0x1cc4c9be1": 0.1,
+          "<deduplicated_symbol>": 0.1
+        },
+        "own_inclusive_weight_ms": {
+          "main": 3.8,
+          "static VinylPressingProbe.$main()": 3.8,
+          "static VinylPressingProbe.main()": 3.8,
+          "RadialProgressView.body.getter": 0.1,
+          "initializeWithCopy for MorphingArtworkView": 0.1
+        }
+      },
+      {
+        "start_s": 9.640622334,
+        "end_s": 9.764017917,
+        "duration_ms": 123.395583,
+        "main_sample_count": 45,
+        "main_sample_weight_ms": 4.5,
+        "all_process_sample_weight_ms": 4.6,
+        "max_main_sample_gap_ms": 73.701417,
+        "main_leaf_weight_ms": {
+          "AG::Graph::propagate_dirty(AG::AttributeID)": 0.5,
+          "AG::Subgraph::update(unsigned int)": 0.4,
+          "AG::Graph::UpdateStack::update()": 0.3,
+          "objc_msgSend": 0.2,
+          "swift::swift_slowAllocTyped(unsigned long, unsigned long, unsigned long long)": 0.2
+        },
+        "own_inclusive_weight_ms": {
+          "main": 4.5,
+          "static VinylPressingProbe.$main()": 4.5,
+          "static VinylPressingProbe.main()": 4.5,
+          "specialized closure #1 in TimelineView<>.init(_:content:)": 0.3,
+          "RadialProgressView.body.getter": 0.2,
+          "PlayerModel.displayPositionMs(at:)": 0.1,
+          "VinylRecordView.sheen.getter": 0.1,
+          "closure #1 in MorphingArtworkView.body.getter": 0.1
+        }
+      }
+    ],
+    "progress": [
+      {
+        "start_s": 8.866934667,
+        "end_s": 9.002961875,
+        "duration_ms": 136.027208,
+        "main_sample_count": 39,
+        "main_sample_weight_ms": 3.9,
+        "all_process_sample_weight_ms": 4.0,
+        "max_main_sample_gap_ms": 38.200333,
+        "main_leaf_weight_ms": {
+          "AG::Graph::UpdateStack::update()": 0.4,
+          "AG::Graph::propagate_dirty(AG::AttributeID)": 0.3,
+          "AG::Subgraph::update(unsigned int)": 0.2,
+          "objc_msgSend": 0.2,
+          "specialized Trace_Handle.write<A>(struct:)": 0.2
+        },
+        "own_inclusive_weight_ms": {
+          "main": 3.9,
+          "static VinylPressingProbe.$main()": 3.9,
+          "static VinylPressingProbe.main()": 3.9,
+          "specialized closure #1 in TimelineView<>.init(_:content:)": 0.3,
+          "MorphingArtworkView.body.getter": 0.2,
+          "PlaybackState.mirror.getter": 0.1,
+          "RadialProgressView.body.getter": 0.1,
+          "RecordPlayerView.occurrenceID.getter": 0.1
+        }
+      },
+      {
+        "start_s": 9.002961875,
+        "end_s": 9.121254458,
+        "duration_ms": 118.292583,
+        "main_sample_count": 33,
+        "main_sample_weight_ms": 3.3,
+        "all_process_sample_weight_ms": 3.5,
+        "max_main_sample_gap_ms": 90.401417,
+        "main_leaf_weight_ms": {
+          "AG::Graph::UpdateStack::update()": 0.6,
+          "<deduplicated_symbol>": 0.4,
+          "AG::Graph::propagate_dirty(AG::AttributeID)": 0.3,
+          "AG::Subgraph::update(unsigned int)": 0.2,
+          "_xzm_free_zone": 0.2
+        },
+        "own_inclusive_weight_ms": {
+          "main": 3.3,
+          "static VinylPressingProbe.$main()": 3.3,
+          "static VinylPressingProbe.main()": 3.3,
+          "specialized closure #1 in TimelineView<>.init(_:content:)": 0.3,
+          "<deduplicated_symbol>": 0.2,
+          "closure #1 in VinylRecordView.body.getter": 0.2,
+          "closure #1 in closure #1 in VinylRecordView.body.getter": 0.2,
+          "partial apply for closure #1 in VinylRecordView.body.getter": 0.2
+        }
+      },
+      {
+        "start_s": 9.407436167,
+        "end_s": 9.745446625,
+        "duration_ms": 338.010458,
+        "main_sample_count": 40,
+        "main_sample_weight_ms": 4.0,
+        "all_process_sample_weight_ms": 4.0,
+        "max_main_sample_gap_ms": 73.701417,
+        "main_leaf_weight_ms": {
+          "AG::Graph::UpdateStack::update()": 0.4,
+          "AG::Graph::propagate_dirty(AG::AttributeID)": 0.4,
+          "objc_opt_self": 0.2,
+          "<deduplicated_symbol>": 0.1,
+          "DynamicPreferenceCombiner.value.getter": 0.1
+        },
+        "own_inclusive_weight_ms": {
+          "main": 4.0,
+          "static VinylPressingProbe.$main()": 4.0,
+          "static VinylPressingProbe.main()": 4.0,
+          "specialized closure #1 in TimelineView<>.init(_:content:)": 0.2,
+          "PlayerModel.displayPositionMs(at:)": 0.1,
+          "RadialProgressView.body.getter": 0.1,
+          "closure #1 in MorphingArtworkView.body.getter": 0.1,
+          "closure #1 in closure #3 in RecordPlayerView.record(diameter:)": 0.1
+        }
+      }
+    ]
+  },
+  "event_ancestry": {
+    "leaf_weight_ms": {
+      "AG::Graph::UpdateStack::update()": 10.6,
+      "<deduplicated_symbol>": 6.9,
+      "swift::RefCounts<swift::RefCountBitsT<(swift::RefCountInlinedness)1>>::incrementSlow(swift::RefCountBitsT<(swift::RefCountInlinedness)1>, unsigned int)": 3.9,
+      "_xzm_xzone_malloc_tiny": 2.6,
+      "swift_beginAccess": 2.6,
+      "swift_release": 2.6,
+      "specialized closure #1 in ViewTransform.convert(_:_:)": 2.5,
+      "getCache(swift::TargetTypeContextDescriptor<swift::InProcess> const&)": 2.3,
+      "objc_msgSend": 2.0,
+      "swift::MetadataCacheKey::operator==(swift::MetadataCacheKey const&) const": 2.0,
+      "___chkstk_darwin": 1.7,
+      "_platform_memcmp": 1.7,
+      "swift::TargetContextDescriptor<swift::InProcess>::getGenericContext() const": 1.6,
+      "swift_retain": 1.6,
+      "bool swift::RefCounts<swift::RefCountBitsT<(swift::RefCountInlinedness)1>>::doDecrementSlow<(swift::PerformDeinit)1>(swift::RefCountBitsT<(swift::RefCountInlinedness)1>, unsigned int)": 1.5,
+      "ViewTransform.convert(_:_:)": 1.3,
+      "partial apply for specialized closure #1 in ViewTransform.convertGlobal<A>(to:points:)": 1.1,
+      "std::__1::pair<swift::GenericCacheEntry*, bool> swift::StableAddressConcurrentReadableHashMap<swift::GenericCacheEntry, swift::TaggedMetadataAllocator<(unsigned short)14>, swift::Mutex>::getOrInsert<swift::MetadataCacheKey, swift::MetadataWaitQueue::Worker&, swift::MetadataRequest&, swift::TargetTypeContextDescriptor<swift::InProcess> const*&, void const* const*&>(swift::MetadataCacheKey, swift::MetadataWaitQueue::Worker&, swift::MetadataRequest&, swift::TargetTypeContextDescriptor<swift::InProcess> const*&, void const* const*&)": 1.1,
+      "AGGraphGetValue": 1.0,
+      "MultiViewResponder.containsGlobalPoints(_:cacheKey:options:)": 1.0
+    },
+    "inclusive_weight_ms": {
+      "-[NSApplication _handleEvent:]": 138.6,
+      "-[NSApplication run]": 138.6,
+      "-[NSApplication(NSEventRouting) sendEvent:]": 138.6,
+      "@objc StatusPanel.sendEvent(_:)": 138.6,
+      "main": 138.6,
+      "start": 138.6,
+      "static VinylPressingProbe.$main()": 138.6,
+      "static VinylPressingProbe.main()": 138.6,
+      "StatusPanel.sendEvent(_:)": 137.9,
+      "-[NSWindow(NSEventRouting) sendEvent:]": 125.5,
+      "-[NSWindow(NSEventRouting) _reallySendEvent:isDelayedEvent:]": 125.4,
+      "routeMouseMovedEvent": 108.8,
+      "_routeMouseMovedEvent": 107.0,
+      "-[_NSTrackingAreaAKManager _mouseMoved:]": 106.1,
+      "@objc PlayerHostingView.mouseMoved(with:)": 101.6,
+      "PlayerHostingView.mouseEntered(with:)": 101.2,
+      "-[NSTrackingArea mouseMoved:]": 99.0,
+      "NSHostingView.sendHoverEvent(_:phase:)": 98.3,
+      "@objc NSHostingView.mouseMoved(with:)": 97.8,
+      "NSHostingView.sendEvent<A>(_:serial:track:)": 97.7,
+      "NSHostingView.mouseMoved(with:)": 97.5,
+      "EventBindingManager.send(_:)": 96.8,
+      "NSHostingView.sendEvents(_:track:)": 96.8,
+      "EventBindingManager.sendDownstream(_:)": 96.3,
+      "EventBindingManager.dispatchNonGestureEvents(_:)": 78.3,
+      "HoverEventDispatcher.receiveEvents(_:manager:)": 77.0,
+      "HitTestBindingResponder.bindEvent(_:)": 75.6,
+      "ViewResponder.hitTest(globalPoints:weights:mask:cacheKey:options:)": 62.8,
+      "MultiViewResponder.containsGlobalPoints(_:cacheKey:options:)": 59.1,
+      "NSHostingView.responderNode.getter": 37.7
+    },
+    "leaf_source_weight_ms": [
+      {
+        "name": "PlayerHostingView.updatePointer(_:)",
+        "line": "95",
+        "weight_ms": 0.2
+      },
+      {
+        "name": "closure #1 in QueueView.row(for:isCurrent:)",
+        "line": "64",
+        "weight_ms": 0.1
+      },
+      {
+        "name": "closure #1 in closure #1 in closure #1 in RecordPlayerView.controls.getter",
+        "line": "243",
+        "weight_ms": 0.1
+      },
+      {
+        "name": "destroy for PlaybackState",
+        "line": "0",
+        "weight_ms": 0.1
+      },
+      {
+        "name": "getEnumTagSinglePayload for QueueEntry",
+        "line": "0",
+        "weight_ms": 0.1
+      },
+      {
+        "name": "initializeWithCopy for PlayerSurface",
+        "line": "0",
+        "weight_ms": 0.1
+      }
+    ],
+    "top_leaf_stacks": [
+      {
+        "frames": [
+          "AG::Graph::UpdateStack::update()",
+          "AG::Graph::update_attribute(AG::data::ptr<AG::Node>, unsigned int)",
+          "AG::Graph::value_ref(AG::AttributeID, unsigned int, AGSwiftMetadata const*, unsigned char&)",
+          "AGGraphGetWeakValue",
+          "ViewGraph.responderNode.getter",
+          "closure #1 in NSHostingView.responderNode.getter",
+          "ViewRendererHost.updateViewGraph<A>(body:)"
+        ],
+        "weight_ms": 10.6
+      },
+      {
+        "frames": [
+          "AG::Graph::propagate_dirty(AG::AttributeID)",
+          "AG::Graph::value_set(AG::data::ptr<AG::Node>, AGSwiftMetadata const*, void const*)",
+          "GraphHost.setEnvironment(_:)",
+          "NSHostingView.updateEnvironment()",
+          "closure #1 in ViewGraphRootValueUpdater.updateGraph()",
+          "ViewGraphRootValueUpdater.updateGraph()",
+          "ViewRendererHost.updateViewGraph<A>(body:)"
+        ],
+        "weight_ms": 0.9
+      },
+      {
+        "frames": [
+          "specialized closure #1 in ViewTransform.convert(_:_:)",
+          "static ViewTransform.UnsafeBuffer._VTable.forEach(elt:inverted:stop:_:)",
+          "ViewTransform.UnsafeBuffer.forEach(inverted:stop:_:)",
+          "BufferedElement.forEach(inverted:stop:_:)",
+          "ViewTransform.convert(_:_:)",
+          "specialized ViewTransform.convertGlobal<A>(to:points:)",
+          "closure #1 in closure #1 in ContentResponderHelper.containsGlobalPoints(_:cacheKey:options:children:)"
+        ],
+        "weight_ms": 0.9
+      },
+      {
+        "frames": [
+          "Element.forEach(inverted:stop:_:)",
+          "ViewTransform.convert(_:_:)",
+          "specialized ViewTransform.convertGlobal<A>(to:points:)",
+          "closure #1 in closure #1 in ContentResponderHelper.containsGlobalPoints(_:cacheKey:options:children:)",
+          "closure #1 in ContentResponderHelper.containsGlobalPoints(_:cacheKey:options:children:)",
+          "ContentResponderHelper.containsGlobalPoints(_:cacheKey:options:children:)",
+          "LeafViewResponder.containsGlobalPoints(_:cacheKey:options:)"
+        ],
+        "weight_ms": 0.7
+      },
+      {
+        "frames": [
+          "ViewTransform.convert(_:_:)",
+          "specialized ViewTransform.convertGlobal<A>(to:points:)",
+          "closure #1 in closure #1 in ContentResponderHelper.containsGlobalPoints(_:cacheKey:options:children:)",
+          "closure #1 in ContentResponderHelper.containsGlobalPoints(_:cacheKey:options:children:)",
+          "ContentResponderHelper.containsGlobalPoints(_:cacheKey:options:children:)",
+          "LeafViewResponder.containsGlobalPoints(_:cacheKey:options:)",
+          "MultiViewResponder.containsGlobalPoints(_:cacheKey:options:)"
+        ],
+        "weight_ms": 0.7
+      },
+      {
+        "frames": [
+          "RB::Path::Storage::append_element(RBPathElement, double const*, void const*)",
+          "closure #1 in Path.strokedPath(_:)",
+          "Path.strokedPath(_:)",
+          "_StrokedShape.path(in:)",
+          "protocol witness for Shape.path(in:) in conformance _StrokedShape<A>",
+          "Shape.effectivePath(in:)",
+          "AnimatedShape.shape(in:)"
+        ],
+        "weight_ms": 0.6
+      },
+      {
+        "frames": [
+          "swift_conformsToProtocolMaybeInstantiateSuperclasses(swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptor<swift::InProcess> const*, bool)",
+          "swift_conformsToProtocolWithExecutionContext",
+          "swift::_conformsToProtocol(swift::OpaqueValue const*, swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptorRef<swift::InProcess>, swift::TargetWitnessTable<swift::InProcess> const**, swift::ConformanceExecutionContext*)",
+          "swift::_conformsToProtocolInContext(swift::OpaqueValue const*, swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptorRef<swift::InProcess>, swift::TargetWitnessTable<swift::InProcess> const**, bool)",
+          "_conformsToProtocols(swift::OpaqueValue const*, swift::TargetMetadata<swift::InProcess> const*, swift::TargetExistentialTypeMetadata<swift::InProcess> const*, swift::TargetWitnessTable<swift::InProcess> const**, bool)",
+          "tryCastToConstrainedOpaqueExistential(swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*, swift::TargetMetadata<swift::InProcess> const*&, swift::TargetMetadata<swift::InProcess> const*&, bool, bool, bool)",
+          "tryCast(swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*, swift::TargetMetadata<swift::InProcess> const*&, swift::TargetMetadata<swift::InProcess> const*&, bool, bool, bool)"
+        ],
+        "weight_ms": 0.6
+      },
+      {
+        "frames": [
+          "_xzm_xzone_malloc_tiny",
+          "swift_allocObject",
+          "ViewTransform.convert(_:_:)",
+          "specialized ViewTransform.convertGlobal<A>(to:points:)",
+          "closure #1 in closure #1 in ContentResponderHelper.containsGlobalPoints(_:cacheKey:options:children:)",
+          "closure #1 in ContentResponderHelper.containsGlobalPoints(_:cacheKey:options:children:)",
+          "ContentResponderHelper.containsGlobalPoints(_:cacheKey:options:children:)"
+        ],
+        "weight_ms": 0.5
+      }
+    ]
+  },
+  "limits": [
+    "Long SwiftUI interval wall time is not CPU self-time.",
+    "Sample gaps cannot distinguish idle, scheduler delay, missed samples or tracing overhead without scheduler data.",
+    "Fixture monotonic tick gaps have no exact trace anchor; matching body-gap patterns is only approximate correlation.",
+    "Inclusive stack weights overlap and are not calibrated utilization."
+  ]
+}

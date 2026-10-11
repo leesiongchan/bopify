@@ -1,0 +1,91 @@
+{
+  "checks": [
+    {
+      "evidence": "after-swiftui-1/cpu-swiftui-analysis.json",
+      "sha256": "5c92db495d1d4ed0d5a85246c90e981a30d18adfdcd265f0f4bb317d32761608",
+      "hash_seeds": [
+        1,
+        2
+      ],
+      "byte_identical": true
+    },
+    {
+      "evidence": "after-swiftui-cadence-1/cpu-swiftui-analysis.json",
+      "sha256": "cec746afdaba392ecfe7542c492c128dbae65936be11c9c3c565b6cbaeff34ab",
+      "hash_seeds": [
+        1,
+        2
+      ],
+      "byte_identical": true
+    },
+    {
+      "evidence": "before-swiftui-cadence-1/cpu-swiftui-analysis.json",
+      "sha256": "4108939000890537770e8a8ca2def9a3479d76c76d4e14c0d85dcc1d8b2668de",
+      "hash_seeds": [
+        1,
+        2
+      ],
+      "byte_identical": true
+    },
+    {
+      "evidence": "activation-regular-1/cpu-swiftui-analysis.json",
+      "sha256": "07ea53360b10312ee2e7d832484b6e516ef863acbc8c8f05accf30c52f453667",
+      "hash_seeds": [
+        1,
+        2
+      ],
+      "byte_identical": true
+    },
+    {
+      "evidence": "visibility-normal-1/cpu-swiftui-analysis.json",
+      "sha256": "c022f1f72102ba41830ed710fd1bafef449d544472e2bd94996112d4e297572f",
+      "hash_seeds": [
+        1,
+        2
+      ],
+      "byte_identical": true
+    },
+    {
+      "evidence": "activation-regular-1/long-swiftui-analysis.json",
+      "sha256": "e8c0daa5b9cbf8b0702ebe3ab3ff9f244ddba150d30f6891d2bf76528f6f7182",
+      "hash_seeds": [
+        1,
+        2
+      ],
+      "byte_identical": true
+    },
+    {
+      "evidence": "visibility-normal-1/long-swiftui-analysis.json",
+      "sha256": "3505bcdd63b4a124ba7cf19d5c37bbe94c24c477fe1a6080ef7778a3fb5e76f9",
+      "hash_seeds": [
+        1,
+        2
+      ],
+      "byte_identical": true
+    },
+    {
+      "evidence": "after-cpu-1/cpu-analysis.json",
+      "sha256": "9bdc80f31441eb297b1ffc33fbddcc87f1a8725a922ec32d67fc202128cc174a",
+      "hash_seeds": [
+        1,
+        2
+      ],
+      "byte_identical": true
+    },
+    {
+      "evidence": "after-scheduler-1/scheduler-analysis.json",
+      "sha256": "8588151d05118858c491f1fe315c2c3976a3d5b10946bd473e3f9317cf00e1d4",
+      "hash_seeds": [
+        1,
+        2
+      ],
+      "byte_identical": true
+    }
+  ],
+  "explicit_sorting_checked": [
+    "main sample timestamps",
+    "all process sample timestamps",
+    "motor body timestamps",
+    "progress body timestamps"
+  ]
+}
