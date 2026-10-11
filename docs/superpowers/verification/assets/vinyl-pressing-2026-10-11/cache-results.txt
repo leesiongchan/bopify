@@ -1,0 +1,8 @@
+PASS: lazy palettes, coalescing, decoded image reuse, clear/eviction/replacement races, failure lifetimes
+PALETTE 0: marble(BopifyPlayback.ArtworkColor(red: 0.1516927182674408, green: 0.5442708730697632, blue: 0.9017857313156128), BopifyPlayback.ArtworkColor(red: 0.8870738744735718, green: 0.11470171064138412, blue: 0.2127130776643753), BopifyPlayback.ArtworkColor(red: 0.1516927182674408, green: 0.5442708730697632, blue: 0.9017857313156128))
+PALETTE 1: marble(BopifyPlayback.ArtworkColor(red: 0.949404776096344, green: 0.3697916865348816, blue: 0.0757533460855484), BopifyPlayback.ArtworkColor(red: 0.41086649894714355, green: 0.20632103085517883, blue: 0.10191761702299118), BopifyPlayback.ArtworkColor(red: 0.949404776096344, green: 0.3697916865348816, blue: 0.0757533460855484))
+PALETTE 2: tinted(BopifyPlayback.ArtworkColor(red: 0.010692249983549118, green: 0.010692249983549118, blue: 0.010692249983549118))
+PALETTE 3: marble(BopifyPlayback.ArtworkColor(red: 0.7998046875, green: 0.199951171875, blue: 0.1019287109375), BopifyPlayback.ArtworkColor(red: 0.7998046875, green: 0.199951171875, blue: 0.1019287109375), BopifyPlayback.ArtworkColor(red: 0.7998046875, green: 0.199951171875, blue: 0.1019287109375))
+PASS: coalescing, image publication, 640px downsampling, HTTP/decode failure caching, 112-entry cap, clear/reload
+/private/tmp/bopify-pressing-cache/MonolithProbe.app/Contents/MacOS/MonolithProbe
+Report/captures: /private/tmp/bopify-pressing-cache

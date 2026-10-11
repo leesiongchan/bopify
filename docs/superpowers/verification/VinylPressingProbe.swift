@@ -32,6 +32,8 @@ private nonisolated final class PressingArtworkProtocol: URLProtocol, @unchecked
     var reduceMotion = false
     var mounted = true
     var artworkStore: ArtworkStore?
+    var reduceTransparency = false
+    var increasedContrast = false
 }
 
 private struct PressingProbeScene: View {
@@ -42,8 +44,12 @@ private struct PressingProbeScene: View {
     var body: some View {
         if settings.mounted {
             RecordPlayerView(player: environment.player!, artworkStore: settings.artworkStore ?? environment.artworkStore,
-                             presentation: presentation, windowController: controller, reduceMotionOverride: settings.reduceMotion)
+                             presentation: presentation, windowController: controller)
                 .environment(environment)
+                // Writable backing keys in the Xcode 27 SDK let the fixture exercise the production environment reads.
+                .environment(\._accessibilityReduceMotion, settings.reduceMotion)
+                .environment(\._accessibilityReduceTransparency, settings.reduceTransparency)
+                .environment(\._colorSchemeContrast, settings.increasedContrast ? .increased : .standard)
                 .id(ObjectIdentifier(settings.artworkStore ?? environment.artworkStore))
         }
     }
@@ -102,6 +108,7 @@ private struct PressingProbeScene: View {
         try await visualMatrix(player: player, settings: settings, panel: panel, controller: controller, output: output)
         if ProcessInfo.processInfo.environment["VINYL_PROBE_VISUAL_ONLY"] == "1" { return }
         try await verifyMotor(player: player, presentation: presentation, settings: settings, panel: panel)
+        try await verifyEngineStops()
         #endif
     }
 
@@ -131,15 +138,42 @@ private struct PressingProbeScene: View {
                         .trackChanged(track), .paused(positionMs: 0)])
                     if name == "warm-attention" { player.applyPreviewEvents([.failed(.networkUnavailable)]) }
                     try await settle(850)
-                    let image = try await capture(panel, output: output,
-                        name: "matrix-\(name)-\(Int(controller.layout.recordDiameter))-\(dark ? "dark" : "light")")
+                    let captureName = "matrix-\(name)-\(Int(controller.layout.recordDiameter))-\(dark ? "dark" : "light")"
+                    let image = try await capture(panel, output: output, name: captureName)
                     let fraction = saturatedFraction(image, center: controller.layout.recordCenter, diameter: controller.layout.recordDiameter)
                     try require(name == "colourful" || name == "warm-attention" ? fraction > 0.2 : fraction < 0.08,
                                 "\(name) annulus classification disagrees with artwork: \(fraction)")
+                    if let comparison = ProcessInfo.processInfo.environment["VINYL_PROBE_COMPARE_DIR"] {
+                        let previous = NSImage(contentsOfFile: comparison + "/" + captureName + ".png")!.cgImage(forProposedRect: nil, context: nil, hints: nil)!
+                        let difference = annulusDifference(previous, image, center: controller.layout.recordCenter, diameter: controller.layout.recordDiameter)
+                        try require(difference < 0.003, "fresh process changed \(captureName): \(difference)")
+                        print("FRESH PROCESS \(captureName): mean RGB difference \(difference)"); fflush(stdout)
+                    }
                 }
             }
         }
         try await stopped("visual matrix settled")
+        let accessibleTrack = previewTracks[1]
+        player.applyPreviewEvents([.queueChanged(PlaybackQueue(generation: 999, previous: [],
+            current: QueueEntry(id: "accessibility", uri: accessibleTrack.uri, target: nil, track: accessibleTrack, metadataFailed: false), next: [])),
+            .trackChanged(accessibleTrack), .paused(positionMs: 0)])
+        try await settle(850)
+        settings.increasedContrast = true
+        try await settle(300)
+        try require(MonolithPressingProbe.contrast == .increased, "native high-contrast appearance must reach the record environment")
+        try await capture(panel, output: output, name: "accessibility-increased-contrast")
+        settings.increasedContrast = false
+        settings.reduceMotion = true
+        try await settle(300)
+        try await capture(panel, output: output, name: "accessibility-reduce-motion")
+        try await stopped("accessibility Reduce Motion")
+        settings.reduceTransparency = true
+        try await settle(850)
+        try await capture(panel, output: output, name: "accessibility-reduce-transparency")
+        try await stopped("accessibility Reduce Transparency")
+        settings.reduceTransparency = false
+        settings.reduceMotion = false
+        try await settle(850)
         print("VISUAL MATRIX: colourful/warm attention/greyscale/missing, 118/182pt, light/dark PASS"); fflush(stdout)
     }
 
@@ -263,6 +297,11 @@ private struct PressingProbeScene: View {
         try await settle(100); pause(); try await settle(330)
         try await moving("new brake survives old deadline", milliseconds: 100)
         try await settle(650); try await stopped("replacement brake settled")
+        player.applyPreviewEvents([.playing(positionMs: 64_000)])
+        try await settle(120)
+        settings.reduceMotion = true
+        try await settle(90); try await stopped("Reduce Motion during spin-up")
+        settings.reduceMotion = false
 
         try await play()
         let scrubPointer = try recordPointer(panel.contentView!)
@@ -342,6 +381,33 @@ private struct PressingProbeScene: View {
         let delta = MonolithAmbientProbe.ticks - ticks
         try require(delta >= 2, "\(name) must animate; got \(delta) ticks")
         print("MOTOR \(name): \(delta) ticks"); fflush(stdout)
+    }
+
+    private static func verifyEngineStops() async throws {
+        for recovering in [false, true] {
+            for duringBrake in [false, true] {
+                let environment = makePreviewEnvironment(.playing)
+                let player = environment.player!
+                let presentation = PlayerPresentation()
+                presentation.isVisible = true
+                let controller = PlayerWindowController(previewMode: .compact)
+                let settings = PressingProbeSettings()
+                let panel = StatusPanel(content: PressingProbeScene(environment: environment, presentation: presentation,
+                                                                   controller: controller, settings: settings))
+                panel.setFrame(CGRect(x: 300, y: 300, width: 264, height: 264), display: true)
+                panel.makeKeyAndOrderFront(nil)
+                try await settle(700)
+                try await moving("detachment control")
+                if duringBrake { player.applyPreviewEvents([.paused(positionMs: 0)]); try await settle(100) }
+                if recovering { player.applyPreviewEvents([.sessionLost(.legacy)]) }
+                else { player.detachEngine() }
+                try await settle(90)
+                try require(MonolithMotorProbe.samples.last!.0 == .snap && MonolithMotorProbe.samples.last!.2 == 0,
+                            "detachment and recovery must snap during drive and brake")
+                try await stopped("\(recovering ? "recovery" : "detachment") \(duringBrake)")
+                player.stop(); panel.orderOut(nil)
+            }
+        }
     }
 
     private static func stopped(_ name: String) async throws {

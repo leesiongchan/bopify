@@ -24,6 +24,10 @@ if options.measure_ambient or options.probe == 'composition':
         assert source.count(marker) == 1, 'ambient probe instrumentation marker changed'
         source = source.replace(marker, marker + '\n            let _ = MonolithAmbientProbe.tick()')
         source += '\n@MainActor enum MonolithAmbientProbe { static var ticks = 0; static func tick() { ticks += 1 } }\n'
+        if options.probe == 'pressing':
+            marker = '.accessibilityHidden(true)'
+            assert source.count(marker) == 1, 'contrast instrumentation marker changed'
+            source = source.replace(marker, marker + '\n        .onChange(of: contrast, initial: true) { _, value in MonolithPressingProbe.contrast = value }')
     if options.probe == 'composition':
         assert source.count('.onChange(of: occurrenceID) { _, _ in') == 1, 'navigation probe instrumentation marker changed'
         source = source.replace('.onChange(of: occurrenceID) { _, _ in',
@@ -42,7 +46,7 @@ if options.measure_ambient and options.probe == 'pressing':
     assert source.count(marker) == 1, 'pressing publication instrumentation marker changed'
     source = source.replace(marker, marker + '\n            MonolithPressingProbe.samples.append((ready.seed, ready.palette))')
     source += '\n@MainActor enum MonolithMotorProbe { static var samples: [(RecordMotorRequest, Double, Double)] = []; static var seeks: [Int64] = [] }\n'
-    source += '\n@MainActor enum MonolithPressingProbe { static var samples: [(Float, ArtworkPalette)] = []; static var layers = 0 }\n'
+    source += '\n@MainActor enum MonolithPressingProbe { static var samples: [(Float, ArtworkPalette)] = []; static var layers = 0; static var contrast: ColorSchemeContrast = .standard }\n'
     measured.write_text(source)
     sources[sources.index(str(original))] = str(measured)
     original = root / 'Bopify/Bopify/Views/VinylPressingView.swift'
