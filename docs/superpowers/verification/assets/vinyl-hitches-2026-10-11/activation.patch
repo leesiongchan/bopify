@@ -1,0 +1,5 @@
+--- a/VinylPressingProbe.swift
++++ b/VinylPressingProbe.swift
+@@ -62 +62 @@
+-        app.setActivationPolicy(.regular)
++        app.setActivationPolicy(ProcessInfo.processInfo.environment["HITCH_ACCESSORY"] == "1" ? .accessory : .regular)

@@ -1,0 +1,55 @@
+{
+  "before": {
+    "source_sha256": {
+      "VinylPressingProbe.swift": "e8edef339b6deb932451d66b44a0986d24fd5aa3f7e8f6b7d6026ad4abbf406c",
+      "Bopify/Bopify/Views/VinylRecordView.swift": "4534c9153c9f6f2110510f19d336a85dae8867b9c75474083dd3ffd1273756dc",
+      "Bopify/Bopify/Views/RecordPlayerView.swift": "cb5d60eb4218259e8f47b3cba1e52b0d17051c90e8bc56c17df676032a7c1822"
+    },
+    "binary_sha256": "c10ca4074463e2f066fc144028a0dc6d36ebc630c4b3d1ac4d1308f317d4c229"
+  },
+  "after": {
+    "source_sha256": {
+      "VinylPressingProbe.swift": "e8edef339b6deb932451d66b44a0986d24fd5aa3f7e8f6b7d6026ad4abbf406c",
+      "Bopify/Bopify/Views/VinylRecordView.swift": "a5b9f9d7ac324ff1b50af6cc953d01a08872141c5ffa241b6a35a080d1b7035e",
+      "Bopify/Bopify/Views/RecordPlayerView.swift": "2c5e59a7c16b93322712a468be8ba354efa5cffc96b187a8dfec5b5d2e2cd8d1"
+    },
+    "binary_sha256": "29b0da3249152ca917a5a5ea536e944d00a4c18234dd11e0d4f2834c25669d2b"
+  },
+  "ablation": {
+    "source_sha256": {
+      "VinylPressingProbe.swift": "e8edef339b6deb932451d66b44a0986d24fd5aa3f7e8f6b7d6026ad4abbf406c",
+      "Bopify/Bopify/Views/VinylRecordView.swift": "6d5677d5a6e0b53e4817696b3ab5514508751f605a102c7e9254911cf9881370",
+      "Bopify/Bopify/Views/RecordPlayerView.swift": "822a64c4c96cd4972f61e750c0bab9ffe1e6b479a9523aba7ca8c56a97cb4b8f"
+    },
+    "binary_sha256": "8bd4a346f475f9b8c756edaa9c7f66206071cacf40619eaa5601ad040e101e27"
+  },
+  "accessory": {
+    "source_sha256": {
+      "VinylPressingProbe.swift": "b231fe10b4ef4563a52a067d4ac4bef9ffd156aee057139793c938cc4b3c2aa1",
+      "Bopify/Bopify/Views/VinylRecordView.swift": "a5b9f9d7ac324ff1b50af6cc953d01a08872141c5ffa241b6a35a080d1b7035e",
+      "Bopify/Bopify/Views/RecordPlayerView.swift": "2c5e59a7c16b93322712a468be8ba354efa5cffc96b187a8dfec5b5d2e2cd8d1"
+    },
+    "binary_sha256": "38d083bd883e164439eb2f26595f0ee1b1752cbd9155575e736b7be7836c6559"
+  },
+  "activation": {
+    "source_sha256": {
+      "VinylPressingProbe.swift": "9d0de69dd7e0302b3cb72869b2747bfd26287d9d0189eddd3e66d49e3e664efb",
+      "Bopify/Bopify/Views/VinylRecordView.swift": "a5b9f9d7ac324ff1b50af6cc953d01a08872141c5ffa241b6a35a080d1b7035e",
+      "Bopify/Bopify/Views/RecordPlayerView.swift": "2c5e59a7c16b93322712a468be8ba354efa5cffc96b187a8dfec5b5d2e2cd8d1"
+    },
+    "binary_sha256": "fb171560b0ccdd872efc21cf8bfa2b97c9ca7a72b6710663e0d48026b095d55c"
+  },
+  "visibility": {
+    "source_sha256": {
+      "VinylPressingProbe.swift": "b9098f7e21b2be247e0e8118499361f113ddaeff975fdcf79741ed3572231271",
+      "Bopify/Bopify/Views/VinylRecordView.swift": "a5b9f9d7ac324ff1b50af6cc953d01a08872141c5ffa241b6a35a080d1b7035e",
+      "Bopify/Bopify/Views/RecordPlayerView.swift": "2c5e59a7c16b93322712a468be8ba354efa5cffc96b187a8dfec5b5d2e2cd8d1"
+    },
+    "binary_sha256": "2ab5e715a5a8170747137a8a032bb443fc21a11b7d9047936857c9841690f1d5"
+  },
+  "minimal_current": {
+    "source_sha256": "809a7ed4f872f4944083dbb69bd705390964f2033fcd23f6378bfd36d2fe70ac",
+    "binary_sha256": "20271c75b3aa5c9141a956820e3429c393065a3c486d2f321117017c813d6998",
+    "limit": "Earlier regular-policy minimal binary was replaced when the policy switch was added; its hash was not recorded. Current source reproduces that policy via default branch, not byte-identical historical binary."
+  }
+}
