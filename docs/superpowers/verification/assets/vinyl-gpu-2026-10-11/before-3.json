@@ -1,0 +1,6682 @@
+{
+  "process_pid": 78823,
+  "measurement": "shared compositor frame GPU associated with app updates",
+  "window_seconds": [
+    2,
+    12
+  ],
+  "top_level_update_rows": 470,
+  "unique_update_frame_keys": 470,
+  "gpu": {
+    "all_compositor_frames": 694,
+    "diagnostic": "joined",
+    "frame_values": [
+      {
+        "display": "Display 3",
+        "swap_id": 467022,
+        "surface_id": 454,
+        "start_ns": 2050896000,
+        "duration_ms": 2.30375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467024,
+        "surface_id": 87,
+        "start_ns": 2083943000,
+        "duration_ms": 2.520375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467025,
+        "surface_id": 454,
+        "start_ns": 2100646291,
+        "duration_ms": 2.2055
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467026,
+        "surface_id": 404,
+        "start_ns": 2117768750,
+        "duration_ms": 3.311041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467027,
+        "surface_id": 87,
+        "start_ns": 2134144500,
+        "duration_ms": 2.462875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467029,
+        "surface_id": 404,
+        "start_ns": 2168942125,
+        "duration_ms": 2.173416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467030,
+        "surface_id": 87,
+        "start_ns": 2189320625,
+        "duration_ms": 3.19325
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467031,
+        "surface_id": 454,
+        "start_ns": 2200464250,
+        "duration_ms": 2.4635
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467032,
+        "surface_id": 404,
+        "start_ns": 2217294875,
+        "duration_ms": 2.754125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467033,
+        "surface_id": 87,
+        "start_ns": 2234933750,
+        "duration_ms": 3.0335
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467035,
+        "surface_id": 404,
+        "start_ns": 2268126750,
+        "duration_ms": 3.490625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467036,
+        "surface_id": 87,
+        "start_ns": 2284194125,
+        "duration_ms": 2.590625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467039,
+        "surface_id": 87,
+        "start_ns": 2334360125,
+        "duration_ms": 2.414375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467041,
+        "surface_id": 404,
+        "start_ns": 2368235750,
+        "duration_ms": 3.07275
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467042,
+        "surface_id": 87,
+        "start_ns": 2384162541,
+        "duration_ms": 2.531958
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347556,
+        "surface_id": 462,
+        "start_ns": 2387427250,
+        "duration_ms": 0.795125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467044,
+        "surface_id": 454,
+        "start_ns": 2422696291,
+        "duration_ms": 3.276833
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347558,
+        "surface_id": 462,
+        "start_ns": 2442354666,
+        "duration_ms": 0.797458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467047,
+        "surface_id": 454,
+        "start_ns": 2466996916,
+        "duration_ms": 2.264458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467048,
+        "surface_id": 404,
+        "start_ns": 2483997000,
+        "duration_ms": 3.263125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467049,
+        "surface_id": 87,
+        "start_ns": 2499821416,
+        "duration_ms": 2.962458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467051,
+        "surface_id": 404,
+        "start_ns": 2533711875,
+        "duration_ms": 2.92825
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467052,
+        "surface_id": 87,
+        "start_ns": 2551573625,
+        "duration_ms": 3.2855
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467054,
+        "surface_id": 404,
+        "start_ns": 2583967375,
+        "duration_ms": 2.228
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467055,
+        "surface_id": 87,
+        "start_ns": 2601710541,
+        "duration_ms": 3.106458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467058,
+        "surface_id": 87,
+        "start_ns": 2651537041,
+        "duration_ms": 2.075625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467061,
+        "surface_id": 404,
+        "start_ns": 2719599166,
+        "duration_ms": 2.915
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467062,
+        "surface_id": 87,
+        "start_ns": 2752333250,
+        "duration_ms": 2.30275
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467065,
+        "surface_id": 404,
+        "start_ns": 2817983000,
+        "duration_ms": 2.959541
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347568,
+        "surface_id": 462,
+        "start_ns": 2821700541,
+        "duration_ms": 0.747625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467066,
+        "surface_id": 87,
+        "start_ns": 2853615041,
+        "duration_ms": 2.466583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467068,
+        "surface_id": 87,
+        "start_ns": 2885637625,
+        "duration_ms": 2.574166
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347569,
+        "surface_id": 223,
+        "start_ns": 2892380125,
+        "duration_ms": 0.722125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467069,
+        "surface_id": 404,
+        "start_ns": 2917738625,
+        "duration_ms": 3.523916
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347571,
+        "surface_id": 223,
+        "start_ns": 2935720125,
+        "duration_ms": 0.721291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467072,
+        "surface_id": 87,
+        "start_ns": 2986175166,
+        "duration_ms": 2.989708
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347573,
+        "surface_id": 223,
+        "start_ns": 3003283416,
+        "duration_ms": 0.768375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467074,
+        "surface_id": 87,
+        "start_ns": 3034833625,
+        "duration_ms": 2.412041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467076,
+        "surface_id": 87,
+        "start_ns": 3070270041,
+        "duration_ms": 3.134125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467077,
+        "surface_id": 454,
+        "start_ns": 3084939041,
+        "duration_ms": 2.547083
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347576,
+        "surface_id": 462,
+        "start_ns": 3104344875,
+        "duration_ms": 0.7775
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467080,
+        "surface_id": 404,
+        "start_ns": 3134301125,
+        "duration_ms": 2.511
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467081,
+        "surface_id": 87,
+        "start_ns": 3154097166,
+        "duration_ms": 2.325708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467083,
+        "surface_id": 404,
+        "start_ns": 3183604625,
+        "duration_ms": 2.76825
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467084,
+        "surface_id": 87,
+        "start_ns": 3200662291,
+        "duration_ms": 2.193375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467086,
+        "surface_id": 404,
+        "start_ns": 3234211875,
+        "duration_ms": 2.451166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467087,
+        "surface_id": 87,
+        "start_ns": 3254417000,
+        "duration_ms": 2.354166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467088,
+        "surface_id": 454,
+        "start_ns": 3268355416,
+        "duration_ms": 3.210208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467089,
+        "surface_id": 404,
+        "start_ns": 3284480375,
+        "duration_ms": 2.576916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467090,
+        "surface_id": 87,
+        "start_ns": 3300739375,
+        "duration_ms": 2.223375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467091,
+        "surface_id": 404,
+        "start_ns": 3322940750,
+        "duration_ms": 3.189
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467092,
+        "surface_id": 454,
+        "start_ns": 3333862750,
+        "duration_ms": 2.529541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467093,
+        "surface_id": 87,
+        "start_ns": 3350701791,
+        "duration_ms": 2.343625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467094,
+        "surface_id": 404,
+        "start_ns": 3368248541,
+        "duration_ms": 3.121625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467095,
+        "surface_id": 454,
+        "start_ns": 3384244666,
+        "duration_ms": 2.514208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467096,
+        "surface_id": 404,
+        "start_ns": 3404107625,
+        "duration_ms": 2.216
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467097,
+        "surface_id": 87,
+        "start_ns": 3418458291,
+        "duration_ms": 3.289125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467098,
+        "surface_id": 454,
+        "start_ns": 3434243125,
+        "duration_ms": 2.443
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467099,
+        "surface_id": 404,
+        "start_ns": 3450699125,
+        "duration_ms": 2.26475
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467100,
+        "surface_id": 87,
+        "start_ns": 3474145250,
+        "duration_ms": 3.087625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467101,
+        "surface_id": 454,
+        "start_ns": 3483908250,
+        "duration_ms": 2.502625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467102,
+        "surface_id": 404,
+        "start_ns": 3500168916,
+        "duration_ms": 2.240583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467103,
+        "surface_id": 87,
+        "start_ns": 3518150125,
+        "duration_ms": 3.21025
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467104,
+        "surface_id": 454,
+        "start_ns": 3534047416,
+        "duration_ms": 2.412083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467105,
+        "surface_id": 404,
+        "start_ns": 3550716250,
+        "duration_ms": 2.30975
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467106,
+        "surface_id": 87,
+        "start_ns": 3568190666,
+        "duration_ms": 3.075583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467107,
+        "surface_id": 404,
+        "start_ns": 3588786875,
+        "duration_ms": 2.484916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467108,
+        "surface_id": 454,
+        "start_ns": 3600808250,
+        "duration_ms": 2.213166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467109,
+        "surface_id": 87,
+        "start_ns": 3618669375,
+        "duration_ms": 3.09725
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467110,
+        "surface_id": 404,
+        "start_ns": 3634007166,
+        "duration_ms": 2.502625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467111,
+        "surface_id": 454,
+        "start_ns": 3650365666,
+        "duration_ms": 2.3645
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467113,
+        "surface_id": 404,
+        "start_ns": 3685200166,
+        "duration_ms": 3.280708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467114,
+        "surface_id": 454,
+        "start_ns": 3700938041,
+        "duration_ms": 2.460583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467115,
+        "surface_id": 87,
+        "start_ns": 3717423250,
+        "duration_ms": 2.271625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467116,
+        "surface_id": 404,
+        "start_ns": 3734888041,
+        "duration_ms": 3.091
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467117,
+        "surface_id": 87,
+        "start_ns": 3754716500,
+        "duration_ms": 2.485375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467118,
+        "surface_id": 454,
+        "start_ns": 3768482416,
+        "duration_ms": 3.147125
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347580,
+        "surface_id": 462,
+        "start_ns": 3771839875,
+        "duration_ms": 0.841875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467120,
+        "surface_id": 87,
+        "start_ns": 3800788291,
+        "duration_ms": 2.275208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467121,
+        "surface_id": 454,
+        "start_ns": 3817740500,
+        "duration_ms": 2.95
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467122,
+        "surface_id": 404,
+        "start_ns": 3834459416,
+        "duration_ms": 2.311875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467125,
+        "surface_id": 87,
+        "start_ns": 3885889000,
+        "duration_ms": 2.2725
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467126,
+        "surface_id": 404,
+        "start_ns": 3919641500,
+        "duration_ms": 2.952416
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347582,
+        "surface_id": 462,
+        "start_ns": 3936974375,
+        "duration_ms": 0.72375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467128,
+        "surface_id": 404,
+        "start_ns": 3988492500,
+        "duration_ms": 3.233416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467129,
+        "surface_id": 87,
+        "start_ns": 4019437250,
+        "duration_ms": 2.748791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467132,
+        "surface_id": 404,
+        "start_ns": 4087195000,
+        "duration_ms": 2.399541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467134,
+        "surface_id": 404,
+        "start_ns": 4119771791,
+        "duration_ms": 2.350083
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347584,
+        "surface_id": 462,
+        "start_ns": 4138675666,
+        "duration_ms": 0.791625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467136,
+        "surface_id": 404,
+        "start_ns": 4187480000,
+        "duration_ms": 2.50075
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467137,
+        "surface_id": 87,
+        "start_ns": 4205628750,
+        "duration_ms": 3.203625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467138,
+        "surface_id": 404,
+        "start_ns": 4218827750,
+        "duration_ms": 2.363916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467140,
+        "surface_id": 404,
+        "start_ns": 4256747416,
+        "duration_ms": 3.13425
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467141,
+        "surface_id": 87,
+        "start_ns": 4267869791,
+        "duration_ms": 2.379125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467142,
+        "surface_id": 454,
+        "start_ns": 4284276291,
+        "duration_ms": 2.198333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467143,
+        "surface_id": 404,
+        "start_ns": 4300782000,
+        "duration_ms": 2.18925
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467144,
+        "surface_id": 87,
+        "start_ns": 4318566125,
+        "duration_ms": 3.113875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467146,
+        "surface_id": 404,
+        "start_ns": 4354481791,
+        "duration_ms": 2.305583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467147,
+        "surface_id": 87,
+        "start_ns": 4372748375,
+        "duration_ms": 3.090666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467148,
+        "surface_id": 454,
+        "start_ns": 4384034500,
+        "duration_ms": 2.531625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467149,
+        "surface_id": 404,
+        "start_ns": 4400761125,
+        "duration_ms": 2.197791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467150,
+        "surface_id": 87,
+        "start_ns": 4417899375,
+        "duration_ms": 3.2505
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467151,
+        "surface_id": 454,
+        "start_ns": 4434301916,
+        "duration_ms": 2.421708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467153,
+        "surface_id": 87,
+        "start_ns": 4472915500,
+        "duration_ms": 3.147875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467154,
+        "surface_id": 454,
+        "start_ns": 4484127875,
+        "duration_ms": 2.80625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467155,
+        "surface_id": 404,
+        "start_ns": 4500738625,
+        "duration_ms": 2.25675
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467157,
+        "surface_id": 454,
+        "start_ns": 4534290375,
+        "duration_ms": 2.433416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467158,
+        "surface_id": 404,
+        "start_ns": 4554360750,
+        "duration_ms": 2.245041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467159,
+        "surface_id": 87,
+        "start_ns": 4567534666,
+        "duration_ms": 2.147583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467160,
+        "surface_id": 454,
+        "start_ns": 4584926291,
+        "duration_ms": 3.23425
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467161,
+        "surface_id": 404,
+        "start_ns": 4600900250,
+        "duration_ms": 2.493625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467162,
+        "surface_id": 87,
+        "start_ns": 4619088625,
+        "duration_ms": 2.315375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467163,
+        "surface_id": 404,
+        "start_ns": 4637791375,
+        "duration_ms": 2.216375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467164,
+        "surface_id": 454,
+        "start_ns": 4652423500,
+        "duration_ms": 3.133625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467165,
+        "surface_id": 87,
+        "start_ns": 4667855291,
+        "duration_ms": 2.387125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467166,
+        "surface_id": 404,
+        "start_ns": 4687623916,
+        "duration_ms": 2.246833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467167,
+        "surface_id": 454,
+        "start_ns": 4701778750,
+        "duration_ms": 3.160875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467168,
+        "surface_id": 87,
+        "start_ns": 4717642000,
+        "duration_ms": 2.533125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467169,
+        "surface_id": 404,
+        "start_ns": 4733998625,
+        "duration_ms": 2.243875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467170,
+        "surface_id": 87,
+        "start_ns": 4754888041,
+        "duration_ms": 2.346583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467171,
+        "surface_id": 454,
+        "start_ns": 4769503166,
+        "duration_ms": 3.163083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467172,
+        "surface_id": 404,
+        "start_ns": 4785198541,
+        "duration_ms": 2.487833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467173,
+        "surface_id": 87,
+        "start_ns": 4800987541,
+        "duration_ms": 2.263708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467174,
+        "surface_id": 454,
+        "start_ns": 4818628666,
+        "duration_ms": 3.286208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467175,
+        "surface_id": 404,
+        "start_ns": 4834373791,
+        "duration_ms": 2.467208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467176,
+        "surface_id": 87,
+        "start_ns": 4850792000,
+        "duration_ms": 2.265625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467177,
+        "surface_id": 404,
+        "start_ns": 4872593916,
+        "duration_ms": 3.113958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467178,
+        "surface_id": 454,
+        "start_ns": 4884512000,
+        "duration_ms": 2.54375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467179,
+        "surface_id": 87,
+        "start_ns": 4900748250,
+        "duration_ms": 2.296541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467180,
+        "surface_id": 404,
+        "start_ns": 4923263541,
+        "duration_ms": 3.152958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467181,
+        "surface_id": 454,
+        "start_ns": 4933898041,
+        "duration_ms": 2.427958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467182,
+        "surface_id": 87,
+        "start_ns": 4950661375,
+        "duration_ms": 2.38275
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467183,
+        "surface_id": 404,
+        "start_ns": 4968312666,
+        "duration_ms": 3.101083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467184,
+        "surface_id": 454,
+        "start_ns": 4984719666,
+        "duration_ms": 2.558958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467185,
+        "surface_id": 87,
+        "start_ns": 5000727750,
+        "duration_ms": 2.226541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467186,
+        "surface_id": 404,
+        "start_ns": 5018392541,
+        "duration_ms": 2.058333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467187,
+        "surface_id": 87,
+        "start_ns": 5036182166,
+        "duration_ms": 2.869833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467189,
+        "surface_id": 87,
+        "start_ns": 5085037250,
+        "duration_ms": 2.079
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467191,
+        "surface_id": 87,
+        "start_ns": 5118988416,
+        "duration_ms": 2.250958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467192,
+        "surface_id": 404,
+        "start_ns": 5153842750,
+        "duration_ms": 3.228625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467193,
+        "surface_id": 87,
+        "start_ns": 5187047875,
+        "duration_ms": 2.594875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467195,
+        "surface_id": 404,
+        "start_ns": 5219495166,
+        "duration_ms": 2.434833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467196,
+        "surface_id": 87,
+        "start_ns": 5255339166,
+        "duration_ms": 3.214
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467197,
+        "surface_id": 404,
+        "start_ns": 5286489125,
+        "duration_ms": 2.422666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467199,
+        "surface_id": 404,
+        "start_ns": 5319265541,
+        "duration_ms": 2.494125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467200,
+        "surface_id": 87,
+        "start_ns": 5355803875,
+        "duration_ms": 3.137625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467201,
+        "surface_id": 404,
+        "start_ns": 5371101000,
+        "duration_ms": 2.39875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467202,
+        "surface_id": 87,
+        "start_ns": 5384691500,
+        "duration_ms": 2.129291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467203,
+        "surface_id": 454,
+        "start_ns": 5401775375,
+        "duration_ms": 3.025625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467204,
+        "surface_id": 404,
+        "start_ns": 5417776125,
+        "duration_ms": 2.33575
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467205,
+        "surface_id": 87,
+        "start_ns": 5434045791,
+        "duration_ms": 2.218458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467206,
+        "surface_id": 454,
+        "start_ns": 5451566125,
+        "duration_ms": 3.106916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467207,
+        "surface_id": 404,
+        "start_ns": 5468322666,
+        "duration_ms": 2.389833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467208,
+        "surface_id": 87,
+        "start_ns": 5484539875,
+        "duration_ms": 2.72575
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467209,
+        "surface_id": 404,
+        "start_ns": 5505873500,
+        "duration_ms": 3.23875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467211,
+        "surface_id": 404,
+        "start_ns": 5537736625,
+        "duration_ms": 2.26525
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467212,
+        "surface_id": 454,
+        "start_ns": 5552190750,
+        "duration_ms": 3.109
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467213,
+        "surface_id": 87,
+        "start_ns": 5567753250,
+        "duration_ms": 2.536041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467214,
+        "surface_id": 404,
+        "start_ns": 5585111875,
+        "duration_ms": 3.234041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467215,
+        "surface_id": 454,
+        "start_ns": 5601029250,
+        "duration_ms": 2.484416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467216,
+        "surface_id": 87,
+        "start_ns": 5617544375,
+        "duration_ms": 2.2695
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467217,
+        "surface_id": 404,
+        "start_ns": 5634944625,
+        "duration_ms": 3.124291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467218,
+        "surface_id": 454,
+        "start_ns": 5651007625,
+        "duration_ms": 2.5135
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467219,
+        "surface_id": 404,
+        "start_ns": 5670715625,
+        "duration_ms": 2.2795
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467220,
+        "surface_id": 87,
+        "start_ns": 5689182000,
+        "duration_ms": 3.16475
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467221,
+        "surface_id": 404,
+        "start_ns": 5704740125,
+        "duration_ms": 2.631875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467223,
+        "surface_id": 87,
+        "start_ns": 5734456041,
+        "duration_ms": 2.45275
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467225,
+        "surface_id": 87,
+        "start_ns": 5773469375,
+        "duration_ms": 3.151875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467226,
+        "surface_id": 454,
+        "start_ns": 5784727625,
+        "duration_ms": 2.52825
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467227,
+        "surface_id": 404,
+        "start_ns": 5800833875,
+        "duration_ms": 2.2185
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467228,
+        "surface_id": 87,
+        "start_ns": 5818366625,
+        "duration_ms": 3.171875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467229,
+        "surface_id": 454,
+        "start_ns": 5833863916,
+        "duration_ms": 2.478958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467230,
+        "surface_id": 404,
+        "start_ns": 5854257250,
+        "duration_ms": 2.363125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467232,
+        "surface_id": 454,
+        "start_ns": 5884478666,
+        "duration_ms": 2.543208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467233,
+        "surface_id": 404,
+        "start_ns": 5900812875,
+        "duration_ms": 2.174875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467234,
+        "surface_id": 87,
+        "start_ns": 5918936250,
+        "duration_ms": 3.140125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467236,
+        "surface_id": 404,
+        "start_ns": 5951268750,
+        "duration_ms": 3.1325
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467237,
+        "surface_id": 87,
+        "start_ns": 5967172125,
+        "duration_ms": 2.39675
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467238,
+        "surface_id": 454,
+        "start_ns": 5983630875,
+        "duration_ms": 2.22325
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467239,
+        "surface_id": 404,
+        "start_ns": 6001998250,
+        "duration_ms": 3.09425
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467240,
+        "surface_id": 87,
+        "start_ns": 6017877750,
+        "duration_ms": 3.008375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467241,
+        "surface_id": 454,
+        "start_ns": 6034039875,
+        "duration_ms": 2.26875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467243,
+        "surface_id": 87,
+        "start_ns": 6067594041,
+        "duration_ms": 2.441083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467244,
+        "surface_id": 454,
+        "start_ns": 6084167375,
+        "duration_ms": 2.293
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467245,
+        "surface_id": 404,
+        "start_ns": 6100777375,
+        "duration_ms": 2.22025
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467246,
+        "surface_id": 87,
+        "start_ns": 6122121000,
+        "duration_ms": 3.603625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467247,
+        "surface_id": 454,
+        "start_ns": 6134520375,
+        "duration_ms": 2.4195
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467249,
+        "surface_id": 87,
+        "start_ns": 6168616916,
+        "duration_ms": 3.179583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467250,
+        "surface_id": 454,
+        "start_ns": 6184076875,
+        "duration_ms": 2.464375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467251,
+        "surface_id": 404,
+        "start_ns": 6202532666,
+        "duration_ms": 2.107208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467252,
+        "surface_id": 87,
+        "start_ns": 6219465125,
+        "duration_ms": 3.029916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467254,
+        "surface_id": 87,
+        "start_ns": 6251724500,
+        "duration_ms": 2.133375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467256,
+        "surface_id": 87,
+        "start_ns": 6286128500,
+        "duration_ms": 2.285
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347598,
+        "surface_id": 462,
+        "start_ns": 6305361375,
+        "duration_ms": 0.725375
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347599,
+        "surface_id": 223,
+        "start_ns": 6340313750,
+        "duration_ms": 0.773625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467260,
+        "surface_id": 404,
+        "start_ns": 6386231291,
+        "duration_ms": 2.989333
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347600,
+        "surface_id": 462,
+        "start_ns": 6405909375,
+        "duration_ms": 0.721666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467262,
+        "surface_id": 404,
+        "start_ns": 6452838416,
+        "duration_ms": 2.991583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467266,
+        "surface_id": 404,
+        "start_ns": 6519477750,
+        "duration_ms": 2.198625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467268,
+        "surface_id": 404,
+        "start_ns": 6551758000,
+        "duration_ms": 2.346375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467269,
+        "surface_id": 454,
+        "start_ns": 6567819875,
+        "duration_ms": 2.145541
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347606,
+        "surface_id": 462,
+        "start_ns": 6588487875,
+        "duration_ms": 0.739625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467272,
+        "surface_id": 454,
+        "start_ns": 6617357791,
+        "duration_ms": 2.527083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467273,
+        "surface_id": 87,
+        "start_ns": 6634273750,
+        "duration_ms": 2.142
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467275,
+        "surface_id": 454,
+        "start_ns": 6667291125,
+        "duration_ms": 2.610625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467276,
+        "surface_id": 87,
+        "start_ns": 6684298375,
+        "duration_ms": 2.62925
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467279,
+        "surface_id": 87,
+        "start_ns": 6734154375,
+        "duration_ms": 2.193666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467281,
+        "surface_id": 454,
+        "start_ns": 6767552625,
+        "duration_ms": 2.839875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467282,
+        "surface_id": 87,
+        "start_ns": 6784530375,
+        "duration_ms": 2.309375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467284,
+        "surface_id": 87,
+        "start_ns": 6819890541,
+        "duration_ms": 2.318583
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347613,
+        "surface_id": 223,
+        "start_ns": 6839004291,
+        "duration_ms": 0.722333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467287,
+        "surface_id": 87,
+        "start_ns": 6865859166,
+        "duration_ms": 2.291083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467288,
+        "surface_id": 404,
+        "start_ns": 6882330625,
+        "duration_ms": 2.558291
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347615,
+        "surface_id": 223,
+        "start_ns": 6906123000,
+        "duration_ms": 0.7225
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467291,
+        "surface_id": 87,
+        "start_ns": 6934850750,
+        "duration_ms": 2.144875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467292,
+        "surface_id": 404,
+        "start_ns": 6954963791,
+        "duration_ms": 3.152583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467293,
+        "surface_id": 87,
+        "start_ns": 6986932125,
+        "duration_ms": 2.277375
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347617,
+        "surface_id": 223,
+        "start_ns": 7005960250,
+        "duration_ms": 0.72325
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467296,
+        "surface_id": 404,
+        "start_ns": 7052739916,
+        "duration_ms": 2.109958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467297,
+        "surface_id": 87,
+        "start_ns": 7071257875,
+        "duration_ms": 3.42425
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467300,
+        "surface_id": 404,
+        "start_ns": 7118126250,
+        "duration_ms": 2.914875
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347621,
+        "surface_id": 223,
+        "start_ns": 7121463166,
+        "duration_ms": 0.721708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467302,
+        "surface_id": 404,
+        "start_ns": 7150042625,
+        "duration_ms": 2.0875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467303,
+        "surface_id": 87,
+        "start_ns": 7169995875,
+        "duration_ms": 2.922875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467306,
+        "surface_id": 404,
+        "start_ns": 7220122875,
+        "duration_ms": 3.019041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467307,
+        "surface_id": 87,
+        "start_ns": 7234391166,
+        "duration_ms": 2.3585
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467308,
+        "surface_id": 404,
+        "start_ns": 7250980750,
+        "duration_ms": 2.1895
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467309,
+        "surface_id": 87,
+        "start_ns": 7269379750,
+        "duration_ms": 2.12425
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467310,
+        "surface_id": 404,
+        "start_ns": 7286124750,
+        "duration_ms": 3.163375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467311,
+        "surface_id": 87,
+        "start_ns": 7301431291,
+        "duration_ms": 2.344833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467312,
+        "surface_id": 454,
+        "start_ns": 7317633875,
+        "duration_ms": 2.2495
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467313,
+        "surface_id": 404,
+        "start_ns": 7335733875,
+        "duration_ms": 3.002125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467314,
+        "surface_id": 87,
+        "start_ns": 7351034500,
+        "duration_ms": 2.410791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467315,
+        "surface_id": 404,
+        "start_ns": 7369878250,
+        "duration_ms": 2.940166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467316,
+        "surface_id": 87,
+        "start_ns": 7383101166,
+        "duration_ms": 2.316083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467317,
+        "surface_id": 404,
+        "start_ns": 7418524000,
+        "duration_ms": 2.036666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467319,
+        "surface_id": 404,
+        "start_ns": 7452218666,
+        "duration_ms": 2.323583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467320,
+        "surface_id": 87,
+        "start_ns": 7486380125,
+        "duration_ms": 2.949541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467321,
+        "surface_id": 404,
+        "start_ns": 7521080916,
+        "duration_ms": 3.245958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467322,
+        "surface_id": 87,
+        "start_ns": 7536616666,
+        "duration_ms": 2.454875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467323,
+        "surface_id": 404,
+        "start_ns": 7553501125,
+        "duration_ms": 2.226166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467324,
+        "surface_id": 87,
+        "start_ns": 7588160916,
+        "duration_ms": 3.113958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467325,
+        "surface_id": 404,
+        "start_ns": 7620447916,
+        "duration_ms": 2.411958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467326,
+        "surface_id": 87,
+        "start_ns": 7636507500,
+        "duration_ms": 2.265416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467328,
+        "surface_id": 87,
+        "start_ns": 7667696291,
+        "duration_ms": 2.290833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467329,
+        "surface_id": 404,
+        "start_ns": 7684153750,
+        "duration_ms": 2.091791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467330,
+        "surface_id": 87,
+        "start_ns": 7703882750,
+        "duration_ms": 3.044625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467331,
+        "surface_id": 454,
+        "start_ns": 7718728166,
+        "duration_ms": 2.428958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467332,
+        "surface_id": 404,
+        "start_ns": 7734498916,
+        "duration_ms": 2.22325
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347625,
+        "surface_id": 223,
+        "start_ns": 7739696000,
+        "duration_ms": 0.779916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467334,
+        "surface_id": 454,
+        "start_ns": 7767885916,
+        "duration_ms": 2.37925
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467335,
+        "surface_id": 404,
+        "start_ns": 7784470125,
+        "duration_ms": 2.259375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467336,
+        "surface_id": 87,
+        "start_ns": 7801872000,
+        "duration_ms": 3.177041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467337,
+        "surface_id": 454,
+        "start_ns": 7820161375,
+        "duration_ms": 2.512791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467338,
+        "surface_id": 404,
+        "start_ns": 7834321750,
+        "duration_ms": 2.198
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467339,
+        "surface_id": 87,
+        "start_ns": 7852208250,
+        "duration_ms": 3.657
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467340,
+        "surface_id": 454,
+        "start_ns": 7867964666,
+        "duration_ms": 2.471958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467342,
+        "surface_id": 87,
+        "start_ns": 7901577000,
+        "duration_ms": 2.21775
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467343,
+        "surface_id": 454,
+        "start_ns": 7919716875,
+        "duration_ms": 3.152
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467345,
+        "surface_id": 87,
+        "start_ns": 7951231000,
+        "duration_ms": 2.287291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467346,
+        "surface_id": 454,
+        "start_ns": 7968846375,
+        "duration_ms": 3.102166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467347,
+        "surface_id": 404,
+        "start_ns": 7984583750,
+        "duration_ms": 2.493
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467348,
+        "surface_id": 87,
+        "start_ns": 8000931291,
+        "duration_ms": 2.194333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467349,
+        "surface_id": 404,
+        "start_ns": 8020763750,
+        "duration_ms": 2.316625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467350,
+        "surface_id": 454,
+        "start_ns": 8035321916,
+        "duration_ms": 3.0955
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467352,
+        "surface_id": 404,
+        "start_ns": 8067629750,
+        "duration_ms": 2.271
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467353,
+        "surface_id": 454,
+        "start_ns": 8085091500,
+        "duration_ms": 3.217
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467354,
+        "surface_id": 87,
+        "start_ns": 8104040250,
+        "duration_ms": 3.141875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467355,
+        "surface_id": 404,
+        "start_ns": 8117926875,
+        "duration_ms": 2.465916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467356,
+        "surface_id": 454,
+        "start_ns": 8134250625,
+        "duration_ms": 2.246875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467358,
+        "surface_id": 404,
+        "start_ns": 8167801750,
+        "duration_ms": 2.491541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467359,
+        "surface_id": 87,
+        "start_ns": 8187699166,
+        "duration_ms": 2.269333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467360,
+        "surface_id": 404,
+        "start_ns": 8202092875,
+        "duration_ms": 3.17425
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467361,
+        "surface_id": 454,
+        "start_ns": 8217915125,
+        "duration_ms": 2.593041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467363,
+        "surface_id": 404,
+        "start_ns": 8251938250,
+        "duration_ms": 3.162
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467364,
+        "surface_id": 454,
+        "start_ns": 8267840750,
+        "duration_ms": 2.395125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467365,
+        "surface_id": 87,
+        "start_ns": 8284271250,
+        "duration_ms": 2.251875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467366,
+        "surface_id": 404,
+        "start_ns": 8306107625,
+        "duration_ms": 3.156916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467367,
+        "surface_id": 454,
+        "start_ns": 8317616750,
+        "duration_ms": 2.52925
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467369,
+        "surface_id": 404,
+        "start_ns": 8351937625,
+        "duration_ms": 3.184791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467370,
+        "surface_id": 454,
+        "start_ns": 8367814625,
+        "duration_ms": 2.550791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467371,
+        "surface_id": 87,
+        "start_ns": 8385231666,
+        "duration_ms": 2.240833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467372,
+        "surface_id": 404,
+        "start_ns": 8402484125,
+        "duration_ms": 3.183625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467373,
+        "surface_id": 454,
+        "start_ns": 8418282625,
+        "duration_ms": 2.50475
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467375,
+        "surface_id": 404,
+        "start_ns": 8454275541,
+        "duration_ms": 3.350875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467376,
+        "surface_id": 454,
+        "start_ns": 8467719166,
+        "duration_ms": 2.578083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467377,
+        "surface_id": 87,
+        "start_ns": 8485868000,
+        "duration_ms": 2.231625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467378,
+        "surface_id": 404,
+        "start_ns": 8503595750,
+        "duration_ms": 2.19675
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467379,
+        "surface_id": 454,
+        "start_ns": 8518274041,
+        "duration_ms": 3.05175
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347633,
+        "surface_id": 223,
+        "start_ns": 8522774375,
+        "duration_ms": 0.729166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467381,
+        "surface_id": 404,
+        "start_ns": 8551942125,
+        "duration_ms": 2.04125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467382,
+        "surface_id": 87,
+        "start_ns": 8569700250,
+        "duration_ms": 2.9225
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467383,
+        "surface_id": 404,
+        "start_ns": 8585387625,
+        "duration_ms": 2.311375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467384,
+        "surface_id": 87,
+        "start_ns": 8619722625,
+        "duration_ms": 2.916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467385,
+        "surface_id": 404,
+        "start_ns": 8635258750,
+        "duration_ms": 2.295875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467386,
+        "surface_id": 87,
+        "start_ns": 8651942000,
+        "duration_ms": 2.074875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467388,
+        "surface_id": 87,
+        "start_ns": 8687554875,
+        "duration_ms": 2.567291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467389,
+        "surface_id": 404,
+        "start_ns": 8721418750,
+        "duration_ms": 2.902666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467390,
+        "surface_id": 87,
+        "start_ns": 8736674375,
+        "duration_ms": 2.477625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467391,
+        "surface_id": 404,
+        "start_ns": 8750718250,
+        "duration_ms": 2.11625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467393,
+        "surface_id": 404,
+        "start_ns": 8787418416,
+        "duration_ms": 2.572
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467394,
+        "surface_id": 87,
+        "start_ns": 8803093916,
+        "duration_ms": 2.192458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467395,
+        "surface_id": 404,
+        "start_ns": 8820806500,
+        "duration_ms": 3.038791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467396,
+        "surface_id": 87,
+        "start_ns": 8835091416,
+        "duration_ms": 2.327625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467397,
+        "surface_id": 404,
+        "start_ns": 8851977250,
+        "duration_ms": 2.267625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467398,
+        "surface_id": 87,
+        "start_ns": 8872997625,
+        "duration_ms": 3.105791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467399,
+        "surface_id": 404,
+        "start_ns": 8884313000,
+        "duration_ms": 2.372375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467400,
+        "surface_id": 87,
+        "start_ns": 8900754625,
+        "duration_ms": 2.14325
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467401,
+        "surface_id": 454,
+        "start_ns": 8919292375,
+        "duration_ms": 3.062
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467402,
+        "surface_id": 404,
+        "start_ns": 8934802666,
+        "duration_ms": 2.462125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467403,
+        "surface_id": 87,
+        "start_ns": 8951125875,
+        "duration_ms": 2.292125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467404,
+        "surface_id": 404,
+        "start_ns": 8972581375,
+        "duration_ms": 3.068
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467405,
+        "surface_id": 454,
+        "start_ns": 8984569166,
+        "duration_ms": 2.6435
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467406,
+        "surface_id": 87,
+        "start_ns": 9000971666,
+        "duration_ms": 2.261625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467407,
+        "surface_id": 404,
+        "start_ns": 9018699291,
+        "duration_ms": 3.245
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467408,
+        "surface_id": 454,
+        "start_ns": 9034025875,
+        "duration_ms": 2.894666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467410,
+        "surface_id": 404,
+        "start_ns": 9069050000,
+        "duration_ms": 3.125125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467411,
+        "surface_id": 454,
+        "start_ns": 9084728875,
+        "duration_ms": 2.507875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467412,
+        "surface_id": 87,
+        "start_ns": 9101942166,
+        "duration_ms": 3.127458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467413,
+        "surface_id": 404,
+        "start_ns": 9121550041,
+        "duration_ms": 2.48875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467414,
+        "surface_id": 454,
+        "start_ns": 9134520875,
+        "duration_ms": 2.236875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467415,
+        "surface_id": 87,
+        "start_ns": 9151885291,
+        "duration_ms": 3.1775
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467416,
+        "surface_id": 404,
+        "start_ns": 9168239041,
+        "duration_ms": 2.452333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467417,
+        "surface_id": 454,
+        "start_ns": 9185405416,
+        "duration_ms": 3.31875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467418,
+        "surface_id": 87,
+        "start_ns": 9201284666,
+        "duration_ms": 2.452958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467419,
+        "surface_id": 404,
+        "start_ns": 9221798875,
+        "duration_ms": 3.168625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467420,
+        "surface_id": 454,
+        "start_ns": 9234421375,
+        "duration_ms": 2.533875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467421,
+        "surface_id": 87,
+        "start_ns": 9251067791,
+        "duration_ms": 2.315583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467422,
+        "surface_id": 404,
+        "start_ns": 9268499541,
+        "duration_ms": 3.199375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467423,
+        "surface_id": 454,
+        "start_ns": 9284623375,
+        "duration_ms": 2.56775
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467424,
+        "surface_id": 404,
+        "start_ns": 9307059625,
+        "duration_ms": 3.138791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467425,
+        "surface_id": 87,
+        "start_ns": 9317582500,
+        "duration_ms": 2.45
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467426,
+        "surface_id": 454,
+        "start_ns": 9334318416,
+        "duration_ms": 2.303208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467427,
+        "surface_id": 404,
+        "start_ns": 9351856375,
+        "duration_ms": 3.24975
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467428,
+        "surface_id": 87,
+        "start_ns": 9367813416,
+        "duration_ms": 2.463
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467429,
+        "surface_id": 454,
+        "start_ns": 9388175750,
+        "duration_ms": 2.320125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467430,
+        "surface_id": 404,
+        "start_ns": 9401831416,
+        "duration_ms": 3.167583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467431,
+        "surface_id": 87,
+        "start_ns": 9417724250,
+        "duration_ms": 2.52675
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467432,
+        "surface_id": 454,
+        "start_ns": 9434326166,
+        "duration_ms": 2.195083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467433,
+        "surface_id": 404,
+        "start_ns": 9455110625,
+        "duration_ms": 3.212375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467434,
+        "surface_id": 87,
+        "start_ns": 9467719500,
+        "duration_ms": 2.395666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467435,
+        "surface_id": 454,
+        "start_ns": 9484343125,
+        "duration_ms": 2.2365
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467436,
+        "surface_id": 404,
+        "start_ns": 9501805250,
+        "duration_ms": 3.141
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467437,
+        "surface_id": 87,
+        "start_ns": 9521521750,
+        "duration_ms": 2.581625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467438,
+        "surface_id": 454,
+        "start_ns": 9534508750,
+        "duration_ms": 2.240416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467440,
+        "surface_id": 87,
+        "start_ns": 9568108250,
+        "duration_ms": 2.400916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467441,
+        "surface_id": 454,
+        "start_ns": 9584508416,
+        "duration_ms": 2.211583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467442,
+        "surface_id": 404,
+        "start_ns": 9606338125,
+        "duration_ms": 3.2415
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467443,
+        "surface_id": 87,
+        "start_ns": 9617894666,
+        "duration_ms": 2.516458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467444,
+        "surface_id": 454,
+        "start_ns": 9634583791,
+        "duration_ms": 2.209458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467445,
+        "surface_id": 404,
+        "start_ns": 9652695791,
+        "duration_ms": 3.655458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467446,
+        "surface_id": 87,
+        "start_ns": 9667813625,
+        "duration_ms": 2.360875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467448,
+        "surface_id": 87,
+        "start_ns": 9701614375,
+        "duration_ms": 2.04025
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467449,
+        "surface_id": 404,
+        "start_ns": 9720032875,
+        "duration_ms": 2.88775
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467450,
+        "surface_id": 87,
+        "start_ns": 9732623375,
+        "duration_ms": 2.278625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467451,
+        "surface_id": 404,
+        "start_ns": 9749044500,
+        "duration_ms": 2.055375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467452,
+        "surface_id": 87,
+        "start_ns": 9769551125,
+        "duration_ms": 2.890291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467454,
+        "surface_id": 87,
+        "start_ns": 9802116916,
+        "duration_ms": 2.074625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467455,
+        "surface_id": 404,
+        "start_ns": 9819562666,
+        "duration_ms": 2.956833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467457,
+        "surface_id": 404,
+        "start_ns": 9848970416,
+        "duration_ms": 2.085458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467458,
+        "surface_id": 454,
+        "start_ns": 9870738125,
+        "duration_ms": 3.092291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467459,
+        "surface_id": 404,
+        "start_ns": 9883378916,
+        "duration_ms": 2.280208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467460,
+        "surface_id": 87,
+        "start_ns": 9902997041,
+        "duration_ms": 2.248375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467461,
+        "surface_id": 404,
+        "start_ns": 9920398750,
+        "duration_ms": 3.03375
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347639,
+        "surface_id": 223,
+        "start_ns": 9924783375,
+        "duration_ms": 0.7575
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467463,
+        "surface_id": 404,
+        "start_ns": 9950554291,
+        "duration_ms": 2.19175
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467465,
+        "surface_id": 404,
+        "start_ns": 9987975750,
+        "duration_ms": 3.034
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467466,
+        "surface_id": 87,
+        "start_ns": 10001346541,
+        "duration_ms": 2.324083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467467,
+        "surface_id": 404,
+        "start_ns": 10017646666,
+        "duration_ms": 2.861333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467469,
+        "surface_id": 87,
+        "start_ns": 10051685916,
+        "duration_ms": 2.421583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467470,
+        "surface_id": 404,
+        "start_ns": 10068810625,
+        "duration_ms": 3.115875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467471,
+        "surface_id": 454,
+        "start_ns": 10084704916,
+        "duration_ms": 2.563708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467472,
+        "surface_id": 87,
+        "start_ns": 10101075000,
+        "duration_ms": 2.152166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467473,
+        "surface_id": 404,
+        "start_ns": 10123526000,
+        "duration_ms": 3.649125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467474,
+        "surface_id": 454,
+        "start_ns": 10134217041,
+        "duration_ms": 2.370958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467476,
+        "surface_id": 404,
+        "start_ns": 10167750041,
+        "duration_ms": 2.366708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467477,
+        "surface_id": 454,
+        "start_ns": 10184490000,
+        "duration_ms": 2.247625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467478,
+        "surface_id": 87,
+        "start_ns": 10201468416,
+        "duration_ms": 3.212333
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347643,
+        "surface_id": 223,
+        "start_ns": 10207979750,
+        "duration_ms": 0.805
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467480,
+        "surface_id": 87,
+        "start_ns": 10234817916,
+        "duration_ms": 2.1865
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467481,
+        "surface_id": 454,
+        "start_ns": 10255705250,
+        "duration_ms": 3.18075
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467482,
+        "surface_id": 404,
+        "start_ns": 10267831166,
+        "duration_ms": 2.401833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467483,
+        "surface_id": 87,
+        "start_ns": 10284070250,
+        "duration_ms": 2.37875
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347644,
+        "surface_id": 462,
+        "start_ns": 10291230875,
+        "duration_ms": 0.810541
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347645,
+        "surface_id": 92,
+        "start_ns": 10308461125,
+        "duration_ms": 0.879
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467486,
+        "surface_id": 87,
+        "start_ns": 10334288250,
+        "duration_ms": 2.39975
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347646,
+        "surface_id": 462,
+        "start_ns": 10341323416,
+        "duration_ms": 0.791375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467488,
+        "surface_id": 404,
+        "start_ns": 10368154250,
+        "duration_ms": 3.055916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467489,
+        "surface_id": 87,
+        "start_ns": 10383821791,
+        "duration_ms": 2.576875
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347647,
+        "surface_id": 223,
+        "start_ns": 10391343416,
+        "duration_ms": 0.811875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467492,
+        "surface_id": 87,
+        "start_ns": 10434298666,
+        "duration_ms": 3.100833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467494,
+        "surface_id": 404,
+        "start_ns": 10468841125,
+        "duration_ms": 3.148625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467495,
+        "surface_id": 87,
+        "start_ns": 10484757791,
+        "duration_ms": 2.994333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467497,
+        "surface_id": 404,
+        "start_ns": 10519062416,
+        "duration_ms": 3.113083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467499,
+        "surface_id": 404,
+        "start_ns": 10554643000,
+        "duration_ms": 2.652625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467500,
+        "surface_id": 454,
+        "start_ns": 10568860291,
+        "duration_ms": 3.126
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347653,
+        "surface_id": 92,
+        "start_ns": 10591424125,
+        "duration_ms": 0.784416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467503,
+        "surface_id": 454,
+        "start_ns": 10618514875,
+        "duration_ms": 3.157916
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347654,
+        "surface_id": 462,
+        "start_ns": 10624810000,
+        "duration_ms": 0.814791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467505,
+        "surface_id": 404,
+        "start_ns": 10652020500,
+        "duration_ms": 3.23725
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467506,
+        "surface_id": 87,
+        "start_ns": 10671435916,
+        "duration_ms": 2.491708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467507,
+        "surface_id": 454,
+        "start_ns": 10685595291,
+        "duration_ms": 3.964083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467510,
+        "surface_id": 454,
+        "start_ns": 10735704250,
+        "duration_ms": 3.112791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467512,
+        "surface_id": 87,
+        "start_ns": 10767823500,
+        "duration_ms": 2.25525
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467513,
+        "surface_id": 454,
+        "start_ns": 10785688625,
+        "duration_ms": 3.217041
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347658,
+        "surface_id": 223,
+        "start_ns": 10791578875,
+        "duration_ms": 0.82025
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347659,
+        "surface_id": 92,
+        "start_ns": 10808169875,
+        "duration_ms": 0.827125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467516,
+        "surface_id": 454,
+        "start_ns": 10835017541,
+        "duration_ms": 2.517208
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347660,
+        "surface_id": 462,
+        "start_ns": 10841896625,
+        "duration_ms": 0.791166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467518,
+        "surface_id": 87,
+        "start_ns": 10867291875,
+        "duration_ms": 2.995791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467519,
+        "surface_id": 404,
+        "start_ns": 10882983000,
+        "duration_ms": 2.32375
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347661,
+        "surface_id": 223,
+        "start_ns": 10891278375,
+        "duration_ms": 0.724625
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347662,
+        "surface_id": 462,
+        "start_ns": 10911467791,
+        "duration_ms": 0.722708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467522,
+        "surface_id": 87,
+        "start_ns": 10932472416,
+        "duration_ms": 2.279208
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347663,
+        "surface_id": 223,
+        "start_ns": 10941090375,
+        "duration_ms": 0.723166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467524,
+        "surface_id": 87,
+        "start_ns": 10967088250,
+        "duration_ms": 2.965875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467525,
+        "surface_id": 404,
+        "start_ns": 10982426750,
+        "duration_ms": 2.466916
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347664,
+        "surface_id": 462,
+        "start_ns": 10991051791,
+        "duration_ms": 0.723208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467528,
+        "surface_id": 87,
+        "start_ns": 11032477541,
+        "duration_ms": 3.0815
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467530,
+        "surface_id": 87,
+        "start_ns": 11066632625,
+        "duration_ms": 2.954166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467531,
+        "surface_id": 404,
+        "start_ns": 11083343375,
+        "duration_ms": 2.855375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467534,
+        "surface_id": 87,
+        "start_ns": 11134165875,
+        "duration_ms": 2.337416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467535,
+        "surface_id": 404,
+        "start_ns": 11150349041,
+        "duration_ms": 2.103
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467537,
+        "surface_id": 404,
+        "start_ns": 11187279375,
+        "duration_ms": 2.573166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467539,
+        "surface_id": 454,
+        "start_ns": 11219701416,
+        "duration_ms": 3.103875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467540,
+        "surface_id": 404,
+        "start_ns": 11234916500,
+        "duration_ms": 2.383625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467541,
+        "surface_id": 87,
+        "start_ns": 11250763125,
+        "duration_ms": 2.116625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467542,
+        "surface_id": 404,
+        "start_ns": 11267023125,
+        "duration_ms": 2.95725
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467543,
+        "surface_id": 87,
+        "start_ns": 11284150625,
+        "duration_ms": 2.341791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467544,
+        "surface_id": 404,
+        "start_ns": 11301038125,
+        "duration_ms": 2.170125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467545,
+        "surface_id": 87,
+        "start_ns": 11317735750,
+        "duration_ms": 2.0975
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467546,
+        "surface_id": 404,
+        "start_ns": 11339364750,
+        "duration_ms": 3.101625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467547,
+        "surface_id": 87,
+        "start_ns": 11352025625,
+        "duration_ms": 2.342375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467548,
+        "surface_id": 454,
+        "start_ns": 11368148166,
+        "duration_ms": 2.147958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467549,
+        "surface_id": 404,
+        "start_ns": 11389860375,
+        "duration_ms": 3.290291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467550,
+        "surface_id": 87,
+        "start_ns": 11401530875,
+        "duration_ms": 2.406791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467551,
+        "surface_id": 454,
+        "start_ns": 11418623041,
+        "duration_ms": 3.301083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467552,
+        "surface_id": 404,
+        "start_ns": 11434349916,
+        "duration_ms": 2.492083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467553,
+        "surface_id": 87,
+        "start_ns": 11451230875,
+        "duration_ms": 2.406791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467554,
+        "surface_id": 454,
+        "start_ns": 11468817916,
+        "duration_ms": 3.18
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467555,
+        "surface_id": 404,
+        "start_ns": 11484762500,
+        "duration_ms": 2.488541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467556,
+        "surface_id": 87,
+        "start_ns": 11504657416,
+        "duration_ms": 2.280708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467557,
+        "surface_id": 454,
+        "start_ns": 11519228125,
+        "duration_ms": 3.327
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467558,
+        "surface_id": 404,
+        "start_ns": 11534830125,
+        "duration_ms": 2.479416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467559,
+        "surface_id": 87,
+        "start_ns": 11551182625,
+        "duration_ms": 2.321875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467560,
+        "surface_id": 454,
+        "start_ns": 11568742625,
+        "duration_ms": 3.1095
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467561,
+        "surface_id": 404,
+        "start_ns": 11584717500,
+        "duration_ms": 2.49225
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467562,
+        "surface_id": 87,
+        "start_ns": 11604910000,
+        "duration_ms": 2.256625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467563,
+        "surface_id": 454,
+        "start_ns": 11618842791,
+        "duration_ms": 3.235375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467564,
+        "surface_id": 404,
+        "start_ns": 11634731500,
+        "duration_ms": 2.4345
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467567,
+        "surface_id": 404,
+        "start_ns": 11684699375,
+        "duration_ms": 2.53775
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467568,
+        "surface_id": 87,
+        "start_ns": 11701084250,
+        "duration_ms": 2.23975
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467569,
+        "surface_id": 404,
+        "start_ns": 11722165500,
+        "duration_ms": 3.187791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467570,
+        "surface_id": 454,
+        "start_ns": 11734863625,
+        "duration_ms": 2.466041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467571,
+        "surface_id": 87,
+        "start_ns": 11751210166,
+        "duration_ms": 2.284083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467572,
+        "surface_id": 404,
+        "start_ns": 11768637875,
+        "duration_ms": 3.202416
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347673,
+        "surface_id": 462,
+        "start_ns": 11775893125,
+        "duration_ms": 0.781375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467574,
+        "surface_id": 87,
+        "start_ns": 11801149250,
+        "duration_ms": 2.20025
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467575,
+        "surface_id": 404,
+        "start_ns": 11823038250,
+        "duration_ms": 3.357
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467576,
+        "surface_id": 454,
+        "start_ns": 11834908166,
+        "duration_ms": 2.468708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467578,
+        "surface_id": 404,
+        "start_ns": 11868722000,
+        "duration_ms": 3.091625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467579,
+        "surface_id": 454,
+        "start_ns": 11884732000,
+        "duration_ms": 2.617791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467580,
+        "surface_id": 87,
+        "start_ns": 11901075291,
+        "duration_ms": 2.326083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467581,
+        "surface_id": 404,
+        "start_ns": 11917778250,
+        "duration_ms": 2.331666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467582,
+        "surface_id": 87,
+        "start_ns": 11939809375,
+        "duration_ms": 3.13175
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347675,
+        "surface_id": 462,
+        "start_ns": 11946128500,
+        "duration_ms": 0.834875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467584,
+        "surface_id": 454,
+        "start_ns": 11967811500,
+        "duration_ms": 2.274625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467585,
+        "surface_id": 404,
+        "start_ns": 11988152041,
+        "duration_ms": 2.310333
+      }
+    ],
+    "associated": {
+      "frames": 468,
+      "mean_ms": 2.4906092991452993,
+      "median_ms": 2.46325,
+      "p95_ms": 3.245958,
+      "max_ms": 3.964083
+    },
+    "unjoined_update_frame_keys": 2,
+    "by_display": {
+      "Display 2": {
+        "frames": 37,
+        "mean_ms": 0.7688894324324325,
+        "median_ms": 0.773625,
+        "p95_ms": 0.841875,
+        "max_ms": 0.879
+      },
+      "Display 3": {
+        "frames": 431,
+        "mean_ms": 2.6384135568445477,
+        "median_ms": 2.491541,
+        "p95_ms": 3.2505,
+        "max_ms": 3.964083
+      }
+    }
+  },
+  "renders": {
+    "all_compositor_frames": 694,
+    "diagnostic": "joined",
+    "frame_values": [
+      {
+        "display": "Display 3",
+        "swap_id": 467022,
+        "surface_id": 454,
+        "start_ns": 2046594333,
+        "duration_ms": 4.946625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467024,
+        "surface_id": 87,
+        "start_ns": 2079934083,
+        "duration_ms": 4.598583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467025,
+        "surface_id": 454,
+        "start_ns": 2096595375,
+        "duration_ms": 4.5265
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467026,
+        "surface_id": 404,
+        "start_ns": 2113267958,
+        "duration_ms": 5.822333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467027,
+        "surface_id": 87,
+        "start_ns": 2129929291,
+        "duration_ms": 4.971125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467029,
+        "surface_id": 404,
+        "start_ns": 2163268250,
+        "duration_ms": 6.393416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467030,
+        "surface_id": 87,
+        "start_ns": 2180027750,
+        "duration_ms": 10.133166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467031,
+        "surface_id": 454,
+        "start_ns": 2196603083,
+        "duration_ms": 4.399
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467032,
+        "surface_id": 404,
+        "start_ns": 2213261625,
+        "duration_ms": 4.641125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467033,
+        "surface_id": 87,
+        "start_ns": 2229938583,
+        "duration_ms": 5.680791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467035,
+        "surface_id": 404,
+        "start_ns": 2263268666,
+        "duration_ms": 5.589666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467036,
+        "surface_id": 87,
+        "start_ns": 2279941333,
+        "duration_ms": 4.91825
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467039,
+        "surface_id": 87,
+        "start_ns": 2329965083,
+        "duration_ms": 4.937
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467041,
+        "surface_id": 404,
+        "start_ns": 2363265708,
+        "duration_ms": 5.685333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467042,
+        "surface_id": 87,
+        "start_ns": 2379936708,
+        "duration_ms": 4.921458
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347556,
+        "surface_id": 462,
+        "start_ns": 2386104583,
+        "duration_ms": 1.29325
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467044,
+        "surface_id": 454,
+        "start_ns": 2413268750,
+        "duration_ms": 10.303458
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347558,
+        "surface_id": 462,
+        "start_ns": 2440674333,
+        "duration_ms": 1.257666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467047,
+        "surface_id": 454,
+        "start_ns": 2463300750,
+        "duration_ms": 4.202541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467048,
+        "surface_id": 404,
+        "start_ns": 2479950500,
+        "duration_ms": 5.12175
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467049,
+        "surface_id": 87,
+        "start_ns": 2496604375,
+        "duration_ms": 4.115166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467051,
+        "surface_id": 404,
+        "start_ns": 2529951833,
+        "duration_ms": 4.464916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467052,
+        "surface_id": 87,
+        "start_ns": 2546611750,
+        "duration_ms": 5.75025
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467054,
+        "surface_id": 404,
+        "start_ns": 2579954625,
+        "duration_ms": 4.623541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467055,
+        "surface_id": 87,
+        "start_ns": 2596623958,
+        "duration_ms": 5.9405
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467058,
+        "surface_id": 87,
+        "start_ns": 2646673166,
+        "duration_ms": 5.089708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467061,
+        "surface_id": 404,
+        "start_ns": 2713305958,
+        "duration_ms": 7.197208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467062,
+        "surface_id": 87,
+        "start_ns": 2746623666,
+        "duration_ms": 6.556541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467065,
+        "surface_id": 404,
+        "start_ns": 2813384958,
+        "duration_ms": 5.367791
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347568,
+        "surface_id": 462,
+        "start_ns": 2820175708,
+        "duration_ms": 1.515
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467066,
+        "surface_id": 87,
+        "start_ns": 2846670041,
+        "duration_ms": 7.914208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467068,
+        "surface_id": 87,
+        "start_ns": 2879964375,
+        "duration_ms": 6.811041
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347569,
+        "surface_id": 223,
+        "start_ns": 2889381875,
+        "duration_ms": 2.763708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467069,
+        "surface_id": 404,
+        "start_ns": 2913371375,
+        "duration_ms": 4.932916
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347571,
+        "surface_id": 223,
+        "start_ns": 2933389500,
+        "duration_ms": 2.014916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467072,
+        "surface_id": 87,
+        "start_ns": 2979979833,
+        "duration_ms": 6.89125
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347573,
+        "surface_id": 223,
+        "start_ns": 3000112208,
+        "duration_ms": 2.699458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467074,
+        "surface_id": 87,
+        "start_ns": 3029972958,
+        "duration_ms": 5.578833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467076,
+        "surface_id": 87,
+        "start_ns": 3063361833,
+        "duration_ms": 7.499375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467077,
+        "surface_id": 454,
+        "start_ns": 3080000625,
+        "duration_ms": 5.631083
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347576,
+        "surface_id": 462,
+        "start_ns": 3102896375,
+        "duration_ms": 1.420666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467080,
+        "surface_id": 404,
+        "start_ns": 3129992291,
+        "duration_ms": 5.096291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467081,
+        "surface_id": 87,
+        "start_ns": 3146792083,
+        "duration_ms": 8.007333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467083,
+        "surface_id": 404,
+        "start_ns": 3179975500,
+        "duration_ms": 4.587958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467084,
+        "surface_id": 87,
+        "start_ns": 3196653458,
+        "duration_ms": 4.509125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467086,
+        "surface_id": 404,
+        "start_ns": 3229985625,
+        "duration_ms": 4.903458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467087,
+        "surface_id": 87,
+        "start_ns": 3246807041,
+        "duration_ms": 8.442916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467088,
+        "surface_id": 454,
+        "start_ns": 3263316666,
+        "duration_ms": 5.68475
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467089,
+        "surface_id": 404,
+        "start_ns": 3279994500,
+        "duration_ms": 5.123666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467090,
+        "surface_id": 87,
+        "start_ns": 3296664375,
+        "duration_ms": 4.627708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467091,
+        "surface_id": 404,
+        "start_ns": 3313444083,
+        "duration_ms": 10.2715
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467092,
+        "surface_id": 454,
+        "start_ns": 3329997625,
+        "duration_ms": 4.480291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467093,
+        "surface_id": 87,
+        "start_ns": 3346659375,
+        "duration_ms": 4.627791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467094,
+        "surface_id": 404,
+        "start_ns": 3363342541,
+        "duration_ms": 5.757333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467095,
+        "surface_id": 454,
+        "start_ns": 3379988416,
+        "duration_ms": 4.916833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467096,
+        "surface_id": 404,
+        "start_ns": 3396832250,
+        "duration_ms": 7.862708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467097,
+        "surface_id": 87,
+        "start_ns": 3413342500,
+        "duration_ms": 5.854833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467098,
+        "surface_id": 454,
+        "start_ns": 3430007833,
+        "duration_ms": 4.836666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467099,
+        "surface_id": 404,
+        "start_ns": 3446667583,
+        "duration_ms": 4.635625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467100,
+        "surface_id": 87,
+        "start_ns": 3463536666,
+        "duration_ms": 11.265125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467101,
+        "surface_id": 454,
+        "start_ns": 3479988541,
+        "duration_ms": 4.505041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467102,
+        "surface_id": 404,
+        "start_ns": 3496685541,
+        "duration_ms": 4.036208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467103,
+        "surface_id": 87,
+        "start_ns": 3513338291,
+        "duration_ms": 5.538416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467104,
+        "surface_id": 454,
+        "start_ns": 3530008083,
+        "duration_ms": 4.647875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467105,
+        "surface_id": 404,
+        "start_ns": 3546672625,
+        "duration_ms": 4.74825
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467106,
+        "surface_id": 87,
+        "start_ns": 3563336041,
+        "duration_ms": 5.67575
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467107,
+        "surface_id": 404,
+        "start_ns": 3580198125,
+        "duration_ms": 9.217166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467108,
+        "surface_id": 454,
+        "start_ns": 3596678708,
+        "duration_ms": 4.680125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467109,
+        "surface_id": 87,
+        "start_ns": 3613337958,
+        "duration_ms": 6.021958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467110,
+        "surface_id": 404,
+        "start_ns": 3630005541,
+        "duration_ms": 4.631333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467111,
+        "surface_id": 454,
+        "start_ns": 3646671500,
+        "duration_ms": 4.272666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467113,
+        "surface_id": 404,
+        "start_ns": 3680017250,
+        "duration_ms": 5.898375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467114,
+        "surface_id": 454,
+        "start_ns": 3696671750,
+        "duration_ms": 4.867708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467115,
+        "surface_id": 87,
+        "start_ns": 3713350250,
+        "duration_ms": 4.696916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467116,
+        "surface_id": 404,
+        "start_ns": 3730007458,
+        "duration_ms": 5.699041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467117,
+        "surface_id": 87,
+        "start_ns": 3746829291,
+        "duration_ms": 8.52925
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467118,
+        "surface_id": 454,
+        "start_ns": 3763365458,
+        "duration_ms": 5.910458
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347580,
+        "surface_id": 462,
+        "start_ns": 3770548833,
+        "duration_ms": 1.271041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467120,
+        "surface_id": 87,
+        "start_ns": 3796680833,
+        "duration_ms": 4.698916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467121,
+        "surface_id": 454,
+        "start_ns": 3813350791,
+        "duration_ms": 5.586791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467122,
+        "surface_id": 404,
+        "start_ns": 3830008916,
+        "duration_ms": 4.849541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467125,
+        "surface_id": 87,
+        "start_ns": 3880016000,
+        "duration_ms": 6.792416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467126,
+        "surface_id": 404,
+        "start_ns": 3913364833,
+        "duration_ms": 7.51575
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347582,
+        "surface_id": 462,
+        "start_ns": 3934258875,
+        "duration_ms": 2.368833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467128,
+        "surface_id": 404,
+        "start_ns": 3980092041,
+        "duration_ms": 9.523
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467129,
+        "surface_id": 87,
+        "start_ns": 4013443041,
+        "duration_ms": 6.838291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467132,
+        "surface_id": 404,
+        "start_ns": 4080061791,
+        "duration_ms": 8.03525
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467134,
+        "surface_id": 404,
+        "start_ns": 4113364583,
+        "duration_ms": 7.264125
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347584,
+        "surface_id": 462,
+        "start_ns": 4134466208,
+        "duration_ms": 3.787666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467136,
+        "surface_id": 404,
+        "start_ns": 4180084083,
+        "duration_ms": 8.280041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467137,
+        "surface_id": 87,
+        "start_ns": 4196735791,
+        "duration_ms": 10.081166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467138,
+        "surface_id": 404,
+        "start_ns": 4213455000,
+        "duration_ms": 6.034666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467140,
+        "surface_id": 404,
+        "start_ns": 4246773833,
+        "duration_ms": 10.9515
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467141,
+        "surface_id": 87,
+        "start_ns": 4263385291,
+        "duration_ms": 5.203208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467142,
+        "surface_id": 454,
+        "start_ns": 4280049333,
+        "duration_ms": 4.879375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467143,
+        "surface_id": 404,
+        "start_ns": 4296727333,
+        "duration_ms": 4.674625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467144,
+        "surface_id": 87,
+        "start_ns": 4313385291,
+        "duration_ms": 6.015666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467146,
+        "surface_id": 404,
+        "start_ns": 4346857291,
+        "duration_ms": 8.373833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467147,
+        "surface_id": 87,
+        "start_ns": 4363463750,
+        "duration_ms": 10.1175
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467148,
+        "surface_id": 454,
+        "start_ns": 4380055958,
+        "duration_ms": 4.6105
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467149,
+        "surface_id": 404,
+        "start_ns": 4396716125,
+        "duration_ms": 4.641791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467150,
+        "surface_id": 87,
+        "start_ns": 4413378208,
+        "duration_ms": 5.785458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467151,
+        "surface_id": 454,
+        "start_ns": 4430057416,
+        "duration_ms": 4.958416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467153,
+        "surface_id": 87,
+        "start_ns": 4463583541,
+        "duration_ms": 10.093458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467154,
+        "surface_id": 454,
+        "start_ns": 4480065291,
+        "duration_ms": 4.688166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467155,
+        "surface_id": 404,
+        "start_ns": 4496716791,
+        "duration_ms": 4.610083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467157,
+        "surface_id": 454,
+        "start_ns": 4530057375,
+        "duration_ms": 4.901375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467158,
+        "surface_id": 404,
+        "start_ns": 4546882166,
+        "duration_ms": 8.133666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467159,
+        "surface_id": 87,
+        "start_ns": 4563404541,
+        "duration_ms": 4.67475
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467160,
+        "surface_id": 454,
+        "start_ns": 4580058208,
+        "duration_ms": 5.722291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467161,
+        "surface_id": 404,
+        "start_ns": 4596732541,
+        "duration_ms": 4.805041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467162,
+        "surface_id": 87,
+        "start_ns": 4613396166,
+        "duration_ms": 6.512791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467163,
+        "surface_id": 404,
+        "start_ns": 4630216583,
+        "duration_ms": 8.233375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467164,
+        "surface_id": 454,
+        "start_ns": 4646727625,
+        "duration_ms": 6.432583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467165,
+        "surface_id": 87,
+        "start_ns": 4663405833,
+        "duration_ms": 5.242
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467166,
+        "surface_id": 404,
+        "start_ns": 4680227000,
+        "duration_ms": 8.00975
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467167,
+        "surface_id": 454,
+        "start_ns": 4696730000,
+        "duration_ms": 5.776416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467168,
+        "surface_id": 87,
+        "start_ns": 4713402416,
+        "duration_ms": 4.871541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467169,
+        "surface_id": 404,
+        "start_ns": 4730077000,
+        "duration_ms": 4.572458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467170,
+        "surface_id": 87,
+        "start_ns": 4746902541,
+        "duration_ms": 8.630291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467171,
+        "surface_id": 454,
+        "start_ns": 4763410833,
+        "duration_ms": 6.863083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467172,
+        "surface_id": 404,
+        "start_ns": 4780083333,
+        "duration_ms": 5.951875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467173,
+        "surface_id": 87,
+        "start_ns": 4796735000,
+        "duration_ms": 4.816
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467174,
+        "surface_id": 454,
+        "start_ns": 4813408333,
+        "duration_ms": 5.965291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467175,
+        "surface_id": 404,
+        "start_ns": 4830069041,
+        "duration_ms": 4.9245
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467176,
+        "surface_id": 87,
+        "start_ns": 4846732166,
+        "duration_ms": 4.648333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467177,
+        "surface_id": 404,
+        "start_ns": 4863472458,
+        "duration_ms": 9.928125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467178,
+        "surface_id": 454,
+        "start_ns": 4880063875,
+        "duration_ms": 4.978791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467179,
+        "surface_id": 87,
+        "start_ns": 4896740875,
+        "duration_ms": 4.544458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467180,
+        "surface_id": 404,
+        "start_ns": 4913594916,
+        "duration_ms": 10.339875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467181,
+        "surface_id": 454,
+        "start_ns": 4930083291,
+        "duration_ms": 4.339291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467182,
+        "surface_id": 87,
+        "start_ns": 4946746166,
+        "duration_ms": 4.440291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467183,
+        "surface_id": 404,
+        "start_ns": 4963409958,
+        "duration_ms": 5.696208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467184,
+        "surface_id": 454,
+        "start_ns": 4980080541,
+        "duration_ms": 5.367
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467185,
+        "surface_id": 87,
+        "start_ns": 4996741625,
+        "duration_ms": 4.588625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467186,
+        "surface_id": 404,
+        "start_ns": 5013456125,
+        "duration_ms": 5.659458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467187,
+        "surface_id": 87,
+        "start_ns": 5030081416,
+        "duration_ms": 6.529958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467189,
+        "surface_id": 87,
+        "start_ns": 5080100708,
+        "duration_ms": 5.65425
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467191,
+        "surface_id": 87,
+        "start_ns": 5113436291,
+        "duration_ms": 6.429166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467192,
+        "surface_id": 404,
+        "start_ns": 5146760375,
+        "duration_ms": 8.053
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467193,
+        "surface_id": 87,
+        "start_ns": 5180122166,
+        "duration_ms": 7.816541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467195,
+        "surface_id": 404,
+        "start_ns": 5213512166,
+        "duration_ms": 6.793833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467196,
+        "surface_id": 87,
+        "start_ns": 5246802583,
+        "duration_ms": 9.661375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467197,
+        "surface_id": 404,
+        "start_ns": 5280124166,
+        "duration_ms": 7.208875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467199,
+        "surface_id": 404,
+        "start_ns": 5313490250,
+        "duration_ms": 6.644375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467200,
+        "surface_id": 87,
+        "start_ns": 5346806458,
+        "duration_ms": 10.034333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467201,
+        "surface_id": 404,
+        "start_ns": 5363474750,
+        "duration_ms": 8.303208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467202,
+        "surface_id": 87,
+        "start_ns": 5380199041,
+        "duration_ms": 5.064375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467203,
+        "surface_id": 454,
+        "start_ns": 5396782416,
+        "duration_ms": 5.780375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467204,
+        "surface_id": 404,
+        "start_ns": 5413454791,
+        "duration_ms": 5.032208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467205,
+        "surface_id": 87,
+        "start_ns": 5430108041,
+        "duration_ms": 4.581291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467206,
+        "surface_id": 454,
+        "start_ns": 5446770166,
+        "duration_ms": 5.401583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467207,
+        "surface_id": 404,
+        "start_ns": 5463460208,
+        "duration_ms": 5.555791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467208,
+        "surface_id": 87,
+        "start_ns": 5480132166,
+        "duration_ms": 5.021166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467209,
+        "surface_id": 404,
+        "start_ns": 5496848208,
+        "duration_ms": 10.169708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467211,
+        "surface_id": 404,
+        "start_ns": 5530230458,
+        "duration_ms": 8.412041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467212,
+        "surface_id": 454,
+        "start_ns": 5546781958,
+        "duration_ms": 6.233625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467213,
+        "surface_id": 87,
+        "start_ns": 5563443958,
+        "duration_ms": 5.140208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467214,
+        "surface_id": 404,
+        "start_ns": 5580108166,
+        "duration_ms": 5.851875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467215,
+        "surface_id": 454,
+        "start_ns": 5596772750,
+        "duration_ms": 5.027333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467216,
+        "surface_id": 87,
+        "start_ns": 5613444333,
+        "duration_ms": 4.717666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467217,
+        "surface_id": 404,
+        "start_ns": 5630123416,
+        "duration_ms": 5.636791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467218,
+        "surface_id": 454,
+        "start_ns": 5646785000,
+        "duration_ms": 4.891875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467219,
+        "surface_id": 404,
+        "start_ns": 5663582083,
+        "duration_ms": 8.02125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467220,
+        "surface_id": 87,
+        "start_ns": 5680179958,
+        "duration_ms": 10.012333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467221,
+        "surface_id": 404,
+        "start_ns": 5700104166,
+        "duration_ms": 5.477291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467223,
+        "surface_id": 87,
+        "start_ns": 5730132125,
+        "duration_ms": 5.03375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467225,
+        "surface_id": 87,
+        "start_ns": 5763553166,
+        "duration_ms": 10.889333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467226,
+        "surface_id": 454,
+        "start_ns": 5780141583,
+        "duration_ms": 5.367583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467227,
+        "surface_id": 404,
+        "start_ns": 5796799583,
+        "duration_ms": 4.619416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467228,
+        "surface_id": 87,
+        "start_ns": 5813461166,
+        "duration_ms": 5.605125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467229,
+        "surface_id": 454,
+        "start_ns": 5830128666,
+        "duration_ms": 4.785541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467230,
+        "surface_id": 404,
+        "start_ns": 5846936791,
+        "duration_ms": 8.078041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467232,
+        "surface_id": 454,
+        "start_ns": 5880137791,
+        "duration_ms": 5.005291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467233,
+        "surface_id": 404,
+        "start_ns": 5896826708,
+        "duration_ms": 4.5315
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467234,
+        "surface_id": 87,
+        "start_ns": 5913501708,
+        "duration_ms": 5.985125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467236,
+        "surface_id": 404,
+        "start_ns": 5946810250,
+        "duration_ms": 5.072083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467237,
+        "surface_id": 87,
+        "start_ns": 5963467958,
+        "duration_ms": 4.208875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467238,
+        "surface_id": 454,
+        "start_ns": 5980132125,
+        "duration_ms": 3.979375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467239,
+        "surface_id": 404,
+        "start_ns": 5996822125,
+        "duration_ms": 5.8515
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467240,
+        "surface_id": 87,
+        "start_ns": 6013478833,
+        "duration_ms": 5.006541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467241,
+        "surface_id": 454,
+        "start_ns": 6030144791,
+        "duration_ms": 4.44275
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467243,
+        "surface_id": 87,
+        "start_ns": 6063475583,
+        "duration_ms": 4.735
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467244,
+        "surface_id": 454,
+        "start_ns": 6080142916,
+        "duration_ms": 4.575208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467245,
+        "surface_id": 404,
+        "start_ns": 6096804833,
+        "duration_ms": 4.521083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467246,
+        "surface_id": 87,
+        "start_ns": 6113484583,
+        "duration_ms": 9.33
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467247,
+        "surface_id": 454,
+        "start_ns": 6130159416,
+        "duration_ms": 4.920375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467249,
+        "surface_id": 87,
+        "start_ns": 6163480416,
+        "duration_ms": 5.70075
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467250,
+        "surface_id": 454,
+        "start_ns": 6180136708,
+        "duration_ms": 4.443541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467251,
+        "surface_id": 404,
+        "start_ns": 6196836583,
+        "duration_ms": 6.116666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467252,
+        "surface_id": 87,
+        "start_ns": 6213505291,
+        "duration_ms": 6.505333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467254,
+        "surface_id": 87,
+        "start_ns": 6246826541,
+        "duration_ms": 5.360708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467256,
+        "surface_id": 87,
+        "start_ns": 6280182041,
+        "duration_ms": 6.56975
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347598,
+        "surface_id": 462,
+        "start_ns": 6302867541,
+        "duration_ms": 2.200083
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347599,
+        "surface_id": 223,
+        "start_ns": 6336259375,
+        "duration_ms": 3.674833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467260,
+        "surface_id": 404,
+        "start_ns": 6380202583,
+        "duration_ms": 7.286291
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347600,
+        "surface_id": 462,
+        "start_ns": 6402959416,
+        "duration_ms": 2.690166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467262,
+        "surface_id": 404,
+        "start_ns": 6446822875,
+        "duration_ms": 6.699708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467266,
+        "surface_id": 404,
+        "start_ns": 6513600750,
+        "duration_ms": 6.65325
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467268,
+        "surface_id": 404,
+        "start_ns": 6546921958,
+        "duration_ms": 5.458375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467269,
+        "surface_id": 454,
+        "start_ns": 6563516125,
+        "duration_ms": 4.978041
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347606,
+        "surface_id": 462,
+        "start_ns": 6587172041,
+        "duration_ms": 1.289875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467272,
+        "surface_id": 454,
+        "start_ns": 6613510416,
+        "duration_ms": 4.93975
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467273,
+        "surface_id": 87,
+        "start_ns": 6630165541,
+        "duration_ms": 4.619916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467275,
+        "surface_id": 454,
+        "start_ns": 6663508416,
+        "duration_ms": 4.824791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467276,
+        "surface_id": 87,
+        "start_ns": 6680180625,
+        "duration_ms": 4.7705
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467279,
+        "surface_id": 87,
+        "start_ns": 6730175166,
+        "duration_ms": 4.509125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467281,
+        "surface_id": 454,
+        "start_ns": 6763506541,
+        "duration_ms": 4.672416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467282,
+        "surface_id": 87,
+        "start_ns": 6780194250,
+        "duration_ms": 4.983125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467284,
+        "surface_id": 87,
+        "start_ns": 6813599750,
+        "duration_ms": 6.730666
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347613,
+        "surface_id": 223,
+        "start_ns": 6836624208,
+        "duration_ms": 2.087958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467287,
+        "surface_id": 87,
+        "start_ns": 6863488916,
+        "duration_ms": 2.5485
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467288,
+        "surface_id": 404,
+        "start_ns": 6880202041,
+        "duration_ms": 2.20525
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347615,
+        "surface_id": 223,
+        "start_ns": 6903343583,
+        "duration_ms": 2.542375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467291,
+        "surface_id": 87,
+        "start_ns": 6930266583,
+        "duration_ms": 5.587291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467292,
+        "surface_id": 404,
+        "start_ns": 6946906833,
+        "duration_ms": 9.017583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467293,
+        "surface_id": 87,
+        "start_ns": 6980196500,
+        "duration_ms": 7.672041
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347617,
+        "surface_id": 223,
+        "start_ns": 7003417833,
+        "duration_ms": 2.234583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467296,
+        "surface_id": 404,
+        "start_ns": 7046941666,
+        "duration_ms": 6.539708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467297,
+        "surface_id": 87,
+        "start_ns": 7063620000,
+        "duration_ms": 8.330833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467300,
+        "surface_id": 404,
+        "start_ns": 7113640250,
+        "duration_ms": 5.188666
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347621,
+        "surface_id": 223,
+        "start_ns": 7120156666,
+        "duration_ms": 1.295041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467302,
+        "surface_id": 404,
+        "start_ns": 7146855583,
+        "duration_ms": 3.441708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467303,
+        "surface_id": 87,
+        "start_ns": 7163557708,
+        "duration_ms": 7.219333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467306,
+        "surface_id": 404,
+        "start_ns": 7213551166,
+        "duration_ms": 7.321708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467307,
+        "surface_id": 87,
+        "start_ns": 7230213375,
+        "duration_ms": 4.721083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467308,
+        "surface_id": 404,
+        "start_ns": 7246873791,
+        "duration_ms": 4.630791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467309,
+        "surface_id": 87,
+        "start_ns": 7263608833,
+        "duration_ms": 6.404291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467310,
+        "surface_id": 404,
+        "start_ns": 7280247250,
+        "duration_ms": 6.679041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467311,
+        "surface_id": 87,
+        "start_ns": 7296898250,
+        "duration_ms": 5.156
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467312,
+        "surface_id": 454,
+        "start_ns": 7313543125,
+        "duration_ms": 4.642291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467313,
+        "surface_id": 404,
+        "start_ns": 7330219791,
+        "duration_ms": 6.287
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467314,
+        "surface_id": 87,
+        "start_ns": 7346864708,
+        "duration_ms": 4.767416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467315,
+        "surface_id": 404,
+        "start_ns": 7363623041,
+        "duration_ms": 6.700916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467316,
+        "surface_id": 87,
+        "start_ns": 7380203958,
+        "duration_ms": 3.123458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467317,
+        "surface_id": 404,
+        "start_ns": 7413556125,
+        "duration_ms": 5.652083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467319,
+        "surface_id": 404,
+        "start_ns": 7446875291,
+        "duration_ms": 6.105083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467320,
+        "surface_id": 87,
+        "start_ns": 7480213833,
+        "duration_ms": 7.07325
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467321,
+        "surface_id": 404,
+        "start_ns": 7513609875,
+        "duration_ms": 8.553875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467322,
+        "surface_id": 87,
+        "start_ns": 7530216250,
+        "duration_ms": 7.291916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467323,
+        "surface_id": 404,
+        "start_ns": 7546923208,
+        "duration_ms": 7.386958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467324,
+        "surface_id": 87,
+        "start_ns": 7580288541,
+        "duration_ms": 8.964333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467325,
+        "surface_id": 404,
+        "start_ns": 7613606625,
+        "duration_ms": 7.750291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467326,
+        "surface_id": 87,
+        "start_ns": 7630281583,
+        "duration_ms": 7.084416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467328,
+        "surface_id": 87,
+        "start_ns": 7663619583,
+        "duration_ms": 4.640416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467329,
+        "surface_id": 404,
+        "start_ns": 7680236583,
+        "duration_ms": 4.495041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467330,
+        "surface_id": 87,
+        "start_ns": 7696951541,
+        "duration_ms": 7.734583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467331,
+        "surface_id": 454,
+        "start_ns": 7713570291,
+        "duration_ms": 5.789791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467332,
+        "surface_id": 404,
+        "start_ns": 7730246125,
+        "duration_ms": 4.929458
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347625,
+        "surface_id": 223,
+        "start_ns": 7737372541,
+        "duration_ms": 1.969166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467334,
+        "surface_id": 454,
+        "start_ns": 7763577916,
+        "duration_ms": 4.878291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467335,
+        "surface_id": 404,
+        "start_ns": 7780253666,
+        "duration_ms": 4.943875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467336,
+        "surface_id": 87,
+        "start_ns": 7796919750,
+        "duration_ms": 5.870375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467337,
+        "surface_id": 454,
+        "start_ns": 7813574125,
+        "duration_ms": 7.332166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467338,
+        "surface_id": 404,
+        "start_ns": 7830228041,
+        "duration_ms": 4.675875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467339,
+        "surface_id": 87,
+        "start_ns": 7846908750,
+        "duration_ms": 5.982916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467340,
+        "surface_id": 454,
+        "start_ns": 7863568583,
+        "duration_ms": 5.02225
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467342,
+        "surface_id": 87,
+        "start_ns": 7896915250,
+        "duration_ms": 5.198791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467343,
+        "surface_id": 454,
+        "start_ns": 7913595958,
+        "duration_ms": 6.839333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467345,
+        "surface_id": 87,
+        "start_ns": 7946911166,
+        "duration_ms": 4.8725
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467346,
+        "surface_id": 454,
+        "start_ns": 7963603833,
+        "duration_ms": 5.815125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467347,
+        "surface_id": 404,
+        "start_ns": 7980244541,
+        "duration_ms": 4.909208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467348,
+        "surface_id": 87,
+        "start_ns": 7996917541,
+        "duration_ms": 4.625166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467349,
+        "surface_id": 404,
+        "start_ns": 8013767750,
+        "duration_ms": 7.69925
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467350,
+        "surface_id": 454,
+        "start_ns": 8030264708,
+        "duration_ms": 5.839583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467352,
+        "surface_id": 404,
+        "start_ns": 8063600083,
+        "duration_ms": 4.663583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467353,
+        "surface_id": 454,
+        "start_ns": 8080239208,
+        "duration_ms": 5.582791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467354,
+        "surface_id": 87,
+        "start_ns": 8096933083,
+        "duration_ms": 7.909333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467355,
+        "surface_id": 404,
+        "start_ns": 8113601250,
+        "duration_ms": 4.933083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467356,
+        "surface_id": 454,
+        "start_ns": 8130251666,
+        "duration_ms": 4.636166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467358,
+        "surface_id": 404,
+        "start_ns": 8163595000,
+        "duration_ms": 4.908791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467359,
+        "surface_id": 87,
+        "start_ns": 8180399000,
+        "duration_ms": 7.922916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467360,
+        "surface_id": 404,
+        "start_ns": 8197037208,
+        "duration_ms": 5.826708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467361,
+        "surface_id": 454,
+        "start_ns": 8213586708,
+        "duration_ms": 4.9415
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467363,
+        "surface_id": 404,
+        "start_ns": 8246929291,
+        "duration_ms": 5.861541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467364,
+        "surface_id": 454,
+        "start_ns": 8263613541,
+        "duration_ms": 4.934875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467365,
+        "surface_id": 87,
+        "start_ns": 8280261291,
+        "duration_ms": 4.614333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467366,
+        "surface_id": 404,
+        "start_ns": 8297025166,
+        "duration_ms": 9.957541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467367,
+        "surface_id": 454,
+        "start_ns": 8313598291,
+        "duration_ms": 4.6405
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467369,
+        "surface_id": 404,
+        "start_ns": 8346935375,
+        "duration_ms": 5.712625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467370,
+        "surface_id": 454,
+        "start_ns": 8363606583,
+        "duration_ms": 4.893875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467371,
+        "surface_id": 87,
+        "start_ns": 8380284166,
+        "duration_ms": 5.674375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467372,
+        "surface_id": 404,
+        "start_ns": 8396948250,
+        "duration_ms": 6.260125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467373,
+        "surface_id": 454,
+        "start_ns": 8413607000,
+        "duration_ms": 5.276333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467375,
+        "surface_id": 404,
+        "start_ns": 8446934375,
+        "duration_ms": 8.135583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467376,
+        "surface_id": 454,
+        "start_ns": 8463603750,
+        "duration_ms": 4.663041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467377,
+        "surface_id": 87,
+        "start_ns": 8480292541,
+        "duration_ms": 6.245166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467378,
+        "surface_id": 404,
+        "start_ns": 8496963583,
+        "duration_ms": 7.241083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467379,
+        "surface_id": 454,
+        "start_ns": 8513609541,
+        "duration_ms": 5.242916
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347633,
+        "surface_id": 223,
+        "start_ns": 8521316833,
+        "duration_ms": 1.109333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467381,
+        "surface_id": 404,
+        "start_ns": 8546955708,
+        "duration_ms": 5.198583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467382,
+        "surface_id": 87,
+        "start_ns": 8563602291,
+        "duration_ms": 6.899958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467383,
+        "surface_id": 404,
+        "start_ns": 8580283416,
+        "duration_ms": 5.696791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467384,
+        "surface_id": 87,
+        "start_ns": 8613644833,
+        "duration_ms": 6.961583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467385,
+        "surface_id": 404,
+        "start_ns": 8630271875,
+        "duration_ms": 5.784166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467386,
+        "surface_id": 87,
+        "start_ns": 8646959250,
+        "duration_ms": 5.751416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467388,
+        "surface_id": 87,
+        "start_ns": 8680381750,
+        "duration_ms": 8.2305
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467389,
+        "surface_id": 404,
+        "start_ns": 8713685041,
+        "duration_ms": 8.534583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467390,
+        "surface_id": 87,
+        "start_ns": 8730385666,
+        "duration_ms": 7.127833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467391,
+        "surface_id": 404,
+        "start_ns": 8746924833,
+        "duration_ms": 4.411208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467393,
+        "surface_id": 404,
+        "start_ns": 8780337916,
+        "duration_ms": 8.087791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467394,
+        "surface_id": 87,
+        "start_ns": 8797052791,
+        "duration_ms": 6.769875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467395,
+        "surface_id": 404,
+        "start_ns": 8813674041,
+        "duration_ms": 7.989958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467396,
+        "surface_id": 87,
+        "start_ns": 8830409875,
+        "duration_ms": 5.527291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467397,
+        "surface_id": 404,
+        "start_ns": 8846960000,
+        "duration_ms": 5.696666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467398,
+        "surface_id": 87,
+        "start_ns": 8863801375,
+        "duration_ms": 10.020375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467399,
+        "surface_id": 404,
+        "start_ns": 8880380833,
+        "duration_ms": 4.468541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467400,
+        "surface_id": 87,
+        "start_ns": 8896985625,
+        "duration_ms": 4.254291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467401,
+        "surface_id": 454,
+        "start_ns": 8913630041,
+        "duration_ms": 6.294083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467402,
+        "surface_id": 404,
+        "start_ns": 8930319541,
+        "duration_ms": 5.05275
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467403,
+        "surface_id": 87,
+        "start_ns": 8946979750,
+        "duration_ms": 4.686208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467404,
+        "surface_id": 404,
+        "start_ns": 8963719916,
+        "duration_ms": 9.546125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467405,
+        "surface_id": 454,
+        "start_ns": 8980320916,
+        "duration_ms": 4.905291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467406,
+        "surface_id": 87,
+        "start_ns": 8996969041,
+        "duration_ms": 4.598166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467407,
+        "surface_id": 404,
+        "start_ns": 9013624375,
+        "duration_ms": 5.977083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467408,
+        "surface_id": 454,
+        "start_ns": 9030312250,
+        "duration_ms": 4.720416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467410,
+        "surface_id": 404,
+        "start_ns": 9063657416,
+        "duration_ms": 6.167583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467411,
+        "surface_id": 454,
+        "start_ns": 9080326583,
+        "duration_ms": 5.077333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467412,
+        "surface_id": 87,
+        "start_ns": 9096960166,
+        "duration_ms": 5.81075
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467413,
+        "surface_id": 404,
+        "start_ns": 9113775291,
+        "duration_ms": 8.457166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467414,
+        "surface_id": 454,
+        "start_ns": 9130321041,
+        "duration_ms": 4.752833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467415,
+        "surface_id": 87,
+        "start_ns": 9146988083,
+        "duration_ms": 5.714833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467416,
+        "surface_id": 404,
+        "start_ns": 9163663458,
+        "duration_ms": 5.307958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467417,
+        "surface_id": 454,
+        "start_ns": 9180326375,
+        "duration_ms": 5.88775
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467418,
+        "surface_id": 87,
+        "start_ns": 9196985708,
+        "duration_ms": 5.027791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467419,
+        "surface_id": 404,
+        "start_ns": 9213648000,
+        "duration_ms": 8.82725
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467420,
+        "surface_id": 454,
+        "start_ns": 9230323000,
+        "duration_ms": 4.587958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467421,
+        "surface_id": 87,
+        "start_ns": 9246983875,
+        "duration_ms": 4.547833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467422,
+        "surface_id": 404,
+        "start_ns": 9263653041,
+        "duration_ms": 5.693666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467423,
+        "surface_id": 454,
+        "start_ns": 9280319791,
+        "duration_ms": 4.995875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467424,
+        "surface_id": 404,
+        "start_ns": 9297058458,
+        "duration_ms": 10.746541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467425,
+        "surface_id": 87,
+        "start_ns": 9313646000,
+        "duration_ms": 4.441333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467426,
+        "surface_id": 454,
+        "start_ns": 9330329916,
+        "duration_ms": 4.400166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467427,
+        "surface_id": 404,
+        "start_ns": 9346993541,
+        "duration_ms": 5.515583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467428,
+        "surface_id": 87,
+        "start_ns": 9363661708,
+        "duration_ms": 4.819875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467429,
+        "surface_id": 454,
+        "start_ns": 9380327583,
+        "duration_ms": 8.521541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467430,
+        "surface_id": 404,
+        "start_ns": 9397023250,
+        "duration_ms": 5.467416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467431,
+        "surface_id": 87,
+        "start_ns": 9413663208,
+        "duration_ms": 4.514583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467432,
+        "surface_id": 454,
+        "start_ns": 9430330208,
+        "duration_ms": 4.493083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467433,
+        "surface_id": 404,
+        "start_ns": 9446998958,
+        "duration_ms": 9.009166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467434,
+        "surface_id": 87,
+        "start_ns": 9463675500,
+        "duration_ms": 4.528083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467435,
+        "surface_id": 454,
+        "start_ns": 9480330250,
+        "duration_ms": 4.418916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467436,
+        "surface_id": 404,
+        "start_ns": 9496998041,
+        "duration_ms": 5.621416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467437,
+        "surface_id": 87,
+        "start_ns": 9513833083,
+        "duration_ms": 8.586541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467438,
+        "surface_id": 454,
+        "start_ns": 9530330208,
+        "duration_ms": 4.751666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467440,
+        "surface_id": 87,
+        "start_ns": 9563672000,
+        "duration_ms": 5.144583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467441,
+        "surface_id": 454,
+        "start_ns": 9580332666,
+        "duration_ms": 4.770666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467442,
+        "surface_id": 404,
+        "start_ns": 9597055875,
+        "duration_ms": 10.140833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467443,
+        "surface_id": 87,
+        "start_ns": 9613674250,
+        "duration_ms": 4.77125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467444,
+        "surface_id": 454,
+        "start_ns": 9630328666,
+        "duration_ms": 4.862166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467445,
+        "surface_id": 404,
+        "start_ns": 9647012375,
+        "duration_ms": 6.412041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467446,
+        "surface_id": 87,
+        "start_ns": 9663683166,
+        "duration_ms": 4.628458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467448,
+        "surface_id": 87,
+        "start_ns": 9697016916,
+        "duration_ms": 4.787
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467449,
+        "surface_id": 404,
+        "start_ns": 9713684791,
+        "duration_ms": 6.617416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467450,
+        "surface_id": 87,
+        "start_ns": 9730320791,
+        "duration_ms": 2.453041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467451,
+        "surface_id": 404,
+        "start_ns": 9746993125,
+        "duration_ms": 2.160708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467452,
+        "surface_id": 87,
+        "start_ns": 9763676208,
+        "duration_ms": 6.573166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467454,
+        "surface_id": 87,
+        "start_ns": 9797019958,
+        "duration_ms": 5.237958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467455,
+        "surface_id": 404,
+        "start_ns": 9813676208,
+        "duration_ms": 6.357958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467457,
+        "surface_id": 404,
+        "start_ns": 9847020750,
+        "duration_ms": 2.593375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467458,
+        "surface_id": 454,
+        "start_ns": 9863724583,
+        "duration_ms": 7.951583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467459,
+        "surface_id": 404,
+        "start_ns": 9880414583,
+        "duration_ms": 3.756458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467460,
+        "surface_id": 87,
+        "start_ns": 9897113500,
+        "duration_ms": 6.605125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467461,
+        "surface_id": 404,
+        "start_ns": 9913683500,
+        "duration_ms": 7.715208
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347639,
+        "surface_id": 223,
+        "start_ns": 9922728958,
+        "duration_ms": 1.814541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467463,
+        "surface_id": 404,
+        "start_ns": 9947021166,
+        "duration_ms": 4.2955
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467465,
+        "surface_id": 404,
+        "start_ns": 9980452458,
+        "duration_ms": 8.297375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467466,
+        "surface_id": 87,
+        "start_ns": 9997026458,
+        "duration_ms": 4.977375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467467,
+        "surface_id": 404,
+        "start_ns": 10013791000,
+        "duration_ms": 4.723625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467469,
+        "surface_id": 87,
+        "start_ns": 10047045875,
+        "duration_ms": 5.253166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467470,
+        "surface_id": 404,
+        "start_ns": 10063709666,
+        "duration_ms": 5.940125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467471,
+        "surface_id": 454,
+        "start_ns": 10080358541,
+        "duration_ms": 5.007625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467472,
+        "surface_id": 87,
+        "start_ns": 10097045958,
+        "duration_ms": 4.558666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467473,
+        "surface_id": 404,
+        "start_ns": 10113879625,
+        "duration_ms": 10.526583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467474,
+        "surface_id": 454,
+        "start_ns": 10130359291,
+        "duration_ms": 4.314875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467476,
+        "surface_id": 404,
+        "start_ns": 10163734416,
+        "duration_ms": 4.567833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467477,
+        "surface_id": 454,
+        "start_ns": 10180368250,
+        "duration_ms": 4.727875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467478,
+        "surface_id": 87,
+        "start_ns": 10197052291,
+        "duration_ms": 5.688833
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347643,
+        "surface_id": 223,
+        "start_ns": 10206068750,
+        "duration_ms": 1.565125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467480,
+        "surface_id": 87,
+        "start_ns": 10230397750,
+        "duration_ms": 5.18625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467481,
+        "surface_id": 454,
+        "start_ns": 10247040208,
+        "duration_ms": 9.494291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467482,
+        "surface_id": 404,
+        "start_ns": 10263714250,
+        "duration_ms": 4.693083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467483,
+        "surface_id": 87,
+        "start_ns": 10280378166,
+        "duration_ms": 4.366708
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347644,
+        "surface_id": 462,
+        "start_ns": 10289466791,
+        "duration_ms": 1.341541
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347645,
+        "surface_id": 92,
+        "start_ns": 10306135416,
+        "duration_ms": 1.995375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467486,
+        "surface_id": 87,
+        "start_ns": 10330391208,
+        "duration_ms": 4.543875
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347646,
+        "surface_id": 462,
+        "start_ns": 10339503041,
+        "duration_ms": 1.403833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467488,
+        "surface_id": 404,
+        "start_ns": 10363726333,
+        "duration_ms": 5.239416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467489,
+        "surface_id": 87,
+        "start_ns": 10380402500,
+        "duration_ms": 4.501916
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347647,
+        "surface_id": 223,
+        "start_ns": 10389542875,
+        "duration_ms": 1.450791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467492,
+        "surface_id": 87,
+        "start_ns": 10430387375,
+        "duration_ms": 4.658041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467494,
+        "surface_id": 404,
+        "start_ns": 10463736000,
+        "duration_ms": 5.829083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467495,
+        "surface_id": 87,
+        "start_ns": 10480395250,
+        "duration_ms": 5.061333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467497,
+        "surface_id": 404,
+        "start_ns": 10513732000,
+        "duration_ms": 6.027791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467499,
+        "surface_id": 404,
+        "start_ns": 10547168083,
+        "duration_ms": 8.21525
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467500,
+        "surface_id": 454,
+        "start_ns": 10563726958,
+        "duration_ms": 5.824958
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347653,
+        "surface_id": 92,
+        "start_ns": 10589710625,
+        "duration_ms": 1.355208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467503,
+        "surface_id": 454,
+        "start_ns": 10613727958,
+        "duration_ms": 5.685541
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347654,
+        "surface_id": 462,
+        "start_ns": 10623072541,
+        "duration_ms": 1.388833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467505,
+        "surface_id": 404,
+        "start_ns": 10647076291,
+        "duration_ms": 5.740791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467506,
+        "surface_id": 87,
+        "start_ns": 10663903916,
+        "duration_ms": 8.360625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467507,
+        "surface_id": 454,
+        "start_ns": 10680397291,
+        "duration_ms": 5.977958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467510,
+        "surface_id": 454,
+        "start_ns": 10730409333,
+        "duration_ms": 6.126083
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467512,
+        "surface_id": 87,
+        "start_ns": 10763756000,
+        "duration_ms": 4.698
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467513,
+        "surface_id": 454,
+        "start_ns": 10780418208,
+        "duration_ms": 6.035
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347658,
+        "surface_id": 223,
+        "start_ns": 10789877791,
+        "duration_ms": 1.278166
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347659,
+        "surface_id": 92,
+        "start_ns": 10806550875,
+        "duration_ms": 1.200625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467516,
+        "surface_id": 454,
+        "start_ns": 10830416375,
+        "duration_ms": 5.376791
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347660,
+        "surface_id": 462,
+        "start_ns": 10839907250,
+        "duration_ms": 1.626041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467518,
+        "surface_id": 87,
+        "start_ns": 10863727458,
+        "duration_ms": 3.99825
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467519,
+        "surface_id": 404,
+        "start_ns": 10880403125,
+        "duration_ms": 3.29075
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347661,
+        "surface_id": 223,
+        "start_ns": 10889953166,
+        "duration_ms": 1.013041
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347662,
+        "surface_id": 462,
+        "start_ns": 10906619083,
+        "duration_ms": 4.538458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467522,
+        "surface_id": 87,
+        "start_ns": 10930379541,
+        "duration_ms": 2.772833
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347663,
+        "surface_id": 223,
+        "start_ns": 10939972500,
+        "duration_ms": 0.804958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467524,
+        "surface_id": 87,
+        "start_ns": 10963723375,
+        "duration_ms": 4.012583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467525,
+        "surface_id": 404,
+        "start_ns": 10980379333,
+        "duration_ms": 2.69575
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347664,
+        "surface_id": 462,
+        "start_ns": 10990011541,
+        "duration_ms": 0.78775
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467528,
+        "surface_id": 87,
+        "start_ns": 11030455958,
+        "duration_ms": 2.314458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467530,
+        "surface_id": 87,
+        "start_ns": 11063811875,
+        "duration_ms": 3.280333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467531,
+        "surface_id": 404,
+        "start_ns": 11080477875,
+        "duration_ms": 3.219541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467534,
+        "surface_id": 87,
+        "start_ns": 11130497375,
+        "duration_ms": 4.268583
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467535,
+        "surface_id": 404,
+        "start_ns": 11147098125,
+        "duration_ms": 3.778791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467537,
+        "surface_id": 404,
+        "start_ns": 11180510500,
+        "duration_ms": 7.671666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467539,
+        "surface_id": 454,
+        "start_ns": 11213783791,
+        "duration_ms": 6.754333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467540,
+        "surface_id": 404,
+        "start_ns": 11230424166,
+        "duration_ms": 5.171416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467541,
+        "surface_id": 87,
+        "start_ns": 11247116375,
+        "duration_ms": 4.137
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467542,
+        "surface_id": 404,
+        "start_ns": 11263767375,
+        "duration_ms": 3.477291
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467543,
+        "surface_id": 87,
+        "start_ns": 11280461041,
+        "duration_ms": 4.070666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467544,
+        "surface_id": 404,
+        "start_ns": 11297196375,
+        "duration_ms": 4.280916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467545,
+        "surface_id": 87,
+        "start_ns": 11313772583,
+        "duration_ms": 4.594666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467546,
+        "surface_id": 404,
+        "start_ns": 11330508125,
+        "duration_ms": 9.849666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467547,
+        "surface_id": 87,
+        "start_ns": 11347128083,
+        "duration_ms": 5.576416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467548,
+        "surface_id": 454,
+        "start_ns": 11363783166,
+        "duration_ms": 4.978125
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467549,
+        "surface_id": 404,
+        "start_ns": 11380506500,
+        "duration_ms": 10.266666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467550,
+        "surface_id": 87,
+        "start_ns": 11397121958,
+        "duration_ms": 4.944333
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467551,
+        "surface_id": 454,
+        "start_ns": 11413772208,
+        "duration_ms": 5.545916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467552,
+        "surface_id": 404,
+        "start_ns": 11430434458,
+        "duration_ms": 4.517708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467553,
+        "surface_id": 87,
+        "start_ns": 11447117375,
+        "duration_ms": 4.690166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467554,
+        "surface_id": 454,
+        "start_ns": 11463772208,
+        "duration_ms": 5.832791
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467555,
+        "surface_id": 404,
+        "start_ns": 11480450875,
+        "duration_ms": 5.027166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467556,
+        "surface_id": 87,
+        "start_ns": 11497252083,
+        "duration_ms": 8.154916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467557,
+        "surface_id": 454,
+        "start_ns": 11513779791,
+        "duration_ms": 6.236458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467558,
+        "surface_id": 404,
+        "start_ns": 11530442375,
+        "duration_ms": 5.103541
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467559,
+        "surface_id": 87,
+        "start_ns": 11547105291,
+        "duration_ms": 4.678458
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467560,
+        "surface_id": 454,
+        "start_ns": 11563781708,
+        "duration_ms": 5.745625
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467561,
+        "surface_id": 404,
+        "start_ns": 11580457791,
+        "duration_ms": 4.904375
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467562,
+        "surface_id": 87,
+        "start_ns": 11597283666,
+        "duration_ms": 8.339208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467563,
+        "surface_id": 454,
+        "start_ns": 11613781500,
+        "duration_ms": 5.73525
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467564,
+        "surface_id": 404,
+        "start_ns": 11630451625,
+        "duration_ms": 4.832916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467567,
+        "surface_id": 404,
+        "start_ns": 11680453916,
+        "duration_ms": 5.091708
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467568,
+        "surface_id": 87,
+        "start_ns": 11697121333,
+        "duration_ms": 4.6015
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467569,
+        "surface_id": 404,
+        "start_ns": 11713914708,
+        "duration_ms": 8.944875
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467570,
+        "surface_id": 454,
+        "start_ns": 11730457291,
+        "duration_ms": 5.03325
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467571,
+        "surface_id": 87,
+        "start_ns": 11747122625,
+        "duration_ms": 4.70025
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467572,
+        "surface_id": 404,
+        "start_ns": 11763786875,
+        "duration_ms": 5.639458
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347673,
+        "surface_id": 462,
+        "start_ns": 11774034041,
+        "duration_ms": 1.43725
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467574,
+        "surface_id": 87,
+        "start_ns": 11797139291,
+        "duration_ms": 4.585416
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467575,
+        "surface_id": 404,
+        "start_ns": 11813935291,
+        "duration_ms": 9.960041
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467576,
+        "surface_id": 454,
+        "start_ns": 11830468541,
+        "duration_ms": 5.045833
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467578,
+        "surface_id": 404,
+        "start_ns": 11863793666,
+        "duration_ms": 5.600666
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467579,
+        "surface_id": 454,
+        "start_ns": 11880480541,
+        "duration_ms": 4.9585
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467580,
+        "surface_id": 87,
+        "start_ns": 11897127791,
+        "duration_ms": 4.602166
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467581,
+        "surface_id": 404,
+        "start_ns": 11913794333,
+        "duration_ms": 4.638916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467582,
+        "surface_id": 87,
+        "start_ns": 11930566000,
+        "duration_ms": 10.121708
+      },
+      {
+        "display": "Display 2",
+        "swap_id": 347675,
+        "surface_id": 462,
+        "start_ns": 11944246958,
+        "duration_ms": 1.464958
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467584,
+        "surface_id": 454,
+        "start_ns": 11963806916,
+        "duration_ms": 4.605208
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467585,
+        "surface_id": 404,
+        "start_ns": 11980608166,
+        "duration_ms": 8.185916
+      },
+      {
+        "display": "Display 3",
+        "swap_id": 467586,
+        "surface_id": 87,
+        "start_ns": 11997140625,
+        "duration_ms": 5.66525
+      }
+    ],
+    "associated": {
+      "frames": 469,
+      "mean_ms": 5.562621091684435,
+      "median_ms": 5.144583,
+      "p95_ms": 9.661375,
+      "max_ms": 11.265125
+    },
+    "unjoined_update_frame_keys": 1,
+    "by_display": {
+      "Display 2": {
+        "frames": 37,
+        "mean_ms": 1.8365435405405406,
+        "median_ms": 1.464958,
+        "p95_ms": 3.787666,
+        "max_ms": 4.538458
+      },
+      "Display 3": {
+        "frames": 432,
+        "mean_ms": 5.881752733796296,
+        "median_ms": 5.372291000000001,
+        "p95_ms": 9.928125,
+        "max_ms": 11.265125
+      }
+    }
+  },
+  "hitches": {
+    "count": 37,
+    "total_duration_ms": 616.700571,
+    "descriptions": {
+      "Potentially expensive app update(s)": 2,
+      "unspecified": 35
+    },
+    "by_display": {
+      "Display 3": {
+        "frames": 37,
+        "mean_ms": 16.667583,
+        "median_ms": 16.667583,
+        "p95_ms": 16.667583,
+        "max_ms": 16.667583
+      }
+    }
+  },
+  "fixture_control": "GPU CONTROL: pid=78823 window=3996 display=Optional(3) frame=(80.0, 80.0, 484.0, 360.0) scale=2.0 track=Optional(spotify:track:preview1) thermal=0 hold=45.0s",
+  "display_metadata": [
+    {
+      "timestamp": "0",
+      "accelerator-id": "4294968251",
+      "display-id": "2",
+      "device-name": "external-1",
+      "framebuffer-index": "1",
+      "resolution": "2560 1440",
+      "pixel-width": "4294967295",
+      "pixel-height": "4294967295",
+      "built-in": "0",
+      "max-refresh-rate": "75",
+      "is-main-display": "0"
+    },
+    {
+      "timestamp": "0",
+      "accelerator-id": "4294968251",
+      "display-id": "3",
+      "device-name": "external-2",
+      "framebuffer-index": "2",
+      "resolution": "3840 2160",
+      "pixel-width": "4294967295",
+      "pixel-height": "4294967295",
+      "built-in": "0",
+      "max-refresh-rate": "75",
+      "is-main-display": "0"
+    }
+  ],
+  "export_sha256": {
+    "hitches-renders.xml": "67d9b393d426ee9fbcc395d4a2185b81d1f6b5b3da664c64022a5034d1990d70",
+    "device-display-info.xml": "5ba34d6ba3e553d758965a37a84e236a8bc410f364b40fd9ef8e688387414d34",
+    "hitches-gpu.xml": "461f8b9a47f60889e6275d3483c26a2807ee3880480d845eb505e24666e55344",
+    "hitches-updates.xml": "f07153b7e6c96975dfd04f3e5ba3a377604aa487ec8bf8892790dfcf798b3a28",
+    "hitches.xml": "8f231df52673edaa449b4ad87e1babc764cc0e12025786e7acb244bd6b54f0e2"
+  }
+}
