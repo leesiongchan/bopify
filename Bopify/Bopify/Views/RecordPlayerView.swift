@@ -4,12 +4,29 @@ import BopifyDomain
 import BopifyLibrary
 import BopifyPlayback
 
+enum RecordMotorRequest: String {
+    case drive, brake, snap
+
+    static func resolve(phase: PlaybackPhase, ready: Bool, active: Bool, visible: Bool, reduced: Bool, pressed: Bool) -> Self {
+        guard ready, visible, !reduced, !pressed else { return .snap }
+        switch phase {
+        case .loading, .buffering: return .snap
+        case .idle: return active ? .snap : .brake
+        case .playing: return active ? .drive : .brake
+        case .paused, .ended, .error: return .brake
+        }
+    }
+}
+
 struct RecordPlayerView: View {
     let player: PlayerModel
     let artworkStore: ArtworkStore
     let presentation: PlayerPresentation
     let windowController: PlayerWindowController
     @State private var rotation = RecordRotation()
+    @State private var isCoasting = false
+    @State private var appliedMotorRequest: RecordMotorRequest?
+    @State private var displayedPressing = PressingAppearance.neutral
     @State private var scrub: RecordScrub?
     @State private var pressedAngle: Double?
     @State private var isScrubbing = false
@@ -20,8 +37,12 @@ struct RecordPlayerView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var canScrub: Bool { player.isEngineReady && player.state.canSeek && player.state.isActiveDevice && player.displayDurationMs > 0 }
-    private var shouldSpin: Bool {
-        player.isEngineReady && player.state.phase == .playing && player.state.isActiveDevice && presentation.isVisible && !reduceMotion && pressedAngle == nil
+    private var motorRequest: RecordMotorRequest {
+        .resolve(phase: player.state.phase, ready: player.isEngineReady, active: player.state.isActiveDevice,
+                 visible: presentation.isVisible, reduced: reduceMotion, pressed: pressedAngle != nil)
+    }
+    private var isMoving: Bool {
+        motorRequest != .snap && (motorRequest == .drive || isCoasting) && rotation.isMoving(at: ProcessInfo.processInfo.systemUptime)
     }
     private var isEngaged: Bool { presentation.mode != .compact }
     // Bopify's queue says nothing about which way a mirrored device moved.
@@ -38,6 +59,14 @@ struct RecordPlayerView: View {
         player.state.mirror?.trackURI.rawValue ?? player.state.queue?.current?.id ?? player.state.currentTrack?.uri.rawValue ?? "missing"
     }
     private var image: Image? { track?.artwork.flatMap { artworkStore.images[$0.url] }.map { Image(nsImage: $0) } }
+    private struct PressingRequest: Equatable {
+        let uri: String?
+        let artworkURL: URL?
+    }
+    private var pressingRequest: PressingRequest {
+        PressingRequest(uri: player.state.mirror?.trackURI.rawValue ?? track?.uri.rawValue ?? player.state.queue?.current?.uri?.rawValue,
+                        artworkURL: track?.artwork?.url)
+    }
     private var recordStatus: Text {
         if let connectionStatus, connectionStatus.isVisible { return connectionStatus.message }
         if let notice = player.commandNotice { return Text(notice) }
@@ -102,9 +131,14 @@ struct RecordPlayerView: View {
         .offset(x: windowController.contentOffset.x, y: windowController.contentOffset.y)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear { windowController.onCancelInteraction = cancelRecord }
-        .onDisappear { _ = cancelRecord(); windowController.onCancelInteraction = nil }
-        .onChange(of: shouldSpin, initial: true) { _, running in
-            rotation.setRunning(running, at: ProcessInfo.processInfo.systemUptime)
+        .onDisappear { _ = cancelRecord(); setMotor(.snap); windowController.onCancelInteraction = nil }
+        .onChange(of: motorRequest, initial: true) { _, request in setMotor(request) }
+        .task(id: rotation.stopTime) {
+            guard isCoasting, let deadline = rotation.stopTime else { return }
+            do { try await Task.sleep(for: .seconds(max(0, deadline - ProcessInfo.processInfo.systemUptime))) }
+            catch { return }
+            guard rotation.stopTime == deadline else { return }
+            isCoasting = false
         }
         .onChange(of: occurrenceID) { _, _ in _ = cancelRecord() }
         .onChange(of: player.displayDurationMs) { _, _ in _ = cancelRecord() }
@@ -122,20 +156,28 @@ struct RecordPlayerView: View {
             if !visible { pendingSelection = nil; accessibilityFocus = false; _ = cancelRecord() }
         }
         .onChange(of: accessibilityFocus) { _, focused in presentation.sendAttention(.accessibilityFocus(focused)) }
-        .task(id: track?.artwork?.url) { if let url = track?.artwork?.url { await artworkStore.load(url) } }
+        .task(id: pressingRequest) {
+            let request = pressingRequest
+            if let url = request.artworkURL { await artworkStore.loadPalette(url) }
+            guard !Task.isCancelled, request == pressingRequest else { return }
+            let palette = request.artworkURL.flatMap { artworkStore.palettes[$0] } ?? .neutral
+            let ready = PressingAppearance(seed: request.uri.map(PressingSeed.offset) ?? 0, palette: palette)
+            displayedPressing = ready
+        }
     }
 
     private func record(diameter: CGFloat) -> some View {
         VinylRecordView(image: image, occurrenceID: occurrenceID, direction: direction, diameter: diameter,
-                        isPlaying: player.isEngineReady && player.state.phase == .playing && player.state.isActiveDevice,
+                        isMoving: isMoving,
                         isVisible: presentation.isVisible, rotation: rotation,
+                        pressingSeed: displayedPressing.seed, palette: displayedPressing.palette,
                         rotationOverride: pressedAngle.map { $0 + (scrub?.angleDelta ?? 0) }, isScrubbing: pressedAngle != nil,
-                        isEngaged: isEngaged)
+                        isEngaged: isEngaged, reduceMotionOverride: reduceMotion)
             .overlay {
                 RecordPointerRegion(onPress: { point, geometryID in
                     guard presentation.isVisible else { return }
                     let now = ProcessInfo.processInfo.systemUptime
-                    rotation.setRunning(false, at: now)
+                    setMotor(.snap, at: now)
                     pressedAngle = rotation.angle(at: now)
                     if canScrub {
                         scrub = RecordScrub(positionMs: player.displayPositionMs(at: Date()), durationMs: player.displayDurationMs)
@@ -186,7 +228,9 @@ struct RecordPlayerView: View {
             }
             .overlay {
                 if needsAttention {
-                    Circle().strokeBorder(.orange.opacity(0.7), lineWidth: 1).allowsHitTesting(false)
+                    Circle().strokeBorder(.black.opacity(0.75), lineWidth: 3)
+                        .overlay(Circle().strokeBorder(.orange.opacity(0.7), lineWidth: 1))
+                        .allowsHitTesting(false)
                 }
             }
     }
@@ -278,8 +322,17 @@ struct RecordPlayerView: View {
         scrub = nil
         if isScrubbing { presentation.sendAttention(.interaction(.seek, false)) }
         isScrubbing = false
-        rotation.setRunning(shouldSpin, at: now)
+        setMotor(motorRequest, at: now)
         return true
+    }
+
+    private func setMotor(_ request: RecordMotorRequest, at time: TimeInterval = ProcessInfo.processInfo.systemUptime) {
+        rotation.setRunning(request == .drive, at: time, stopStyle: request == .snap ? .snap : .brake)
+        isCoasting = request == .brake && rotation.isMoving(at: time)
+        if appliedMotorRequest != request {
+            BopifyLog.playback.debug("record motor \(request.rawValue, privacy: .public)")
+            appliedMotorRequest = request
+        }
     }
 
     private func select(_ entry: QueueEntry) {
