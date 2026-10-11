@@ -103,7 +103,8 @@ final class PlayerWindowController {
             layout = next
             contentOffset = CGPoint(x: target.minX - envelope.minX, y: envelope.maxY - target.maxY)
         } completion: { [weak self] in
-            self?.finishTransition(generation)
+            // Completion can run inside NSHostingView.layout during a Core Animation commit.
+            DispatchQueue.main.async { [weak self] in self?.finishTransition(generation) }
         }
     }
 

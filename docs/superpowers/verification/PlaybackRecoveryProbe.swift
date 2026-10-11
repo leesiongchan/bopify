@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import ScreenCaptureKit
+import OSLog
 import BopifyAuth
 import BopifyDomain
 import BopifyPlayback
@@ -21,6 +22,8 @@ import BopifyLibrary
         app.run()
     }
     @MainActor static func run() async {
+        let started = Date()
+        BopifyLog.playback.notice("UI diagnostics probe started")
         _ = PlaybackConnectionStatusView(status: .offline, restorationUnavailable: false, onRetry: {}, onReconnect: {})
         let store = ProbeTokenStore(), libraryStore = ProbeTokenStore()
         let saved = TokenSet(accessToken: "PLAYBACK_FAKE", refreshToken: "RT_FAKE", expiresAt: .distantFuture, grantedScopes: ["streaming"])
@@ -62,7 +65,61 @@ import BopifyLibrary
         await checkQuitAndInitialNetworkFailure()
         await checkPresentation()
         await checkRepeatedRecovery()
+        await checkAnimationInterruption()
+        try! checkUIDiagnostics(since: started)
         print("PASS: stable player/library, serialized replacement, stable device ID, late-create sign-out, no unsolicited browser")
+    }
+
+    @MainActor static func checkAnimationInterruption() async {
+        let environment = makePreviewEnvironment(.paused)
+        let controller = environment.playerWindowController
+        let panel = StatusPanel(content: PlayerRootView(environment: environment))
+        controller.attach(to: panel)
+        controller.apply(mode: .compact, reduceMotion: true)
+        panel.orderFrontRegardless()
+        let player = environment.player!
+        let queue = player.state.queue!
+        for index in 0..<50 {
+            player.applyPreviewEvents(queue.next.map {
+                .queueMetadata(generation: queue.generation, entryID: $0.id, track: index.isMultiple(of: 2) ? nil : $0.track)
+            })
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        for mode in [PlayerMode.expanded, .queue, .compact] {
+            controller.apply(mode: mode, reduceMotion: false)
+            await render(); await render()
+            precondition(!controller.isTransitioning && panel.frame.size == controller.layout.contentSize)
+        }
+        controller.apply(mode: .expanded, reduceMotion: false)
+        let stale = controller.transitionID
+        controller.apply(mode: .queue, reduceMotion: false)
+        let frame = panel.frame
+        controller.finishTransition(stale)
+        precondition(panel.frame == frame)
+        await render(); await render()
+        precondition(!controller.isTransitioning && panel.frame.size == controller.layout.contentSize)
+        controller.apply(mode: .compact, reduceMotion: false)
+        controller.invalidateTransition()
+        panel.orderOut(nil)
+        await render(); await render()
+        precondition(!controller.isTransitioning && !panel.isVisible)
+        environment.player?.stop()
+        print("PASS: animated completion, stale completion, interruption and dismissal")
+    }
+
+    @MainActor static func checkUIDiagnostics(since started: Date) throws {
+        let store = try OSLogStore(scope: .currentProcessIdentifier)
+        let entries = try store.getEntries(at: store.position(date: started)).compactMap { $0 as? OSLogEntryLog }
+        precondition(entries.contains { $0.composedMessage == "UI diagnostics probe started" }, "Probe log capture unavailable")
+        let failures = entries.filter {
+            $0.composedMessage.contains("action tried to update multiple times per frame") ||
+            $0.composedMessage.contains("already being laid out") ||
+            $0.composedMessage.contains("during CA commit") ||
+            $0.composedMessage.contains("entangle context after pre-commit")
+        }
+        failures.forEach { print("UI DIAGNOSTIC FAIL: \($0.composedMessage)") }
+        precondition(failures.isEmpty, "Production views emitted invalid update/layout/transaction diagnostics")
+        print("PASS: no invalid update/layout/transaction diagnostics")
     }
     @MainActor static func checkRepeatedRecovery() async {
         let store = ProbeTokenStore(), factory = ProbeFactory()
