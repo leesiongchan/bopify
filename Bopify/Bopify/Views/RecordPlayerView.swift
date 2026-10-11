@@ -23,7 +23,6 @@ struct RecordPlayerView: View {
     let artworkStore: ArtworkStore
     let presentation: PlayerPresentation
     let windowController: PlayerWindowController
-    var reduceMotionOverride = false
     @State private var rotation = RecordRotation()
     @State private var isCoasting = false
     @State private var appliedMotorRequest: RecordMotorRequest?
@@ -35,8 +34,7 @@ struct RecordPlayerView: View {
     @State private var controlsContentHeight: CGFloat?
     @AccessibilityFocusState private var accessibilityFocus: Bool
     @Environment(AppEnvironment.self) private var environment: AppEnvironment?
-    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    private var reduceMotion: Bool { systemReduceMotion || reduceMotionOverride }
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var canScrub: Bool { player.isEngineReady && player.state.canSeek && player.state.isActiveDevice && player.displayDurationMs > 0 }
     private var motorRequest: RecordMotorRequest {

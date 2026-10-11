@@ -1,0 +1,39 @@
+{
+  "capture_duration_s": 12,
+  "steady_window_s": [
+    2,
+    12
+  ],
+  "record_gpu_frame_comparison_verified": false,
+  "hardware": "Mac mini M4 Pro (16 GPU cores), 48 GB; macOS 27.0.1 (26A434); Xcode 27.0 (27A266a)",
+  "scene": "182pt record, expanded production PlayerSurface/Liquid Glass, dark, 2x backing scale",
+  "limitation": "GPU samples are display compositor intervals across two displays, without fixture attribution; record-specific GPU cost remains unverified.",
+  "baseline": {
+    "Display 2": {
+      "samples": 583,
+      "mean_ms": 0.948728627787307,
+      "median_ms": 0.665041,
+      "p95_ms": 2.552291
+    },
+    "Display 3": {
+      "samples": 446,
+      "mean_ms": 2.323956134529148,
+      "median_ms": 1.4560415,
+      "p95_ms": 7.486875
+    }
+  },
+  "after": {
+    "Display 3": {
+      "samples": 582,
+      "mean_ms": 1.8238438694158075,
+      "median_ms": 1.7702494999999998,
+      "p95_ms": 2.257
+    },
+    "Display 2": {
+      "samples": 454,
+      "mean_ms": 1.1689154625550662,
+      "median_ms": 1.346,
+      "p95_ms": 1.479875
+    }
+  }
+}

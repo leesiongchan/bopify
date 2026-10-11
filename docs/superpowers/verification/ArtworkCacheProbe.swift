@@ -104,6 +104,8 @@ private nonisolated final class ArtworkProtocol: URLProtocol, @unchecked Sendabl
         let coalescedCount = await gate.count
         precondition(coalescedCount == 1 && store.palettes[url] == palette, "Palette requests did not coalesce/publish")
         precondition(ArtworkProtocol.requestCount == fetched, "Palette downloaded already-decoded artwork again")
+        for index in 0..<112 { await store.load(URL(string: "https://artwork.invalid/published-evict/\(index)")!) }
+        precondition(store.images[url] == nil && store.palettes[url] == nil, "Published palette outlived its cached image")
 
         store.clear()
         let late = Task { await store.loadPalette(url) }
