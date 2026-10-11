@@ -1,0 +1,12 @@
+CAPTURE pressing-118-light
+CAPTURE pressing-182-light
+CAPTURE pressing-118-dark
+CAPTURE pressing-182-dark
+CAPTURE identity-a
+CAPTURE identity-b-pending
+CAPTURE identity-c
+CAPTURE identity-c-repeat
+CAPTURE dissolve-b-200ms
+VINYL PRESSING FAIL: Error Domain=ordinary dissolve must stay opaque; minimum annulus alpha 0.8431372549019608 Code=1 "(null)"
+/private/tmp/bopify-pressing-native/MonolithProbe.app/Contents/MacOS/MonolithProbe
+Report/captures: /private/tmp/bopify-pressing-native

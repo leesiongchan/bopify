@@ -224,15 +224,35 @@ private struct PressingProbeScene: View {
         try require(annulusDifference(cImage, repeated, center: controller.layout.recordCenter, diameter: controller.layout.recordDiameter) < 0.003, "occurrence must not change pressing")
         select("spotify:track:pressingB", artwork: bURL)
         try await settle(200)
-        try await capture(panel, output: output, name: "dissolve-b-200ms")
+        let dissolving = try await capture(panel, output: output, name: "dissolve-b-200ms")
+        try requireOpaque(dissolving, center: controller.layout.recordCenter, diameter: controller.layout.recordDiameter,
+                          name: "ordinary dissolve")
         try require(MonolithPressingProbe.layers >= 2, "dissolve must retain outgoing layer")
         select("spotify:track:pressingA", artwork: aURL)
         try await settle(200)
         let interrupted = try await capture(panel, output: output, name: "dissolve-interrupted-200ms")
+        try requireOpaque(interrupted, center: controller.layout.recordCenter, diameter: controller.layout.recordDiameter,
+                          name: "interrupted dissolve")
         try require(saturatedFraction(interrupted, center: controller.layout.recordCenter, diameter: controller.layout.recordDiameter) > 0.2, "interrupted dissolve must not flash neutral")
         try await settle(800)
         try require(MonolithPressingProbe.layers == 1, "settled dissolve must release outgoing layers")
         try await stopped("pressing dissolve settled")
+
+        settings.reduceTransparency = true
+        try await settle(300)
+        select("spotify:track:pressingB", artwork: bURL)
+        try await settle(200)
+        let reducedDissolve = try await capture(panel, output: output, name: "dissolve-reduce-transparency-200ms")
+        try requireOpaque(reducedDissolve, center: controller.layout.recordCenter, diameter: controller.layout.recordDiameter,
+                          name: "Reduce Transparency dissolve")
+        select("spotify:track:pressingA", artwork: aURL)
+        try await settle(200)
+        let reducedInterrupted = try await capture(panel, output: output, name: "dissolve-reduce-transparency-interrupted-200ms")
+        try requireOpaque(reducedInterrupted, center: controller.layout.recordCenter, diameter: controller.layout.recordDiameter,
+                          name: "Reduce Transparency interrupted dissolve")
+        try await settle(800)
+        try require(MonolithPressingProbe.layers == 1, "Reduce Transparency dissolve must release outgoing layers")
+        settings.reduceTransparency = false
 
         select("spotify:track:late", artwork: nil); try await settle(800)
         try expect("spotify:track:late", .neutral)
@@ -464,6 +484,21 @@ private struct PressingProbeScene: View {
             }
         }
         return Double(coloured) / Double(max(1, total))
+    }
+    private static func requireOpaque(_ image: CGImage, center: CGPoint, diameter: CGFloat, name: String) throws {
+        let bitmap = NSBitmapImageRep(cgImage: image)
+        var minimumAlpha = 1.0, count = 0
+        for y in stride(from: Int(center.y * 2 - diameter), to: Int(center.y * 2 + diameter), by: 4) {
+            for x in stride(from: Int(center.x * 2 - diameter), to: Int(center.x * 2 + diameter), by: 4) {
+                let distance = hypot(Double(x) - center.x * 2, Double(y) - center.y * 2)
+                guard distance > diameter * 0.55, distance < diameter * 0.85,
+                      let color = bitmap.colorAt(x: x, y: y) else { continue }
+                minimumAlpha = min(minimumAlpha, color.alphaComponent)
+                count += 1
+            }
+        }
+        try require(count > 0 && minimumAlpha >= 0.995, "\(name) must stay opaque; minimum annulus alpha \(minimumAlpha)")
+        print("OPACITY \(name): minimum annulus alpha \(minimumAlpha), \(count) samples"); fflush(stdout)
     }
     private static func annulusDifference(_ first: CGImage, _ second: CGImage, center: CGPoint, diameter: CGFloat) -> Double {
         let a = NSBitmapImageRep(cgImage: first), b = NSBitmapImageRep(cgImage: second)
