@@ -19,10 +19,12 @@ struct PlayerRootView: View {
                         switch environment.authState {
                         case .signedOut, .needsReauthentication:
                             SignInView(status: .idle, onSignIn: requestSignIn)
-                        case .authenticating, .refreshing:
+                        case .authenticating:
                             SignInView(status: .authenticating, onSignIn: requestSignIn)
+                        case .refreshing:
+                            SignInView(status: .restoring, onSignIn: requestSignIn)
                         case let .error(error):
-                            SignInView(status: .error(error), onSignIn: requestSignIn)
+                            SignInView(status: .error(error), onSignIn: requestSignIn, onRetryCredentials: { Task { await environment.restoreOrPromptSignIn() } })
                         case .signedIn:
                             if let player = environment.player {
                                 if environment.connectionStatus != .ready || player.restorationUnavailable {
