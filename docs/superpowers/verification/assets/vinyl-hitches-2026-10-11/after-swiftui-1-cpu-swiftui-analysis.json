@@ -1,0 +1,4558 @@
+{
+  "process_pid": 86839,
+  "window_seconds": [
+    2.0,
+    12.0
+  ],
+  "hitches": {
+    "count": 145,
+    "total_ms": 2416.799535,
+    "median_ms": 16.667583,
+    "p95_ms": 16.667583,
+    "max_ms": 16.667583
+  },
+  "hitch_narratives": {
+    "unspecified": 122,
+    "Potentially expensive app update(s)": 23
+  },
+  "cpu": {
+    "sample_weight_limit": "Sampling weights are not calibrated CPU utilization; inclusive stack costs overlap.",
+    "samples": 6666,
+    "thread_states": {
+      "Running": 6666
+    },
+    "sample_weight_total_ms": 666.6,
+    "main_weight_ms": 655.0,
+    "main_sample_weight_window_percent": 6.550000000000001,
+    "thread_weight_ms": {
+      "Main Thread (0x1433b6) (MonolithProbe, pid: 86839)": 655.0,
+      "MonolithProbe (0x1433fb) (MonolithProbe, pid: 86839)": 0.3,
+      "MonolithProbe (0x1433ff) (MonolithProbe, pid: 86839)": 0.1,
+      "MonolithProbe (0x143400) (MonolithProbe, pid: 86839)": 0.1,
+      "MonolithProbe (0x1433b8) (MonolithProbe, pid: 86839)": 0.1,
+      "MonolithProbe (0x1433c9) (MonolithProbe, pid: 86839)": 0.1,
+      "MonolithProbe (0x1433de) (MonolithProbe, pid: 86839)": 5.5,
+      "MonolithProbe (0x1433fd) (MonolithProbe, pid: 86839)": 1.9,
+      "MonolithProbe (0x143401) (MonolithProbe, pid: 86839)": 0.5,
+      "MonolithProbe (0x1433b7) (MonolithProbe, pid: 86839)": 3.0
+    },
+    "trace_support_inclusive_ms": 65.2,
+    "main_trace_support_inclusive_ms": 65.2,
+    "inclusive": [
+      {
+        "name": "-[NSApplication run]",
+        "weighted_ms": 654.2
+      },
+      {
+        "name": "-[NSApplication(NSEventRouting) _nextEventMatchingEventMask:untilDate:inMode:dequeue:]",
+        "weighted_ms": 654.2
+      },
+      {
+        "name": "-[NSApplication(NSEventRouting) nextEventMatchingMask:untilDate:inMode:dequeue:]",
+        "weighted_ms": 654.2
+      },
+      {
+        "name": "_BlockUntilNextEventMatchingListInMode",
+        "weighted_ms": 654.2
+      },
+      {
+        "name": "_DPSBlockUntilNextEventMatchingListInMode",
+        "weighted_ms": 654.2
+      },
+      {
+        "name": "_DPSNextEvent",
+        "weighted_ms": 654.2
+      },
+      {
+        "name": "main",
+        "weighted_ms": 654.2
+      },
+      {
+        "name": "start",
+        "weighted_ms": 654.2
+      },
+      {
+        "name": "static VinylPressingProbe.$main()",
+        "weighted_ms": 654.2
+      },
+      {
+        "name": "static VinylPressingProbe.main()",
+        "weighted_ms": 654.2
+      },
+      {
+        "name": "ReceiveNextEventCommon",
+        "weighted_ms": 654.0
+      },
+      {
+        "name": "RunCurrentEventLoopInMode",
+        "weighted_ms": 652.7
+      },
+      {
+        "name": "_CFRunLoopRunSpecificWithOptions",
+        "weighted_ms": 650.8
+      },
+      {
+        "name": "__CFRunLoopRun",
+        "weighted_ms": 648.1
+      },
+      {
+        "name": "UC::DriverCore::continueProcessing()",
+        "weighted_ms": 620.9
+      },
+      {
+        "name": "CA::Transaction::flush()",
+        "weighted_ms": 610.7
+      },
+      {
+        "name": "CA::Transaction::commit()",
+        "weighted_ms": 609.8
+      },
+      {
+        "name": "CA::Transaction::run_commit_handlers(CATransactionPhase)",
+        "weighted_ms": 580.9
+      },
+      {
+        "name": "NSDisplayCycleFlush",
+        "weighted_ms": 576.6
+      },
+      {
+        "name": "NSDisplayCycleObserverInvoke",
+        "weighted_ms": 569.9
+      }
+    ],
+    "leaf": [
+      {
+        "name": "AG::Graph::propagate_dirty(AG::AttributeID)",
+        "weighted_ms": 82.7
+      },
+      {
+        "name": "AG::Graph::UpdateStack::update()",
+        "weighted_ms": 80.2
+      },
+      {
+        "name": "AG::Subgraph::update(unsigned int)",
+        "weighted_ms": 29.9
+      },
+      {
+        "name": "mach_absolute_time",
+        "weighted_ms": 23.3
+      },
+      {
+        "name": "<deduplicated_symbol>",
+        "weighted_ms": 18.0
+      },
+      {
+        "name": "objc_msgSend",
+        "weighted_ms": 15.5
+      },
+      {
+        "name": "mach_msg2_trap",
+        "weighted_ms": 14.5
+      },
+      {
+        "name": "start_wqthread",
+        "weighted_ms": 8.3
+      },
+      {
+        "name": "swift::MetadataCacheKey::operator==(swift::MetadataCacheKey const&) const",
+        "weighted_ms": 6.9
+      },
+      {
+        "name": "__kdebug_trace64",
+        "weighted_ms": 6.8
+      },
+      {
+        "name": "specialized Trace_Handle.write<A>(_:omit:)",
+        "weighted_ms": 6.2
+      },
+      {
+        "name": "swift_release",
+        "weighted_ms": 5.1
+      },
+      {
+        "name": "write",
+        "weighted_ms": 5.1
+      },
+      {
+        "name": "ExternalTrace::set_dirty(AG::data::ptr<AG::Node>, bool)",
+        "weighted_ms": 4.0
+      },
+      {
+        "name": "kevent_id",
+        "weighted_ms": 4.0
+      },
+      {
+        "name": "_xzm_xzone_malloc_tiny",
+        "weighted_ms": 3.6
+      },
+      {
+        "name": "specialized Trace_Handle.write<A>(struct:)",
+        "weighted_ms": 3.6
+      },
+      {
+        "name": "_platform_memmove",
+        "weighted_ms": 3.5
+      },
+      {
+        "name": "AG::Graph::UpdateStack::push(AG::data::ptr<AG::Node>, AG::Node&, bool, bool)",
+        "weighted_ms": 3.4
+      },
+      {
+        "name": "bool objc::DenseMapBase<objc::DenseMap<DisguisedPtr<objc_object>, objc::SmallDenseMap<void const*, objc::ObjcAssociation, 1u, objc::DenseMapValueInfo<objc::ObjcAssociation>, objc::DenseMapInfo<void const*>, objc::detail::DenseMapPair<void const*, objc::ObjcAssociation>>, objc::DenseMapValueInfo<objc::SmallDenseMap<void const*, objc::ObjcAssociation, 1u, objc::DenseMapValueInfo<objc::ObjcAssociation>, objc::DenseMapInfo<void const*>, objc::detail::DenseMapPair<void const*, objc::ObjcAssociation>>>, objc::DenseMapInfo<DisguisedPtr<objc_object>>, objc::detail::DenseMapPair<DisguisedPtr<objc_object>, objc::SmallDenseMap<void const*, objc::ObjcAssociation, 1u, objc::DenseMapValueInfo<objc::ObjcAssociation>, objc::DenseMapInfo<void const*>, objc::detail::DenseMapPair<void const*, objc::ObjcAssociation>>>>, DisguisedPtr<objc_object>, objc::SmallDenseMap<void const*, objc::ObjcAssociation, 1u, objc::DenseMapValueInfo<objc::ObjcAssociation>, objc::DenseMapInfo<void const*>, objc::detail::DenseMapPair<void const*, objc::ObjcAssociation>>, objc::DenseMapValueInfo<objc::SmallDenseMap<void const*, objc::ObjcAssociation, 1u, objc::DenseMapValueInfo<objc::ObjcAssociation>, objc::DenseMapInfo<void const*>, objc::detail::DenseMapPair<void const*, objc::ObjcAssociation>>>, objc::DenseMapInfo<DisguisedPtr<objc_object>>, objc::detail::DenseMapPair<DisguisedPtr<objc_object>, objc::SmallDenseMap<void const*, objc::ObjcAssociation, 1u, objc::DenseMapValueInfo<objc::ObjcAssociation>, objc::DenseMapInfo<void const*>, objc::detail::DenseMapPair<void const*, objc::ObjcAssociation>>>>::LookupBucketFor<DisguisedPtr<objc_object>>(DisguisedPtr<objc_object> const&, objc::detail::DenseMapPair<DisguisedPtr<objc_object>, objc::SmallDenseMap<void const*, objc::ObjcAssociation, 1u, objc::DenseMapValueInfo<objc::ObjcAssociation>, objc::DenseMapInfo<void const*>, objc::detail::DenseMapPair<void const*, objc::ObjcAssociation>>> const*&) const",
+        "weighted_ms": 2.8
+      }
+    ],
+    "own_inclusive": [
+      {
+        "name": "main",
+        "weighted_ms": 654.2
+      },
+      {
+        "name": "static VinylPressingProbe.$main()",
+        "weighted_ms": 654.2
+      },
+      {
+        "name": "static VinylPressingProbe.main()",
+        "weighted_ms": 654.2
+      },
+      {
+        "name": "specialized closure #1 in TimelineView<>.init(_:content:)",
+        "weighted_ms": 20.2
+      },
+      {
+        "name": "specialized _VariadicView.Tree.init(_:content:)",
+        "weighted_ms": 13.9
+      },
+      {
+        "name": "specialized ZStack.init(alignment:content:)",
+        "weighted_ms": 13.5
+      },
+      {
+        "name": "specialized closure #1 in ZStack.init(alignment:content:)",
+        "weighted_ms": 13.5
+      },
+      {
+        "name": "RadialProgressView.body.getter",
+        "weighted_ms": 13.4
+      },
+      {
+        "name": "closure #1 in VinylRecordView.body.getter",
+        "weighted_ms": 9.1
+      },
+      {
+        "name": "partial apply for closure #1 in VinylRecordView.body.getter",
+        "weighted_ms": 9.1
+      },
+      {
+        "name": "MorphingArtworkView.body.getter",
+        "weighted_ms": 8.6
+      },
+      {
+        "name": "closure #1 in closure #1 in VinylRecordView.body.getter",
+        "weighted_ms": 7.8
+      },
+      {
+        "name": "closure #1 in closure #3 in RecordPlayerView.record(diameter:)",
+        "weighted_ms": 6.2
+      },
+      {
+        "name": "<deduplicated_symbol>",
+        "weighted_ms": 4.5
+      },
+      {
+        "name": "closure #1 in closure #1 in closure #1 in VinylRecordView.body.getter",
+        "weighted_ms": 4.3
+      },
+      {
+        "name": "closure #1 in MorphingArtworkView.body.getter",
+        "weighted_ms": 3.7
+      },
+      {
+        "name": "closure #1 in closure #1 in MorphingArtworkView.body.getter",
+        "weighted_ms": 3.7
+      },
+      {
+        "name": "closure #1 in RadialProgressView.body.getter",
+        "weighted_ms": 3.5
+      },
+      {
+        "name": "specialized ForEach<>.init(_:content:)",
+        "weighted_ms": 3.5
+      },
+      {
+        "name": "PlayerModel.displayPositionMs(at:)",
+        "weighted_ms": 2.8
+      },
+      {
+        "name": "PlayerModel.state.getter",
+        "weighted_ms": 2.5
+      },
+      {
+        "name": "specialized PlayerModel.access<A>(keyPath:)",
+        "weighted_ms": 1.8
+      },
+      {
+        "name": "VinylRecordView.sheen.getter",
+        "weighted_ms": 1.4
+      },
+      {
+        "name": "MorphingArtworkView.init(image:diameter:occurrenceID:direction:isVisible:reduceMotionOverride:)",
+        "weighted_ms": 1.1
+      },
+      {
+        "name": "closure #1 in closure #1 in RadialProgressView.body.getter",
+        "weighted_ms": 1.0
+      },
+      {
+        "name": "closure #1 in closure #1 in closure #1 in closure #1 in VinylRecordView.body.getter",
+        "weighted_ms": 0.9
+      },
+      {
+        "name": "RadialProgressView.scrub.getter",
+        "weighted_ms": 0.8
+      },
+      {
+        "name": "initializeWithCopy for PlaybackState",
+        "weighted_ms": 0.8
+      },
+      {
+        "name": "__swift_closure_destructorTm",
+        "weighted_ms": 0.7
+      },
+      {
+        "name": "outlined init with copy of VinylRecordView",
+        "weighted_ms": 0.7
+      },
+      {
+        "name": "RecordPlayerView.occurrenceID.getter",
+        "weighted_ms": 0.6
+      },
+      {
+        "name": "VinylRecordView.kick.getter",
+        "weighted_ms": 0.6
+      },
+      {
+        "name": "initializeWithCopy for RecordPlayerView",
+        "weighted_ms": 0.6
+      },
+      {
+        "name": "ArtworkMorphState.init(image:occurrenceID:)",
+        "weighted_ms": 0.4
+      },
+      {
+        "name": "__swift_instantiateConcreteTypeFromMangledNameV2",
+        "weighted_ms": 0.4
+      }
+    ],
+    "own_leaf": [
+      {
+        "name": "__swift_instantiateConcreteTypeFromMangledNameV2",
+        "weighted_ms": 0.4
+      },
+      {
+        "name": "MorphingArtworkView.init(image:diameter:occurrenceID:direction:isVisible:reduceMotionOverride:)",
+        "weighted_ms": 0.3
+      },
+      {
+        "name": "__swift_memcpy25_8",
+        "weighted_ms": 0.3
+      },
+      {
+        "name": "__swift_memcpy2_1",
+        "weighted_ms": 0.3
+      },
+      {
+        "name": "protocol witness for static Equatable.== infix(_:_:) in conformance PressingAppearance",
+        "weighted_ms": 0.3
+      },
+      {
+        "name": "specialized closure #1 in TimelineView<>.init(_:content:)",
+        "weighted_ms": 0.3
+      },
+      {
+        "name": "<deduplicated_symbol>",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "RecordPlayerView.occurrenceID.getter",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "__swift_memcpy81_8",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "closure #2 in closure #1 in RadialProgressView.body.getter",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "destroy for RadialProgressView",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "getEnumTag for ArtworkPalette",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "initializeWithCopy for MorphingArtworkView",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "initializeWithCopy for PlaybackState",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "ArtworkMorphState.frames(at:)",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "DYLD-STUB$$ObservationRegistrar.access<A, B>(_:keyPath:)",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "DYLD-STUB$$swift_beginAccess",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "DYLD-STUB$$swift_bridgeObjectRelease",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "DYLD-STUB$$swift_release",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "DYLD-STUB$$swift_storeEnumTagSinglePayloadGeneric",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "DYLD-STUB$$type metadata accessor for ModifiedContent",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "MorphingArtworkView.body.getter",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "PlayerModel.displayPositionMs(at:)",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "RadialProgressView.progress.getter",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "__swift_closure_destructor",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "__swift_closure_destructor.44",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "__swift_closure_destructorTm",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "closure #1 in closure #1 in MorphingArtworkView.body.getter",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "closure #1 in closure #1 in RadialProgressView.body.getter",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "closure #1 in closure #1 in closure #1 in closure #1 in VinylRecordView.body.getter",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "getEnumTagSinglePayload for Artwork",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "getEnumTagSinglePayload for QueueEntry",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "getEnumTagSinglePayload for QueueSelectionStatus",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "getEnumTagSinglePayload for RadialProgressView",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "initializeWithCopy for ArtworkMorphFrame",
+        "weighted_ms": 0.1
+      }
+    ],
+    "hitch_main_samples": 1111,
+    "hitch_main_weight_ms": 111.1,
+    "hitch_inclusive": [
+      {
+        "name": "-[NSApplication run]",
+        "weighted_ms": 111.0
+      },
+      {
+        "name": "-[NSApplication(NSEventRouting) _nextEventMatchingEventMask:untilDate:inMode:dequeue:]",
+        "weighted_ms": 111.0
+      },
+      {
+        "name": "-[NSApplication(NSEventRouting) nextEventMatchingMask:untilDate:inMode:dequeue:]",
+        "weighted_ms": 111.0
+      },
+      {
+        "name": "ReceiveNextEventCommon",
+        "weighted_ms": 111.0
+      },
+      {
+        "name": "_BlockUntilNextEventMatchingListInMode",
+        "weighted_ms": 111.0
+      },
+      {
+        "name": "_DPSBlockUntilNextEventMatchingListInMode",
+        "weighted_ms": 111.0
+      },
+      {
+        "name": "_DPSNextEvent",
+        "weighted_ms": 111.0
+      },
+      {
+        "name": "main",
+        "weighted_ms": 111.0
+      },
+      {
+        "name": "start",
+        "weighted_ms": 111.0
+      },
+      {
+        "name": "static VinylPressingProbe.$main()",
+        "weighted_ms": 111.0
+      },
+      {
+        "name": "static VinylPressingProbe.main()",
+        "weighted_ms": 111.0
+      },
+      {
+        "name": "RunCurrentEventLoopInMode",
+        "weighted_ms": 110.8
+      },
+      {
+        "name": "_CFRunLoopRunSpecificWithOptions",
+        "weighted_ms": 110.5
+      },
+      {
+        "name": "__CFRunLoopRun",
+        "weighted_ms": 110.0
+      },
+      {
+        "name": "UC::DriverCore::continueProcessing()",
+        "weighted_ms": 103.1
+      },
+      {
+        "name": "CA::Transaction::flush()",
+        "weighted_ms": 100.7
+      },
+      {
+        "name": "CA::Transaction::commit()",
+        "weighted_ms": 100.2
+      },
+      {
+        "name": "CA::Transaction::run_commit_handlers(CATransactionPhase)",
+        "weighted_ms": 94.9
+      },
+      {
+        "name": "NSDisplayCycleFlush",
+        "weighted_ms": 94.1
+      },
+      {
+        "name": "NSDisplayCycleObserverInvoke",
+        "weighted_ms": 92.6
+      }
+    ],
+    "hitch_own_inclusive": [
+      {
+        "name": "main",
+        "weighted_ms": 111.0
+      },
+      {
+        "name": "static VinylPressingProbe.$main()",
+        "weighted_ms": 111.0
+      },
+      {
+        "name": "static VinylPressingProbe.main()",
+        "weighted_ms": 111.0
+      }
+    ]
+  },
+  "swiftui": {
+    "all_update_intervals": {
+      "count": 38280,
+      "total_ms": 181.794513,
+      "median_ms": 0.001208,
+      "p95_ms": 0.022,
+      "max_ms": 0.357875
+    },
+    "update_types": {
+      "Other Updates": 38280
+    },
+    "severity": {
+      "Very Low": 38280
+    },
+    "modules": {
+      "<unknown>": 35880,
+      "null": 2400
+    },
+    "top_descriptions_by_sum": [
+      {
+        "description": "UpdateFilter<AnimationTimelineSchedule, ZStack<TupleView>>",
+        "count": 1200,
+        "total_ms": 21.5512,
+        "median_ms": 0.002104,
+        "p95_ms": 0.070958,
+        "max_ms": 0.1175
+      },
+      {
+        "description": "DynamicBody<ViewBodyAccessor<RadialProgressView>, MainThreadFlags>",
+        "count": 300,
+        "total_ms": 17.424531,
+        "median_ms": 0.05825,
+        "p95_ms": 0.065666,
+        "max_ms": 0.0775
+      },
+      {
+        "description": "FlexCoreInteractionModifier.FlexValue",
+        "count": 2400,
+        "total_ms": 17.155468,
+        "median_ms": 0.005583,
+        "p95_ms": 0.014583,
+        "max_ms": 0.031833
+      },
+      {
+        "description": "View Creation / Reuse",
+        "count": 1200,
+        "total_ms": 16.498525,
+        "median_ms": 0.005541,
+        "p95_ms": 0.043666,
+        "max_ms": 0.048541
+      },
+      {
+        "description": "DynamicBody<ViewBodyAccessor<MorphingArtworkView>, MainThreadFlags>",
+        "count": 300,
+        "total_ms": 15.187485,
+        "median_ms": 0.050583,
+        "p95_ms": 0.056666,
+        "max_ms": 0.090791
+      },
+      {
+        "description": "UpdateFilter<PlaybackClockSchedule, IDView<ModifiedContent, String>>",
+        "count": 1200,
+        "total_ms": 12.447207,
+        "median_ms": 0.000833,
+        "p95_ms": 0.041166,
+        "max_ms": 0.1125
+      },
+      {
+        "description": "GeometryReader<ModifiedContent>.Child",
+        "count": 300,
+        "total_ms": 8.547444,
+        "median_ms": 0.027562,
+        "p95_ms": 0.031791,
+        "max_ms": 0.091625
+      },
+      {
+        "description": "UpdateFilter<PlaybackClockSchedule, ModifiedContent<ModifiedContent, _ForegroundStyleModifier>>",
+        "count": 1200,
+        "total_ms": 8.360443,
+        "median_ms": 0.00675,
+        "p95_ms": 0.013125,
+        "max_ms": 0.104666
+      },
+      {
+        "description": "UpdateFilter<AnimationTimelineSchedule, ModifiedContent<ZStack, _ClipEffect>>",
+        "count": 300,
+        "total_ms": 5.827358,
+        "median_ms": 0.01925,
+        "p95_ms": 0.022958,
+        "max_ms": 0.026541
+      },
+      {
+        "description": "Action Callback",
+        "count": 2400,
+        "total_ms": 4.299278,
+        "median_ms": 0.001375,
+        "p95_ms": 0.003666,
+        "max_ms": 0.008458
+      },
+      {
+        "description": "DisplayList Item: ShapeStyledDisplayList<AnimatedShape<_StrokedShape>>",
+        "count": 300,
+        "total_ms": 4.28577,
+        "median_ms": 0.014041,
+        "p95_ms": 0.017458,
+        "max_ms": 0.019416
+      },
+      {
+        "description": "ForEachChild<Range<Int>, Int, ModifiedContent<StrokeShapeView, _PaddingLayout>>",
+        "count": 5400,
+        "total_ms": 4.216076,
+        "median_ms": 0.000583,
+        "p95_ms": 0.003291,
+        "max_ms": 0.008625
+      },
+      {
+        "description": "SecondaryLayerGeometryQuery",
+        "count": 310,
+        "total_ms": 3.763854,
+        "median_ms": 0.010916,
+        "p95_ms": 0.015458,
+        "max_ms": 0.048166
+      },
+      {
+        "description": "ForEachState<Array, UUID, ModifiedContent>.ForEachState.Info.Init",
+        "count": 300,
+        "total_ms": 3.744028,
+        "median_ms": 0.012166,
+        "p95_ms": 0.01575,
+        "max_ms": 0.020541
+      },
+      {
+        "description": "ForEachState<Range, Int, ModifiedContent>.ForEachState.Info.Init",
+        "count": 300,
+        "total_ms": 2.939402,
+        "median_ms": 0.009416,
+        "p95_ms": 0.012833,
+        "max_ms": 0.015458
+      },
+      {
+        "description": "DynamicViewList<_ConditionalContent<ModifiedContent, ModifiedContent>>",
+        "count": 300,
+        "total_ms": 2.249191,
+        "median_ms": 0.0072705,
+        "p95_ms": 0.0095,
+        "max_ms": 0.012583
+      },
+      {
+        "description": "Layout: LayoutChildGeometries",
+        "count": 620,
+        "total_ms": 1.812212,
+        "median_ms": 0.001916,
+        "p95_ms": 0.004666,
+        "max_ms": 0.008583
+      },
+      {
+        "description": "AnimatableAttribute<_StrokedShape<_TrimmedShape>>",
+        "count": 300,
+        "total_ms": 1.799864,
+        "median_ms": 0.005791,
+        "p95_ms": 0.007333,
+        "max_ms": 0.010791
+      },
+      {
+        "description": "ViewListTransition<OpacityTransition>",
+        "count": 600,
+        "total_ms": 1.435463,
+        "median_ms": 0.0025624999999999997,
+        "p95_ms": 0.004291,
+        "max_ms": 0.007916
+      },
+      {
+        "description": "DisplayList Item: PreferenceCombiner<DisplayList.Key>",
+        "count": 610,
+        "total_ms": 1.334494,
+        "median_ms": 0.0020205,
+        "p95_ms": 0.003708,
+        "max_ms": 0.036916
+      }
+    ],
+    "top_views_by_sum": [
+      {
+        "module": "<unknown>",
+        "view": "[unknown view: created before tracing started?]",
+        "type": "Other Updates",
+        "count": 35880,
+        "total_ms": 177.495235,
+        "median_ms": 0.001166,
+        "p95_ms": 0.026708,
+        "max_ms": 0.357875
+      },
+      {
+        "module": null,
+        "view": null,
+        "type": "Other Updates",
+        "count": 2400,
+        "total_ms": 4.299278,
+        "median_ms": 0.001375,
+        "p95_ms": 0.003666,
+        "max_ms": 0.008458
+      }
+    ],
+    "long_updates": [
+      {
+        "start_s": 2.74151225,
+        "duration_ms": 0.357875,
+        "type": "Other Updates",
+        "description": "DisplayList Item: GeometryEffectDisplayList<_RotationEffect>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 4.641120459,
+        "duration_ms": 0.133791,
+        "type": "Other Updates",
+        "description": "Text Content",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 7.641256167,
+        "duration_ms": 0.125083,
+        "type": "Other Updates",
+        "description": "Text Content",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 10.641383209,
+        "duration_ms": 0.123791,
+        "type": "Other Updates",
+        "description": "Text Content",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 2.640963542,
+        "duration_ms": 0.120916,
+        "type": "Other Updates",
+        "description": "Text Content",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 5.641149125,
+        "duration_ms": 0.120875,
+        "type": "Other Updates",
+        "description": "Text Content",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 8.641294042,
+        "duration_ms": 0.120166,
+        "type": "Other Updates",
+        "description": "Text Content",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 9.641318375,
+        "duration_ms": 0.118208,
+        "type": "Other Updates",
+        "description": "Text Content",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 8.874549916,
+        "duration_ms": 0.1175,
+        "type": "Other Updates",
+        "description": "UpdateFilter<AnimationTimelineSchedule, ZStack<TupleView>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 3.6410015,
+        "duration_ms": 0.116458,
+        "type": "Other Updates",
+        "description": "Text Content",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 6.641171917,
+        "duration_ms": 0.116458,
+        "type": "Other Updates",
+        "description": "Text Content",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 11.641405417,
+        "duration_ms": 0.116416,
+        "type": "Other Updates",
+        "description": "Text Content",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 4.1743395,
+        "duration_ms": 0.114,
+        "type": "Other Updates",
+        "description": "UpdateFilter<AnimationTimelineSchedule, ZStack<TupleView>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 10.074895,
+        "duration_ms": 0.1125,
+        "type": "Other Updates",
+        "description": "UpdateFilter<PlaybackClockSchedule, IDView<ModifiedContent, String>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 8.274541583,
+        "duration_ms": 0.112125,
+        "type": "Other Updates",
+        "description": "UpdateFilter<AnimationTimelineSchedule, ZStack<TupleView>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 3.5742525,
+        "duration_ms": 0.109875,
+        "type": "Other Updates",
+        "description": "UpdateFilter<AnimationTimelineSchedule, ZStack<TupleView>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 9.641539208,
+        "duration_ms": 0.1095,
+        "type": "Other Updates",
+        "description": "UpdateFilter<AnimationTimelineSchedule, ZStack<TupleView>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 4.774354292,
+        "duration_ms": 0.107666,
+        "type": "Other Updates",
+        "description": "UpdateFilter<AnimationTimelineSchedule, ZStack<TupleView>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 4.641015292,
+        "duration_ms": 0.104666,
+        "type": "Other Updates",
+        "description": "UpdateFilter<PlaybackClockSchedule, ModifiedContent<ModifiedContent, _ForegroundStyleModifier>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 7.641158542,
+        "duration_ms": 0.097166,
+        "type": "Other Updates",
+        "description": "UpdateFilter<PlaybackClockSchedule, ModifiedContent<ModifiedContent, _ForegroundStyleModifier>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 5.641052875,
+        "duration_ms": 0.095708,
+        "type": "Other Updates",
+        "description": "UpdateFilter<PlaybackClockSchedule, ModifiedContent<ModifiedContent, _ForegroundStyleModifier>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 10.641288166,
+        "duration_ms": 0.094625,
+        "type": "Other Updates",
+        "description": "UpdateFilter<PlaybackClockSchedule, ModifiedContent<ModifiedContent, _ForegroundStyleModifier>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 8.641199125,
+        "duration_ms": 0.094416,
+        "type": "Other Updates",
+        "description": "UpdateFilter<PlaybackClockSchedule, ModifiedContent<ModifiedContent, _ForegroundStyleModifier>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 11.641313167,
+        "duration_ms": 0.091708,
+        "type": "Other Updates",
+        "description": "UpdateFilter<PlaybackClockSchedule, ModifiedContent<ModifiedContent, _ForegroundStyleModifier>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 11.441799583,
+        "duration_ms": 0.091625,
+        "type": "Other Updates",
+        "description": "GeometryReader<ModifiedContent>.Child",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      }
+    ]
+  },
+  "app_update_commits": {
+    "all": {
+      "count": 277,
+      "total_ms": 2312.090908,
+      "median_ms": 1.426166,
+      "p95_ms": 18.179791,
+      "max_ms": 19.290291
+    },
+    "by_display": {
+      "Display 2": {
+        "count": 106,
+        "total_ms": 122.087172,
+        "median_ms": 1.099875,
+        "p95_ms": 1.465333,
+        "max_ms": 18.061833
+      },
+      "Display 3": {
+        "count": 171,
+        "total_ms": 2190.003736,
+        "median_ms": 18.038916,
+        "p95_ms": 18.217375,
+        "max_ms": 19.290291
+      }
+    },
+    "longest": [
+      {
+        "start_s": 7.85759025,
+        "duration_ms": 19.290291,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 9.457677083,
+        "duration_ms": 19.0295,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 5.6241435,
+        "duration_ms": 18.658416,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 9.624350125,
+        "duration_ms": 18.5475,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 9.72435525,
+        "duration_ms": 18.533333,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 6.6241995,
+        "duration_ms": 18.509458,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 9.224330208,
+        "duration_ms": 18.256,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 11.157775583,
+        "duration_ms": 18.255583,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 8.790970916,
+        "duration_ms": 18.217375,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 11.424449416,
+        "duration_ms": 18.2165,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 8.757690958,
+        "duration_ms": 18.208958,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 6.490855583,
+        "duration_ms": 18.206375,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 7.324286916,
+        "duration_ms": 18.18625,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 8.357620041,
+        "duration_ms": 18.179791,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 4.924108916,
+        "duration_ms": 18.179583,
+        "display": "Display 3"
+      }
+    ]
+  },
+  "long_commit_cpu": {
+    "threshold_ms": 10,
+    "count": 119,
+    "total_main_sampled_weight_ms": 259.1,
+    "relative_cpu_histogram_ms": {
+      "0": 87.4,
+      "16": 41.8,
+      "17": 117.4,
+      "18": 12.3,
+      "19": 0.2
+    },
+    "per_commit": [
+      {
+        "start_s": 3.724045125,
+        "duration_ms": 18.050125,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.024291,
+          0.125041,
+          0.223416,
+          0.323458,
+          0.423708,
+          0.524,
+          0.624791,
+          0.725833,
+          16.725708,
+          16.826291,
+          16.925833,
+          17.024208,
+          17.124708,
+          17.223708,
+          17.324541,
+          17.426,
+          17.523791,
+          17.626,
+          17.724291,
+          17.82475,
+          17.926583,
+          18.024791
+        ]
+      },
+      {
+        "start_s": 3.757388041,
+        "duration_ms": 18.062458,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.083667,
+          0.182625,
+          0.280959,
+          0.383167,
+          0.481167,
+          0.582834,
+          0.682917,
+          16.681125,
+          16.781959,
+          16.880375,
+          16.980917,
+          17.081917,
+          17.18325,
+          17.282084,
+          17.383167,
+          17.482584,
+          17.583584,
+          17.68075,
+          17.78075,
+          17.88325,
+          17.980459
+        ]
+      },
+      {
+        "start_s": 3.79072325,
+        "duration_ms": 18.0725,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.045958,
+          0.145625,
+          0.245416,
+          0.345125,
+          0.445458,
+          0.548708,
+          0.645125,
+          16.651291,
+          16.745791,
+          16.845416,
+          16.948833,
+          17.045875,
+          17.14725,
+          17.248583,
+          17.347875,
+          17.445625,
+          17.545791,
+          17.647666,
+          17.747,
+          17.8455,
+          17.945375,
+          18.048291
+        ]
+      },
+      {
+        "start_s": 3.957398625,
+        "duration_ms": 18.109291,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.071416,
+          0.17075,
+          0.27325,
+          0.3725,
+          0.470166,
+          0.571875,
+          0.671791,
+          16.671375,
+          16.772833,
+          16.873041,
+          16.970958,
+          17.071708,
+          17.171166,
+          17.272666,
+          17.372541,
+          17.471,
+          17.571,
+          17.672333,
+          17.772375,
+          17.872958,
+          17.971541,
+          18.072958
+        ]
+      },
+      {
+        "start_s": 4.024067166,
+        "duration_ms": 18.046833,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.002459,
+          0.101875,
+          0.201584,
+          0.302209,
+          0.401709,
+          0.50325,
+          0.603834,
+          0.702,
+          16.701959,
+          16.802584,
+          16.901292,
+          17.004292,
+          17.103209,
+          17.204667,
+          17.302292,
+          17.401917,
+          17.503334,
+          17.603167,
+          17.702334,
+          17.803459,
+          17.90175,
+          18.00425
+        ]
+      },
+      {
+        "start_s": 4.090740125,
+        "duration_ms": 18.096333,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.028833,
+          0.128625,
+          0.228583,
+          0.328708,
+          0.430416,
+          0.530375,
+          0.628708,
+          16.731458,
+          16.828666,
+          16.928541,
+          17.030083,
+          17.129875,
+          17.229708,
+          17.330833,
+          17.42975,
+          17.5305,
+          17.6285,
+          17.729291,
+          17.830291,
+          17.930416,
+          18.028666
+        ]
+      },
+      {
+        "start_s": 4.257412625,
+        "duration_ms": 18.096416,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.057166,
+          0.158875,
+          0.256458,
+          0.356875,
+          0.459083,
+          0.556458,
+          0.658125,
+          16.657875,
+          16.756458,
+          16.85575,
+          16.957166,
+          17.058333,
+          17.157375,
+          17.257208,
+          17.357875,
+          17.456166,
+          17.557833,
+          17.658,
+          17.756625,
+          17.857083,
+          17.956,
+          18.056
+        ]
+      },
+      {
+        "start_s": 4.29074925,
+        "duration_ms": 18.092625,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.021958,
+          0.122125,
+          0.219291,
+          0.321416,
+          0.420166,
+          0.521583,
+          0.619125,
+          0.722625,
+          16.722333,
+          16.821583,
+          16.919166,
+          17.020666,
+          17.120291,
+          17.220458,
+          17.321958,
+          17.422041,
+          17.520125,
+          17.622125,
+          17.720125,
+          17.819625,
+          17.922291,
+          18.022166
+        ]
+      },
+      {
+        "start_s": 4.35742275,
+        "duration_ms": 18.024583,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.046791,
+          0.147541,
+          0.247958,
+          0.348916,
+          0.447958,
+          0.546708,
+          0.647791,
+          0.747875,
+          16.64675,
+          16.748166,
+          16.847375,
+          16.948083,
+          17.046083,
+          17.148375,
+          17.245708,
+          17.347375,
+          17.445791,
+          17.546875,
+          17.648375,
+          17.745666,
+          17.84675,
+          17.947208
+        ]
+      },
+      {
+        "start_s": 4.42408725,
+        "duration_ms": 18.076333,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.081666,
+          0.184125,
+          0.283833,
+          0.381083,
+          0.484291,
+          0.581375,
+          0.681583,
+          16.683,
+          16.781541,
+          16.881833,
+          16.982583,
+          17.084375,
+          17.183583,
+          17.283791,
+          17.384125,
+          17.482458,
+          17.582041,
+          17.683041,
+          17.78425,
+          17.883625,
+          17.981333
+        ]
+      },
+      {
+        "start_s": 4.4574245,
+        "duration_ms": 18.11625,
+        "main_sampled_weight_ms": 2.3,
+        "sample_relative_ms": [
+          0.046166,
+          0.144833,
+          0.244125,
+          0.345083,
+          0.445083,
+          0.545833,
+          0.645375,
+          0.7445,
+          16.648416,
+          16.743916,
+          16.845166,
+          16.945208,
+          17.045958,
+          17.144458,
+          17.244625,
+          17.344291,
+          17.447208,
+          17.543916,
+          17.646208,
+          17.7445,
+          17.845875,
+          17.945625,
+          18.044166
+        ]
+      },
+      {
+        "start_s": 4.89079275,
+        "duration_ms": 18.047666,
+        "main_sampled_weight_ms": 2.3,
+        "sample_relative_ms": [
+          0.078416,
+          0.179541,
+          0.277666,
+          0.476916,
+          0.576625,
+          0.677125,
+          0.776125,
+          0.876708,
+          0.975833,
+          16.67825,
+          16.776291,
+          16.875791,
+          16.977708,
+          17.078125,
+          17.176291,
+          17.276583,
+          17.377791,
+          17.4765,
+          17.577,
+          17.676041,
+          17.777083,
+          17.877625,
+          17.976333
+        ]
+      },
+      {
+        "start_s": 4.924108916,
+        "duration_ms": 18.179583,
+        "main_sampled_weight_ms": 2.3,
+        "sample_relative_ms": [
+          0.060667,
+          0.1595,
+          0.26225,
+          0.361459,
+          0.462334,
+          0.562,
+          0.65975,
+          16.6605,
+          16.760834,
+          16.860875,
+          16.959667,
+          17.062125,
+          17.160625,
+          17.260375,
+          17.360709,
+          17.459625,
+          17.559584,
+          17.660084,
+          17.761084,
+          17.860834,
+          17.959959,
+          18.059792,
+          18.159875
+        ]
+      },
+      {
+        "start_s": 4.990798416,
+        "duration_ms": 18.146458,
+        "main_sampled_weight_ms": 2.3,
+        "sample_relative_ms": [
+          0.070709,
+          0.172,
+          0.271375,
+          0.37075,
+          0.469917,
+          0.570625,
+          0.670167,
+          0.770167,
+          16.671125,
+          16.771334,
+          16.871167,
+          16.971334,
+          17.071792,
+          17.171375,
+          17.271125,
+          17.370959,
+          17.470625,
+          17.572792,
+          17.670375,
+          17.771167,
+          17.870334,
+          17.971709,
+          18.071125
+        ]
+      },
+      {
+        "start_s": 5.02411325,
+        "duration_ms": 18.071541,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.056833,
+          0.156791,
+          0.255583,
+          0.355125,
+          0.45675,
+          0.556166,
+          0.656541,
+          16.658125,
+          16.755333,
+          16.855291,
+          16.956583,
+          17.057208,
+          17.155291,
+          17.255125,
+          17.357333,
+          17.456041,
+          17.555458,
+          17.655416,
+          17.757541,
+          17.858708,
+          17.956708,
+          18.0575
+        ]
+      },
+      {
+        "start_s": 5.324135333,
+        "duration_ms": 18.111333,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.035375,
+          0.136583,
+          0.235167,
+          0.334167,
+          0.4335,
+          0.535875,
+          0.633292,
+          0.734125,
+          16.734333,
+          16.83425,
+          16.935417,
+          17.034125,
+          17.13325,
+          17.234917,
+          17.336042,
+          17.435333,
+          17.534333,
+          17.633625,
+          17.733708,
+          17.835583,
+          17.935208,
+          18.034083
+        ]
+      },
+      {
+        "start_s": 5.390805833,
+        "duration_ms": 18.036166,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.063833,
+          0.163792,
+          0.263917,
+          0.365708,
+          0.464375,
+          0.563625,
+          0.664458,
+          16.665208,
+          16.764417,
+          16.865708,
+          16.964583,
+          17.065167,
+          17.165,
+          17.265292,
+          17.363667,
+          17.463125,
+          17.564042,
+          17.663625,
+          17.765542,
+          17.862625,
+          17.963958
+        ]
+      },
+      {
+        "start_s": 5.59080425,
+        "duration_ms": 17.997291,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.064916,
+          0.164208,
+          0.26425,
+          0.365,
+          0.464541,
+          0.564375,
+          0.666333,
+          0.764583,
+          16.664708,
+          16.76575,
+          16.866875,
+          16.965916,
+          17.065125,
+          17.165833,
+          17.264333,
+          17.365333,
+          17.466791,
+          17.564416,
+          17.666375,
+          17.767416,
+          17.864166,
+          17.964416
+        ]
+      },
+      {
+        "start_s": 5.6241435,
+        "duration_ms": 18.658416,
+        "main_sampled_weight_ms": 2.8,
+        "sample_relative_ms": [
+          0.026125,
+          0.125541,
+          0.225041,
+          0.325208,
+          0.424916,
+          0.526166,
+          0.624791,
+          0.726791,
+          16.726625,
+          16.827666,
+          16.925041,
+          17.026125,
+          17.125125,
+          17.226458,
+          17.324833,
+          17.425541,
+          17.525625,
+          17.626125,
+          17.725416,
+          17.826,
+          17.92775,
+          18.024958,
+          18.126291,
+          18.224916,
+          18.325875,
+          18.425541,
+          18.526333,
+          18.625875
+        ]
+      },
+      {
+        "start_s": 5.690816583,
+        "duration_ms": 18.072208,
+        "main_sampled_weight_ms": 2.3,
+        "sample_relative_ms": [
+          0.054167,
+          0.152708,
+          0.252667,
+          0.353292,
+          0.452333,
+          0.55225,
+          0.652708,
+          0.754,
+          0.852625,
+          16.752917,
+          16.853083,
+          16.951833,
+          17.0535,
+          17.151958,
+          17.252458,
+          17.352875,
+          17.453458,
+          17.552417,
+          17.651792,
+          17.753917,
+          17.853125,
+          17.952042,
+          18.052125
+        ]
+      },
+      {
+        "start_s": 5.724152916,
+        "duration_ms": 18.037791,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.018375,
+          0.117125,
+          0.217875,
+          0.317209,
+          0.417542,
+          0.516334,
+          0.615875,
+          0.715875,
+          16.716917,
+          16.816959,
+          16.915959,
+          17.016459,
+          17.115917,
+          17.215709,
+          17.315792,
+          17.415792,
+          17.515875,
+          17.616292,
+          17.715875,
+          17.816,
+          17.916042,
+          18.017
+        ]
+      },
+      {
+        "start_s": 6.057526958,
+        "duration_ms": 18.006791,
+        "main_sampled_weight_ms": 2.0,
+        "sample_relative_ms": [
+          0.044,
+          0.143792,
+          0.242667,
+          0.34425,
+          0.442792,
+          0.542917,
+          16.641833,
+          16.742042,
+          16.843875,
+          16.942167,
+          17.042542,
+          17.144792,
+          17.243792,
+          17.342583,
+          17.443625,
+          17.544167,
+          17.644292,
+          17.744333,
+          17.843667,
+          17.943125
+        ]
+      },
+      {
+        "start_s": 6.124172166,
+        "duration_ms": 18.02475,
+        "main_sampled_weight_ms": 2.0,
+        "sample_relative_ms": [
+          0.097959,
+          0.196375,
+          0.296584,
+          0.397417,
+          0.498625,
+          0.599,
+          16.697042,
+          16.799167,
+          16.898292,
+          16.997417,
+          17.096542,
+          17.196542,
+          17.297917,
+          17.397459,
+          17.496209,
+          17.59675,
+          17.697584,
+          17.796459,
+          17.897417,
+          17.999167
+        ]
+      },
+      {
+        "start_s": 6.257526708,
+        "duration_ms": 18.005666,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.043958,
+          0.142833,
+          0.241917,
+          0.343125,
+          0.442167,
+          0.543292,
+          0.642208,
+          16.643292,
+          16.741958,
+          16.8435,
+          16.944125,
+          17.043667,
+          17.141958,
+          17.241875,
+          17.341875,
+          17.441958,
+          17.543208,
+          17.6455,
+          17.74425,
+          17.842792,
+          17.942792
+        ]
+      },
+      {
+        "start_s": 6.390859458,
+        "duration_ms": 18.075625,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.011792,
+          0.111167,
+          0.212375,
+          0.309417,
+          0.408917,
+          0.511125,
+          0.610208,
+          0.709167,
+          16.710042,
+          16.809,
+          16.909333,
+          17.009417,
+          17.109417,
+          17.209292,
+          17.31025,
+          17.410167,
+          17.510875,
+          17.61025,
+          17.712208,
+          17.810417,
+          17.909,
+          18.009625
+        ]
+      },
+      {
+        "start_s": 6.490855583,
+        "duration_ms": 18.206375,
+        "main_sampled_weight_ms": 2.3,
+        "sample_relative_ms": [
+          0.013167,
+          0.112917,
+          0.213625,
+          0.315458,
+          0.41275,
+          0.515125,
+          0.615833,
+          0.714125,
+          16.713792,
+          16.813333,
+          16.913083,
+          17.013875,
+          17.11575,
+          17.213292,
+          17.313458,
+          17.415583,
+          17.514208,
+          17.615042,
+          17.714208,
+          17.814417,
+          17.913375,
+          18.013958,
+          18.113375
+        ]
+      },
+      {
+        "start_s": 6.524196541,
+        "duration_ms": 17.985583,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.073459,
+          0.172959,
+          0.272459,
+          0.372084,
+          0.474667,
+          0.571959,
+          0.67425,
+          16.675459,
+          16.774209,
+          16.872084,
+          16.973209,
+          17.072834,
+          17.1735,
+          17.275209,
+          17.373084,
+          17.472625,
+          17.574375,
+          17.67325,
+          17.775,
+          17.874125,
+          17.974084
+        ]
+      },
+      {
+        "start_s": 6.6241995,
+        "duration_ms": 18.509458,
+        "main_sampled_weight_ms": 2.6,
+        "sample_relative_ms": [
+          0.070625,
+          0.170083,
+          0.272166,
+          0.369375,
+          0.470083,
+          0.571916,
+          0.672291,
+          16.670125,
+          16.769666,
+          16.870333,
+          16.9695,
+          17.07175,
+          17.170083,
+          17.2695,
+          17.371291,
+          17.470166,
+          17.571083,
+          17.67125,
+          17.770041,
+          17.87175,
+          17.970166,
+          18.069875,
+          18.170041,
+          18.271458,
+          18.371666,
+          18.469291
+        ]
+      },
+      {
+        "start_s": 6.657528416,
+        "duration_ms": 18.05925,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.043,
+          0.142625,
+          0.241084,
+          0.341667,
+          0.440792,
+          0.540667,
+          0.642917,
+          0.740417,
+          16.741917,
+          16.840584,
+          16.940209,
+          17.040292,
+          17.142209,
+          17.241084,
+          17.340292,
+          17.441375,
+          17.5405,
+          17.640834,
+          17.740334,
+          17.841459,
+          17.940709,
+          18.042084
+        ]
+      },
+      {
+        "start_s": 6.690884458,
+        "duration_ms": 17.965791,
+        "main_sampled_weight_ms": 2.0,
+        "sample_relative_ms": [
+          0.087042,
+          0.183958,
+          0.283875,
+          0.386375,
+          0.48675,
+          0.586417,
+          0.686583,
+          16.685958,
+          16.785,
+          16.884208,
+          16.984083,
+          17.086583,
+          17.184333,
+          17.284583,
+          17.384333,
+          17.484292,
+          17.586917,
+          17.686417,
+          17.785208,
+          17.884583
+        ]
+      },
+      {
+        "start_s": 6.724207,
+        "duration_ms": 18.128,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.062333,
+          0.161458,
+          0.264,
+          0.361666,
+          0.463375,
+          0.564166,
+          16.664458,
+          16.762583,
+          16.862625,
+          16.962083,
+          17.063833,
+          17.163041,
+          17.264375,
+          17.36175,
+          17.463375,
+          17.563666,
+          17.661458,
+          17.763583,
+          17.864,
+          17.961458,
+          18.062625
+        ]
+      },
+      {
+        "start_s": 6.79087775,
+        "duration_ms": 17.99,
+        "main_sampled_weight_ms": 2.0,
+        "sample_relative_ms": [
+          0.092083,
+          0.191833,
+          0.2935,
+          0.394,
+          0.492,
+          0.593375,
+          0.693416,
+          16.693833,
+          16.792791,
+          16.89225,
+          16.993458,
+          17.092708,
+          17.193041,
+          17.293458,
+          17.392833,
+          17.490916,
+          17.593041,
+          17.690833,
+          17.792625,
+          17.89325
+        ]
+      },
+      {
+        "start_s": 6.857549416,
+        "duration_ms": 18.052333,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.022292,
+          0.120375,
+          0.219084,
+          0.320042,
+          0.4215,
+          0.521917,
+          0.620209,
+          0.722209,
+          16.719792,
+          16.819667,
+          16.91925,
+          17.02075,
+          17.120084,
+          17.2195,
+          17.319209,
+          17.42025,
+          17.521959,
+          17.621417,
+          17.720375,
+          17.81925,
+          17.921042,
+          18.019417
+        ]
+      },
+      {
+        "start_s": 6.890887,
+        "duration_ms": 18.092041,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.083708,
+          0.183416,
+          0.283541,
+          0.383875,
+          0.482708,
+          0.583,
+          0.682125,
+          16.683458,
+          16.783375,
+          16.884,
+          16.982208,
+          17.084,
+          17.184166,
+          17.28375,
+          17.383416,
+          17.4825,
+          17.582083,
+          17.684,
+          17.783666,
+          17.882875,
+          17.982333,
+          18.083333
+        ]
+      },
+      {
+        "start_s": 6.924216083,
+        "duration_ms": 18.045541,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.055167,
+          0.155042,
+          0.252917,
+          0.354333,
+          0.453375,
+          0.552708,
+          0.652667,
+          16.653542,
+          16.752958,
+          16.852833,
+          16.954,
+          17.054667,
+          17.154708,
+          17.254208,
+          17.354708,
+          17.454625,
+          17.552917,
+          17.655792,
+          17.753875,
+          17.853708,
+          17.952875
+        ]
+      },
+      {
+        "start_s": 6.957548333,
+        "duration_ms": 18.098166,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.022333,
+          0.121208,
+          0.221875,
+          0.321667,
+          0.4225,
+          0.52225,
+          0.621125,
+          0.720708,
+          16.722,
+          16.822958,
+          16.921208,
+          17.022417,
+          17.122458,
+          17.223208,
+          17.322292,
+          17.423542,
+          17.521875,
+          17.62275,
+          17.720292,
+          17.822917,
+          17.922125,
+          18.020042
+        ]
+      },
+      {
+        "start_s": 6.990884208,
+        "duration_ms": 18.038916,
+        "main_sampled_weight_ms": 2.0,
+        "sample_relative_ms": [
+          0.084542,
+          0.186167,
+          0.2845,
+          0.386917,
+          0.48425,
+          0.584583,
+          16.686917,
+          16.787417,
+          16.884583,
+          16.988,
+          17.086792,
+          17.185167,
+          17.286125,
+          17.387375,
+          17.485792,
+          17.585708,
+          17.685458,
+          17.786708,
+          17.887375,
+          17.985542
+        ]
+      },
+      {
+        "start_s": 7.157556208,
+        "duration_ms": 18.12825,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.014792,
+          0.1125,
+          0.212125,
+          0.313917,
+          0.412542,
+          0.512792,
+          0.613917,
+          16.81525,
+          16.91325,
+          17.014417,
+          17.112208,
+          17.214542,
+          17.314167,
+          17.415375,
+          17.5155,
+          17.614958,
+          17.713542,
+          17.813458,
+          17.913625,
+          18.0155,
+          18.112542
+        ]
+      },
+      {
+        "start_s": 7.224232916,
+        "duration_ms": 17.942208,
+        "main_sampled_weight_ms": 2.0,
+        "sample_relative_ms": [
+          0.035709,
+          0.137334,
+          0.235542,
+          0.3355,
+          0.436125,
+          0.536625,
+          0.63625,
+          16.736875,
+          16.838625,
+          16.936667,
+          17.036917,
+          17.138084,
+          17.236042,
+          17.338417,
+          17.436709,
+          17.536709,
+          17.637834,
+          17.736959,
+          17.837334,
+          17.936375
+        ]
+      },
+      {
+        "start_s": 7.324286916,
+        "duration_ms": 18.18625,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.083375,
+          0.183917,
+          0.281625,
+          0.383,
+          0.483459,
+          0.582667,
+          16.68325,
+          16.7845,
+          16.88175,
+          16.982042,
+          17.083542,
+          17.183167,
+          17.282792,
+          17.383125,
+          17.483917,
+          17.581584,
+          17.684209,
+          17.782959,
+          17.982,
+          18.082084,
+          18.181917
+        ]
+      },
+      {
+        "start_s": 7.524243833,
+        "duration_ms": 18.040083,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.025792,
+          0.125083,
+          0.228125,
+          0.32675,
+          0.42675,
+          0.525,
+          0.625833,
+          16.7275,
+          16.828417,
+          16.926625,
+          17.025042,
+          17.125,
+          17.226375,
+          17.326208,
+          17.425083,
+          17.525083,
+          17.627292,
+          17.724958,
+          17.827708,
+          17.925708,
+          18.025167
+        ]
+      },
+      {
+        "start_s": 7.557578458,
+        "duration_ms": 18.098541,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.091958,
+          0.191667,
+          0.290833,
+          0.3905,
+          0.492375,
+          0.590208,
+          0.690208,
+          16.691417,
+          16.792667,
+          16.891042,
+          16.991583,
+          17.090917,
+          17.191458,
+          17.292125,
+          17.39175,
+          17.49225,
+          17.591917,
+          17.690583,
+          17.791292,
+          17.892792,
+          17.993292,
+          18.091875
+        ]
+      },
+      {
+        "start_s": 7.59090925,
+        "duration_ms": 18.097458,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.059916,
+          0.15975,
+          0.26,
+          0.359958,
+          0.4625,
+          0.559125,
+          0.660458,
+          16.660625,
+          16.760375,
+          16.860333,
+          16.961416,
+          17.059166,
+          17.1605,
+          17.259583,
+          17.362208,
+          17.459333,
+          17.560541,
+          17.660666,
+          17.761,
+          17.860583,
+          17.960541,
+          18.060458
+        ]
+      },
+      {
+        "start_s": 7.72425525,
+        "duration_ms": 18.08475,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.013791,
+          0.113416,
+          0.215041,
+          0.317125,
+          0.415666,
+          0.515833,
+          0.6155,
+          16.714791,
+          16.81625,
+          16.913333,
+          17.015166,
+          17.11425,
+          17.215125,
+          17.315416,
+          17.415291,
+          17.51475,
+          17.614625,
+          17.716166,
+          17.814458,
+          17.914791,
+          18.013625
+        ]
+      },
+      {
+        "start_s": 7.824262833,
+        "duration_ms": 17.934583,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.006417,
+          0.105833,
+          0.20725,
+          0.308292,
+          0.406625,
+          0.507333,
+          0.606958,
+          0.706625,
+          0.806083,
+          16.706542,
+          16.805917,
+          16.906375,
+          17.005958,
+          17.107042,
+          17.206292,
+          17.306375,
+          17.405875,
+          17.506375,
+          17.605792,
+          17.705708,
+          17.806708,
+          17.906625
+        ]
+      },
+      {
+        "start_s": 7.85759025,
+        "duration_ms": 19.290291,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.079875,
+          0.179458,
+          0.279083,
+          0.37825,
+          0.47975,
+          0.578875,
+          0.67825,
+          16.679666,
+          16.778041,
+          16.878458,
+          16.978375,
+          17.078375,
+          17.179125,
+          17.278166,
+          17.37825,
+          17.478125,
+          17.5785,
+          17.678458,
+          17.778375,
+          19.17875,
+          19.278083
+        ]
+      },
+      {
+        "start_s": 7.890923,
+        "duration_ms": 18.009125,
+        "main_sampled_weight_ms": 2.0,
+        "sample_relative_ms": [
+          0.046791,
+          0.145916,
+          0.246875,
+          0.345583,
+          0.445416,
+          0.5465,
+          0.645416,
+          16.746916,
+          16.845958,
+          16.945666,
+          17.045708,
+          17.145458,
+          17.245666,
+          17.345333,
+          17.445416,
+          17.545416,
+          17.645416,
+          17.746166,
+          17.8455,
+          17.945375
+        ]
+      },
+      {
+        "start_s": 8.090962416,
+        "duration_ms": 17.85925,
+        "main_sampled_weight_ms": 1.9,
+        "sample_relative_ms": [
+          0.008459,
+          0.107959,
+          0.208542,
+          0.308959,
+          0.407375,
+          0.506875,
+          0.607042,
+          16.707834,
+          16.806084,
+          16.908,
+          17.008625,
+          17.107167,
+          17.207667,
+          17.307459,
+          17.409542,
+          17.507834,
+          17.606542,
+          17.707042,
+          17.807167
+        ]
+      },
+      {
+        "start_s": 8.1243375,
+        "duration_ms": 17.954333,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.0315,
+          0.132875,
+          0.234333,
+          0.330875,
+          0.433958,
+          0.533333,
+          0.632416,
+          0.73325,
+          16.733833,
+          16.831833,
+          16.931041,
+          17.0325,
+          17.132208,
+          17.231708,
+          17.332041,
+          17.433583,
+          17.532583,
+          17.632041,
+          17.733291,
+          17.83275,
+          17.931125
+        ]
+      },
+      {
+        "start_s": 8.157612916,
+        "duration_ms": 17.851666,
+        "main_sampled_weight_ms": 1.8,
+        "sample_relative_ms": [
+          0.057792,
+          0.155625,
+          0.258459,
+          0.35775,
+          0.457709,
+          0.5575,
+          0.656959,
+          16.758375,
+          16.855709,
+          16.956917,
+          17.056667,
+          17.158625,
+          17.258,
+          17.357417,
+          17.4555,
+          17.556709,
+          17.658375,
+          17.757542
+        ]
+      },
+      {
+        "start_s": 8.19093725,
+        "duration_ms": 18.060791,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.031958,
+          0.132375,
+          0.233166,
+          0.331541,
+          0.432458,
+          0.533666,
+          0.631791,
+          16.73325,
+          16.832291,
+          16.932458,
+          17.032083,
+          17.1335,
+          17.23425,
+          17.333875,
+          17.432791,
+          17.534416,
+          17.633666,
+          17.732375,
+          17.832166,
+          17.931708,
+          18.033125
+        ]
+      },
+      {
+        "start_s": 8.224284166,
+        "duration_ms": 18.015875,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.084959,
+          0.185292,
+          0.284709,
+          0.387209,
+          0.486459,
+          0.584709,
+          0.686292,
+          16.685,
+          16.786709,
+          16.886334,
+          16.9855,
+          17.085917,
+          17.184959,
+          17.286584,
+          17.386875,
+          17.487125,
+          17.587542,
+          17.685584,
+          17.784917,
+          17.884667,
+          17.98475
+        ]
+      },
+      {
+        "start_s": 8.257615833,
+        "duration_ms": 18.170125,
+        "main_sampled_weight_ms": 2.3,
+        "sample_relative_ms": [
+          0.054875,
+          0.155208,
+          0.253083,
+          0.355125,
+          0.455333,
+          0.555375,
+          0.652875,
+          16.65475,
+          16.752917,
+          16.853625,
+          16.955417,
+          17.053208,
+          17.153,
+          17.253708,
+          17.354875,
+          17.45375,
+          17.554167,
+          17.653583,
+          17.752667,
+          17.854417,
+          17.953083,
+          18.054417,
+          18.153333
+        ]
+      },
+      {
+        "start_s": 8.357620041,
+        "duration_ms": 18.179791,
+        "main_sampled_weight_ms": 2.3,
+        "sample_relative_ms": [
+          0.048959,
+          0.149084,
+          0.250959,
+          0.349542,
+          0.451209,
+          0.551542,
+          0.648459,
+          16.651917,
+          16.751084,
+          16.851417,
+          16.951709,
+          17.049959,
+          17.150125,
+          17.251292,
+          17.349834,
+          17.451709,
+          17.548667,
+          17.648459,
+          17.751542,
+          17.849375,
+          17.951084,
+          18.049417,
+          18.148667
+        ]
+      },
+      {
+        "start_s": 8.424295833,
+        "duration_ms": 18.113541,
+        "main_sampled_weight_ms": 2.3,
+        "sample_relative_ms": [
+          0.074708,
+          0.175542,
+          0.275875,
+          0.374167,
+          0.472708,
+          0.574958,
+          0.67525,
+          0.773875,
+          16.673292,
+          16.77475,
+          16.873875,
+          16.97575,
+          17.07575,
+          17.1735,
+          17.275625,
+          17.373458,
+          17.472875,
+          17.572708,
+          17.674583,
+          17.7745,
+          17.87425,
+          17.973583,
+          18.075542
+        ]
+      },
+      {
+        "start_s": 8.45762125,
+        "duration_ms": 18.113458,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.047583,
+          0.150458,
+          0.248041,
+          0.349666,
+          0.449166,
+          0.548,
+          0.648333,
+          16.749333,
+          16.848916,
+          16.948458,
+          17.04925,
+          17.1485,
+          17.250541,
+          17.35,
+          17.449333,
+          17.547375,
+          17.647916,
+          17.748666,
+          17.849833,
+          17.951125,
+          18.047291
+        ]
+      },
+      {
+        "start_s": 8.490960833,
+        "duration_ms": 18.052875,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.008833,
+          0.10975,
+          0.209792,
+          0.309375,
+          0.410542,
+          0.511,
+          0.6105,
+          0.708125,
+          16.71075,
+          16.808167,
+          16.91025,
+          17.009375,
+          17.109625,
+          17.210083,
+          17.309042,
+          17.411208,
+          17.509375,
+          17.608875,
+          17.709667,
+          17.810417,
+          17.908625,
+          18.01075
+        ]
+      },
+      {
+        "start_s": 8.5242945,
+        "duration_ms": 18.052333,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.076125,
+          0.175916,
+          0.274291,
+          0.375291,
+          0.476333,
+          0.574333,
+          0.674291,
+          16.676375,
+          16.774583,
+          16.874333,
+          16.97625,
+          17.075333,
+          17.174541,
+          17.274958,
+          17.376458,
+          17.474,
+          17.574291,
+          17.677208,
+          17.77425,
+          17.876083,
+          17.973916
+        ]
+      },
+      {
+        "start_s": 8.757690958,
+        "duration_ms": 18.208958,
+        "main_sampled_weight_ms": 2.4,
+        "sample_relative_ms": [
+          0.079958,
+          0.179167,
+          0.278833,
+          0.37875,
+          0.480208,
+          0.578542,
+          0.678875,
+          0.777667,
+          16.6805,
+          16.778917,
+          16.879167,
+          16.980125,
+          17.079208,
+          17.177708,
+          17.279958,
+          17.378667,
+          17.47775,
+          17.579208,
+          17.677875,
+          17.778083,
+          17.880875,
+          17.978917,
+          18.077667,
+          18.178042
+        ]
+      },
+      {
+        "start_s": 8.790970916,
+        "duration_ms": 18.217375,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.100209,
+          0.199875,
+          0.300167,
+          0.400334,
+          0.49875,
+          0.600584,
+          16.699,
+          16.798959,
+          16.899584,
+          16.998334,
+          17.100584,
+          17.19825,
+          17.30025,
+          17.399584,
+          17.500417,
+          17.6,
+          17.698667,
+          17.79775,
+          17.897792,
+          17.99925,
+          18.098292,
+          18.198917
+        ]
+      },
+      {
+        "start_s": 8.824310833,
+        "duration_ms": 18.061083,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.059375,
+          0.16025,
+          0.260625,
+          0.358042,
+          0.460208,
+          0.559917,
+          0.659292,
+          16.658667,
+          16.759417,
+          16.860625,
+          16.957708,
+          17.058625,
+          17.158708,
+          17.259458,
+          17.359042,
+          17.45925,
+          17.5605,
+          17.657958,
+          17.758625,
+          17.860083,
+          17.957917,
+          18.058292
+        ]
+      },
+      {
+        "start_s": 8.857647,
+        "duration_ms": 18.155875,
+        "main_sampled_weight_ms": 2.3,
+        "sample_relative_ms": [
+          0.024333,
+          0.123833,
+          0.223541,
+          0.324375,
+          0.422291,
+          0.523958,
+          0.622791,
+          0.722041,
+          16.723875,
+          16.823333,
+          16.924208,
+          17.023875,
+          17.122375,
+          17.224083,
+          17.324083,
+          17.422916,
+          17.524375,
+          17.623041,
+          17.722708,
+          17.824166,
+          17.921625,
+          18.023625,
+          18.122541
+        ]
+      },
+      {
+        "start_s": 8.890985291,
+        "duration_ms": 17.975625,
+        "main_sampled_weight_ms": 2.0,
+        "sample_relative_ms": [
+          0.085084,
+          0.184709,
+          0.286084,
+          0.385584,
+          0.485167,
+          0.584334,
+          0.685834,
+          16.683709,
+          16.784042,
+          16.886042,
+          16.984667,
+          17.085417,
+          17.185584,
+          17.284875,
+          17.384834,
+          17.48525,
+          17.585792,
+          17.68475,
+          17.78425,
+          17.885584
+        ]
+      },
+      {
+        "start_s": 8.957679791,
+        "duration_ms": 18.085708,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.091375,
+          0.189959,
+          0.290209,
+          0.390292,
+          0.488959,
+          0.589834,
+          0.688667,
+          16.691292,
+          16.789209,
+          16.889292,
+          16.98975,
+          17.089792,
+          17.190334,
+          17.291584,
+          17.3915,
+          17.491042,
+          17.588917,
+          17.689334,
+          17.790875,
+          17.889167,
+          17.990334
+        ]
+      },
+      {
+        "start_s": 8.990988708,
+        "duration_ms": 18.1125,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.080708,
+          0.180958,
+          0.282125,
+          0.379833,
+          0.481,
+          0.583083,
+          0.682125,
+          16.680667,
+          16.781375,
+          16.88,
+          16.979792,
+          17.082625,
+          17.182583,
+          17.280917,
+          17.382292,
+          17.480583,
+          17.580083,
+          17.680833,
+          17.779792,
+          17.88175,
+          17.981083,
+          18.082333
+        ]
+      },
+      {
+        "start_s": 9.024319041,
+        "duration_ms": 18.117166,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.051792,
+          0.151,
+          0.250959,
+          0.351125,
+          0.450375,
+          0.55025,
+          0.649292,
+          0.75025,
+          16.750625,
+          16.85275,
+          16.952125,
+          17.052084,
+          17.151792,
+          17.2505,
+          17.352834,
+          17.451292,
+          17.551125,
+          17.653125,
+          17.751875,
+          17.849917,
+          17.95025,
+          18.049959
+        ]
+      },
+      {
+        "start_s": 9.0576605,
+        "duration_ms": 18.104,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.009125,
+          0.111041,
+          0.208166,
+          0.310833,
+          0.408875,
+          0.50925,
+          0.610583,
+          0.710708,
+          16.708416,
+          16.809875,
+          16.908666,
+          17.010958,
+          17.1095,
+          17.208625,
+          17.31075,
+          17.410375,
+          17.508375,
+          17.610208,
+          17.707958,
+          17.808208,
+          17.910833,
+          18.008
+        ]
+      },
+      {
+        "start_s": 9.124325541,
+        "duration_ms": 18.10825,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.043542,
+          0.145042,
+          0.24325,
+          0.343125,
+          0.445959,
+          0.543125,
+          0.643209,
+          16.745792,
+          16.845209,
+          16.944209,
+          17.04325,
+          17.144375,
+          17.244209,
+          17.343875,
+          17.44375,
+          17.545042,
+          17.64375,
+          17.743084,
+          17.844209,
+          17.945334,
+          18.042959
+        ]
+      },
+      {
+        "start_s": 9.157659916,
+        "duration_ms": 18.012,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.010459,
+          0.108959,
+          0.208917,
+          0.30925,
+          0.409084,
+          0.510542,
+          0.610834,
+          0.709375,
+          16.709,
+          16.811209,
+          16.908875,
+          17.01025,
+          17.110375,
+          17.209625,
+          17.310959,
+          17.410667,
+          17.508875,
+          17.608875,
+          17.710959,
+          17.81025,
+          17.911542,
+          18.011417
+        ]
+      },
+      {
+        "start_s": 9.190998583,
+        "duration_ms": 18.028375,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.071292,
+          0.170292,
+          0.27175,
+          0.3715,
+          0.470375,
+          0.571875,
+          0.6705,
+          16.672125,
+          16.770542,
+          16.872333,
+          16.973,
+          17.0705,
+          17.170333,
+          17.270833,
+          17.371708,
+          17.472417,
+          17.572167,
+          17.670333,
+          17.77025,
+          17.872583,
+          17.971917
+        ]
+      },
+      {
+        "start_s": 9.224330208,
+        "duration_ms": 18.256,
+        "main_sampled_weight_ms": 2.3,
+        "sample_relative_ms": [
+          0.03975,
+          0.141458,
+          0.240208,
+          0.341208,
+          0.440833,
+          0.540792,
+          0.639125,
+          16.739042,
+          16.838458,
+          16.940167,
+          17.040458,
+          17.140875,
+          17.239,
+          17.339208,
+          17.441542,
+          17.539,
+          17.639042,
+          17.7395,
+          17.839417,
+          17.940417,
+          18.038833,
+          18.139833,
+          18.24025
+        ]
+      },
+      {
+        "start_s": 9.257696791,
+        "duration_ms": 18.116541,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.074584,
+          0.171834,
+          0.272042,
+          0.371959,
+          0.472834,
+          0.57375,
+          0.67475,
+          16.673167,
+          16.772792,
+          16.873875,
+          16.973584,
+          17.072917,
+          17.171875,
+          17.27425,
+          17.372125,
+          17.473209,
+          17.574292,
+          17.672334,
+          17.772042,
+          17.871875,
+          17.974042,
+          18.073667
+        ]
+      },
+      {
+        "start_s": 9.291006208,
+        "duration_ms": 18.074625,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.063167,
+          0.164042,
+          0.264833,
+          0.36475,
+          0.462792,
+          0.56425,
+          0.662458,
+          16.665292,
+          16.762417,
+          16.862375,
+          16.963917,
+          17.064042,
+          17.163417,
+          17.264708,
+          17.36375,
+          17.46475,
+          17.56225,
+          17.662667,
+          17.762458,
+          17.862708,
+          17.965625,
+          18.063958
+        ]
+      },
+      {
+        "start_s": 9.324333791,
+        "duration_ms": 17.953541,
+        "main_sampled_weight_ms": 2.0,
+        "sample_relative_ms": [
+          0.036709,
+          0.137625,
+          0.235625,
+          0.33475,
+          0.436042,
+          0.536584,
+          0.635917,
+          16.736542,
+          16.834959,
+          16.937,
+          17.035667,
+          17.135042,
+          17.236334,
+          17.334792,
+          17.436125,
+          17.535875,
+          17.6365,
+          17.7365,
+          17.8375,
+          17.9375
+        ]
+      },
+      {
+        "start_s": 9.357809375,
+        "duration_ms": 18.082708,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.061541,
+          0.16125,
+          0.260625,
+          0.359458,
+          0.460708,
+          0.559166,
+          0.660333,
+          16.660583,
+          16.76075,
+          16.861666,
+          16.960833,
+          17.061416,
+          17.160875,
+          17.261541,
+          17.359833,
+          17.462208,
+          17.559333,
+          17.661291,
+          17.760375,
+          17.861041,
+          17.962166,
+          18.0615
+        ]
+      },
+      {
+        "start_s": 9.391010458,
+        "duration_ms": 18.063041,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.060667,
+          0.159708,
+          0.259792,
+          0.3585,
+          0.459083,
+          0.560333,
+          0.659125,
+          16.661,
+          16.760292,
+          16.859792,
+          16.957958,
+          17.060458,
+          17.160542,
+          17.258417,
+          17.3605,
+          17.458333,
+          17.558375,
+          17.658875,
+          17.759333,
+          17.860083,
+          17.960333,
+          18.057958
+        ]
+      },
+      {
+        "start_s": 9.457677083,
+        "duration_ms": 19.0295,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.092875,
+          0.193417,
+          0.2915,
+          0.392375,
+          0.493292,
+          0.593708,
+          17.593833,
+          17.693958,
+          17.793,
+          17.89225,
+          17.992167,
+          18.094042,
+          18.194125,
+          18.294167,
+          18.391833,
+          18.494125,
+          18.593958,
+          18.69225,
+          18.792625,
+          18.893708,
+          18.992583
+        ]
+      },
+      {
+        "start_s": 9.557682541,
+        "duration_ms": 18.101375,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.088792,
+          0.188084,
+          0.28775,
+          0.387,
+          0.487167,
+          0.58725,
+          16.686459,
+          16.787084,
+          16.888,
+          16.98725,
+          17.087334,
+          17.189292,
+          17.286917,
+          17.388667,
+          17.487084,
+          17.587542,
+          17.6875,
+          17.787209,
+          17.889042,
+          17.9885,
+          18.086542
+        ]
+      },
+      {
+        "start_s": 9.59101675,
+        "duration_ms": 18.044625,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.053958,
+          0.152208,
+          0.254416,
+          0.354125,
+          0.452416,
+          0.552541,
+          0.653041,
+          16.654416,
+          16.753708,
+          16.852791,
+          16.951791,
+          17.054125,
+          17.152083,
+          17.254208,
+          17.352791,
+          17.454416,
+          17.554958,
+          17.653125,
+          17.753791,
+          17.853833,
+          17.952208
+        ]
+      },
+      {
+        "start_s": 9.624350125,
+        "duration_ms": 18.5475,
+        "main_sampled_weight_ms": 2.6,
+        "sample_relative_ms": [
+          0.019333,
+          0.118916,
+          0.218791,
+          0.319916,
+          0.418416,
+          0.518291,
+          0.620916,
+          16.72025,
+          16.82175,
+          16.920166,
+          17.018416,
+          17.118583,
+          17.219875,
+          17.318625,
+          17.419583,
+          17.519208,
+          17.620208,
+          17.71975,
+          17.818666,
+          17.919041,
+          18.019041,
+          18.118583,
+          18.218666,
+          18.320166,
+          18.420958,
+          18.5185
+        ]
+      },
+      {
+        "start_s": 9.72435525,
+        "duration_ms": 18.533333,
+        "main_sampled_weight_ms": 2.7,
+        "sample_relative_ms": [
+          0.016041,
+          0.113583,
+          0.21625,
+          0.314875,
+          0.414625,
+          0.514958,
+          0.613833,
+          0.71525,
+          16.714208,
+          16.814125,
+          16.916291,
+          17.014208,
+          17.114541,
+          17.214625,
+          17.316041,
+          17.414458,
+          17.513375,
+          17.615083,
+          17.714125,
+          17.816166,
+          17.915541,
+          18.014,
+          18.115458,
+          18.215208,
+          18.313541,
+          18.415291,
+          18.513625
+        ]
+      },
+      {
+        "start_s": 9.757691958,
+        "duration_ms": 18.077625,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.077083,
+          0.178667,
+          0.276917,
+          0.377833,
+          0.476917,
+          0.578167,
+          16.678875,
+          16.777042,
+          16.877417,
+          16.980167,
+          17.078208,
+          17.178792,
+          17.279083,
+          17.377625,
+          17.478417,
+          17.577333,
+          17.679458,
+          17.77875,
+          17.878042,
+          17.976917,
+          18.0765
+        ]
+      },
+      {
+        "start_s": 9.824361333,
+        "duration_ms": 18.058,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.00875,
+          0.109042,
+          0.208375,
+          0.308667,
+          0.409708,
+          0.507375,
+          0.607208,
+          0.707917,
+          16.709833,
+          16.81,
+          16.908583,
+          17.01025,
+          17.108208,
+          17.209708,
+          17.3095,
+          17.409667,
+          17.508958,
+          17.607542,
+          17.70925,
+          17.807167,
+          17.909792,
+          18.007542
+        ]
+      },
+      {
+        "start_s": 9.857699458,
+        "duration_ms": 18.089166,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.0705,
+          0.170792,
+          0.269417,
+          0.369167,
+          0.471333,
+          0.569583,
+          0.669,
+          16.670667,
+          16.770167,
+          16.869167,
+          16.971542,
+          17.071208,
+          17.169083,
+          17.271667,
+          17.371875,
+          17.470375,
+          17.570417,
+          17.669375,
+          17.769708,
+          17.87175,
+          17.970875,
+          18.070667
+        ]
+      },
+      {
+        "start_s": 9.957713375,
+        "duration_ms": 18.141875,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.056333,
+          0.155416,
+          0.256958,
+          0.355458,
+          0.457083,
+          0.557291,
+          0.657041,
+          0.755416,
+          16.757666,
+          16.85525,
+          16.956375,
+          17.056833,
+          17.1565,
+          17.255916,
+          17.356833,
+          17.455625,
+          17.557625,
+          17.656625,
+          17.756375,
+          17.855625,
+          17.956541,
+          18.057958
+        ]
+      },
+      {
+        "start_s": 9.991044916,
+        "duration_ms": 18.149166,
+        "main_sampled_weight_ms": 2.3,
+        "sample_relative_ms": [
+          0.024084,
+          0.124875,
+          0.22625,
+          0.325417,
+          0.425334,
+          0.524834,
+          0.625792,
+          0.723834,
+          16.726209,
+          16.824917,
+          16.924584,
+          17.024417,
+          17.125,
+          17.2245,
+          17.324375,
+          17.423834,
+          17.523792,
+          17.625792,
+          17.725959,
+          17.825167,
+          17.924667,
+          18.025917,
+          18.124709
+        ]
+      },
+      {
+        "start_s": 10.024382625,
+        "duration_ms": 18.147166,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.088416,
+          0.186125,
+          0.288833,
+          0.386375,
+          0.486041,
+          0.586583,
+          0.685875,
+          16.787,
+          16.886625,
+          16.988166,
+          17.087416,
+          17.18725,
+          17.288083,
+          17.38925,
+          17.48725,
+          17.586291,
+          17.688,
+          17.786666,
+          17.887541,
+          17.986125,
+          18.087625
+        ]
+      },
+      {
+        "start_s": 10.09103975,
+        "duration_ms": 18.0465,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.031208,
+          0.131125,
+          0.230125,
+          0.32925,
+          0.42875,
+          0.529333,
+          0.628625,
+          0.729125,
+          16.729458,
+          16.831875,
+          16.930458,
+          17.02975,
+          17.131208,
+          17.229583,
+          17.329791,
+          17.431041,
+          17.530333,
+          17.6315,
+          17.730125,
+          17.828958,
+          17.931458,
+          18.031791
+        ]
+      },
+      {
+        "start_s": 10.124382458,
+        "duration_ms": 18.02575,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.088958,
+          0.188125,
+          0.287208,
+          0.388458,
+          0.488042,
+          0.586292,
+          0.688375,
+          0.787,
+          16.688125,
+          16.787375,
+          16.88625,
+          16.987708,
+          17.086,
+          17.187125,
+          17.2865,
+          17.388833,
+          17.487125,
+          17.587458,
+          17.687125,
+          17.788708,
+          17.887417,
+          17.987208
+        ]
+      },
+      {
+        "start_s": 10.157710791,
+        "duration_ms": 18.151666,
+        "main_sampled_weight_ms": 2.3,
+        "sample_relative_ms": [
+          0.060959,
+          0.158042,
+          0.259125,
+          0.357625,
+          0.45825,
+          0.559375,
+          0.660334,
+          0.759417,
+          16.659959,
+          16.760292,
+          16.85975,
+          16.957875,
+          17.058917,
+          17.159834,
+          17.260542,
+          17.360334,
+          17.459292,
+          17.558917,
+          17.659834,
+          17.758917,
+          17.857834,
+          17.957917,
+          18.057959
+        ]
+      },
+      {
+        "start_s": 10.2243885,
+        "duration_ms": 18.038416,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.081125,
+          0.181291,
+          0.281208,
+          0.382208,
+          0.482583,
+          0.58225,
+          0.683333,
+          16.681666,
+          16.780666,
+          16.881166,
+          16.981083,
+          17.082125,
+          17.181625,
+          17.280916,
+          17.381083,
+          17.481875,
+          17.582583,
+          17.68025,
+          17.783125,
+          17.879916,
+          17.983041
+        ]
+      },
+      {
+        "start_s": 10.25772475,
+        "duration_ms": 17.990458,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.045041,
+          0.146958,
+          0.243958,
+          0.345208,
+          0.44575,
+          0.545083,
+          0.645583,
+          16.647458,
+          16.746791,
+          16.845458,
+          16.945916,
+          17.046625,
+          17.144666,
+          17.244625,
+          17.346166,
+          17.443833,
+          17.544958,
+          17.646291,
+          17.743875,
+          17.846208,
+          17.944208
+        ]
+      },
+      {
+        "start_s": 10.3577275,
+        "duration_ms": 18.056416,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.0425,
+          0.144083,
+          0.242416,
+          0.341041,
+          0.442833,
+          0.54225,
+          0.641458,
+          0.741791,
+          16.741833,
+          16.841041,
+          16.943791,
+          17.041375,
+          17.142291,
+          17.241416,
+          17.3425,
+          17.443666,
+          17.54225,
+          17.644125,
+          17.742666,
+          17.841083,
+          17.941375,
+          18.042416
+        ]
+      },
+      {
+        "start_s": 10.424398583,
+        "duration_ms": 17.854541,
+        "main_sampled_weight_ms": 1.9,
+        "sample_relative_ms": [
+          0.072708,
+          0.171125,
+          0.271542,
+          0.370417,
+          0.470792,
+          0.571083,
+          0.670167,
+          16.672875,
+          16.771208,
+          16.872208,
+          16.971375,
+          17.072958,
+          17.170958,
+          17.271292,
+          17.371,
+          17.47325,
+          17.571875,
+          17.671375,
+          17.771083
+        ]
+      },
+      {
+        "start_s": 10.457727875,
+        "duration_ms": 18.112333,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.041333,
+          0.142791,
+          0.241041,
+          0.343208,
+          0.4435,
+          0.540625,
+          0.642541,
+          0.741041,
+          16.742958,
+          16.842791,
+          16.940833,
+          17.043583,
+          17.140958,
+          17.241291,
+          17.342166,
+          17.442708,
+          17.541916,
+          17.641,
+          17.741416,
+          17.842416,
+          17.943083,
+          18.043083
+        ]
+      },
+      {
+        "start_s": 10.49106175,
+        "duration_ms": 18.106208,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.009958,
+          0.108833,
+          0.208083,
+          0.307791,
+          0.408791,
+          0.509666,
+          0.609,
+          0.70825,
+          16.707375,
+          16.809208,
+          16.907958,
+          17.006958,
+          17.106916,
+          17.20825,
+          17.308291,
+          17.409833,
+          17.507333,
+          17.609708,
+          17.709666,
+          17.808041,
+          17.907208,
+          18.0075
+        ]
+      },
+      {
+        "start_s": 10.524401083,
+        "duration_ms": 18.08475,
+        "main_sampled_weight_ms": 2.3,
+        "sample_relative_ms": [
+          0.068917,
+          0.168792,
+          0.269,
+          0.369208,
+          0.468958,
+          0.570792,
+          0.668667,
+          0.7685,
+          16.669458,
+          16.767333,
+          16.867625,
+          16.969458,
+          17.070292,
+          17.170125,
+          17.269083,
+          17.370208,
+          17.4685,
+          17.569083,
+          17.669125,
+          17.768458,
+          17.870042,
+          17.969375,
+          18.067667
+        ]
+      },
+      {
+        "start_s": 10.557736041,
+        "duration_ms": 18.044208,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.034125,
+          0.134959,
+          0.235,
+          0.335709,
+          0.433459,
+          0.5325,
+          0.633625,
+          0.735084,
+          16.734292,
+          16.835792,
+          16.935125,
+          17.032625,
+          17.133042,
+          17.233625,
+          17.335542,
+          17.433667,
+          17.534542,
+          17.632875,
+          17.73525,
+          17.833709,
+          17.934584,
+          18.035042
+        ]
+      },
+      {
+        "start_s": 10.591073708,
+        "duration_ms": 18.082541,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.096125,
+          0.195333,
+          0.296,
+          0.396292,
+          0.495083,
+          0.595625,
+          0.695333,
+          16.698208,
+          16.795583,
+          16.895458,
+          16.997375,
+          17.097667,
+          17.1975,
+          17.298,
+          17.3965,
+          17.495708,
+          17.595458,
+          17.695958,
+          17.79575,
+          17.896833,
+          17.996042
+        ]
+      },
+      {
+        "start_s": 10.65774475,
+        "duration_ms": 18.061833,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.025166,
+          0.12525,
+          0.225291,
+          0.32475,
+          0.425208,
+          0.526041,
+          0.626833,
+          0.723625,
+          16.724625,
+          16.825125,
+          16.924083,
+          17.026708,
+          17.124291,
+          17.224833,
+          17.326375,
+          17.424083,
+          17.525416,
+          17.626416,
+          17.725,
+          17.826291,
+          17.924583,
+          18.026291
+        ]
+      },
+      {
+        "start_s": 10.691078,
+        "duration_ms": 18.037333,
+        "main_sampled_weight_ms": 2.0,
+        "sample_relative_ms": [
+          0.091375,
+          0.191208,
+          0.291125,
+          0.390625,
+          0.492083,
+          0.591875,
+          16.693291,
+          16.792833,
+          16.89075,
+          16.992166,
+          17.0935,
+          17.190875,
+          17.293625,
+          17.392041,
+          17.491166,
+          17.592375,
+          17.690958,
+          17.790875,
+          17.892541,
+          17.991375
+        ]
+      },
+      {
+        "start_s": 10.724426666,
+        "duration_ms": 18.016791,
+        "main_sampled_weight_ms": 2.3,
+        "sample_relative_ms": [
+          0.042542,
+          0.143834,
+          0.242959,
+          0.344125,
+          0.442875,
+          0.5435,
+          0.642959,
+          0.74425,
+          0.843167,
+          16.644125,
+          16.743167,
+          16.843375,
+          16.942834,
+          17.04275,
+          17.144625,
+          17.243959,
+          17.343834,
+          17.442917,
+          17.544375,
+          17.642542,
+          17.743167,
+          17.843,
+          17.944375
+        ]
+      },
+      {
+        "start_s": 10.757750375,
+        "duration_ms": 18.156708,
+        "main_sampled_weight_ms": 2.3,
+        "sample_relative_ms": [
+          0.018916,
+          0.118625,
+          0.219083,
+          0.319458,
+          0.418375,
+          0.518291,
+          0.618541,
+          0.718958,
+          16.720041,
+          16.819791,
+          16.91825,
+          17.019791,
+          17.119541,
+          17.219458,
+          17.319291,
+          17.419875,
+          17.519166,
+          17.6185,
+          17.72125,
+          17.820208,
+          17.918791,
+          18.020666,
+          18.121041
+        ]
+      },
+      {
+        "start_s": 10.79108675,
+        "duration_ms": 18.041583,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.082875,
+          0.182,
+          0.281791,
+          0.382458,
+          0.482166,
+          0.582833,
+          0.683041,
+          16.683583,
+          16.785166,
+          16.883208,
+          16.982625,
+          17.083166,
+          17.182833,
+          17.284291,
+          17.38275,
+          17.48225,
+          17.58275,
+          17.682791,
+          17.78175,
+          17.881875,
+          17.98425
+        ]
+      },
+      {
+        "start_s": 10.857747625,
+        "duration_ms": 18.060083,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.021875,
+          0.123333,
+          0.223666,
+          0.323166,
+          0.423375,
+          0.521333,
+          0.622541,
+          0.723541,
+          16.722125,
+          16.821875,
+          16.92125,
+          17.022541,
+          17.121083,
+          17.221166,
+          17.323333,
+          17.423291,
+          17.522208,
+          17.621833,
+          17.722166,
+          17.821625,
+          17.923,
+          18.021458
+        ]
+      },
+      {
+        "start_s": 10.8911325,
+        "duration_ms": 18.066875,
+        "main_sampled_weight_ms": 2.3,
+        "sample_relative_ms": [
+          0.038166,
+          0.136625,
+          0.237375,
+          0.336958,
+          0.437166,
+          0.537916,
+          0.638,
+          0.737916,
+          16.638166,
+          16.738916,
+          16.836791,
+          16.936541,
+          17.03775,
+          17.138166,
+          17.236166,
+          17.338916,
+          17.436541,
+          17.536916,
+          17.6375,
+          17.736041,
+          17.836083,
+          17.938083,
+          18.037416
+        ]
+      },
+      {
+        "start_s": 11.091106208,
+        "duration_ms": 17.988958,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.064667,
+          0.1655,
+          0.2655,
+          0.363375,
+          0.4645,
+          0.563708,
+          0.664125,
+          16.664208,
+          16.763458,
+          16.863958,
+          16.963625,
+          17.063375,
+          17.162958,
+          17.26325,
+          17.362667,
+          17.463875,
+          17.562667,
+          17.664542,
+          17.764875,
+          17.864,
+          17.964917
+        ]
+      },
+      {
+        "start_s": 11.157775583,
+        "duration_ms": 18.255583,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.093167,
+          0.1935,
+          0.294875,
+          0.395,
+          0.493542,
+          0.593208,
+          0.695208,
+          16.798208,
+          16.893833,
+          16.995292,
+          17.094375,
+          17.193375,
+          17.294167,
+          17.394458,
+          17.493,
+          17.594875,
+          17.695667,
+          17.793042,
+          17.893417,
+          17.994917,
+          18.095458,
+          18.193667
+        ]
+      },
+      {
+        "start_s": 11.191106333,
+        "duration_ms": 18.0585,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.064375,
+          0.165292,
+          0.261958,
+          0.365208,
+          0.464417,
+          0.56475,
+          0.664292,
+          16.664042,
+          16.763167,
+          16.865,
+          16.963667,
+          17.064542,
+          17.165125,
+          17.265167,
+          17.363375,
+          17.4635,
+          17.5655,
+          17.662292,
+          17.762792,
+          17.864792,
+          17.964792
+        ]
+      },
+      {
+        "start_s": 11.224442041,
+        "duration_ms": 18.129625,
+        "main_sampled_weight_ms": 2.3,
+        "sample_relative_ms": [
+          0.027334,
+          0.129084,
+          0.228917,
+          0.327625,
+          0.428917,
+          0.527292,
+          0.629,
+          0.726709,
+          16.728084,
+          16.828542,
+          16.929084,
+          17.028167,
+          17.12825,
+          17.227459,
+          17.326709,
+          17.426959,
+          17.52775,
+          17.626875,
+          17.72825,
+          17.829875,
+          17.926709,
+          18.029334,
+          18.128084
+        ]
+      },
+      {
+        "start_s": 11.291105291,
+        "duration_ms": 18.115166,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.065584,
+          0.165625,
+          0.26375,
+          0.366042,
+          0.465542,
+          0.564792,
+          0.66325,
+          16.764709,
+          16.864625,
+          16.966,
+          17.064,
+          17.165292,
+          17.265334,
+          17.36375,
+          17.464,
+          17.563917,
+          17.663834,
+          17.764167,
+          17.864959,
+          17.9655,
+          18.065167
+        ]
+      },
+      {
+        "start_s": 11.324438333,
+        "duration_ms": 17.998541,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.032958,
+          0.131958,
+          0.232042,
+          0.331208,
+          0.431833,
+          0.532125,
+          0.632375,
+          0.732417,
+          16.731917,
+          16.831208,
+          16.931208,
+          17.033125,
+          17.130375,
+          17.232375,
+          17.330583,
+          17.432458,
+          17.532458,
+          17.631625,
+          17.730417,
+          17.833042,
+          17.93025
+        ]
+      },
+      {
+        "start_s": 11.357808041,
+        "duration_ms": 17.995333,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.060959,
+          0.161375,
+          0.261584,
+          0.363459,
+          0.463459,
+          0.56375,
+          0.66125,
+          16.663625,
+          16.762417,
+          16.861,
+          16.962709,
+          17.061292,
+          17.161417,
+          17.263667,
+          17.361584,
+          17.461792,
+          17.563375,
+          17.661959,
+          17.761042,
+          17.862625,
+          17.96375
+        ]
+      },
+      {
+        "start_s": 11.424449416,
+        "duration_ms": 18.2165,
+        "main_sampled_weight_ms": 2.3,
+        "sample_relative_ms": [
+          0.021084,
+          0.122417,
+          0.219292,
+          0.320042,
+          0.42075,
+          0.522167,
+          0.618875,
+          0.720167,
+          16.721209,
+          16.820167,
+          16.921292,
+          17.020209,
+          17.120334,
+          17.219292,
+          17.320667,
+          17.420875,
+          17.520917,
+          17.621209,
+          17.719334,
+          17.82,
+          17.919375,
+          18.020542,
+          18.121042
+        ]
+      },
+      {
+        "start_s": 11.724464541,
+        "duration_ms": 17.938208,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.006459,
+          0.105209,
+          0.203917,
+          0.306459,
+          0.406584,
+          0.506084,
+          0.60625,
+          0.704334,
+          16.705584,
+          16.80575,
+          16.904625,
+          17.004292,
+          17.106375,
+          17.204084,
+          17.30525,
+          17.406667,
+          17.504375,
+          17.604417,
+          17.706834,
+          17.804125,
+          17.906
+        ]
+      },
+      {
+        "start_s": 11.824459083,
+        "duration_ms": 18.065166,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.009917,
+          0.110125,
+          0.209917,
+          0.3115,
+          0.4105,
+          0.510667,
+          0.609542,
+          16.71275,
+          16.811125,
+          16.912167,
+          17.012083,
+          17.1105,
+          17.210375,
+          17.310583,
+          17.411833,
+          17.511833,
+          17.6105,
+          17.71275,
+          17.811208,
+          17.912167,
+          18.011
+        ]
+      },
+      {
+        "start_s": 11.857795208,
+        "duration_ms": 18.122625,
+        "main_sampled_weight_ms": 2.1,
+        "sample_relative_ms": [
+          0.07625,
+          0.173625,
+          0.274917,
+          0.374917,
+          0.473667,
+          0.574417,
+          16.675917,
+          16.774458,
+          16.874042,
+          16.975042,
+          17.074042,
+          17.173375,
+          17.275708,
+          17.374208,
+          17.474917,
+          17.576708,
+          17.673375,
+          17.774708,
+          17.874875,
+          17.973667,
+          18.076
+        ]
+      },
+      {
+        "start_s": 11.924478625,
+        "duration_ms": 18.016208,
+        "main_sampled_weight_ms": 2.2,
+        "sample_relative_ms": [
+          0.090166,
+          0.190791,
+          0.292375,
+          0.38975,
+          0.491833,
+          0.591208,
+          0.690458,
+          0.791083,
+          16.691666,
+          16.792541,
+          16.893208,
+          16.99325,
+          17.091541,
+          17.191,
+          17.290166,
+          17.3905,
+          17.491,
+          17.5925,
+          17.690583,
+          17.790958,
+          17.892708,
+          17.992125
+        ]
+      },
+      {
+        "start_s": 11.957812,
+        "duration_ms": 18.170458,
+        "main_sampled_weight_ms": 2.3,
+        "sample_relative_ms": [
+          0.058583,
+          0.156833,
+          0.256708,
+          0.358375,
+          0.458875,
+          0.55725,
+          0.657041,
+          16.657666,
+          16.759416,
+          16.858208,
+          16.957583,
+          17.059,
+          17.158916,
+          17.259208,
+          17.357291,
+          17.457833,
+          17.557041,
+          17.656916,
+          17.757,
+          17.85875,
+          17.959875,
+          18.057583,
+          18.158583
+        ]
+      }
+    ]
+  }
+}
