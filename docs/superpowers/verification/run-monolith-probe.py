@@ -38,8 +38,19 @@ if options.measure_ambient and options.probe == 'pressing':
     marker = 'isCoasting = request == .brake && rotation.isMoving(at: time)'
     assert source.count(marker) == 1, 'motor anchor instrumentation marker changed'
     source = source.replace(marker, marker + '\n        MonolithMotorProbe.samples.append((request, rotation.angle(at: time), rotation.speed(at: time)))')
+    marker = 'displayedPressing = ready'
+    assert source.count(marker) == 1, 'pressing publication instrumentation marker changed'
+    source = source.replace(marker, marker + '\n            MonolithPressingProbe.samples.append((ready.seed, ready.palette))')
     source += '\n@MainActor enum MonolithMotorProbe { static var samples: [(RecordMotorRequest, Double, Double)] = []; static var seeks: [Int64] = [] }\n'
+    source += '\n@MainActor enum MonolithPressingProbe { static var samples: [(Float, ArtworkPalette)] = []; static var layers = 0 }\n'
     measured.write_text(source)
+    sources[sources.index(str(original))] = str(measured)
+    original = root / 'Bopify/Bopify/Views/VinylPressingView.swift'
+    measured = probe / 'InstrumentedVinylPressingView.swift'
+    source = original.read_text()
+    marker = '.frame(width: diameter, height: diameter)'
+    assert source.count(marker) == 1, 'pressing layer instrumentation marker changed'
+    measured.write_text(source.replace(marker, marker + '\n        .onAppear { MonolithPressingProbe.layers += 1 }\n        .onDisappear { MonolithPressingProbe.layers -= 1 }'))
     sources[sources.index(str(original))] = str(measured)
     original = root / 'Bopify/Bopify/Views/PreviewPlaybackEngine.swift'
     measured = probe / 'InstrumentedPreviewPlaybackEngine.swift'
@@ -59,6 +70,9 @@ if instrumented: instrumented.unlink()
 for source in (products / 'Bopify.app/Contents/Resources').iterdir():
     if source.is_file(): shutil.copy2(source, app / 'Resources' / source.name)
     elif source.is_dir(): shutil.copytree(source, app / 'Resources' / source.name, dirs_exist_ok=True)
+if options.probe == 'pressing':
+    assert (products / 'Bopify.app/Contents/Resources/default.metallib').is_file(), 'app shader library missing'
+    assert (app / 'Resources/default.metallib').is_file(), 'fixture shader library missing'
 (app / 'Info.plist').write_text('<plist version="1.0"><dict><key>CFBundleExecutable</key><string>MonolithProbe</string><key>CFBundleIdentifier</key><string>com.leesiongchan.bopify.monolith-probe</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>')
 
 print(app / "MacOS/MonolithProbe")

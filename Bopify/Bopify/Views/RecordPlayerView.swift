@@ -27,6 +27,7 @@ struct RecordPlayerView: View {
     @State private var rotation = RecordRotation()
     @State private var isCoasting = false
     @State private var appliedMotorRequest: RecordMotorRequest?
+    @State private var displayedPressing = PressingAppearance.neutral
     @State private var scrub: RecordScrub?
     @State private var pressedAngle: Double?
     @State private var isScrubbing = false
@@ -60,6 +61,14 @@ struct RecordPlayerView: View {
         player.state.mirror?.trackURI.rawValue ?? player.state.queue?.current?.id ?? player.state.currentTrack?.uri.rawValue ?? "missing"
     }
     private var image: Image? { track?.artwork.flatMap { artworkStore.images[$0.url] }.map { Image(nsImage: $0) } }
+    private struct PressingRequest: Equatable {
+        let uri: String?
+        let artworkURL: URL?
+    }
+    private var pressingRequest: PressingRequest {
+        PressingRequest(uri: player.state.mirror?.trackURI.rawValue ?? track?.uri.rawValue ?? player.state.queue?.current?.uri?.rawValue,
+                        artworkURL: track?.artwork?.url)
+    }
     private var recordStatus: Text {
         if let connectionStatus, connectionStatus.isVisible { return connectionStatus.message }
         if let notice = player.commandNotice { return Text(notice) }
@@ -149,13 +158,21 @@ struct RecordPlayerView: View {
             if !visible { pendingSelection = nil; accessibilityFocus = false; _ = cancelRecord() }
         }
         .onChange(of: accessibilityFocus) { _, focused in presentation.sendAttention(.accessibilityFocus(focused)) }
-        .task(id: track?.artwork?.url) { if let url = track?.artwork?.url { await artworkStore.load(url) } }
+        .task(id: pressingRequest) {
+            let request = pressingRequest
+            if let url = request.artworkURL { await artworkStore.loadPalette(url) }
+            guard !Task.isCancelled, request == pressingRequest else { return }
+            let palette = request.artworkURL.flatMap { artworkStore.palettes[$0] } ?? .neutral
+            let ready = PressingAppearance(seed: request.uri.map(PressingSeed.offset) ?? 0, palette: palette)
+            displayedPressing = ready
+        }
     }
 
     private func record(diameter: CGFloat) -> some View {
         VinylRecordView(image: image, occurrenceID: occurrenceID, direction: direction, diameter: diameter,
                         isMoving: isMoving,
                         isVisible: presentation.isVisible, rotation: rotation,
+                        pressingSeed: displayedPressing.seed, palette: displayedPressing.palette,
                         rotationOverride: pressedAngle.map { $0 + (scrub?.angleDelta ?? 0) }, isScrubbing: pressedAngle != nil,
                         isEngaged: isEngaged, reduceMotionOverride: reduceMotion)
             .overlay {
@@ -213,7 +230,9 @@ struct RecordPlayerView: View {
             }
             .overlay {
                 if needsAttention {
-                    Circle().strokeBorder(.orange.opacity(0.7), lineWidth: 1).allowsHitTesting(false)
+                    Circle().strokeBorder(.black.opacity(0.75), lineWidth: 3)
+                        .overlay(Circle().strokeBorder(.orange.opacity(0.7), lineWidth: 1))
+                        .allowsHitTesting(false)
                 }
             }
     }

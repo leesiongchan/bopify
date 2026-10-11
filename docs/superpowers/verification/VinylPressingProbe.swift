@@ -4,9 +4,34 @@ import Observation
 import BopifyDomain
 import BopifyPlayback
 
+private actor PressingPaletteGate {
+    private(set) var count = 0
+    private var waiting: [Int: CheckedContinuation<ArtworkPalette?, Never>] = [:]
+    func extract(_ image: CGImage) async -> ArtworkPalette? {
+        count += 1
+        let ordinal = count
+        return await withCheckedContinuation { waiting[ordinal] = $0 }
+    }
+    func release(_ ordinal: Int, _ palette: ArtworkPalette?) { waiting.removeValue(forKey: ordinal)!.resume(returning: palette) }
+}
+
+private nonisolated final class PressingArtworkProtocol: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var data = Data()
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "pressing.invalid" }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func stopLoading() {}
+    override func startLoading() {
+        let status = request.url!.path == "/http-failure" ? 503 : 200
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Self.data)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+}
+
 @Observable private final class PressingProbeSettings {
     var reduceMotion = false
     var mounted = true
+    var artworkStore: ArtworkStore?
 }
 
 private struct PressingProbeScene: View {
@@ -16,9 +41,10 @@ private struct PressingProbeScene: View {
     let settings: PressingProbeSettings
     var body: some View {
         if settings.mounted {
-            RecordPlayerView(player: environment.player!, artworkStore: environment.artworkStore,
+            RecordPlayerView(player: environment.player!, artworkStore: settings.artworkStore ?? environment.artworkStore,
                              presentation: presentation, windowController: controller, reduceMotionOverride: settings.reduceMotion)
                 .environment(environment)
+                .id(ObjectIdentifier(settings.artworkStore ?? environment.artworkStore))
         }
     }
 }
@@ -63,16 +89,159 @@ private struct PressingProbeScene: View {
             for mode in [PlayerMode.compact, .expanded] {
                 controller.apply(mode: mode, reduceMotion: true)
                 try await settle(800)
-                try await capture(panel, output: output, name: "\(ProcessInfo.processInfo.environment["VINYL_PROBE_BASELINE"] == "1" ? "baseline" : "pressing")-\(Int(controller.layout.recordDiameter))-\(dark ? "dark" : "light")")
+                let image = try await capture(panel, output: output, name: "\(ProcessInfo.processInfo.environment["VINYL_PROBE_BASELINE"] == "1" ? "baseline" : "pressing")-\(Int(controller.layout.recordDiameter))-\(dark ? "dark" : "light")")
+                if dark && mode == .expanded && ProcessInfo.processInfo.environment["VINYL_PROBE_BASELINE"] != "1" {
+                    let fraction = saturatedFraction(image, center: controller.layout.recordCenter, diameter: controller.layout.recordDiameter)
+                    try require(fraction > 0.2, "colourful artwork must colour the pressing annulus; got \(fraction)")
+                }
             }
         }
         if ProcessInfo.processInfo.environment["VINYL_PROBE_BASELINE"] == "1" { return }
         #if MONOLITH_MEASURE
+        try await verifyPressings(player: player, environment: environment, settings: settings, panel: panel, controller: controller, output: output)
+        try await visualMatrix(player: player, settings: settings, panel: panel, controller: controller, output: output)
+        if ProcessInfo.processInfo.environment["VINYL_PROBE_VISUAL_ONLY"] == "1" { return }
         try await verifyMotor(player: player, presentation: presentation, settings: settings, panel: panel)
         #endif
     }
 
     #if MONOLITH_MEASURE
+    private static func visualMatrix(player: PlayerModel, settings: PressingProbeSettings, panel: StatusPanel,
+                                     controller: PlayerWindowController, output: URL) async throws {
+        let originals = makePreviewArtworkStore()
+        var images = originals.images
+        let grayURL = previewArtworkURL(3)
+        let renderer = ImageRenderer(content: LinearGradient(colors: [.black, .gray, .white],
+            startPoint: .topLeading, endPoint: .bottomTrailing).frame(width: 240, height: 240))
+        images[grayURL] = renderer.nsImage!
+        settings.artworkStore = ArtworkStore(previewImages: images)
+        var generation: UInt64 = 100
+        for dark in [false, true] {
+            panel.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+            for mode in [PlayerMode.compact, .expanded] {
+                controller.apply(mode: mode, reduceMotion: true)
+                for (name, url) in [("colourful", previewArtworkURL(1)), ("warm-attention", previewArtworkURL(2)),
+                                    ("greyscale", grayURL), ("missing", nil)] {
+                    generation += 1
+                    let track = Track(uri: SpotifyURI("spotify:track:matrix\(name.filter(\.isLetter))")!,
+                        title: name, artists: [ArtistSummary(name: "Native fixture")], albumTitle: nil,
+                        artwork: url.map(Artwork.init(url:)), durationMs: 240_000)
+                    player.applyPreviewEvents([.queueChanged(PlaybackQueue(generation: generation, previous: [],
+                        current: QueueEntry(id: name, uri: track.uri, target: nil, track: track, metadataFailed: false), next: [])),
+                        .trackChanged(track), .paused(positionMs: 0)])
+                    if name == "warm-attention" { player.applyPreviewEvents([.failed(.networkUnavailable)]) }
+                    try await settle(850)
+                    let image = try await capture(panel, output: output,
+                        name: "matrix-\(name)-\(Int(controller.layout.recordDiameter))-\(dark ? "dark" : "light")")
+                    let fraction = saturatedFraction(image, center: controller.layout.recordCenter, diameter: controller.layout.recordDiameter)
+                    try require(name == "colourful" || name == "warm-attention" ? fraction > 0.2 : fraction < 0.08,
+                                "\(name) annulus classification disagrees with artwork: \(fraction)")
+                }
+            }
+        }
+        try await stopped("visual matrix settled")
+        print("VISUAL MATRIX: colourful/warm attention/greyscale/missing, 118/182pt, light/dark PASS"); fflush(stdout)
+    }
+
+    private static func verifyPressings(player: PlayerModel, environment: AppEnvironment, settings: PressingProbeSettings,
+                                       panel: StatusPanel, controller: PlayerWindowController, output: URL) async throws {
+        let gate = PressingPaletteGate()
+        PressingArtworkProtocol.data = environment.artworkStore.images[previewArtworkURL(1)]!.tiffRepresentation!
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [PressingArtworkProtocol.self]
+        settings.artworkStore = ArtworkStore(session: URLSession(configuration: configuration), paletteExtractor: { await gate.extract($0) })
+        let aURL = URL(string: "https://pressing.invalid/a")!
+        let bURL = URL(string: "https://pressing.invalid/b")!
+        let aPalette = ArtworkPalette.marble(.init(red: 0.05, green: 0.7, blue: 0.85), .init(red: 0.7, green: 0.12, blue: 0.65), .init(red: 0.1, green: 0.2, blue: 0.45))
+        let bPalette = ArtworkPalette.marble(.init(red: 0.9, green: 0.35, blue: 0.05), .init(red: 0.75, green: 0.08, blue: 0.04), .init(red: 0.4, green: 0.2, blue: 0.08))
+        var generation: UInt64 = 20
+        func select(_ uri: String, artwork: URL?, occurrence: String = UUID().uuidString) {
+            generation += 1
+            let track = Track(uri: SpotifyURI(uri)!, title: "Pressing fixture", artists: [], albumTitle: nil,
+                              artwork: artwork.map(Artwork.init(url:)), durationMs: 240_000)
+            player.applyPreviewEvents([.queueChanged(PlaybackQueue(generation: generation, previous: [],
+                current: QueueEntry(id: occurrence, uri: track.uri, target: nil, track: track, metadataFailed: false), next: [])),
+                .trackChanged(track), .paused(positionMs: 0)])
+        }
+        func expect(_ uri: String, _ palette: ArtworkPalette) throws {
+            let current = MonolithPressingProbe.samples.last!
+            try require(current.0 == PressingSeed.offset(uri) && current.1 == palette, "seed and palette must publish together for \(uri)")
+        }
+        select("spotify:track:pressingA", artwork: aURL)
+        try await wait(gate, count: 1); await gate.release(1, aPalette)
+        try await settle(800)
+        try expect("spotify:track:pressingA", aPalette)
+        let aImage = try await capture(panel, output: output, name: "identity-a")
+        select("spotify:track:pressingB", artwork: bURL)
+        try await wait(gate, count: 2); try await settle(200)
+        try expect("spotify:track:pressingA", aPalette)
+        let held = try await capture(panel, output: output, name: "identity-b-pending")
+        try require(annulusDifference(aImage, held, center: controller.layout.recordCenter, diameter: controller.layout.recordDiameter) < 0.003, "pending B must keep A's visible pressing")
+        select("spotify:track:pressingC", artwork: aURL)
+        try await settle(800)
+        try expect("spotify:track:pressingC", aPalette)
+        await gate.release(2, bPalette); try await settle(100)
+        try expect("spotify:track:pressingC", aPalette)
+        let cImage = try await capture(panel, output: output, name: "identity-c")
+        try require(annulusDifference(aImage, cImage, center: controller.layout.recordCenter, diameter: controller.layout.recordDiameter) > 0.02, "shared cover must have different URI swirls")
+        select("spotify:track:pressingC", artwork: aURL, occurrence: "repeat")
+        try await settle(800)
+        let repeated = try await capture(panel, output: output, name: "identity-c-repeat")
+        try require(annulusDifference(cImage, repeated, center: controller.layout.recordCenter, diameter: controller.layout.recordDiameter) < 0.003, "occurrence must not change pressing")
+        select("spotify:track:pressingB", artwork: bURL)
+        try await settle(200)
+        try await capture(panel, output: output, name: "dissolve-b-200ms")
+        try require(MonolithPressingProbe.layers >= 2, "dissolve must retain outgoing layer")
+        select("spotify:track:pressingA", artwork: aURL)
+        try await settle(200)
+        let interrupted = try await capture(panel, output: output, name: "dissolve-interrupted-200ms")
+        try require(saturatedFraction(interrupted, center: controller.layout.recordCenter, diameter: controller.layout.recordDiameter) > 0.2, "interrupted dissolve must not flash neutral")
+        try await settle(800)
+        try require(MonolithPressingProbe.layers == 1, "settled dissolve must release outgoing layers")
+        try await stopped("pressing dissolve settled")
+
+        select("spotify:track:late", artwork: nil); try await settle(800)
+        try expect("spotify:track:late", .neutral)
+        select("spotify:track:late", artwork: URL(string: "https://pressing.invalid/late")!)
+        try await wait(gate, count: 3)
+        try expect("spotify:track:late", .neutral)
+        await gate.release(3, bPalette); try await settle(800)
+        try expect("spotify:track:late", bPalette)
+        select("spotify:track:failed", artwork: URL(string: "https://pressing.invalid/failure")!)
+        try await wait(gate, count: 4); await gate.release(4, nil); try await settle(800)
+        try expect("spotify:track:failed", .neutral)
+        select("spotify:track:httpFailure", artwork: URL(string: "https://pressing.invalid/http-failure")!)
+        try await settle(800); try expect("spotify:track:httpFailure", .neutral)
+        player.applyPreviewEvents([.activeDeviceChanged(isActive: false), .remotePlayback(RemotePlayback(deviceName: "Fixture", trackURI: SpotifyURI("spotify:track:mirrorOnly")!,
+            track: nil, isPlaying: true, positionMs: 0, durationMs: 240_000))])
+        try await settle(800); try expect("spotify:track:mirrorOnly", .neutral)
+        try await stopped("mirror without metadata")
+        let metadataURI = SpotifyURI("spotify:track:metadataLate")!
+        player.applyPreviewEvents([.queueChanged(PlaybackQueue(generation: 99, previous: [],
+            current: QueueEntry(id: "metadata-pending", uri: metadataURI, target: nil, track: nil, metadataFailed: false), next: [])),
+            .activeDeviceChanged(isActive: true)])
+        try await settle(250)
+        try expect(metadataURI.rawValue, .neutral)
+        player.applyPreviewEvents([.trackChanged(Track(uri: metadataURI, title: "Late metadata", artists: [], albumTitle: nil,
+                                                      artwork: Artwork(url: aURL), durationMs: 240_000))])
+        try await settle(800); try expect(metadataURI.rawValue, aPalette)
+        settings.reduceMotion = true
+        select("spotify:track:pressingA", artwork: aURL); try await settle(250)
+        try expect("spotify:track:pressingA", aPalette)
+        try require(MonolithPressingProbe.layers == 1, "Reduce Motion dissolve must finish in 0.16s")
+        try await stopped("Reduce Motion pressing")
+        settings.reduceMotion = false
+        print("IDENTITY: repeat/shared art, delayed and stale palettes, interrupted dissolve, late URL, failures, mirror URI, Reduce Motion PASS"); fflush(stdout)
+    }
+
+    private static func wait(_ gate: PressingPaletteGate, count: Int) async throws {
+        let deadline = ProcessInfo.processInfo.systemUptime + 5
+        while await gate.count < count {
+            try require(ProcessInfo.processInfo.systemUptime < deadline, "palette fixture did not start")
+            try await settle(10)
+        }
+    }
+
     private static func verifyMotor(player: PlayerModel, presentation: PlayerPresentation,
                                     settings: PressingProbeSettings, panel: StatusPanel) async throws {
         func play() async throws { player.applyPreviewEvents([.playing(positionMs: 64_000)]); try await settle(700) }
@@ -199,7 +368,7 @@ private struct PressingProbeScene: View {
         if !condition { throw NSError(domain: message, code: 1) }
     }
     private static func settle(_ milliseconds: Int) async throws { try await Task.sleep(for: .milliseconds(milliseconds)) }
-    private static func capture(_ panel: NSWindow, output: URL, name: String) async throws {
+    @discardableResult private static func capture(_ panel: NSWindow, output: URL, name: String) async throws -> CGImage {
         let content = try await SCShareableContent.currentProcess
         guard let window = content.windows.first(where: { $0.windowID == panel.windowNumber }) else {
             throw NSError(domain: "fixture window unavailable", code: 1)
@@ -212,5 +381,36 @@ private struct PressingProbeScene: View {
         let image = try await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(desktopIndependentWindow: window), configuration: configuration)
         try NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])!.write(to: output.appendingPathComponent(name + ".png"))
         print("CAPTURE \(name)"); fflush(stdout)
+        return image
+    }
+    private static func saturatedFraction(_ image: CGImage, center: CGPoint, diameter: CGFloat) -> Double {
+        let bitmap = NSBitmapImageRep(cgImage: image)
+        let radius = diameter
+        var coloured = 0
+        var total = 0
+        for y in stride(from: Int(center.y * 2 - radius), to: Int(center.y * 2 + radius), by: 3) {
+            for x in stride(from: Int(center.x * 2 - radius), to: Int(center.x * 2 + radius), by: 3) {
+                let distance = hypot(Double(x) - center.x * 2, Double(y) - center.y * 2)
+                guard distance > radius * 0.55, distance < radius * 0.85,
+                      let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
+                total += 1
+                if max(color.redComponent, color.greenComponent, color.blueComponent) - min(color.redComponent, color.greenComponent, color.blueComponent) > 0.13 { coloured += 1 }
+            }
+        }
+        return Double(coloured) / Double(max(1, total))
+    }
+    private static func annulusDifference(_ first: CGImage, _ second: CGImage, center: CGPoint, diameter: CGFloat) -> Double {
+        let a = NSBitmapImageRep(cgImage: first), b = NSBitmapImageRep(cgImage: second)
+        var difference = 0.0, count = 0.0
+        for y in stride(from: Int(center.y * 2 - diameter), to: Int(center.y * 2 + diameter), by: 4) {
+            for x in stride(from: Int(center.x * 2 - diameter), to: Int(center.x * 2 + diameter), by: 4) {
+                let distance = hypot(Double(x) - center.x * 2, Double(y) - center.y * 2)
+                guard distance > diameter * 0.55, distance < diameter * 0.85,
+                      let ac = a.colorAt(x: x, y: y)?.usingColorSpace(.sRGB), let bc = b.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
+                difference += abs(ac.redComponent - bc.redComponent) + abs(ac.greenComponent - bc.greenComponent) + abs(ac.blueComponent - bc.blueComponent)
+                count += 3
+            }
+        }
+        return difference / max(1, count)
     }
 }
