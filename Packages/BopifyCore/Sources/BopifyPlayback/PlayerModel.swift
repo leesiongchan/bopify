@@ -34,6 +34,7 @@ public final class PlayerModel {
     public private(set) var state = PlaybackState()
     public private(set) var commandNotice: String?
     public private(set) var queueSelection: QueueSelectionStatus = .idle
+    public private(set) var queueDirection: CarouselDirection = .fade
     private var lastPositiveVolume: Double?
     private var volumeDraft: Double?
     private var isEditingVolume = false
@@ -392,6 +393,7 @@ public final class PlayerModel {
 
     private func apply(_ event: PlaybackEvent) {
         let oldPhase = state.phase
+        let wasMirroring = state.mirror != nil
         switch event {
         case var .queueChanged(queue):
             queue.next = queue.next.map { entry in
@@ -410,6 +412,10 @@ public final class PlayerModel {
             queue.previous = queue.previous.map(retainingMetadata)
             queue.current = queue.current.map(retainingMetadata)
             queue.next = queue.next.map(retainingMetadata)
+            if state.queue?.current?.id != queue.current?.id {
+                queueDirection = carouselDirection(old: state.queue, new: queue)
+                BopifyLog.playback.debug("queue occurrence changed direction=\(String(describing: self.queueDirection), privacy: .public)")
+            }
             state.queue = queue
             commandNotice = nil
             if case let .pending(entryID, target) = queueSelection, queue.generation > target.generation {
@@ -538,6 +544,7 @@ public final class PlayerModel {
             remoteUpdatedAt = .now
             BopifyLog.playback.debug("remote playback present=\(remote != nil, privacy: .public)")
         }
+        if wasMirroring && state.mirror == nil { queueDirection = .fade }
         if state.phase != oldPhase {
             let old = String(describing: oldPhase)
             let new = String(describing: state.phase)

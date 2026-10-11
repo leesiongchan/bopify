@@ -13,7 +13,6 @@ struct RecordPlayerView: View {
     @State private var scrub: RecordScrub?
     @State private var pressedAngle: Double?
     @State private var isScrubbing = false
-    @State private var previousQueue: PlaybackQueue?
     @State private var pendingSelection: QueueSelectionStatus?
     @State private var controlsContentHeight: CGFloat?
     @AccessibilityFocusState private var accessibilityFocus: Bool
@@ -28,7 +27,7 @@ struct RecordPlayerView: View {
     // Bopify's queue says nothing about which way a mirrored device moved.
     private var direction: CarouselDirection {
         guard player.state.mirror == nil else { return .fade }
-        return player.state.queue.map { carouselDirection(old: previousQueue, new: $0) } ?? .fade
+        return player.queueDirection
     }
     private var track: Track? {
         if let mirror = player.state.mirror { return mirror.track }
@@ -110,7 +109,6 @@ struct RecordPlayerView: View {
         .onChange(of: occurrenceID) { _, _ in _ = cancelRecord() }
         .onChange(of: player.displayDurationMs) { _, _ in _ = cancelRecord() }
         .onChange(of: canScrub) { _, allowed in if !allowed { _ = cancelRecord() } }
-        .onChange(of: player.state.queue, initial: true) { _, next in previousQueue = next }
         .onChange(of: player.queueSelection) { _, selection in
             guard case let .confirmed(id, target) = selection,
                   pendingSelection == .pending(entryID: id, target: target) else { return }
