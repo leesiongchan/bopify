@@ -42,3 +42,5 @@ Apple describes rendering work performed outside the app process on its behalf i
 A distinct instrumentation harness or further Instruments analysis would be needed to isolate that cost and diagnose the repeated hitches. There is no evidence here requiring an AppKit/SwiftUI architecture change. Production rendering and playback code were not edited during this follow-up. Live Spotify buffering/recovery remains outside this capture.
 
 [Reproduction commands and temporary source patches](assets/vinyl-gpu-2026-10-11/reproduce.md), [capture helper](run-vinyl-gpu-capture.py), [analyzer](analyze-vinyl-gpu-trace.py). Raw traces and exported XML remain under `/private/tmp/bopify-vinyl-gpu-20261011`; raw trace process environments are excluded from the checked-in evidence.
+
+[Follow-up hitch diagnosis](2026-10-11-vinyl-hitch-diagnosis.md) records CPU, SwiftUI, scheduler, and minimal-scene experiments; it narrows the scheduling question without establishing a production fix.

@@ -1,0 +1,2195 @@
+{
+  "process_pid": 59359,
+  "window_seconds": [
+    5.0,
+    15.0
+  ],
+  "hitches": {
+    "count": 3,
+    "total_ms": 116.673249,
+    "median_ms": 33.335166,
+    "p95_ms": 66.6705,
+    "max_ms": 66.6705
+  },
+  "hitch_narratives": {
+    "Potentially expensive app update(s)": 2,
+    "unspecified": 1
+  },
+  "cpu": {
+    "sample_weight_limit": "Sampling weights are not calibrated CPU utilization; inclusive stack costs overlap.",
+    "samples": 17614,
+    "thread_states": {
+      "Running": 17614
+    },
+    "sample_weight_total_ms": 1761.4,
+    "main_weight_ms": 1740.1,
+    "main_sample_weight_window_percent": 17.401,
+    "thread_weight_ms": {
+      "Main Thread (0x18d6dd) (MonolithProbe, pid: 59359)": 1740.1,
+      "MonolithProbe (0x18d718) (MonolithProbe, pid: 59359)": 11.0,
+      "com.apple.NSEventThread (0x18d6fe) (MonolithProbe, pid: 59359)": 0.1,
+      "MonolithProbe (0x18d6f2) (MonolithProbe, pid: 59359)": 6.4,
+      "MonolithProbe (0x18d6df) (MonolithProbe, pid: 59359)": 2.5,
+      "MonolithProbe (0x18d6de) (MonolithProbe, pid: 59359)": 1.3
+    },
+    "trace_support_inclusive_ms": 152.6,
+    "main_trace_support_inclusive_ms": 152.6,
+    "inclusive": [
+      {
+        "name": "-[NSApplication run]",
+        "weighted_ms": 1731.8
+      },
+      {
+        "name": "-[NSApplication(NSEventRouting) _nextEventMatchingEventMask:untilDate:inMode:dequeue:]",
+        "weighted_ms": 1731.8
+      },
+      {
+        "name": "-[NSApplication(NSEventRouting) nextEventMatchingMask:untilDate:inMode:dequeue:]",
+        "weighted_ms": 1731.8
+      },
+      {
+        "name": "_BlockUntilNextEventMatchingListInMode",
+        "weighted_ms": 1731.8
+      },
+      {
+        "name": "_DPSBlockUntilNextEventMatchingListInMode",
+        "weighted_ms": 1731.8
+      },
+      {
+        "name": "_DPSNextEvent",
+        "weighted_ms": 1731.8
+      },
+      {
+        "name": "main",
+        "weighted_ms": 1731.8
+      },
+      {
+        "name": "start",
+        "weighted_ms": 1731.8
+      },
+      {
+        "name": "static VinylPressingProbe.$main()",
+        "weighted_ms": 1731.8
+      },
+      {
+        "name": "static VinylPressingProbe.main()",
+        "weighted_ms": 1731.8
+      },
+      {
+        "name": "ReceiveNextEventCommon",
+        "weighted_ms": 1731.1
+      },
+      {
+        "name": "RunCurrentEventLoopInMode",
+        "weighted_ms": 1729.1
+      },
+      {
+        "name": "_CFRunLoopRunSpecificWithOptions",
+        "weighted_ms": 1725.1
+      },
+      {
+        "name": "__CFRunLoopRun",
+        "weighted_ms": 1717.9
+      },
+      {
+        "name": "UC::DriverCore::continueProcessing()",
+        "weighted_ms": 1659.6
+      },
+      {
+        "name": "CA::Transaction::flush()",
+        "weighted_ms": 1641.8
+      },
+      {
+        "name": "CA::Transaction::commit()",
+        "weighted_ms": 1639.2
+      },
+      {
+        "name": "CA::Transaction::run_commit_handlers(CATransactionPhase)",
+        "weighted_ms": 1570.9
+      },
+      {
+        "name": "NSDisplayCycleFlush",
+        "weighted_ms": 1560.6
+      },
+      {
+        "name": "NSDisplayCycleObserverInvoke",
+        "weighted_ms": 1548.3
+      }
+    ],
+    "leaf": [
+      {
+        "name": "AG::Graph::propagate_dirty(AG::AttributeID)",
+        "weighted_ms": 270.0
+      },
+      {
+        "name": "AG::Graph::UpdateStack::update()",
+        "weighted_ms": 257.9
+      },
+      {
+        "name": "AG::Subgraph::update(unsigned int)",
+        "weighted_ms": 100.3
+      },
+      {
+        "name": "mach_absolute_time",
+        "weighted_ms": 41.1
+      },
+      {
+        "name": "<deduplicated_symbol>",
+        "weighted_ms": 40.4
+      },
+      {
+        "name": "objc_msgSend",
+        "weighted_ms": 37.0
+      },
+      {
+        "name": "mach_msg2_trap",
+        "weighted_ms": 25.3
+      },
+      {
+        "name": "specialized Trace_Handle.write<A>(_:omit:)",
+        "weighted_ms": 21.8
+      },
+      {
+        "name": "AG::Graph::UpdateStack::push(AG::data::ptr<AG::Node>, AG::Node&, bool, bool)",
+        "weighted_ms": 17.5
+      },
+      {
+        "name": "write",
+        "weighted_ms": 17.1
+      },
+      {
+        "name": "__kdebug_trace64",
+        "weighted_ms": 16.4
+      },
+      {
+        "name": "_xzm_xzone_malloc_tiny",
+        "weighted_ms": 14.9
+      },
+      {
+        "name": "start_wqthread",
+        "weighted_ms": 14.9
+      },
+      {
+        "name": "ExternalTrace::set_dirty(AG::data::ptr<AG::Node>, bool)",
+        "weighted_ms": 12.9
+      },
+      {
+        "name": "swift_release",
+        "weighted_ms": 12.0
+      },
+      {
+        "name": "void AG::Subgraph::foreach_ancestor<AG::Subgraph::propagate_dirty_flags()::$_0>(AG::Subgraph::propagate_dirty_flags()::$_0 const&)",
+        "weighted_ms": 11.3
+      },
+      {
+        "name": "class_getMethodImplementation",
+        "weighted_ms": 10.7
+      },
+      {
+        "name": "swift::MetadataCacheKey::operator==(swift::MetadataCacheKey const&) const",
+        "weighted_ms": 10.0
+      },
+      {
+        "name": "kevent_id",
+        "weighted_ms": 9.2
+      },
+      {
+        "name": "_platform_memcmp",
+        "weighted_ms": 8.8
+      }
+    ],
+    "own_inclusive": [
+      {
+        "name": "main",
+        "weighted_ms": 1731.8
+      },
+      {
+        "name": "static VinylPressingProbe.$main()",
+        "weighted_ms": 1731.8
+      },
+      {
+        "name": "static VinylPressingProbe.main()",
+        "weighted_ms": 1731.8
+      },
+      {
+        "name": "specialized closure #1 in TimelineView<>.init(_:content:)",
+        "weighted_ms": 39.1
+      },
+      {
+        "name": "specialized _VariadicView.Tree.init(_:content:)",
+        "weighted_ms": 27.3
+      },
+      {
+        "name": "specialized ZStack.init(alignment:content:)",
+        "weighted_ms": 26.7
+      },
+      {
+        "name": "specialized closure #1 in ZStack.init(alignment:content:)",
+        "weighted_ms": 26.7
+      },
+      {
+        "name": "RadialProgressView.body.getter",
+        "weighted_ms": 25.9
+      },
+      {
+        "name": "closure #1 in VinylRecordView.body.getter",
+        "weighted_ms": 16.8
+      },
+      {
+        "name": "partial apply for closure #1 in VinylRecordView.body.getter",
+        "weighted_ms": 16.8
+      },
+      {
+        "name": "MorphingArtworkView.body.getter",
+        "weighted_ms": 15.5
+      },
+      {
+        "name": "closure #1 in closure #1 in VinylRecordView.body.getter",
+        "weighted_ms": 14.4
+      },
+      {
+        "name": "<deduplicated_symbol>",
+        "weighted_ms": 13.9
+      },
+      {
+        "name": "closure #1 in closure #3 in RecordPlayerView.record(diameter:)",
+        "weighted_ms": 11.3
+      },
+      {
+        "name": "closure #1 in RadialProgressView.body.getter",
+        "weighted_ms": 11.2
+      },
+      {
+        "name": "specialized ForEach<>.init(_:content:)",
+        "weighted_ms": 8.8
+      },
+      {
+        "name": "closure #1 in MorphingArtworkView.body.getter",
+        "weighted_ms": 8.7
+      },
+      {
+        "name": "closure #1 in closure #1 in MorphingArtworkView.body.getter",
+        "weighted_ms": 8.5
+      },
+      {
+        "name": "closure #1 in closure #1 in closure #1 in VinylRecordView.body.getter",
+        "weighted_ms": 8.2
+      },
+      {
+        "name": "PlayerModel.displayPositionMs(at:)",
+        "weighted_ms": 4.2
+      },
+      {
+        "name": "PlayerModel.state.getter",
+        "weighted_ms": 3.6
+      },
+      {
+        "name": "specialized PlayerModel.access<A>(keyPath:)",
+        "weighted_ms": 3.1
+      },
+      {
+        "name": "VinylRecordView.sheen.getter",
+        "weighted_ms": 2.6
+      },
+      {
+        "name": "closure #1 in closure #1 in RadialProgressView.body.getter",
+        "weighted_ms": 2.1
+      },
+      {
+        "name": "initializeWithCopy for RadialProgressView",
+        "weighted_ms": 1.9
+      },
+      {
+        "name": "partial apply for closure #2 in closure #1 in closure #1 in closure #1 in VinylRecordView.body.getter",
+        "weighted_ms": 1.8
+      },
+      {
+        "name": "MorphingArtworkView.init(image:diameter:occurrenceID:direction:isVisible:reduceMotionOverride:)",
+        "weighted_ms": 1.7
+      },
+      {
+        "name": "RadialProgressView.init(positionMs:durationMs:canSeek:onSeek:onInteractionChanged:isVisible:showsTime:isPointerEnabled:)",
+        "weighted_ms": 1.7
+      },
+      {
+        "name": "closure #1 in static VinylPressingProbe.main()",
+        "weighted_ms": 1.7
+      },
+      {
+        "name": "specialized static VinylPressingProbe.run()",
+        "weighted_ms": 1.7
+      },
+      {
+        "name": "closure #2 in closure #1 in closure #1 in closure #1 in VinylRecordView.body.getter",
+        "weighted_ms": 1.6
+      },
+      {
+        "name": "specialized View.task<A>(id:name:priority:file:line:_:)",
+        "weighted_ms": 1.4
+      },
+      {
+        "name": "VinylRecordView.kick.getter",
+        "weighted_ms": 1.3
+      },
+      {
+        "name": "closure #1 in closure #1 in closure #1 in closure #1 in VinylRecordView.body.getter",
+        "weighted_ms": 1.3
+      },
+      {
+        "name": "closure #2 in closure #1 in RadialProgressView.body.getter",
+        "weighted_ms": 1.3
+      }
+    ],
+    "own_leaf": [
+      {
+        "name": "<deduplicated_symbol>",
+        "weighted_ms": 1.0
+      },
+      {
+        "name": "__swift_instantiateConcreteTypeFromMangledNameV2",
+        "weighted_ms": 0.7
+      },
+      {
+        "name": "initializeWithCopy for RadialProgressView",
+        "weighted_ms": 0.7
+      },
+      {
+        "name": "__swift_memcpy2_1",
+        "weighted_ms": 0.5
+      },
+      {
+        "name": "initializeWithCopy for PlaybackState",
+        "weighted_ms": 0.5
+      },
+      {
+        "name": "MorphingArtworkView.body.getter",
+        "weighted_ms": 0.4
+      },
+      {
+        "name": "DYLD-STUB$$swift_release",
+        "weighted_ms": 0.3
+      },
+      {
+        "name": "__swift_closure_destructor.23",
+        "weighted_ms": 0.3
+      },
+      {
+        "name": "destroy for ArtworkMorphFrame",
+        "weighted_ms": 0.3
+      },
+      {
+        "name": "RadialProgressView.init(positionMs:durationMs:canSeek:onSeek:onInteractionChanged:isVisible:showsTime:isPointerEnabled:)",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "__isPlatformVersionAtLeast",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "__swift_closure_destructor",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "__swift_memcpy81_8",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "closure #1 in closure #3 in RecordPlayerView.record(diameter:)",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "closure #2 in closure #1 in RadialProgressView.body.getter",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "destroy for MorphingArtworkView",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "destroy for PlaybackState",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "destructiveInjectEnumTag for ArtworkPalette",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "getEnumTagSinglePayload for Track",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "initializeWithCopy for ArtworkMorphFrame",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "initializeWithCopy for MorphingArtworkView",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "outlined copy of Environment<Bool>.Content",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "partial apply for closure #2 in closure #1 in closure #1 in closure #1 in VinylRecordView.body.getter",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "specialized ModifiedContent.init(content:modifier:)",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "storeEnumTagSinglePayload for RadialProgressView",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "0x1044cdfa8",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "0x1044ce910",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "ArtworkMorphState.frames(at:)",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "DYLD-STUB$$EdgeInsets.init(_all:)",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "DYLD-STUB$$LazyState.wrappedValue.getter",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "DYLD-STUB$$TimelineView.Context.date.getter",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "DYLD-STUB$$_stdlib_isOSVersionAtLeast(_:_:_:)",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "DYLD-STUB$$memcpy",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "DYLD-STUB$$static Color.white.getter",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "DYLD-STUB$$static MainActor.shared.getter",
+        "weighted_ms": 0.1
+      }
+    ],
+    "hitch_main_samples": 161,
+    "hitch_main_weight_ms": 16.1,
+    "hitch_inclusive": [
+      {
+        "name": "-[NSApplication run]",
+        "weighted_ms": 16.1
+      },
+      {
+        "name": "-[NSApplication(NSEventRouting) _nextEventMatchingEventMask:untilDate:inMode:dequeue:]",
+        "weighted_ms": 16.1
+      },
+      {
+        "name": "-[NSApplication(NSEventRouting) nextEventMatchingMask:untilDate:inMode:dequeue:]",
+        "weighted_ms": 16.1
+      },
+      {
+        "name": "ReceiveNextEventCommon",
+        "weighted_ms": 16.1
+      },
+      {
+        "name": "_BlockUntilNextEventMatchingListInMode",
+        "weighted_ms": 16.1
+      },
+      {
+        "name": "_DPSBlockUntilNextEventMatchingListInMode",
+        "weighted_ms": 16.1
+      },
+      {
+        "name": "_DPSNextEvent",
+        "weighted_ms": 16.1
+      },
+      {
+        "name": "main",
+        "weighted_ms": 16.1
+      },
+      {
+        "name": "start",
+        "weighted_ms": 16.1
+      },
+      {
+        "name": "static VinylPressingProbe.$main()",
+        "weighted_ms": 16.1
+      },
+      {
+        "name": "static VinylPressingProbe.main()",
+        "weighted_ms": 16.1
+      },
+      {
+        "name": "RunCurrentEventLoopInMode",
+        "weighted_ms": 16.0
+      },
+      {
+        "name": "_CFRunLoopRunSpecificWithOptions",
+        "weighted_ms": 16.0
+      },
+      {
+        "name": "__CFRunLoopRun",
+        "weighted_ms": 16.0
+      },
+      {
+        "name": "UC::DriverCore::continueProcessing()",
+        "weighted_ms": 15.8
+      },
+      {
+        "name": "CA::Transaction::commit()",
+        "weighted_ms": 15.7
+      },
+      {
+        "name": "CA::Transaction::flush()",
+        "weighted_ms": 15.7
+      },
+      {
+        "name": "CA::Transaction::run_commit_handlers(CATransactionPhase)",
+        "weighted_ms": 14.8
+      },
+      {
+        "name": "NSDisplayCycleFlush",
+        "weighted_ms": 14.7
+      },
+      {
+        "name": "NSDisplayCycleObserverInvoke",
+        "weighted_ms": 14.6
+      }
+    ],
+    "hitch_own_inclusive": [
+      {
+        "name": "main",
+        "weighted_ms": 16.1
+      },
+      {
+        "name": "static VinylPressingProbe.$main()",
+        "weighted_ms": 16.1
+      },
+      {
+        "name": "static VinylPressingProbe.main()",
+        "weighted_ms": 16.1
+      },
+      {
+        "name": "closure #1 in RadialProgressView.body.getter",
+        "weighted_ms": 0.5
+      },
+      {
+        "name": "<deduplicated_symbol>",
+        "weighted_ms": 0.4
+      },
+      {
+        "name": "specialized closure #1 in TimelineView<>.init(_:content:)",
+        "weighted_ms": 0.4
+      },
+      {
+        "name": "MorphingArtworkView.body.getter",
+        "weighted_ms": 0.3
+      },
+      {
+        "name": "RadialProgressView.body.getter",
+        "weighted_ms": 0.3
+      },
+      {
+        "name": "initializeWithCopy for RadialProgressView",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "outlined init with copy of RadialProgressView",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "specialized _VariadicView.Tree.init(_:content:)",
+        "weighted_ms": 0.2
+      },
+      {
+        "name": "PlayerModel.displayPositionMs(at:)",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "PlayerModel.state.getter",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "VinylRecordView.sheen.getter",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "closure #1 in VinylRecordView.body.getter",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "closure #1 in VinylRecordView.sheen.getter",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "closure #1 in closure #1 in VinylRecordView.body.getter",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "closure #1 in closure #2 in closure #1 in RecordPlayerView.controls.getter",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "closure #1 in closure #3 in RecordPlayerView.record(diameter:)",
+        "weighted_ms": 0.1
+      },
+      {
+        "name": "closure #2 in closure #1 in RecordPlayerView.controls.getter",
+        "weighted_ms": 0.1
+      }
+    ]
+  },
+  "swiftui": {
+    "all_update_intervals": {
+      "count": 37639,
+      "total_ms": 476.542257,
+      "median_ms": 0.003291,
+      "p95_ms": 0.061041,
+      "max_ms": 3.824125
+    },
+    "update_types": {
+      "Other Updates": 37639
+    },
+    "severity": {
+      "Very Low": 37619,
+      "Moderate": 12,
+      "High": 8
+    },
+    "modules": {
+      "<unknown>": 35313,
+      "null": 2326
+    },
+    "top_descriptions_by_sum": [
+      {
+        "description": "FlexCoreInteractionModifier.FlexValue",
+        "count": 2326,
+        "total_ms": 57.985135,
+        "median_ms": 0.0208745,
+        "p95_ms": 0.048791,
+        "max_ms": 2.993541
+      },
+      {
+        "description": "View Creation / Reuse",
+        "count": 1176,
+        "total_ms": 46.170611,
+        "median_ms": 0.014625,
+        "p95_ms": 0.160916,
+        "max_ms": 0.741041
+      },
+      {
+        "description": "UpdateFilter<AnimationTimelineSchedule, ZStack<TupleView>>",
+        "count": 1163,
+        "total_ms": 44.912119,
+        "median_ms": 0.004916,
+        "p95_ms": 0.164125,
+        "max_ms": 0.915541
+      },
+      {
+        "description": "DynamicBody<ViewBodyAccessor<RadialProgressView>, MainThreadFlags>",
+        "count": 294,
+        "total_ms": 43.681575,
+        "median_ms": 0.12243699999999999,
+        "p95_ms": 0.227916,
+        "max_ms": 2.540375
+      },
+      {
+        "description": "DynamicBody<ViewBodyAccessor<MorphingArtworkView>, MainThreadFlags>",
+        "count": 294,
+        "total_ms": 33.667902,
+        "median_ms": 0.101583,
+        "p95_ms": 0.174625,
+        "max_ms": 0.572791
+      },
+      {
+        "description": "UpdateFilter<PlaybackClockSchedule, IDView<ModifiedContent, String>>",
+        "count": 1163,
+        "total_ms": 33.246027,
+        "median_ms": 0.002625,
+        "p95_ms": 0.120333,
+        "max_ms": 1.249666
+      },
+      {
+        "description": "GeometryReader<ModifiedContent>.Child",
+        "count": 294,
+        "total_ms": 23.605651,
+        "median_ms": 0.065791,
+        "p95_ms": 0.132916,
+        "max_ms": 0.6125
+      },
+      {
+        "description": "UpdateFilter<PlaybackClockSchedule, ModifiedContent<ModifiedContent, _ForegroundStyleModifier>>",
+        "count": 1163,
+        "total_ms": 18.418809,
+        "median_ms": 0.01375,
+        "p95_ms": 0.026208,
+        "max_ms": 0.32625
+      },
+      {
+        "description": "ForEachChild<Range<Int>, Int, ModifiedContent<StrokeShapeView, _PaddingLayout>>",
+        "count": 5292,
+        "total_ms": 18.416334,
+        "median_ms": 0.001208,
+        "p95_ms": 0.006708,
+        "max_ms": 3.824125
+      },
+      {
+        "description": "Action Callback",
+        "count": 2326,
+        "total_ms": 12.773507,
+        "median_ms": 0.004375,
+        "p95_ms": 0.012208,
+        "max_ms": 0.194125
+      },
+      {
+        "description": "UpdateFilter<AnimationTimelineSchedule, ModifiedContent<ZStack, _ClipEffect>>",
+        "count": 294,
+        "total_ms": 12.364023,
+        "median_ms": 0.0383745,
+        "p95_ms": 0.063041,
+        "max_ms": 0.198166
+      },
+      {
+        "description": "SecondaryLayerGeometryQuery",
+        "count": 304,
+        "total_ms": 9.31136,
+        "median_ms": 0.021312,
+        "p95_ms": 0.063291,
+        "max_ms": 0.336333
+      },
+      {
+        "description": "DisplayList Item: ShapeStyledDisplayList<AnimatedShape<_StrokedShape>>",
+        "count": 294,
+        "total_ms": 8.996736,
+        "median_ms": 0.026562,
+        "p95_ms": 0.055708,
+        "max_ms": 0.107916
+      },
+      {
+        "description": "ForEachState<Array, UUID, ModifiedContent>.ForEachState.Info.Init",
+        "count": 294,
+        "total_ms": 8.150609,
+        "median_ms": 0.024354,
+        "p95_ms": 0.041833,
+        "max_ms": 0.186083
+      },
+      {
+        "description": "ForEachState<Range, Int, ModifiedContent>.ForEachState.Info.Init",
+        "count": 294,
+        "total_ms": 7.283446,
+        "median_ms": 0.019729,
+        "p95_ms": 0.038666,
+        "max_ms": 0.358625
+      },
+      {
+        "description": "ViewListTransition<OpacityTransition>",
+        "count": 588,
+        "total_ms": 6.1129299999999995,
+        "median_ms": 0.00625,
+        "p95_ms": 0.013333,
+        "max_ms": 2.177333
+      },
+      {
+        "description": "GeometryEffectDisplayList<DefaultGeometryEffectProvider<_ScaleEffect>>",
+        "count": 294,
+        "total_ms": 4.67544,
+        "median_ms": 0.003333,
+        "p95_ms": 0.009875,
+        "max_ms": 3.277583
+      },
+      {
+        "description": "DynamicViewList<_ConditionalContent<ModifiedContent, ModifiedContent>>",
+        "count": 294,
+        "total_ms": 4.5722,
+        "median_ms": 0.012812,
+        "p95_ms": 0.023625,
+        "max_ms": 0.192666
+      },
+      {
+        "description": "Layout: LayoutChildGeometries",
+        "count": 608,
+        "total_ms": 4.529003,
+        "median_ms": 0.006666,
+        "p95_ms": 0.016208,
+        "max_ms": 0.040916
+      },
+      {
+        "description": "StaticLayoutComputer<_ZStackLayout>",
+        "count": 294,
+        "total_ms": 4.169733,
+        "median_ms": 0.007541,
+        "p95_ms": 0.019166,
+        "max_ms": 0.736041
+      }
+    ],
+    "top_views_by_sum": [
+      {
+        "module": "<unknown>",
+        "view": "[unknown view: created before tracing started?]",
+        "type": "Other Updates",
+        "count": 35313,
+        "total_ms": 463.76875,
+        "median_ms": 0.003208,
+        "p95_ms": 0.067708,
+        "max_ms": 3.824125
+      },
+      {
+        "module": null,
+        "view": null,
+        "type": "Other Updates",
+        "count": 2326,
+        "total_ms": 12.773507,
+        "median_ms": 0.004375,
+        "p95_ms": 0.012208,
+        "max_ms": 0.194125
+      }
+    ],
+    "long_updates": [
+      {
+        "start_s": 13.093370375,
+        "duration_ms": 3.824125,
+        "type": "Other Updates",
+        "description": "ForEachChild<Range<Int>, Int, ModifiedContent<StrokeShapeView, _PaddingLayout>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "High"
+      },
+      {
+        "start_s": 13.925747708,
+        "duration_ms": 3.277583,
+        "type": "Other Updates",
+        "description": "GeometryEffectDisplayList<DefaultGeometryEffectProvider<_ScaleEffect>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "High"
+      },
+      {
+        "start_s": 12.707129667,
+        "duration_ms": 2.993541,
+        "type": "Other Updates",
+        "description": "FlexCoreInteractionModifier.FlexValue",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "High"
+      },
+      {
+        "start_s": 11.658181125,
+        "duration_ms": 2.540375,
+        "type": "Other Updates",
+        "description": "DynamicBody<ViewBodyAccessor<RadialProgressView>, MainThreadFlags>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "High"
+      },
+      {
+        "start_s": 14.460169375,
+        "duration_ms": 2.177333,
+        "type": "Other Updates",
+        "description": "ViewListTransition<OpacityTransition>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "High"
+      },
+      {
+        "start_s": 12.703144459,
+        "duration_ms": 1.249666,
+        "type": "Other Updates",
+        "description": "UpdateFilter<PlaybackClockSchedule, IDView<ModifiedContent, String>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "High"
+      },
+      {
+        "start_s": 14.457561,
+        "duration_ms": 1.195916,
+        "type": "Other Updates",
+        "description": "ForEachChild<Range<Int>, Int, ModifiedContent<StrokeShapeView, _PaddingLayout>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "High"
+      },
+      {
+        "start_s": 13.178066541,
+        "duration_ms": 1.1755,
+        "type": "Other Updates",
+        "description": "FlexCoreInteractionModifier.FlexValue",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "High"
+      },
+      {
+        "start_s": 13.957175167,
+        "duration_ms": 0.915541,
+        "type": "Other Updates",
+        "description": "UpdateFilter<AnimationTimelineSchedule, ZStack<TupleView>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Moderate"
+      },
+      {
+        "start_s": 11.663029958,
+        "duration_ms": 0.751,
+        "type": "Other Updates",
+        "description": "RendererEffectDisplayList<_AllowsHitTestingModifier>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Moderate"
+      },
+      {
+        "start_s": 6.990803209,
+        "duration_ms": 0.741041,
+        "type": "Other Updates",
+        "description": "View Creation / Reuse",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Moderate"
+      },
+      {
+        "start_s": 14.577586292,
+        "duration_ms": 0.736041,
+        "type": "Other Updates",
+        "description": "StaticLayoutComputer<_ZStackLayout>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Moderate"
+      },
+      {
+        "start_s": 14.909222292,
+        "duration_ms": 0.644416,
+        "type": "Other Updates",
+        "description": "StaticLayoutComputer<_ZStackLayout>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Moderate"
+      },
+      {
+        "start_s": 12.84082775,
+        "duration_ms": 0.623541,
+        "type": "Other Updates",
+        "description": "FlexCoreInteractionModifier.FlexValue",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Moderate"
+      },
+      {
+        "start_s": 13.176963,
+        "duration_ms": 0.616791,
+        "type": "Other Updates",
+        "description": "DynamicBody<ViewBodyAccessor<RadialProgressView>, MainThreadFlags>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Moderate"
+      },
+      {
+        "start_s": 14.908582916,
+        "duration_ms": 0.6125,
+        "type": "Other Updates",
+        "description": "GeometryReader<ModifiedContent>.Child",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Moderate"
+      },
+      {
+        "start_s": 13.959545,
+        "duration_ms": 0.597291,
+        "type": "Other Updates",
+        "description": "UpdateFilter<PlaybackClockSchedule, IDView<ModifiedContent, String>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Moderate"
+      },
+      {
+        "start_s": 12.924504459,
+        "duration_ms": 0.583291,
+        "type": "Other Updates",
+        "description": "View Creation / Reuse",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Moderate"
+      },
+      {
+        "start_s": 13.95832625,
+        "duration_ms": 0.572791,
+        "type": "Other Updates",
+        "description": "DynamicBody<ViewBodyAccessor<MorphingArtworkView>, MainThreadFlags>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Moderate"
+      },
+      {
+        "start_s": 7.860789208,
+        "duration_ms": 0.538208,
+        "type": "Other Updates",
+        "description": "ForEachChild<Range<Int>, Int, ModifiedContent<StrokeShapeView, _PaddingLayout>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Moderate"
+      },
+      {
+        "start_s": 13.039384333,
+        "duration_ms": 0.498208,
+        "type": "Other Updates",
+        "description": "DynamicBody<ViewBodyAccessor<RadialProgressView>, MainThreadFlags>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 13.092927542,
+        "duration_ms": 0.428833,
+        "type": "Other Updates",
+        "description": "ForEachChild<Range<Int>, Int, ModifiedContent<StrokeShapeView, _PaddingLayout>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 8.191839875,
+        "duration_ms": 0.424416,
+        "type": "Other Updates",
+        "description": "DynamicBody<ViewBodyAccessor<RadialProgressView>, MainThreadFlags>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 14.90737975,
+        "duration_ms": 0.423333,
+        "type": "Other Updates",
+        "description": "UpdateFilter<AnimationTimelineSchedule, ZStack<TupleView>>",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      },
+      {
+        "start_s": 8.124121166,
+        "duration_ms": 0.42225,
+        "type": "Other Updates",
+        "description": "Text Content",
+        "view": "[unknown view: created before tracing started?]",
+        "module": "<unknown>",
+        "severity": "Very Low"
+      }
+    ]
+  },
+  "app_update_commits": {
+    "all": {
+      "count": 186,
+      "total_ms": 861.528568,
+      "median_ms": 2.742937,
+      "p95_ms": 20.046125,
+      "max_ms": 92.849458
+    },
+    "by_display": {
+      "Display 2": {
+        "count": 160,
+        "total_ms": 436.47545,
+        "median_ms": 2.483333,
+        "p95_ms": 5.54375,
+        "max_ms": 15.408791
+      },
+      "Display 3": {
+        "count": 26,
+        "total_ms": 425.053118,
+        "median_ms": 19.9035205,
+        "p95_ms": 20.969291,
+        "max_ms": 92.849458
+      }
+    },
+    "longest": [
+      {
+        "start_s": 13.180891083,
+        "duration_ms": 92.849458,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 14.840031291,
+        "duration_ms": 20.969291,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 14.740026833,
+        "duration_ms": 20.554708,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 14.64001375,
+        "duration_ms": 20.500666,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 14.940063125,
+        "duration_ms": 20.485458,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 14.473347041,
+        "duration_ms": 20.440125,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 14.506675833,
+        "duration_ms": 20.363875,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 14.606683666,
+        "duration_ms": 20.306666,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 13.739964333,
+        "duration_ms": 20.166833,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 13.839975666,
+        "duration_ms": 20.046125,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 14.406666541,
+        "duration_ms": 20.040458,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 14.540003833,
+        "duration_ms": 20.012958,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 14.673355208,
+        "duration_ms": 19.99975,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 14.17332775,
+        "duration_ms": 19.807291,
+        "display": "Display 3"
+      },
+      {
+        "start_s": 14.273355291,
+        "duration_ms": 19.689833,
+        "display": "Display 3"
+      }
+    ]
+  },
+  "long_commit_cpu": {
+    "threshold_ms": 10,
+    "count": 17,
+    "total_main_sampled_weight_ms": 86.1,
+    "relative_cpu_histogram_ms": {
+      "0": 14.9,
+      "1": 10.9,
+      "2": 2.1,
+      "3": 1.2,
+      "4": 0.1,
+      "6": 0.6,
+      "7": 0.1,
+      "12": 0.6,
+      "13": 1.0,
+      "14": 0.8,
+      "15": 0.4,
+      "16": 5.0,
+      "17": 13.5,
+      "18": 14.9,
+      "19": 13.2,
+      "20": 3.5,
+      "89": 0.6,
+      "90": 0.9,
+      "91": 0.9,
+      "92": 0.9
+    },
+    "per_commit": [
+      {
+        "start_s": 13.180891083,
+        "duration_ms": 92.849458,
+        "main_sampled_weight_ms": 3.9,
+        "sample_relative_ms": [
+          0.041458,
+          0.142542,
+          0.242,
+          0.341458,
+          3.842083,
+          3.942167,
+          89.343042,
+          89.442083,
+          89.543167,
+          89.642375,
+          89.84125,
+          89.942042,
+          90.041625,
+          90.141417,
+          90.241333,
+          90.341583,
+          90.541458,
+          90.641,
+          90.741333,
+          90.841208,
+          90.940958,
+          91.042542,
+          91.140917,
+          91.240958,
+          91.340917,
+          91.441125,
+          91.640958,
+          91.741292,
+          91.840958,
+          91.941,
+          92.041292,
+          92.141667,
+          92.241083,
+          92.342167,
+          92.442542,
+          92.542333,
+          92.64125,
+          92.741458,
+          92.841708
+        ]
+      },
+      {
+        "start_s": 13.739964333,
+        "duration_ms": 20.166833,
+        "main_sampled_weight_ms": 4.7,
+        "sample_relative_ms": [
+          0.068417,
+          0.169083,
+          0.269542,
+          0.36875,
+          0.47,
+          0.568458,
+          0.668708,
+          0.869042,
+          0.968583,
+          1.068375,
+          1.169125,
+          1.269,
+          1.369167,
+          16.66875,
+          16.767958,
+          16.8685,
+          16.968125,
+          17.06825,
+          17.268042,
+          17.369542,
+          17.467833,
+          17.568125,
+          17.668042,
+          17.767792,
+          17.868,
+          17.967958,
+          18.067833,
+          18.177542,
+          18.267708,
+          18.367542,
+          18.467667,
+          18.568375,
+          18.668417,
+          18.767917,
+          18.868292,
+          18.968208,
+          19.06775,
+          19.167917,
+          19.268292,
+          19.367792,
+          19.467583,
+          19.567625,
+          19.667833,
+          19.768042,
+          19.867833,
+          19.967542,
+          20.068042
+        ]
+      },
+      {
+        "start_s": 13.839975666,
+        "duration_ms": 20.046125,
+        "main_sampled_weight_ms": 5.3,
+        "sample_relative_ms": [
+          0.058334,
+          0.156667,
+          0.256667,
+          0.356667,
+          0.456334,
+          0.556542,
+          0.656959,
+          0.756709,
+          0.856334,
+          0.956917,
+          1.057,
+          1.157375,
+          1.260542,
+          1.357375,
+          1.456292,
+          1.556167,
+          1.656459,
+          1.756584,
+          1.856334,
+          16.657334,
+          16.756542,
+          16.856667,
+          16.956584,
+          17.056667,
+          17.157167,
+          17.256959,
+          17.357125,
+          17.456667,
+          17.557167,
+          17.657209,
+          17.756792,
+          17.857084,
+          17.957084,
+          18.056417,
+          18.156625,
+          18.257792,
+          18.35725,
+          18.456292,
+          18.556959,
+          18.6565,
+          18.756375,
+          18.856792,
+          18.956417,
+          19.056334,
+          19.15725,
+          19.257292,
+          19.356459,
+          19.456334,
+          19.556167,
+          19.656584,
+          19.756334,
+          19.85625,
+          19.956584
+        ]
+      },
+      {
+        "start_s": 14.073324666,
+        "duration_ms": 19.46475,
+        "main_sampled_weight_ms": 6.2,
+        "sample_relative_ms": [
+          0.008459,
+          0.108,
+          0.207709,
+          0.308167,
+          0.407334,
+          0.608125,
+          0.707875,
+          0.807292,
+          1.207875,
+          1.308167,
+          1.407334,
+          1.708375,
+          1.807667,
+          1.9075,
+          2.007292,
+          2.107292,
+          2.207292,
+          2.407875,
+          2.507709,
+          2.609,
+          2.707667,
+          2.807875,
+          2.907834,
+          3.007959,
+          3.107667,
+          3.208209,
+          3.311709,
+          3.407334,
+          3.507875,
+          3.607542,
+          3.707834,
+          3.808042,
+          3.907459,
+          4.007167,
+          16.70825,
+          16.80725,
+          16.907375,
+          17.007334,
+          17.10725,
+          17.207417,
+          17.3075,
+          17.407417,
+          17.507334,
+          17.6075,
+          17.707459,
+          17.807417,
+          17.90725,
+          18.007334,
+          18.107417,
+          18.207375,
+          18.308042,
+          18.407584,
+          18.507334,
+          18.607417,
+          18.707459,
+          18.807209,
+          18.907334,
+          19.00775,
+          19.107417,
+          19.207667,
+          19.307375,
+          19.407959
+        ]
+      },
+      {
+        "start_s": 14.17332775,
+        "duration_ms": 19.807291,
+        "main_sampled_weight_ms": 4.7,
+        "sample_relative_ms": [
+          0.004916,
+          0.104375,
+          0.2045,
+          0.304083,
+          0.404041,
+          0.50425,
+          0.604125,
+          0.704458,
+          0.804833,
+          1.10475,
+          1.204375,
+          1.304625,
+          1.404125,
+          1.504333,
+          1.60425,
+          1.704333,
+          16.705125,
+          16.804708,
+          16.904416,
+          17.004083,
+          17.104083,
+          17.204833,
+          17.304375,
+          17.404375,
+          17.604666,
+          17.704458,
+          17.804333,
+          17.904375,
+          18.0045,
+          18.104416,
+          18.204666,
+          18.304708,
+          18.404583,
+          18.504458,
+          18.604708,
+          18.704791,
+          18.804458,
+          18.904458,
+          19.007625,
+          19.104125,
+          19.204375,
+          19.304125,
+          19.404125,
+          19.5045,
+          19.60775,
+          19.704583,
+          19.80475
+        ]
+      },
+      {
+        "start_s": 14.273355291,
+        "duration_ms": 19.689833,
+        "main_sampled_weight_ms": 5.0,
+        "sample_relative_ms": [
+          0.0775,
+          0.177292,
+          0.477417,
+          0.577375,
+          0.6775,
+          0.78175,
+          0.979042,
+          1.0775,
+          1.177084,
+          1.27725,
+          1.377417,
+          1.477667,
+          1.577834,
+          1.777209,
+          1.877167,
+          1.982,
+          2.077125,
+          2.177125,
+          2.27825,
+          2.377375,
+          16.678709,
+          16.777209,
+          16.876584,
+          16.976959,
+          17.076709,
+          17.176792,
+          17.276834,
+          17.376875,
+          17.476584,
+          17.576959,
+          17.677084,
+          17.877042,
+          17.976792,
+          18.076875,
+          18.176875,
+          18.277084,
+          18.377084,
+          18.477709,
+          18.577125,
+          18.676709,
+          18.777375,
+          18.877,
+          18.977209,
+          19.07825,
+          19.176834,
+          19.28225,
+          19.376959,
+          19.477292,
+          19.577875,
+          19.677584
+        ]
+      },
+      {
+        "start_s": 14.406666541,
+        "duration_ms": 20.040458,
+        "main_sampled_weight_ms": 5.2,
+        "sample_relative_ms": [
+          0.0665,
+          0.165542,
+          0.266292,
+          0.366209,
+          0.466084,
+          0.566,
+          0.665834,
+          0.765709,
+          0.865959,
+          0.967917,
+          1.065834,
+          1.165584,
+          1.265834,
+          1.466292,
+          1.566,
+          1.765375,
+          1.8655,
+          1.965584,
+          2.066042,
+          16.666125,
+          16.765959,
+          16.865709,
+          16.966834,
+          17.066,
+          17.266459,
+          17.36575,
+          17.46575,
+          17.567959,
+          17.665542,
+          17.765834,
+          17.865625,
+          17.965542,
+          18.065709,
+          18.166,
+          18.2655,
+          18.365667,
+          18.466459,
+          18.565584,
+          18.665792,
+          18.765917,
+          18.86575,
+          18.965375,
+          19.065459,
+          19.165875,
+          19.265709,
+          19.365709,
+          19.465959,
+          19.56575,
+          19.666209,
+          19.766584,
+          19.8665,
+          19.966167
+        ]
+      },
+      {
+        "start_s": 14.473347041,
+        "duration_ms": 20.440125,
+        "main_sampled_weight_ms": 4.7,
+        "sample_relative_ms": [
+          0.185375,
+          0.285125,
+          0.38475,
+          0.484875,
+          0.585167,
+          0.685084,
+          0.784875,
+          0.884959,
+          0.985375,
+          1.085084,
+          1.185042,
+          1.285125,
+          1.384917,
+          1.485125,
+          1.584834,
+          1.685167,
+          17.08625,
+          17.1855,
+          17.285167,
+          17.385292,
+          17.485042,
+          17.585667,
+          17.685209,
+          17.785167,
+          17.8855,
+          18.08525,
+          18.185292,
+          18.284959,
+          18.385292,
+          18.48525,
+          18.585209,
+          18.684917,
+          18.885084,
+          18.985209,
+          19.085084,
+          19.184917,
+          19.2855,
+          19.385292,
+          19.48525,
+          19.584875,
+          19.685042,
+          19.784875,
+          19.884875,
+          19.985,
+          20.085042,
+          20.184917,
+          20.28575
+        ]
+      },
+      {
+        "start_s": 14.506675833,
+        "duration_ms": 20.363875,
+        "main_sampled_weight_ms": 5.1,
+        "sample_relative_ms": [
+          0.057375,
+          0.156875,
+          0.256208,
+          0.356333,
+          0.456,
+          0.556333,
+          0.655958,
+          0.756417,
+          0.856417,
+          0.956708,
+          1.05625,
+          1.156458,
+          1.256208,
+          1.356083,
+          1.456042,
+          1.5565,
+          16.656958,
+          16.756583,
+          16.8565,
+          16.956417,
+          17.056333,
+          17.156208,
+          17.256125,
+          17.356042,
+          17.456333,
+          17.559167,
+          17.656708,
+          17.756375,
+          17.956333,
+          18.056333,
+          18.156417,
+          18.256417,
+          18.356417,
+          18.457,
+          18.556792,
+          18.657042,
+          18.75625,
+          18.856542,
+          18.956417,
+          19.056542,
+          19.156625,
+          19.256625,
+          19.356292,
+          19.456417,
+          19.556292,
+          19.8565,
+          19.956042,
+          20.056083,
+          20.156042,
+          20.256125,
+          20.357208
+        ]
+      },
+      {
+        "start_s": 14.540003833,
+        "duration_ms": 20.012958,
+        "main_sampled_weight_ms": 4.9,
+        "sample_relative_ms": [
+          0.028708,
+          0.12825,
+          0.228875,
+          0.328083,
+          0.428,
+          0.528125,
+          0.628042,
+          0.728208,
+          0.828083,
+          0.928583,
+          1.028167,
+          1.128125,
+          1.228125,
+          1.328083,
+          1.428125,
+          1.528125,
+          16.729167,
+          16.828417,
+          16.927875,
+          17.028417,
+          17.128417,
+          17.228125,
+          17.328042,
+          17.429792,
+          17.528167,
+          17.6285,
+          17.729958,
+          17.832083,
+          17.928292,
+          18.032792,
+          18.128667,
+          18.228083,
+          18.328042,
+          18.428125,
+          18.528292,
+          18.62825,
+          18.728292,
+          18.828208,
+          18.928167,
+          19.028542,
+          19.129208,
+          19.228167,
+          19.328417,
+          19.428083,
+          19.528042,
+          19.628125,
+          19.728042,
+          19.827917,
+          19.928125
+        ]
+      },
+      {
+        "start_s": 14.606683666,
+        "duration_ms": 20.306666,
+        "main_sampled_weight_ms": 5.2,
+        "sample_relative_ms": [
+          0.049959,
+          0.148667,
+          0.249292,
+          0.3485,
+          0.448542,
+          0.548834,
+          0.648209,
+          0.748709,
+          0.848667,
+          0.94875,
+          1.04875,
+          1.148709,
+          1.24875,
+          1.348875,
+          1.448625,
+          1.548625,
+          16.649042,
+          16.748917,
+          16.848334,
+          16.948209,
+          17.04825,
+          17.148459,
+          17.248459,
+          17.348459,
+          17.4485,
+          17.548584,
+          17.64875,
+          17.748625,
+          17.848667,
+          17.948459,
+          18.048834,
+          18.148417,
+          18.251084,
+          18.348417,
+          18.448542,
+          18.550084,
+          18.648959,
+          18.74875,
+          18.848417,
+          18.948417,
+          19.048459,
+          19.148709,
+          19.348834,
+          19.448334,
+          19.553959,
+          19.64925,
+          19.748792,
+          19.848667,
+          19.948542,
+          20.048167,
+          20.1485,
+          20.248792
+        ]
+      },
+      {
+        "start_s": 14.64001375,
+        "duration_ms": 20.500666,
+        "main_sampled_weight_ms": 5.1,
+        "sample_relative_ms": [
+          0.019208,
+          0.122541,
+          0.219583,
+          0.319708,
+          0.418583,
+          0.518458,
+          0.618458,
+          0.7185,
+          0.818875,
+          0.91925,
+          1.019041,
+          1.118291,
+          1.21875,
+          1.318791,
+          1.418541,
+          1.518125,
+          16.720125,
+          16.818958,
+          16.919166,
+          17.018166,
+          17.119083,
+          17.318583,
+          17.418541,
+          17.518333,
+          17.718708,
+          17.818625,
+          17.918875,
+          18.018875,
+          18.11875,
+          18.219041,
+          18.318416,
+          18.419,
+          18.518375,
+          18.618625,
+          18.719041,
+          18.818708,
+          18.918833,
+          19.019041,
+          19.118458,
+          19.219083,
+          19.318708,
+          19.518541,
+          19.61875,
+          19.71925,
+          19.819833,
+          19.919,
+          20.019125,
+          20.118333,
+          20.218791,
+          20.318458,
+          20.418541
+        ]
+      },
+      {
+        "start_s": 14.673355208,
+        "duration_ms": 19.99975,
+        "main_sampled_weight_ms": 5.1,
+        "sample_relative_ms": [
+          0.078,
+          0.177125,
+          0.277375,
+          0.377292,
+          0.477,
+          0.576875,
+          0.676667,
+          0.776625,
+          0.87725,
+          0.977417,
+          1.07675,
+          1.176792,
+          1.27725,
+          1.376667,
+          1.477208,
+          1.576625,
+          1.67675,
+          1.77675,
+          1.876958,
+          16.678667,
+          16.777083,
+          16.877375,
+          16.977333,
+          17.076667,
+          17.177708,
+          17.27675,
+          17.377083,
+          17.477167,
+          17.677375,
+          17.776875,
+          17.877,
+          17.977542,
+          18.076875,
+          18.176792,
+          18.276917,
+          18.377042,
+          18.477375,
+          18.57725,
+          18.677375,
+          18.776833,
+          18.877208,
+          18.977125,
+          19.076958,
+          19.177,
+          19.276875,
+          19.377042,
+          19.476583,
+          19.576875,
+          19.778,
+          19.876792,
+          19.976667
+        ]
+      },
+      {
+        "start_s": 14.740026833,
+        "duration_ms": 20.554708,
+        "main_sampled_weight_ms": 5.2,
+        "sample_relative_ms": [
+          0.006042,
+          0.105542,
+          0.205208,
+          0.305833,
+          0.40525,
+          0.505458,
+          0.605417,
+          0.704958,
+          0.805708,
+          0.905125,
+          1.105375,
+          1.205292,
+          1.305167,
+          1.405667,
+          1.505458,
+          1.605292,
+          1.705333,
+          1.805167,
+          16.706208,
+          16.805958,
+          16.907917,
+          17.006542,
+          17.2065,
+          17.305458,
+          17.405417,
+          17.50575,
+          17.707125,
+          17.805542,
+          17.905208,
+          18.005458,
+          18.105208,
+          18.205292,
+          18.305417,
+          18.405042,
+          18.505375,
+          18.605458,
+          18.70525,
+          18.805375,
+          18.905583,
+          19.005417,
+          19.105375,
+          19.205292,
+          19.305583,
+          19.405375,
+          19.505792,
+          19.605292,
+          19.705417,
+          20.105583,
+          20.205292,
+          20.305083,
+          20.405292,
+          20.505042
+        ]
+      },
+      {
+        "start_s": 14.823409666,
+        "duration_ms": 15.408791,
+        "main_sampled_weight_ms": 3.9,
+        "sample_relative_ms": [
+          0.023875,
+          0.122792,
+          0.222959,
+          0.522584,
+          6.123042,
+          6.22225,
+          6.322375,
+          6.422459,
+          6.522667,
+          6.62275,
+          7.025167,
+          12.423584,
+          12.522542,
+          12.622709,
+          12.723084,
+          12.822625,
+          12.92275,
+          13.022875,
+          13.122625,
+          13.22275,
+          13.322542,
+          13.423,
+          13.522584,
+          13.622625,
+          13.722917,
+          13.822625,
+          13.922959,
+          14.022709,
+          14.223084,
+          14.422959,
+          14.5225,
+          14.623125,
+          14.722875,
+          14.823584,
+          14.922542,
+          15.022375,
+          15.122584,
+          15.224792,
+          15.32275
+        ]
+      },
+      {
+        "start_s": 14.840031291,
+        "duration_ms": 20.969291,
+        "main_sampled_weight_ms": 6.1,
+        "sample_relative_ms": [
+          0.002292,
+          0.101875,
+          0.201625,
+          0.302042,
+          0.401,
+          0.501292,
+          0.601209,
+          0.701375,
+          0.802209,
+          0.9025,
+          1.101584,
+          1.202959,
+          1.301875,
+          1.400625,
+          1.501167,
+          1.701834,
+          1.802417,
+          1.90125,
+          2.301334,
+          2.401,
+          2.50125,
+          2.601667,
+          16.702459,
+          16.801125,
+          16.901459,
+          17.00175,
+          17.101417,
+          17.301917,
+          17.5025,
+          17.70275,
+          17.801209,
+          17.900959,
+          18.001125,
+          18.100875,
+          18.201834,
+          18.301709,
+          18.401584,
+          18.501417,
+          18.601542,
+          18.700792,
+          18.801209,
+          18.901417,
+          19.001042,
+          19.100917,
+          19.201334,
+          19.301125,
+          19.401209,
+          19.501917,
+          19.601,
+          19.801792,
+          19.901209,
+          20.000792,
+          20.100709,
+          20.200709,
+          20.301167,
+          20.400625,
+          20.500542,
+          20.600959,
+          20.700709,
+          20.800459,
+          20.901292
+        ]
+      },
+      {
+        "start_s": 14.940063125,
+        "duration_ms": 20.485458,
+        "main_sampled_weight_ms": 5.8,
+        "sample_relative_ms": [
+          0.069291,
+          0.169208,
+          0.268958,
+          0.368666,
+          0.468833,
+          0.569041,
+          0.669208,
+          0.768791,
+          0.869791,
+          1.069416,
+          1.168916,
+          1.26875,
+          1.368958,
+          1.469833,
+          1.569333,
+          1.669625,
+          1.770083,
+          1.869875,
+          1.9695,
+          2.0695,
+          2.16975,
+          2.269375,
+          16.67,
+          16.769,
+          16.869,
+          16.969541,
+          17.069,
+          17.172041,
+          17.268958,
+          17.36925,
+          17.468916,
+          17.669083,
+          17.768916,
+          17.869041,
+          17.968958,
+          18.069,
+          18.169125,
+          18.269,
+          18.36875,
+          18.470375,
+          18.569666,
+          18.669541,
+          18.769,
+          18.869,
+          18.969416,
+          19.068958,
+          19.168916,
+          19.268916,
+          19.369541,
+          19.469041,
+          19.669458,
+          19.768916,
+          19.869166,
+          19.969416,
+          20.069166,
+          20.170625,
+          20.269,
+          20.469
+        ]
+      }
+    ]
+  }
+}
