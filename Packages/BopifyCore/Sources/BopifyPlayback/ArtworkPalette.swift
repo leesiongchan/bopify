@@ -24,8 +24,8 @@ public struct ArtworkColor: Sendable, Hashable {
         let m = cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
         let s = cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
         let a = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s
-        let b = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
-        return hypot(a, b)
+        let labB = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
+        return hypot(a, labB)
     }
 }
 
