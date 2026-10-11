@@ -149,14 +149,32 @@ private nonisolated struct PreviewLibraryServices: LibraryService, SavedTracksSe
 struct RecordPreviewScene: View {
     let fixture: RecordPreviewFixture
     @State private var rotation = RecordRotation()
-    private var isSpinning: Bool { fixture.isPlaying && fixture.isVisible && !fixture.reduceMotion }
+    @State private var isCoasting = false
+    private var motorRequest: RecordMotorRequest {
+        !fixture.isVisible || fixture.reduceMotion ? .snap : fixture.isPlaying ? .drive : .brake
+    }
     var body: some View {
         VinylRecordView(image: fixture.image, occurrenceID: fixture.occurrenceID, direction: fixture.direction,
-                        diameter: fixture.diameter, isPlaying: fixture.isPlaying, isVisible: fixture.isVisible, rotation: rotation,
+                        diameter: fixture.diameter,
+                        isMoving: motorRequest != .snap && (fixture.isPlaying || isCoasting) && rotation.isMoving(at: ProcessInfo.processInfo.systemUptime),
+                        isVisible: fixture.isVisible, rotation: rotation,
                         reduceMotionOverride: fixture.reduceMotion)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .onChange(of: isSpinning, initial: true) { _, value in
-                rotation.setRunning(value, at: ProcessInfo.processInfo.systemUptime)
+            .onChange(of: motorRequest, initial: true) { _, request in
+                let now = ProcessInfo.processInfo.systemUptime
+                rotation.setRunning(request == .drive, at: now, stopStyle: request == .snap ? .snap : .brake)
+                isCoasting = request == .brake && rotation.isMoving(at: now)
+            }
+            .task(id: rotation.stopTime) {
+                guard isCoasting, let deadline = rotation.stopTime else { return }
+                do { try await Task.sleep(for: .seconds(max(0, deadline - ProcessInfo.processInfo.systemUptime))) }
+                catch { return }
+                guard rotation.stopTime == deadline else { return }
+                isCoasting = false
+            }
+            .onDisappear {
+                rotation.setRunning(false, at: ProcessInfo.processInfo.systemUptime, stopStyle: .snap)
+                isCoasting = false
             }
     }
 }

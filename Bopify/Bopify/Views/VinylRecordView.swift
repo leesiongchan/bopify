@@ -6,7 +6,7 @@ struct VinylRecordView: View {
     let occurrenceID: String
     let direction: CarouselDirection
     let diameter: CGFloat
-    let isPlaying: Bool
+    let isMoving: Bool
     let isVisible: Bool
     let rotation: RecordRotation
     var rotationOverride: Double? = nil
@@ -21,7 +21,7 @@ struct VinylRecordView: View {
     private var reduceMotion: Bool { systemReduceMotion || reduceMotionOverride }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isPlaying || !isVisible || reduceMotion || isScrubbing)) { _ in
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isMoving || !isVisible || reduceMotion || isScrubbing)) { _ in
             ZStack {
                 ZStack {
                     Circle().fill(Color(red: 0.035, green: 0.055, blue: 0.05))
