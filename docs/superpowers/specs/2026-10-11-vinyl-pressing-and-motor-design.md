@@ -2,7 +2,7 @@
 
 Date: 2026-10-11
 
-Status: Design approved in sections on 2026-10-11; written spec awaiting review.
+Status: Implemented and independently reviewed on 2026-10-11. Native fixture checks and 314 package tests pass; record-specific GPU timing and live Spotify buffering/recovery remain unverified. See the [verification report](../verification/2026-10-11-vinyl-pressing-and-motor.md).
 
 ## Intent and approved scope
 
@@ -12,7 +12,7 @@ Make the record feel more physical and give each song its own look, without new 
 2. **Iridescent groove sheen.** A screen-fixed bow-tie highlight with faint diffraction fringes replaces the flat reflection.
 3. **Marbled per-track pressing.** Each song's record is marbled vinyl coloured from its artwork, with a swirl seeded from its track URI so the same song always looks the same.
 
-Out of scope: tonearm, audio-reactive motion, theatrical record-swap transitions, a setting to disable pressings, and any change to the 12 s cruise speed. No motion is added while loading, buffering, or recovering; the existing rule in the [refinement spec](2026-09-27-monolith-refinement-design.md) ("stop ambient scheduling when paused, buffering, loading…"), the [original Monolith spec](2026-09-26-monolith-player-design.md), and the [playback recovery spec](2026-10-04-playback-recovery-design.md) stays in force. A loading "creep" was mocked and explicitly rejected.
+Out of scope: tonearm, audio-reactive motion, theatrical record-swap transitions, a setting to disable pressings, and any change to the 12 s cruise speed. Loading, buffering, and recovery snap the motor to rest immediately; no motion or ambient ticks continue in those states. This preserves their stop rules in the [refinement spec](2026-09-27-monolith-refinement-design.md), the [original Monolith spec](2026-09-26-monolith-player-design.md), and the [playback recovery spec](2026-10-04-playback-recovery-design.md). The brief settling brakes listed below supersede earlier immediate-stop rules only for those listed causes. A loading "creep" was mocked and explicitly rejected.
 
 Success means play and pause read as a physical deck starting and stopping, songs are recognisable by their pressing across launches, nothing renders once the record has settled, and Reduce Motion behaves exactly as today.
 
@@ -40,10 +40,11 @@ State changes re-anchor at the current angle and speed, so angle and speed are c
 
 | Cause of stopping | Style |
 | --- | --- |
-| Pause, end, loading, buffering, error, losing the active device, engine not ready | Brake |
+| Pause, end, error, losing the active device | Brake |
+| Loading, buffering, recovery, engine not ready, idle | Snap |
 | Player hidden, Reduce Motion enabled, pointer press on the record | Snap |
 
-A press snaps because a hand on a real record stops it instantly, and the scrub needs a stationary surface. Releasing a scrub calls `setAngle` (zero speed) and then `setRunning(shouldSpin)`, so a playing record spins up from rest. Mirroring another device never spins, as today, because spinning still requires the active device.
+A snap condition takes precedence over a brake condition, including when a brake is already in progress. A press snaps because a hand on a real record stops it instantly, and the scrub needs a stationary surface. Releasing a scrub calls `setAngle` (zero speed) and then `setRunning(shouldSpin)`, so a playing record spins up from rest. Mirrored playback never drives the motor, as today, because driving still requires the active device.
 
 The motor exposes `isMoving(at:)` (driving, or braking with time remaining) and the brake's stop time. `VinylRecordView`'s `TimelineView` pauses on `!isMoving` instead of `!isPlaying`, keeping the existing `!isVisible`, Reduce Motion, and scrubbing conditions and the 30 fps cap. Because `isMoving` changes with time, `RecordPlayerView` holds a coasting flag set when a brake starts and cleared by a single task that sleeps until the computed stop time; replacing the anchor cancels that task. Once the brake ends, ambient ticks drop to zero, as the existing specs require.
 
@@ -103,7 +104,7 @@ Use `BopifyLog.playback` at debug level for palette computed, palette failed, an
 2. Unit tests for `PressingSeed` (fixed URIs map to pinned values; different URIs differ) and palette classification (saturated colours yield `.marble` with stable ordering; greyscale yields `.tinted`).
 3. Build the macOS app and run the package tests.
 4. Native screenshots at 118 pt and 182 pt, light and dark appearance, for a colourful cover, a warm orange or red cover with the attention rim visible, a black-and-white cover, missing artwork, and the same song played twice (identical pressing).
-5. In the running app, exercise play, pause, buffering, end of track, scrub and release while playing, hide during a brake, and toggle Reduce Motion during spin-up and brake. Confirm with a temporary tick counter or Instruments that the record's timeline stops ticking once the brake ends and when hidden.
+5. In the running app, exercise play, pause, loading, buffering, recovery, end of track, scrub and release while playing, hide during a brake, and toggle Reduce Motion during spin-up and brake. Confirm with a temporary tick counter or Instruments that the record's timeline stops ticking once a brake ends and immediately when hidden, loading, buffering, or recovering, including entry into those states during a brake.
 6. Compare GPU frame time for the record at 182 pt over Liquid Glass before and after the shader.
 7. Report which checks were run natively and which were covered only by unit tests or previews.
 
