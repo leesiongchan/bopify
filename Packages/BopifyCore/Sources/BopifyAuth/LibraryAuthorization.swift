@@ -4,9 +4,6 @@ import BopifyDomain
 
 public enum LibraryClientIDError: Error, Equatable { case invalid }
 
-// Apple documents UserDefaults as thread-safe but the SDK omits the annotation, which blocks passing one to an actor.
-extension UserDefaults: @retroactive @unchecked Sendable {}
-
 /// The user's own Spotify Dashboard client for Web API library access. Spotify caps a
 /// Development Mode app at five users, so every user registers one; the ID is public, not a secret.
 public actor LibraryAuthorization {
@@ -17,7 +14,9 @@ public actor LibraryAuthorization {
     private var clientID: String?
     private var auth: SpotifyAuthService?
 
-    public init(defaults: UserDefaults = .standard, makeAuth: @escaping @Sendable (String) -> SpotifyAuthService) {
+    /// `suiteName` nil means `.standard`; the defaults are built here because `UserDefaults` is not `Sendable`.
+    public init(suiteName: String? = nil, makeAuth: @escaping @Sendable (String) -> SpotifyAuthService) {
+        let defaults = suiteName.map { UserDefaults(suiteName: $0)! } ?? .standard
         self.defaults = defaults
         self.makeAuth = makeAuth
         clientID = Self.storedClientID(in: defaults)
