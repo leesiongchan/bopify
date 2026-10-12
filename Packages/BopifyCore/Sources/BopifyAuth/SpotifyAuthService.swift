@@ -21,6 +21,7 @@ public actor SpotifyAuthService {
     // Sign-out and new consent invalidate suspended work before it can persist credentials.
     private var generation = 0
     private var refresh: (id: UUID, generation: Int, task: Task<TokenSet, Error>)?
+    private var pendingRefresh: (generation: Int, tokens: TokenSet)?
     private var activeListener: LoopbackCallbackListener?
 
     public init(
@@ -39,8 +40,11 @@ public actor SpotifyAuthService {
         self.openURL = openURL
     }
 
-    public func restore() -> TokenSet? {
-        tokens = store.load()
+    public func restore() throws -> TokenSet? {
+        do { tokens = try store.load() }
+        catch KeychainError.accessDenied { throw PlayerError.credentialAccessDenied }
+        catch KeychainError.corrupt { throw PlayerError.credentialCorrupt }
+        catch { throw PlayerError.credentialUnavailable }
         let found = tokens != nil
         BopifyLog.auth.debug("restore found=\(found, privacy: .public)")
         return tokens
@@ -53,7 +57,7 @@ public actor SpotifyAuthService {
     public func authorizeLibraryScopes(_ scopes: Set<String>) async throws -> TokenSet {
         let libraryScopes: Set<String> = ["user-library-read", "user-library-modify", "user-read-recently-played", "user-top-read"]
         guard !scopes.isEmpty, scopes.isSubset(of: libraryScopes) else { throw LibraryError.authorizationRequired }
-        let existing = (tokens ?? restore())?.grantedScopes.intersection(libraryScopes) ?? []
+        let existing = (try tokens ?? restore())?.grantedScopes.intersection(libraryScopes) ?? []
         let required = existing.union(scopes)
         return try await authorize(scopes: required, validateGrant: true)
     }
@@ -62,6 +66,7 @@ public actor SpotifyAuthService {
         refresh?.task.cancel()
         refresh = nil
         generation += 1
+        pendingRefresh = nil
         let myGeneration = generation
         BopifyLog.auth.info("signIn starting generation=\(myGeneration, privacy: .public)")
         let previousListener = activeListener
@@ -70,7 +75,7 @@ public actor SpotifyAuthService {
         guard generation == myGeneration else { throw PlayerError.authDenied }
         let pkce = PKCEPair.random()
         let state = UUID().uuidString
-        let listener = LoopbackCallbackListener(expectedState: state)
+        let listener = LoopbackCallbackListener(expectedState: state, expectedPath: callbackPath)
         activeListener = listener
         let port: Int
         do { port = try await listener.start(port: callbackPort) }
@@ -120,7 +125,7 @@ public actor SpotifyAuthService {
         if validateGrant && !scopes.isSubset(of: tokens.grantedScopes) {
             throw LibraryError.authorizationRequired
         }
-        try store.save(tokens)
+        try persist(tokens)
         BopifyLog.auth.debug("saved token set to store")
         self.tokens = tokens
         return tokens
@@ -144,20 +149,20 @@ public actor SpotifyAuthService {
     }
 
     private func validAccessToken(requiredScopes: Set<String>, rejecting rejectedAccessToken: String?) async throws -> String {
-        guard let current = tokens ?? restore() else {
+        guard let current = try tokens ?? restore() else {
             if !requiredScopes.isEmpty { throw LibraryError.authorizationRequired }
             throw PlayerError.authExpired
         }
         guard requiredScopes.isSubset(of: current.grantedScopes) else { throw LibraryError.authorizationRequired }
-        if !current.needsRefresh(), current.accessToken != rejectedAccessToken { return current.accessToken }
+        if pendingRefresh == nil, !current.needsRefresh(), current.accessToken != rejectedAccessToken { return current.accessToken }
         guard let refreshToken = current.refreshToken else { throw PlayerError.authExpired }
         let myGeneration = generation
         let pending: (id: UUID, generation: Int, task: Task<TokenSet, Error>)
         if let refresh, refresh.generation == myGeneration {
             pending = refresh
         } else {
-            let task = Task { [client] in
-                try await client.refresh(refreshToken: refreshToken, grantedScopes: current.grantedScopes)
+            let task = Task {
+                try await self.refreshAndPersist(refreshToken: refreshToken, scopes: current.grantedScopes, generation: myGeneration)
             }
             pending = (UUID(), myGeneration, task)
             refresh = pending
@@ -166,19 +171,48 @@ public actor SpotifyAuthService {
         defer { if refresh?.id == pending.id { refresh = nil } }
         let refreshed = try await pending.task.value
         guard generation == myGeneration else { throw PlayerError.authExpired }
-        // Only the first waiter writes; other waiters consume the same result.
-        if refresh?.id == pending.id {
-            try store.save(refreshed)
-            tokens = refreshed
-            BopifyLog.auth.info("token refresh succeeded")
-        }
         try Task.checkCancellation()
         guard requiredScopes.isSubset(of: refreshed.grantedScopes) else { throw LibraryError.authorizationRequired }
         return refreshed.accessToken
     }
 
+    private func persist(_ tokens: TokenSet) throws {
+        do { try store.save(tokens) }
+        catch {
+            BopifyLog.auth.error("credential persistence failed")
+            throw PlayerError.credentialSaveFailed
+        }
+    }
+
+    private func refreshAndPersist(refreshToken: String, scopes: Set<String>, generation mine: Int) async throws -> TokenSet {
+        let refreshed: TokenSet
+        if let pendingRefresh, pendingRefresh.generation == mine {
+            let pending = pendingRefresh.tokens
+            try persistRefresh(pending, generation: mine)
+            if !pending.needsRefresh() { return pending }
+            guard let rotated = pending.refreshToken else { throw PlayerError.authExpired }
+            refreshed = try await client.refresh(refreshToken: rotated, grantedScopes: pending.grantedScopes)
+        } else {
+            refreshed = try await client.refresh(refreshToken: refreshToken, grantedScopes: scopes)
+        }
+        try persistRefresh(refreshed, generation: mine)
+        return refreshed
+    }
+
+    private func persistRefresh(_ refreshed: TokenSet, generation mine: Int) throws {
+        guard generation == mine else { throw PlayerError.authExpired }
+        try Task.checkCancellation()
+        // A rotated refresh grant must survive a temporary save failure for manual retry.
+        pendingRefresh = (mine, refreshed)
+        try persist(refreshed)
+        pendingRefresh = nil
+        tokens = refreshed
+        BopifyLog.auth.info("token refresh persisted")
+    }
+
     public func cancelPendingWork() async {
         generation += 1
+        pendingRefresh = nil
         refresh?.task.cancel()
         refresh = nil
         let listener = activeListener
@@ -189,6 +223,7 @@ public actor SpotifyAuthService {
 
     public func signOut() async {
         generation += 1
+        pendingRefresh = nil
         refresh?.task.cancel()
         refresh = nil
         BopifyLog.auth.info("signOut")

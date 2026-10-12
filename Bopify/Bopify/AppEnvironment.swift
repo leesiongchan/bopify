@@ -176,10 +176,15 @@ final class AppEnvironment {
         let generation = sessionGeneration
         await serialize { [self] in
             guard generation == sessionGeneration else { return }
-            authState = .authenticating
-            let restored = await auth.restore()
-            guard generation == sessionGeneration else { return }
-            if restored != nil { connect() } else { authState = .signedOut }
+            authState = .refreshing
+            do {
+                let restored = try await auth.restore()
+                guard generation == sessionGeneration else { return }
+                if restored != nil { connect() } else { authState = .signedOut }
+            } catch {
+                guard generation == sessionGeneration else { return }
+                authState = .error(error as? PlayerError ?? .credentialUnavailable)
+            }
         }
     }
 

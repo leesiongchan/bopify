@@ -91,7 +91,7 @@ public final class PlaybackRecoveryCoordinator {
     public func retryNow() {
         guard active else { return }
         if case .needsReauthentication = status { return }
-        if case .failed = status { return }
+        if case let .failed(error) = status, !error.canRetryCredentials { return }
         if status == .ready && !player.restorationUnavailable { return }
         retryBeforeCreate = false
         delay?.cancel()
@@ -118,7 +118,11 @@ public final class PlaybackRecoveryCoordinator {
         wakeWaiter?.yield(())
     }
 
-    public func wake() { setSleeping(false); retryNow() }
+    public func wake() {
+        setSleeping(false)
+        if case .failed = status { return }
+        retryNow()
+    }
 
     public func reportSessionLoss(_ reason: SessionLossReason, epoch: UInt64) {
         guard active, epoch == player.engineEpoch, currentEngine != nil else { return }

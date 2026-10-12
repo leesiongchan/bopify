@@ -82,6 +82,16 @@
         }
       }
     },
+    "connection.retryCredentials" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry saved sign-in"
+          }
+        }
+      }
+    },
     "connection.retryRestoration" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -129,6 +139,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Spotify rejected your credentials. Signing in again may not help."
+          }
+        }
+      }
+    },
+    "error.credentialAccessDenied" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bopify can’t access your saved sign-in. Check its access in Keychain Access, then retry."
+          }
+        }
+      }
+    },
+    "error.credentialCorrupt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your saved sign-in couldn’t be read. Sign in again to replace it."
+          }
+        }
+      }
+    },
+    "error.credentialSaveFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bopify couldn’t save your sign-in. Check Keychain access, then try again."
+          }
+        }
+      }
+    },
+    "error.credentialUnavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved sign-in is unavailable. Unlock macOS Keychain, then retry."
           }
         }
       }
@@ -896,6 +946,16 @@
         }
       }
     },
+    "signIn.again" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in again"
+          }
+        }
+      }
+    },
     "signIn.authenticating" : {
       "localizations" : {
         "en" : {
@@ -926,6 +986,16 @@
         }
       }
     },
+    "signIn.credentialError" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved sign-in needs attention"
+          }
+        }
+      }
+    },
     "signIn.error" : {
       "localizations" : {
         "en" : {
@@ -942,6 +1012,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Spotify Premium required"
+          }
+        }
+      }
+    },
+    "signIn.restoring" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking saved sign-in…"
           }
         }
       }
