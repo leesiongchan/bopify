@@ -32,14 +32,22 @@ printf 'Release evidence: %s\n' "$work"
 resources="$PWD/Bopify/Bopify/Resources"
 mkdir -p "$resources"
 ./scripts/gen-notices.sh "$resources/Third-Party Licenses.html"
-cp LICENSE "$resources/LICENSE.txt"
+install -m 0644 LICENSE "$resources/LICENSE.txt"
 
 xcodebuild -quiet -project Bopify/Bopify.xcodeproj -scheme Bopify -configuration Release \
   -destination 'generic/platform=macOS' -archivePath "$work/Bopify.xcarchive" \
   ARCHS=arm64 CODE_SIGN_IDENTITY="$identity" MARKETING_VERSION="$marketing_version" \
   CURRENT_PROJECT_VERSION="$build_number" archive
+python3 - "$identity" "$work/ExportOptions.plist" <<'PYTHON'
+import pathlib
+import plistlib
+import sys
+options = plistlib.loads(pathlib.Path('scripts/ExportOptions.plist').read_bytes())
+options['signingCertificate'] = sys.argv[1]
+pathlib.Path(sys.argv[2]).write_bytes(plistlib.dumps(options))
+PYTHON
 xcodebuild -quiet -exportArchive -archivePath "$work/Bopify.xcarchive" \
-  -exportOptionsPlist scripts/ExportOptions.plist -exportPath "$work/export"
+  -exportOptionsPlist "$work/ExportOptions.plist" -exportPath "$work/export"
 python3 scripts/verify-release.py export "$app" "$marketing_version" "$build_number" > "$work/export-check.json"
 cmp "$resources/LICENSE.txt" "$app/Contents/Resources/LICENSE.txt"
 cmp "$resources/Third-Party Licenses.html" "$app/Contents/Resources/Third-Party Licenses.html"
@@ -47,8 +55,8 @@ cmp "$resources/Third-Party Licenses.html" "$app/Contents/Resources/Third-Party 
 mkdir "$work/dmg"
 ditto "$app" "$work/dmg/Bopify.app"
 ln -s /Applications "$work/dmg/Applications"
-cp LICENSE "$work/dmg/LICENSE.txt"
-cp "$resources/Third-Party Licenses.html" "$work/dmg/Third-Party Licenses.html"
+install -m 0644 LICENSE "$work/dmg/LICENSE.txt"
+install -m 0644 "$resources/Third-Party Licenses.html" "$work/dmg/Third-Party Licenses.html"
 hdiutil create -quiet -volname Bopify -srcfolder "$work/dmg" -format UDZO "$dmg"
 codesign --sign "$identity" --timestamp "$dmg"
 codesign --verify --strict "$dmg"
@@ -60,8 +68,15 @@ else
 fi
 job=$(plutil -extract id raw -o - "$work/notary.json")
 xcrun notarytool log "$job" "$work/notary-log.json" "${notary_auth[@]}"
-[[ "$submit_exit" == 0 ]] || { echo "Notarization submission failed; see $work/notary-log.json" >&2; exit 1; }
-python3 scripts/verify-release.py notary "$work/notary.json" "$work/notary-log.json" "$dmg"
+if [[ "$submit_exit" != 0 ]] || ! python3 scripts/verify-release.py notary "$work/notary.json" "$work/notary-log.json" "$dmg"; then
+  python3 - "$work/notary-log.json" <<'PYTHON'
+import pathlib
+import sys
+print(pathlib.Path(sys.argv[1]).read_text(), file=sys.stderr)
+PYTHON
+  echo "Notarization failed; Apple log retained at $work/notary-log.json" >&2
+  exit 1
+fi
 xcrun stapler staple "$dmg"
 xcrun stapler validate "$dmg"
 spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"

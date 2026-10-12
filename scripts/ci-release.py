@@ -21,13 +21,20 @@ def run(arguments, environment, capture=True):
     try:
         output, _ = process.communicate()
     except BaseException:
-        if process.poll() is None:
+        try:
             os.killpg(process.pid, signal.SIGTERM)
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                os.killpg(process.pid, signal.SIGKILL)
-                process.wait()
+        except ProcessLookupError:
+            pass
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+        # The leader exiting does not mean its descendants have stopped.
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait()
         raise
     if process.returncode:
         # security diagnostics and exception argv can contain credential material.

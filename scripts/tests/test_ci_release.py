@@ -1,4 +1,5 @@
 import base64
+import signal
 import json
 import os
 from pathlib import Path
@@ -35,6 +36,10 @@ assert p.read_text()=='synthetic-p8'
 assert stat.S_IMODE(p.stat().st_mode)==0o600
 assert not any(k in os.environ for k in ['DEVELOPER_ID_P12_BASE64','DEVELOPER_ID_P12_PASSWORD','KEYCHAIN_PASSWORD','NOTARY_KEY_P8'])
 with Path(os.environ['TRACE']).open('a') as f:f.write(json.dumps(['release',sys.argv[1]])+'\n')
+if os.environ.get('DESCENDANT_PID'):
+    import subprocess
+    child=subprocess.Popen([sys.executable,'-c', "import os,pathlib,signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(os.environ['DESCENDANT_PID']).write_text(str(os.getpid())); time.sleep(30)"])
+    while not Path(os.environ['DESCENDANT_PID']).exists():time.sleep(0.01)
 if os.environ.get('WAIT_RELEASE'):
     Path(os.environ['READY']).write_text('ready')
     time.sleep(30)
@@ -101,6 +106,42 @@ class CICredentialTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(self.calls(), [])
                 self.assertEqual(list((self.root / 'runner').iterdir()), [])
+
+    def test_sigterm_kills_descendants_even_when_release_leader_exits(self):
+        ready = self.root / 'ready'
+        pid_file = self.root / 'descendant.pid'
+        descendant = None
+        process = subprocess.Popen([sys.executable, str(self.root / 'scripts/ci-release.py'), '0.1.0-rc.1'],
+                                   cwd=self.root, env=self.env | {'WAIT_RELEASE': '1', 'READY': str(ready),
+                                                                'DESCENDANT_PID': str(pid_file)},
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            deadline = time.monotonic() + 5
+            while not ready.exists() and process.poll() is None and time.monotonic() < deadline:
+                time.sleep(0.02)
+            self.assertTrue(ready.exists(), 'release with descendant must start')
+            descendant = int(pid_file.read_text())
+            process.terminate()
+            process.wait(timeout=7)
+            deadline = time.monotonic() + 2
+            while time.monotonic() < deadline:
+                try:
+                    os.kill(descendant, 0)
+                except ProcessLookupError:
+                    break
+                time.sleep(0.02)
+            else:
+                self.fail('descendant survived CI credential cleanup')
+            out, err = process.communicate(timeout=1)
+            self.assertNotEqual(process.returncode, 0)
+            self.assert_clean(subprocess.CompletedProcess([], process.returncode, out, err))
+        finally:
+            if descendant:
+                try: os.kill(descendant, signal.SIGKILL)
+                except ProcessLookupError: pass
+            if process.poll() is None:
+                process.kill()
+            process.communicate(timeout=3)
 
     def test_sigterm_stops_child_and_cleans_signing_material(self):
         ready = self.root / 'ready'
