@@ -116,6 +116,18 @@ struct ExploreModelTests {
         #expect(explore.error == nil && explore.chips.map(\.uri) == [testTrack("l1").uri])
     }
 
+    /// Changing the library client ID clears the model while its shelf stays on screen.
+    @Test func clearWhileShownStillRefreshes() async {
+        let history = FakeHistory()
+        await history.setTop(.tracks, [seed("track", "t1")])
+        let explore = model(history, FakeRadio())
+        await explore.reveal(at: Date())
+        explore.clear()
+        await explore.refresh()
+        #expect(await history.topCalls == 4)
+        #expect(explore.chips.map(\.name) == ["t1"])
+    }
+
     @Test func keepsChipsForSixHours() async {
         let history = FakeHistory()
         let clock = TestClock()

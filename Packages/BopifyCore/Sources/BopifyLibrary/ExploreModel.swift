@@ -104,7 +104,6 @@ public final class ExploreModel: CoverFlowSource {
         error = nil
         retryAfter = nil
         chipsLoadedAt = nil
-        reveals = 0
         BopifyLog.library.debug("explore cleared")
     }
 
