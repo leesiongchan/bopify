@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Bopify third-party licenses</title>
+<style>body{font:14px -apple-system,sans-serif;max-width:860px;margin:2em auto;padding:0 1em}pre{white-space:pre-wrap;background:#f4f4f4;padding:1em}</style>
+</head>
+<body>
+<h1>Third-party licenses</h1>
+<p>Bopify includes the following open-source software.</p>
+{{#each licenses}}
+<h2 id="{{id}}">{{name}}</h2>
+<p>Used by:</p>
+<ul>{{#each used_by}}<li>{{crate.name}} {{crate.version}}</li>{{/each}}</ul>
+<pre>{{text}}</pre>
+{{/each}}
+</body>
+</html>
