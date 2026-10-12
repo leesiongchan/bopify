@@ -1,4 +1,3 @@
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -10,7 +9,6 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-JOB = '11111111-2222-4333-8444-555555555555'
 DMG = b'controlled disk image boundary'
 
 FAKE_TOOL = r'''import hashlib,json,os,plistlib,shutil,sys
@@ -69,7 +67,7 @@ elif name=='xcrun':
         data={'logFormatVersion':1,'jobId':'11111111-2222-4333-8444-555555555555','status':'Accepted','statusSummary':'Ready for distribution','statusCode':0,'archiveFilename':'Bopify-0.1.0-rc.1.dmg','uploadDate':'2026-10-13T00:00:00Z','sha256':hashlib.sha256(b'controlled disk image boundary').hexdigest(),'ticketContents':[],'issues':None}
         if os.environ.get('WRONG_JOB'):data['jobId']='00000000-0000-0000-0000-000000000000'
         if os.environ.get('WRONG_HASH'):data['sha256']='0'*64
-        if os.environ.get('NOTARY_WARNING'):data['issues']=[{'severity':'warning','code':1,'path':'Bopify.app','message':'unresolved warning','docUrl':None,'architecture':'arm64'}]
+        if os.environ.get('NOTARY_WARNING'):data['issues']=[{'severity':'warning','code':1,'path':'Bopify.app','message':'Apple diagnostic: fixture issue 42','docUrl':None,'architecture':'arm64'}]
         Path(args[3]).write_text(json.dumps(data))
 '''
 
@@ -88,7 +86,7 @@ class ReleasePipelineTests(unittest.TestCase):
                 shutil.copy2(ROOT / 'scripts' / name, self.root / 'scripts' / name)
         (self.root / 'scripts/build-rust.sh').write_text('#!/bin/sh\nexit "${FAIL_BUILD:-0}"\n')
         (self.root / 'scripts/build-rust.sh').chmod(0o755)
-        (self.root / 'scripts/gen-notices.sh').write_text('#!/bin/sh\nprintf "<html>test third party licenses</html>\\n" > "$1"\n')
+        (self.root / 'scripts/gen-notices.sh').write_text('#!/bin/sh\nprintf "<html>test third party licenses</html>\\n" > "$1"\nchmod 644 "$1"\n')
         (self.root / 'scripts/gen-notices.sh').chmod(0o755)
         for name in ['git', 'security', 'xcodebuild', 'codesign', 'lipo', 'hdiutil', 'xcrun', 'spctl']:
             path = self.root / 'bin' / name
@@ -120,6 +118,40 @@ class ReleasePipelineTests(unittest.TestCase):
         self.assertTrue(infos)
         self.assertTrue(all(plistlib.loads(info.read_bytes())['CFBundleShortVersionString']=='0.1.0' for info in infos))
         self.assertTrue(all((info.parent/'Resources/Third-Party Licenses.html').is_file() for info in infos))
+
+    def test_selected_certificate_is_used_for_archive_export_and_dmg(self):
+        fingerprint = 'A' * 40
+        result = self.release(SIGN_IDENTITY=fingerprint)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = [json.loads(line) for line in self.trace.read_text().splitlines()]
+        archive = next(call['args'] for call in calls if call['stage'] == 'archive')
+        exported = next(call['args'] for call in calls if call['stage'] == 'export')
+        signed = next(call['args'] for call in calls if call['stage'] == 'sign')
+        self.assertIn('CODE_SIGN_IDENTITY=' + fingerprint, archive)
+        options = plistlib.loads(Path(exported[exported.index('-exportOptionsPlist') + 1]).read_bytes())
+        self.assertEqual(options['signingCertificate'], fingerprint)
+        self.assertEqual(signed[signed.index('--sign') + 1], fingerprint)
+
+    def test_restrictive_umask_keeps_all_shipped_notices_publicly_readable(self):
+        previous = os.umask(0o077)
+        try:
+            result = self.release()
+        finally:
+            os.umask(previous)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        notices = list((self.root / 'build').rglob('LICENSE.txt'))
+        notices += list((self.root / 'build').rglob('Third-Party Licenses.html'))
+        self.assertTrue(notices)
+        for notice in notices:
+            self.assertEqual(notice.stat().st_mode & 0o444, 0o444, str(notice))
+
+    def test_notary_rejections_and_warnings_print_apple_diagnosis(self):
+        for changes in [{'NOTARY_STATUS': 'Invalid'}, {}, {'FAIL_STAGE': 'submit'}]:
+            with self.subTest(changes=changes):
+                result = self.release(NOTARY_WARNING='1', **changes)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('Apple diagnostic: fixture issue 42', result.stdout + result.stderr)
+                self.assertFalse(self.final.exists())
 
     def test_invalid_version_cannot_create_build_output(self):
         for version in ['../escape','1.2','1.2.3/../../escape','1.2.3\nextra']:
