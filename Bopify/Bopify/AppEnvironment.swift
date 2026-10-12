@@ -97,11 +97,16 @@ final class AppEnvironment {
          recoveryEngineFactory: (@Sendable (String, PlaybackEngineConfiguration) async throws -> any ManagedPlaybackEngine)? = nil) {
         auth = playbackAuth ?? SpotifyAuthService(clientID: librespotClientID,
             store: KeychainTokenStore(service: "com.leesiongchan.bopify.preview.\(UUID().uuidString)"))
-        let previewDefaults = UserDefaults(suiteName: "com.leesiongchan.bopify.preview.\(UUID().uuidString)")!
+        // A temp-path suite keeps previews out of ~/Library/Preferences.
+        // The actor reads the ID in init, so the domain can go at once.
+        let previewSuite = FileManager.default.temporaryDirectory
+            .appendingPathComponent("com.leesiongchan.bopify.preview.\(UUID().uuidString)").path
+        let previewDefaults = UserDefaults(suiteName: previewSuite)!
         previewDefaults.set(String(repeating: "0", count: 32), forKey: LibraryAuthorization.defaultsKey)
         let previewLibraryAuth = libraryAuth ?? SpotifyAuthService(clientID: String(repeating: "0", count: 32),
             store: KeychainTokenStore(service: "com.leesiongchan.bopify.preview.library.\(UUID().uuidString)"))
-        self.libraryAuth = LibraryAuthorization(defaults: previewDefaults) { _ in previewLibraryAuth }
+        self.libraryAuth = LibraryAuthorization(suiteName: previewSuite) { _ in previewLibraryAuth }
+        previewDefaults.removePersistentDomain(forName: previewSuite)
         libraryClientID = String(repeating: "0", count: 32)
         self.artworkStore = artworkStore
         favorite = FavoriteModel(service: favoriteService)
