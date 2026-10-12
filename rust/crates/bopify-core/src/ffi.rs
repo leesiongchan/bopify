@@ -1,19 +1,5 @@
-//! The C ABI Swift links against.
-//!
-//! **The contract lives in one place: the `header` block in
-//! `rust/cbindgen.toml`.** That block is what reaches `bopify_core.h`, which
-//! is what Swift actually reads, so it is the copy that has to be right.
-//! This comment used to restate it here and the two had already drifted --
-//! the header carried a rule about commands returning "enqueued, not took
-//! effect" that this file never mentioned. Read the contract there and
-//! change it there.
-//!
-//! What is true here and nowhere else: `BopifyEngine` is never freed. It
-//! holds `alive: AtomicBool` beside `RwLock<Option<Engine>>` so that a
-//! caller who uses a destroyed handle gets `SessionLost` instead of
-//! undefined behaviour. That turns the worst cross-language mistake -- a
-//! use-after-free reached from Swift -- into a bounded leak, which is the
-//! whole reason the type is shaped this way.
+//! C ABI for Swift; the caller contract is defined in `rust/cbindgen.toml`.
+//! Destroy retains the handle shell so late calls return SessionLost safely.
 
 use std::ffi::{CStr, c_char, c_void};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -21,14 +7,7 @@ use std::sync::{Arc, PoisonError, RwLock};
 
 use crate::{engine::Engine, error::BopifyError, event::WireEvent};
 
-/// Opaque handle. Swift never looks inside.
-///
-/// The box behind this pointer is **never freed**, which is what makes a
-/// command racing `bopify_engine_destroy` safe: destroy drops the `Engine`
-/// out of the `Option` under the write lock and leaves the shell behind, so
-/// a concurrent or late call still reads live memory and gets `SessionLost`.
-/// Each successful replacement retains one small shell. Runtime and callback
-/// resources are reclaimed; the retained shell protects late callers.
+/// Opaque handle retained after destroy to keep concurrent and late calls safe.
 pub struct BopifyEngine {
     /// Read without the lock so a late command fails fast instead of queueing
     /// behind a write lock that is held across a multi-second runtime drop.
@@ -36,10 +15,7 @@ pub struct BopifyEngine {
     inner: RwLock<Option<Engine>>,
 }
 
-// Commands arrive on arbitrary Swift threads, so the engine really is shared.
-// Nothing checks that across an `extern "C"` boundary, and `RwLock<Option<T>>`
-// is only `Sync` when `T: Send + Sync`, so assert it here: a future field that
-// breaks it should fail the build, not the app.
+// FFI callers share the engine across threads; enforce that invariant at compile time.
 const _: fn() = || {
     fn assert_send_sync<T: Send + Sync>() {}
     assert_send_sync::<Engine>();
@@ -49,18 +25,14 @@ const _: fn() = || {
 struct SendCtx(*mut c_void);
 
 impl SendCtx {
-    /// Reading through this method rather than the field matters: closure
-    /// capture is per-field, so `ctx.0` would capture the bare `*mut c_void`
-    /// and lose the `Send`/`Sync` impls below.
+    // Access through a method so closures capture SendCtx rather than its non-Send field.
     fn as_ptr(&self) -> *mut c_void {
         self.0
     }
 }
 
-// SAFETY: the pointer is opaque here -- Rust never dereferences it, it is
-// only handed back to the Swift callback. Swift owns the pointee, and the
-// contract above requires it to remain valid, and safe to touch from a
-// non-main thread, until `bopify_engine_destroy` returns.
+// SAFETY: Rust only returns this opaque pointer to the callback; the caller
+// keeps its pointee valid and thread-safe until destroy returns.
 unsafe impl Send for SendCtx {}
 unsafe impl Sync for SendCtx {}
 
@@ -91,13 +63,8 @@ unsafe fn write_err(out_err: *mut i32, code: i32) {
     }
 }
 
-/// Builds a Connect device and starts pushing events into `callback`, which
-/// receives one UTF-8 JSON event per call in a buffer valid only for that
-/// call.
-///
-/// The callback type is written out rather than aliased: cbindgen renders
-/// `Option<fn>` as a nullable function pointer only when it can see a literal
-/// function pointer, and turns an aliased one into an opaque by-value struct.
+/// Starts a Connect device and delivers UTF-8 JSON buffers valid only during each callback.
+// cbindgen needs the literal Option<fn> type to generate a nullable function pointer.
 ///
 /// # Safety
 /// `access_token` and `device_name` must each be a NUL-terminated UTF-8
@@ -216,14 +183,7 @@ unsafe fn create_engine(
     }
 }
 
-/// Shuts the engine down. Idempotent, and safe to call while other entry
-/// points are running on other threads.
-///
-/// Blocks until every runtime thread and librespot's audio thread have
-/// stopped, which is what makes a callback after this point impossible.
-/// That applies to *every* caller: a second, concurrent destroy waits for
-/// the first one's teardown rather than returning early, so the guarantee
-/// holds no matter which call a caller is holding `ctx` for.
+/// Stops the engine and joins its workers before returning, including concurrent destroys.
 ///
 /// # Safety
 /// `handle` must be null or a pointer returned by `bopify_engine_create`.
@@ -242,21 +202,10 @@ pub unsafe extern "C" fn bopify_engine_destroy(handle: *mut BopifyEngine) {
     // hint, not the synchronisation: the lock is.
     handle.alive.store(false, Ordering::Release);
 
-    // Every caller waits here, including a concurrent second destroy.
-    //
-    // Returning early on an already-cleared `alive` would be faster and is
-    // wrong: the loser of that race would return while the winner is still
-    // inside `Runtime::drop`, and a caller that releases `ctx` when destroy
-    // returns -- exactly what this module's contract tells it to do -- would
-    // be releasing it under a live callback. Taking a *read* lock instead is
-    // not a substitute either: it can be acquired before the winner has even
-    // requested the write lock, and return early just the same.
+    // Every destroy must wait for teardown before its caller may release ctx.
     let mut guard = handle.inner.write().unwrap_or_else(PoisonError::into_inner);
     let was_live = guard.is_some();
-    // The Engine must be dropped while this write guard is held: that is what
-    // makes "no callback after destroy returns" true, because the drop is
-    // where the runtime joins its threads. Assigning None drops it in place;
-    // do not hoist it into a local, and do not move it out of the lock.
+    // Drop under the write lock so concurrent destroys cannot return before workers stop.
     *guard = None;
     drop(guard);
 
@@ -267,12 +216,7 @@ pub unsafe extern "C" fn bopify_engine_destroy(handle: *mut BopifyEngine) {
     }
 }
 
-/// Runs `command` against the live engine, holding the read lock for exactly
-/// as long as the call takes.
-///
-/// Returns `InvalidArgument` for a null handle and `SessionLost` once the
-/// engine has been destroyed -- which Swift already maps to
-/// `PlayerError.playbackSessionLost`.
+/// Rejects null or destroyed handles and holds the read lock while submitting a command.
 ///
 /// # Safety
 /// `handle` must be null or a pointer returned by `bopify_engine_create`.
@@ -289,9 +233,7 @@ where
     if !handle.alive.load(Ordering::Relaxed) {
         return BopifyError::SessionLost.code();
     }
-    // Poisoning means some earlier command panicked. A command is only a
-    // channel send, so it cannot leave the Engine half-modified, and refusing
-    // the lock here would strand the runtime instead.
+    // Commands only enqueue work; recover a poisoned lock so teardown remains possible.
     let guard = handle.inner.read().unwrap_or_else(PoisonError::into_inner);
     match guard.as_ref() {
         Some(engine) => match command(engine) {
@@ -308,9 +250,7 @@ where
     }
 }
 
-// The five no-argument commands are spelled out rather than generated by a
-// macro: cbindgen parses the source without expanding `macro_rules!`, so a
-// generated entry point never reaches the header.
+// cbindgen does not expand macro_rules!, so ABI entry points must be explicit.
 
 /// # Safety
 /// `handle` must be null or a live handle from `bopify_engine_create`.
@@ -437,6 +377,9 @@ pub unsafe extern "C" fn bopify_load(
         return BopifyError::InvalidArgument.code();
     };
     let start = unsafe { str_from(start_track_uri) };
+    if !start_track_uri.is_null() && start.is_none() {
+        return BopifyError::InvalidArgument.code();
+    }
     // SAFETY: forwards this function's own contract to `with_engine`.
     unsafe {
         with_engine(handle, |engine| {
@@ -468,8 +411,7 @@ pub unsafe extern "C" fn bopify_request_radio(
     unsafe { with_engine(handle, |engine| engine.request_radio(seed, request_id)) }
 }
 
-/// Always fails with `SessionLost`: librespot cannot swap credentials in
-/// place, so the caller has to destroy the engine and create a new one.
+/// Valid calls return `SessionLost`: librespot cannot swap credentials in place.
 ///
 /// # Safety
 /// `handle` must be null or a live handle from `bopify_engine_create`, and
@@ -480,26 +422,18 @@ pub unsafe extern "C" fn bopify_update_token(
     access_token: *const c_char,
 ) -> i32 {
     log::debug!("ffi: bopify_update_token");
-    // Arguments are validated before the handle's state, matching
-    // `bopify_load`: a malformed call is a caller bug either way, and
-    // reporting it as SessionLost would send Swift off rebuilding the engine.
-    //
+    // Reject malformed input before SessionLost can trigger an unnecessary rebuild.
     // SAFETY: satisfies `str_from`'s contract per the header; the borrow is
     // consumed before returning.
     let Some(_token) = (unsafe { str_from(access_token) }) else {
         return BopifyError::InvalidArgument.code();
     };
-    // SAFETY: forwards this function's own contract to `with_engine`. The
-    // engine is only looked up so a null or destroyed handle is reported as
-    // such rather than as the unsupported-operation answer below.
+    // SAFETY: the handle satisfies with_engine's contract.
     let looked_up = unsafe { with_engine(handle, |_| Ok(())) };
     if looked_up != 0 {
         return looked_up;
     }
-    // librespot has no in-place credential swap: `Credentials` is consumed by
-    // `Spirc::new`. Returning SessionLost tells Swift to tear down and rebuild
-    // the engine, which is the behaviour the facade already implements for a
-    // dead session.
+    // Spirc consumes credentials at creation; SessionLost asks Swift to rebuild.
     log::info!("ffi: bopify_update_token unsupported, asking Swift to rebuild the engine");
     BopifyError::SessionLost.code()
 }
@@ -508,9 +442,7 @@ pub unsafe extern "C" fn bopify_update_token(
 mod tests {
     use super::*;
 
-    /// Stands in for a handle whose `Engine` destroy has already taken.
-    /// Building a real one needs a network login, but every command reaches
-    /// the engine through `with_engine`, so this exercises the whole guard.
+    // Exercises handle guards without a network login.
     fn handle_without_an_engine(alive: bool) -> *mut BopifyEngine {
         Box::into_raw(Box::new(BopifyEngine {
             alive: AtomicBool::new(alive),
@@ -580,6 +512,20 @@ mod tests {
     }
 
     #[test]
+    fn load_rejects_invalid_utf8_in_an_optional_start_track() {
+        let ptr = handle_without_an_engine(false);
+        let invalid = c"\xff";
+        // SAFETY: the handle and NUL-terminated strings remain valid throughout the call.
+        unsafe {
+            assert_eq!(
+                bopify_load(ptr, c"spotify:album:x".as_ptr(), invalid.as_ptr(), 0),
+                BopifyError::InvalidArgument.code()
+            );
+            release(ptr);
+        }
+    }
+
+    #[test]
     fn losing_the_race_with_destroy_also_reports_session_lost() {
         // `alive` is still true but the engine is gone: the window between
         // the relaxed `alive` read and taking the read lock.
@@ -613,11 +559,7 @@ mod tests {
             let _ = tx.send(());
         });
 
-        // The property the header promises: destroy does not return while
-        // teardown is still in progress, even for a caller that lost the
-        // race. Before the fix this returned immediately on the `alive`
-        // check, and a caller releasing `ctx` here would have released it
-        // under a live callback.
+        // A concurrent destroy must not return while ctx is still in use.
         assert_eq!(
             rx.recv_timeout(Duration::from_millis(200)),
             Err(RecvTimeoutError::Timeout),

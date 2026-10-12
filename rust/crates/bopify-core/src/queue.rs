@@ -50,13 +50,32 @@ impl MetadataRequest {
 /// Looks a track or episode up for display; `None` when it cannot be resolved.
 pub(crate) async fn lookup(session: Session, raw: String) -> Option<WireTrack> {
     let uri = SpotifyUri::from_uri(&raw).ok()?;
-    AudioItem::get_file(&session, uri).await.ok().map(track_metadata)
+    if !matches!(uri, SpotifyUri::Track { .. } | SpotifyUri::Episode { .. }) || uri.to_uri() != raw
+    {
+        return None;
+    }
+    AudioItem::get_file(&session, uri)
+        .await
+        .ok()
+        .map(track_metadata)
 }
 
 pub(crate) fn start(session: Session, sink: EventSink) -> watch::Sender<Option<MetadataRequest>> {
     let (sender, receiver) = watch::channel(None);
     tokio::spawn(run(receiver, sink, move |raw| lookup(session.clone(), raw)));
     sender
+}
+
+pub(crate) async fn with_metadata_deadline(
+    lookup: impl Future<Output = Option<WireTrack>>,
+) -> Option<WireTrack> {
+    match tokio::time::timeout(std::time::Duration::from_secs(30), lookup).await {
+        Ok(track) => track,
+        Err(_) => {
+            log::debug!("metadata: lookup deadline expired");
+            None
+        }
+    }
 }
 
 async fn run<F, Fut>(
@@ -68,6 +87,7 @@ async fn run<F, Fut>(
     Fut: Future<Output = Option<WireTrack>> + Send + 'static,
 {
     let mut jobs = JoinSet::new();
+    let mut in_flight = HashMap::new();
     let mut pending: VecDeque<(String, String)> = VecDeque::new();
     let mut cache: HashMap<String, WireTrack> = HashMap::new();
     let mut recent: VecDeque<String> = VecDeque::new();
@@ -87,24 +107,31 @@ async fn run<F, Fut>(
                 recent.push_back(uri);
             } else {
                 let lookup = fetch(uri.clone());
-                jobs.spawn(async move { (generation, entry_id, uri, lookup.await) });
+                let task = jobs.spawn(with_metadata_deadline(lookup));
+                in_flight.insert(task.id(), (entry_id, uri));
             }
         }
         tokio::select! {
             biased;
             changed = requests.changed() => {
                 if changed.is_err() { break; }
-                jobs.abort_all();
-                // Drain cancellation before admitting another four lookups.
-                while jobs.join_next().await.is_some() {}
+                jobs.shutdown().await;
+                in_flight.clear();
                 if let Some(request) = requests.borrow_and_update().clone() {
                     generation = request.generation;
                     pending = request.entries.into();
                 }
             }
-            result = jobs.join_next(), if !jobs.is_empty() => {
-                if let Some(Ok((version, entry_id, uri, track))) = result {
-                    if version != generation { continue; }
+            result = jobs.join_next_with_id(), if !jobs.is_empty() => {
+                if let Some(result) = result {
+                    let (id, track) = match result {
+                        Ok(result) => result,
+                        Err(error) => {
+                            log::error!("queue: metadata lookup task failed");
+                            (error.id(), None)
+                        }
+                    };
+                    let Some((entry_id, uri)) = in_flight.remove(&id) else { continue };
                     if let Some(track) = &track {
                         cache.insert(uri.clone(), track.clone());
                         recent.retain(|key| key != &uri);
@@ -135,6 +162,65 @@ mod tests {
             generation,
             entries: vec![("entry".into(), uri.into())],
         }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn stalled_lookups_report_failure_and_release_capacity() {
+        let (tx, rx) = watch::channel(None);
+        let (events, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let observed = calls.clone();
+        let task = tokio::spawn(run(
+            rx,
+            Arc::new(move |event| {
+                events.send(event).unwrap();
+            }),
+            move |_| {
+                observed.fetch_add(1, Ordering::SeqCst);
+                std::future::pending::<Option<WireTrack>>()
+            },
+        ));
+        tx.send(Some(MetadataRequest {
+            generation: 3,
+            entries: (0..5).map(|i| (i.to_string(), i.to_string())).collect(),
+        }))
+        .unwrap();
+        let event = tokio::time::timeout(std::time::Duration::from_secs(31), received.recv())
+            .await
+            .expect("stalled metadata must produce a row failure")
+            .unwrap();
+        assert!(matches!(
+            event,
+            WireEvent::QueueMetadata {
+                generation: 3,
+                track: None,
+                ..
+            }
+        ));
+        assert_eq!(calls.load(Ordering::SeqCst), 5);
+        task.abort();
+    }
+
+    #[tokio::test]
+    async fn a_panicking_lookup_reports_the_row_failure() {
+        let (tx, rx) = watch::channel(None);
+        let (events, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let task = tokio::spawn(run(
+            rx,
+            Arc::new(move |event| {
+                events.send(event).unwrap();
+            }),
+            |_| async { panic!("metadata lookup failed") },
+        ));
+        tx.send(Some(request(7, "panicked"))).unwrap();
+        let event = tokio::time::timeout(std::time::Duration::from_secs(1), received.recv())
+            .await
+            .expect("lookup panic must not leave the row loading")
+            .unwrap();
+        assert!(
+            matches!(event, WireEvent::QueueMetadata { generation: 7, entry_id, track: None } if entry_id == "entry")
+        );
+        task.abort();
     }
     #[tokio::test]
     async fn replacement_cancels_old_metadata_and_reports_row_failure() {
@@ -215,13 +301,32 @@ mod tests {
         let (events, mut received) = tokio::sync::mpsc::unbounded_channel();
         let calls = Arc::new(AtomicUsize::new(0));
         let observed = calls.clone();
-        let task = tokio::spawn(run(rx, Arc::new(move |event| { events.send(event).unwrap(); }), move |uri| {
-            observed.fetch_add(1, Ordering::SeqCst);
-            async move { Some(WireTrack { track_uri: uri, title: "Title".into(), artists: vec![], album_title: None, artwork_url: None, duration_ms: 1000 }) }
-        }));
+        let task = tokio::spawn(run(
+            rx,
+            Arc::new(move |event| {
+                events.send(event).unwrap();
+            }),
+            move |uri| {
+                observed.fetch_add(1, Ordering::SeqCst);
+                async move {
+                    Some(WireTrack {
+                        track_uri: uri,
+                        title: "Title".into(),
+                        artists: vec![],
+                        album_title: None,
+                        artwork_url: None,
+                        duration_ms: 1000,
+                    })
+                }
+            },
+        ));
         for version in 1..=129 {
-            tx.send(Some(request(version, &version.to_string()))).unwrap();
-            tokio::time::timeout(std::time::Duration::from_secs(1), received.recv()).await.unwrap().unwrap();
+            tx.send(Some(request(version, &version.to_string())))
+                .unwrap();
+            tokio::time::timeout(std::time::Duration::from_secs(1), received.recv())
+                .await
+                .unwrap()
+                .unwrap();
         }
         tx.send(Some(request(130, "129"))).unwrap();
         received.recv().await.unwrap();
@@ -231,5 +336,4 @@ mod tests {
         assert_eq!(calls.load(Ordering::SeqCst), 130);
         task.abort();
     }
-
 }

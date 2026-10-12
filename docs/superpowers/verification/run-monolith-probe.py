@@ -79,6 +79,13 @@ if options.probe == 'pressing':
     assert (app / 'Resources/default.metallib').is_file(), 'fixture shader library missing'
 (app / 'Info.plist').write_text('<plist version="1.0"><dict><key>CFBundleExecutable</key><string>MonolithProbe</string><key>CFBundleIdentifier</key><string>com.leesiongchan.bopify.monolith-probe</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>')
 
+if options.probe == 'live-library':
+    # A certificate-backed identity keeps Keychain approval valid across rebuilds.
+    print("Signing live library probe with Apple Development", flush=True)
+    subprocess.run(['codesign', '--force', '--sign', 'Apple Development', '--identifier',
+                    'com.leesiongchan.bopify.monolith-probe', str(app.parent)], check=True)
+    subprocess.run(['codesign', '--verify', '--strict', str(app.parent)], check=True)
+
 print(app / "MacOS/MonolithProbe")
 
 result = subprocess.run([str(app / "MacOS/MonolithProbe"), str(probe)])

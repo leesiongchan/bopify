@@ -1,65 +1,30 @@
 //! Forwards the `log` facade to `os_log`, under the subsystem Swift uses.
-//!
-//! Hand-rolled rather than taken from a crate: the only `log::Log`
-//! implementation on crates.io that is widely used is four years
-//! unmaintained and pulls a concurrent hashmap to cache category objects,
-//! which the logging runtime already caches itself ("one per
-//! subsystem/category pair ... these objects are never deallocated",
-//! `os/log.h`). What is left is small enough to own.
 
-use std::ffi::{CString, c_char, c_void};
-use std::sync::Once;
+use std::ffi::{CStr, CString, c_char, c_void};
+use std::sync::{Once, OnceLock};
 
 use log::{Level, LevelFilter, Log, Metadata, Record};
 
-/// Shared with `BopifyLog.subsystem` on the Swift side, so one
-/// `log stream --subsystem com.leesiongchan.bopify` shows both halves of the app.
-const SUBSYSTEM: &str = "com.leesiongchan.bopify";
+// Matches Swift's BopifyLog so both halves appear in the same log stream.
+const SUBSYSTEM: &CStr = c"com.leesiongchan.bopify";
 
-/// The engine, the FFI layer and event translation are all one thing to
-/// someone reading the log, and Swift already calls that `playback`.
-const CATEGORY_PLAYBACK: &str = "playback";
+const CATEGORY_PLAYBACK: &CStr = c"playback";
 
-/// librespot gets its own category so it stays filterable, in or out.
-const CATEGORY_LIBRESPOT: &str = "librespot";
+const CATEGORY_LIBRESPOT: &CStr = c"librespot";
 
-/// librespot is extremely chatty at debug and trace and would swamp the
-/// unified log. There is no runtime switch to raise this -- that would mean
-/// a twelfth ABI function -- so to debug a connection problem, change this
-/// to `LevelFilter::Debug` and rebuild.
-///
-/// **Doing that needs no privacy review.** Everything routed to the
-/// `librespot` category is emitted with `%{private}s`, so whatever a future
-/// librespot version decides to interpolate stays out of collected logs and
-/// sysdiagnose at any level. The two decisions are coupled on purpose: the
-/// alternative was "re-audit the dependency's log statements before lowering
-/// this", which is a hope, not a safety property.
-///
-/// The cost, measured rather than assumed: on a stock machine those lines
-/// read `<private>` even in a local `log show`. If you need the text as well
-/// as the level, flip `OsLogBackend::new`'s `librespot` category to `true`
-/// in the same local edit -- it is four lines below this one -- and do not
-/// commit that. Enabling private data system-wide, via the
-/// `com.apple.system.logging` configuration profile, is the other route and
-/// affects every app on the machine.
+// Limit dependency noise; its messages stay private even if this ceiling is raised.
 const LIBRESPOT_CEILING: LevelFilter = LevelFilter::Warn;
 
-/// Our own modules log at debug; the FFI entry points depend on it.
 const OWN_CEILING: LevelFilter = LevelFilter::Debug;
 
-/// Symbols this crate imports. `lib.rs` keeps the whole module out of the
-/// generated header, since none of it is part of the published ABI.
 mod sys {
     use std::ffi::{c_char, c_void};
 
     unsafe extern "C" {
-        /// `OS_EXPORT` in `os/log.h`, so it links directly. The returned
-        /// object is owned by the logging runtime and never deallocated.
+        // The logging runtime owns the returned object for the process lifetime.
         pub fn os_log_create(subsystem: *const c_char, category: *const c_char) -> *mut c_void;
 
-        /// Ours, from `oslog_shim.c`. `type` is an `os_log_type_t`. The two
-        /// differ only in the privacy qualifier on the format string, which
-        /// has to be a literal at the C call site.
+        // Privacy qualifiers must be literals at the shim's C call sites.
         pub fn bopify_os_log_emit_public(log: *mut c_void, r#type: u8, message: *const c_char);
         pub fn bopify_os_log_emit_private(log: *mut c_void, r#type: u8, message: *const c_char);
     }
@@ -71,11 +36,8 @@ const OS_LOG_TYPE_INFO: u8 = 0x01;
 const OS_LOG_TYPE_DEBUG: u8 = 0x02;
 const OS_LOG_TYPE_ERROR: u8 = 0x10;
 
-/// An `os_log_t`, which is an opaque handle Rust only ever passes back,
-/// plus whether messages routed to it may appear in collected logs.
 struct Category {
     handle: *mut c_void,
-    /// True only for lines this project writes. See `Category::emit`.
     public: bool,
 }
 
@@ -86,20 +48,12 @@ unsafe impl Send for Category {}
 unsafe impl Sync for Category {}
 
 impl Category {
-    fn new(category: &str, public: bool) -> Self {
-        let subsystem = CString::new(SUBSYSTEM).expect("subsystem has no interior NUL");
-        let name = CString::new(category).expect("category has no interior NUL");
-        // SAFETY: both pointers are NUL-terminated and live for this call,
-        // which is all `os_log_create` requires. It always returns a usable
-        // object, never null.
-        let handle = unsafe { sys::os_log_create(subsystem.as_ptr(), name.as_ptr()) };
+    fn new(category: &CStr, public: bool) -> Self {
+        // SAFETY: both C strings remain valid for the call.
+        let handle = unsafe { sys::os_log_create(SUBSYSTEM.as_ptr(), category.as_ptr()) };
         Self { handle, public }
     }
 
-    /// The privacy qualifier is chosen by the origin of the line, not by its
-    /// content, so it cannot be wrong for a line nobody has read yet. That is
-    /// what makes raising `LIBRESPOT_CEILING` safe without re-auditing a
-    /// dependency's log statements.
     fn emit(&self, kind: u8, message: *const c_char) {
         // SAFETY: `self.handle` came from `os_log_create` and is never freed;
         // `message` is a NUL-terminated string that outlives the call.
@@ -121,11 +75,8 @@ struct OsLogBackend {
 impl OsLogBackend {
     fn new() -> Self {
         Self {
-            // Ours: public, because a redacted log of our own audited lines
-            // would be useless and there is nothing in them to protect.
+            // Only this crate's audited messages may be public.
             playback: Category::new(CATEGORY_PLAYBACK, true),
-            // Theirs: private, because we cannot audit what a future version
-            // will interpolate.
             librespot: Category::new(CATEGORY_LIBRESPOT, false),
         }
     }
@@ -140,8 +91,7 @@ impl Log for OsLogBackend {
         if !self.enabled(record.metadata()) {
             return;
         }
-        // An interior NUL can only come from a log message built out of
-        // binary data. Dropping the line beats truncating it at the NUL.
+        // Reject interior NULs rather than silently truncating the message.
         let Ok(message) = CString::new(format!("{}", record.args())) else {
             return;
         };
@@ -163,7 +113,7 @@ impl OsLogBackend {
 }
 
 fn is_ours(target: &str) -> bool {
-    target.starts_with("bopify_core")
+    target == "bopify_core" || target.starts_with("bopify_core::")
 }
 
 fn ceiling_for(target: &str) -> LevelFilter {
@@ -185,23 +135,16 @@ fn os_log_type(level: Level) -> u8 {
     }
 }
 
-/// Installs the backend once, on the first `bopify_engine_create`.
-///
-/// It hangs off that entry point rather than one of its own because the C
-/// ABI is pinned at eleven functions. Failure is ignored: a host that
-/// installed its own `log` backend first keeps it.
+/// Installs once, preserving any logger and filter already owned by the host.
 pub(crate) fn install() {
     static INSTALL: Once = Once::new();
+    static BACKEND: OnceLock<OsLogBackend> = OnceLock::new();
     INSTALL.call_once(|| {
-        let backend = OsLogBackend::new();
-        // `log`'s macros test the global ceiling before calling `enabled`,
-        // so it has to be the most permissive of the per-target ceilings.
-        log::set_max_level(OWN_CEILING.max(LIBRESPOT_CEILING));
-        // Leaked on purpose, and `set_logger` rather than
-        // `set_boxed_logger` so `log`'s `std` feature is not needed: the
-        // backend is installed once and the process keeps it, exactly like
-        // the `os_log_t` objects it holds.
-        if log::set_logger(Box::leak(Box::new(backend))).is_err() {
+        let backend = BACKEND.get_or_init(OsLogBackend::new);
+        if log::set_logger(backend).is_ok() {
+            // The facade filters before enabled(), so admit either category's ceiling.
+            log::set_max_level(OWN_CEILING.max(LIBRESPOT_CEILING));
+        } else {
             log::debug!("logging: a backend was already installed, keeping it");
         }
     });
@@ -213,7 +156,11 @@ mod tests {
 
     #[test]
     fn our_modules_map_to_the_swift_playback_category() {
-        for target in ["bopify_core::engine", "bopify_core::ffi", "bopify_core::event"] {
+        for target in [
+            "bopify_core::engine",
+            "bopify_core::ffi",
+            "bopify_core::event",
+        ] {
             assert!(is_ours(target), "{target}");
             assert_eq!(ceiling_for(target), LevelFilter::Debug);
         }
@@ -221,7 +168,11 @@ mod tests {
 
     #[test]
     fn librespot_is_a_separate_category_held_at_warn() {
-        for target in ["librespot_core::session", "librespot_playback::player", "tokio::runtime"] {
+        for target in [
+            "librespot_core::session",
+            "librespot_playback::player",
+            "tokio::runtime",
+        ] {
             assert!(!is_ours(target), "{target}");
             assert_eq!(ceiling_for(target), LevelFilter::Warn);
         }
@@ -239,6 +190,8 @@ mod tests {
     #[test]
     fn only_our_own_lines_are_public() {
         let backend = OsLogBackend::new();
+        assert!(!backend.category_for("bopify_core_extra::session").public);
+        assert!(backend.category_for("bopify_core").public);
         assert!(backend.category_for("bopify_core::engine").public);
         assert!(backend.category_for("bopify_core::ffi").public);
         assert!(!backend.category_for("librespot_core::session").public);
@@ -246,12 +199,32 @@ mod tests {
     }
 
     #[test]
-    fn a_real_category_can_be_created_and_written_to() {
-        // Exercises both shim functions and the os_log_create declaration: a
-        // bad signature or a missing symbol fails to link, and a bad pointer
-        // would crash here rather than in the app.
-        let message = CString::new("bopify logging self-test").unwrap();
-        Category::new("test", true).emit(OS_LOG_TYPE_DEBUG, message.as_ptr());
-        Category::new("test", false).emit(OS_LOG_TYPE_DEBUG, message.as_ptr());
+    fn existing_logger_keeps_its_filter() {
+        const CHILD: &str = "BOPIFY_HOST_LOGGER_TEST";
+        if std::env::var_os(CHILD).is_none() {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "logging::tests::existing_logger_keeps_its_filter",
+                ])
+                .env(CHILD, "1")
+                .status()
+                .unwrap();
+            assert!(status.success());
+            return;
+        }
+
+        struct HostLogger;
+        impl Log for HostLogger {
+            fn enabled(&self, _: &Metadata) -> bool {
+                true
+            }
+            fn log(&self, _: &Record) {}
+            fn flush(&self) {}
+        }
+        log::set_logger(&HostLogger).unwrap();
+        log::set_max_level(LevelFilter::Error);
+        install();
+        assert_eq!(log::max_level(), LevelFilter::Error);
     }
 }

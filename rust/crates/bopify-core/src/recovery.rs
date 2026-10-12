@@ -64,8 +64,8 @@ impl EngineCreateOptions {
             if let Some(identity) = &s.identity {
                 if !matches!(
                     librespot_core::SpotifyUri::from_uri(&identity.track_uri),
-                    Ok(librespot_core::SpotifyUri::Track { .. }
-                        | librespot_core::SpotifyUri::Episode { .. })
+                    Ok(uri @ (librespot_core::SpotifyUri::Track { .. }
+                        | librespot_core::SpotifyUri::Episode { .. })) if uri.to_uri() == identity.track_uri
                 ) {
                     return Err(BopifyError::InvalidArgument);
                 }
@@ -126,5 +126,26 @@ mod tests {
             assert!(EngineCreateOptions::parse(json).is_err());
         }
         assert!(EngineCreateOptions::parse(r#"{"deviceId":"own","startup":"recovery","snapshot":{"wasActive":true,"shouldResume":false,"identity":null,"positionMs":0,"volume":0,"shuffleEnabled":false,"repeatMode":"off"}}"#).is_ok());
+    }
+
+    #[test]
+    fn recovery_rejects_noncanonical_track_identities() {
+        for uri in [
+            "spotify:track:6rqhFgbbKwnb9MLmUQDhG6:extra",
+            "spotify:user:alice:track:6rqhFgbbKwnb9MLmUQDhG6",
+        ] {
+            let json = serde_json::json!({
+                "deviceId": "own", "startup": "recovery",
+                "snapshot": {
+                    "wasActive": true, "shouldResume": true,
+                    "identity": { "trackUri": uri }, "positionMs": 0,
+                    "volume": 0.5, "shuffleEnabled": false, "repeatMode": "off"
+                }
+            });
+            assert!(
+                EngineCreateOptions::parse(&json.to_string()).is_err(),
+                "{uri}"
+            );
+        }
     }
 }

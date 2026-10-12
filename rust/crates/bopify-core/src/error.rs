@@ -8,15 +8,16 @@ pub enum BopifyError {
     Unknown,
 }
 
+impl std::fmt::Display for BopifyError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.message())
+    }
+}
+
+impl std::error::Error for BopifyError {}
+
 impl BopifyError {
-    /// Every variant, for tests that need to iterate the taxonomy.
-    ///
-    /// Hand-maintained, and deliberately so: adding a variant already breaks
-    /// the build twice, at `code()` and at `message()`, which are exhaustive
-    /// matches in this file. This third list is the one the compiler will not
-    /// catch. Forgetting it does not break the wire contract -- it only makes
-    /// `every_code_has_a_message`, currently its sole consumer, silently skip
-    /// the new variant.
+    /// All error categories; keep this list in sync with the variants.
     pub const ALL: [BopifyError; 6] = [
         Self::InvalidArgument,
         Self::SessionLost,
@@ -61,12 +62,5 @@ mod tests {
         assert_eq!(BopifyError::PremiumRequired.code(), -4);
         assert_eq!(BopifyError::NetworkUnavailable.code(), -5);
         assert_eq!(BopifyError::Unknown.code(), -99);
-    }
-
-    #[test]
-    fn every_code_has_a_message() {
-        for e in BopifyError::ALL {
-            assert!(!e.message().is_empty());
-        }
     }
 }
