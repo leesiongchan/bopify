@@ -603,6 +603,126 @@
         }
       }
     },
+    "librarySetup.clientID" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Client ID"
+          }
+        }
+      }
+    },
+    "librarySetup.copy" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy"
+          }
+        }
+      }
+    },
+    "librarySetup.intro" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Favorites, Liked Songs and listening history need your own free Spotify app. Spotify lets each app serve only five people, so Bopify can't share one. Playback works without it."
+          }
+        }
+      }
+    },
+    "librarySetup.invalid" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A Client ID is 32 letters and numbers."
+          }
+        }
+      }
+    },
+    "librarySetup.openDashboard" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Spotify Developer Dashboard"
+          }
+        }
+      }
+    },
+    "librarySetup.save" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save"
+          }
+        }
+      }
+    },
+    "librarySetup.step1" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1. Open the Spotify Developer Dashboard and click Create app. Your account needs Premium."
+          }
+        }
+      }
+    },
+    "librarySetup.step2" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2. Add this Redirect URI and tick Web API:"
+          }
+        }
+      }
+    },
+    "librarySetup.step3" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "3. Save the app. Under User Management, add your own Spotify account's name and email — Spotify blocks anyone not on that list, owner included."
+          }
+        }
+      }
+    },
+    "librarySetup.step4" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "4. Paste the app's Client ID below."
+          }
+        }
+      }
+    },
+    "librarySetup.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Library Access"
+          }
+        }
+      }
+    },
+    "menu.libraryAccess" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Library Access…"
+          }
+        }
+      }
+    },
     "menu.options" : {
       "localizations" : {
         "en" : {
