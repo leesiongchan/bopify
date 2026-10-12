@@ -172,14 +172,22 @@ final class AppEnvironment {
     }
 
     func setLibraryClientID(_ raw: String) async {
+        guard LibraryAuthorization.normalized(raw) != nil else { return }
+        // A misconfigured app's consent never redirects (INVALID_CLIENT), so every Save abandons it.
+        // Reset before awaiting so the cancelled consent cannot post its failure notice.
+        libraryGeneration += 1
+        isEnablingLibrary = false
+        await libraryAuth.cancelPendingWork()
+        BopifyLog.library.info("library setup saved; pending consent cancelled")
         let previous = libraryClientID
         guard let id = try? await libraryAuth.setClientID(raw) else { return }
         libraryClientID = id
         librarySetupWindow.close()
-        if id != previous { clearLibrary() }
+        if let previous, id != previous { clearLibrary() }
         let scopes = pendingLibraryScopes
         pendingLibraryScopes = []
-        if !scopes.isEmpty { await enableLibrary(scopes: scopes) }
+        // Unstructured so Save returns once the ID is stored rather than when consent ends.
+        if !scopes.isEmpty { Task { await enableLibrary(scopes: scopes) } }
     }
 
     private func clearLibrary() {
@@ -257,6 +265,7 @@ final class AppEnvironment {
         connectionMonitor?.stop()
         recovery?.invalidate()
         authState = .signedOut
+        pendingLibraryScopes = []
         let clearingAuth = Task { [auth] in await auth.signOut() }
         await serialize { [self] in
             await clearingAuth.value
