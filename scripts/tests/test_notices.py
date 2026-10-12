@@ -49,6 +49,7 @@ exit "${PROBE_GENERATE_EXIT:-0}"
         result = self.run_generator()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('<pre>license text</pre>', self.output.read_text())
+        self.assertEqual(self.output.stat().st_mode & 0o444, 0o444, 'installed notices must remain readable by other users')
 
     def test_generation_failure_keeps_previous_complete_output(self):
         result = self.run_generator(PROBE_GENERATE_EXIT='7')
