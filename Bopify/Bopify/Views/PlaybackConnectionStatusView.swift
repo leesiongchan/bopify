@@ -23,6 +23,10 @@ struct PlaybackConnectionStatusView: View {
             case .invalidCallback: "error.invalidCallback"
             case .networkUnavailable: "error.networkUnavailable"
             case .playbackSessionLost: "error.playbackSessionLost"
+            case .credentialUnavailable: "error.credentialUnavailable"
+            case .credentialAccessDenied: "error.credentialAccessDenied"
+            case .credentialCorrupt: "error.credentialCorrupt"
+            case .credentialSaveFailed: "error.credentialSaveFailed"
             case .unknown: "error.unknown"
             }
         default: "connection.reconnecting"
@@ -32,14 +36,15 @@ struct PlaybackConnectionStatusView: View {
     var message: Text { Text(LocalizedStringKey(messageKey)) }
     var actionKey: String? {
         switch status {
-        case .needsReauthentication: "connection.reconnect"
+        case .needsReauthentication, .failed(.credentialCorrupt): "connection.reconnect"
+        case let .failed(error) where error.canRetryCredentials: "connection.retryCredentials"
         case .ready where restorationUnavailable: "connection.retryRestoration"
         case .connecting, .restoring, .reconnecting, .offline: "connection.retry"
         default: nil
         }
     }
     func performAction() {
-        if status == .needsReauthentication { onReconnect() } else { onRetry() }
+        if status == .needsReauthentication || status == .failed(.credentialCorrupt) { onReconnect() } else { onRetry() }
     }
     @ViewBuilder var actions: some View {
         if let actionKey { Button(LocalizedStringKey(actionKey), action: performAction) }

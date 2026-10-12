@@ -131,4 +131,31 @@ struct PlayerRecoveryTests {
         #expect(old.recordedCommands.isEmpty)
         model.stop()
     }
+
+    @Test(arguments: [true, false]) func audioFaultPreservesResumeIntentAndIgnoresLateEvents(_ wasPlaying: Bool) async throws {
+        let engine = RecoveryStubEngine()
+        let model = PlayerModel(engine: engine)
+        var snapshots: [PlaybackRecoverySnapshot] = []
+        var reasons: [SessionLossReason] = []
+        model.onSessionLost = { reason, snapshot in reasons.append(reason); snapshots.append(snapshot) }
+        model.start()
+        engine.emit(.trackChanged(track())); engine.emit(.recoveryIdentity(identity))
+        engine.emit(wasPlaying ? .playing(positionMs: 3200) : .paused(positionMs: 3200))
+        engine.emit(.volumeChanged(volume: 0.3))
+        await settle()
+        let fault = try JSONDecoder().decode(PlaybackEvent.self, from: Data(#"{"type":"sessionLost","reason":"audioOutputFailed"}"#.utf8))
+        engine.emit(fault); engine.emit(.paused(positionMs: 0)); engine.emit(.endOfTrack)
+        engine.emit(.activeDeviceChanged(isActive: false)); engine.emit(fault)
+        await settle()
+        #expect(reasons == [.audioOutputFailed])
+        #expect(snapshots.count == 1)
+        #expect(snapshots.first?.shouldResume == wasPlaying)
+        #expect(snapshots.first?.wasActive == true)
+        #expect(snapshots.first?.identity?.trackUID == "second")
+        #expect(snapshots.first?.positionMs ?? 0 >= 3200)
+        #expect(snapshots.first?.volume == 0.3)
+        #expect(!model.isEngineReady)
+        model.stop()
+    }
+
 }

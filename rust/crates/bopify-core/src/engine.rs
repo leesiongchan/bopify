@@ -1,6 +1,9 @@
 //! Owns the librespot session, player and Spirc on a dedicated tokio runtime.
 
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 use librespot_connect::{
     ConnectConfig, LoadRequest, LoadRequestOptions, PlayingTrack, QueueSelection,
@@ -112,15 +115,18 @@ impl Engine {
                     log::error!("engine: mixer open failed");
                     BopifyError::Unknown
                 })?);
-            let backend = audio_backend::find(None).ok_or_else(|| {
-                log::error!("engine: no audio backend available");
-                BopifyError::Unknown
-            })?;
+            let output_failed = reporter.output_error_signal();
             let player = Player::new(
                 PlayerConfig::default(),
                 session.clone(),
                 mixer.get_soft_volume(),
-                move || backend(None, AudioFormat::default()),
+                move || {
+                    audio_backend::mk_rodio_with_error_signal(
+                        None,
+                        AudioFormat::default(),
+                        output_failed.clone(),
+                    )
+                },
             );
 
             // Subscribe before connecting so nothing emitted during login is
@@ -155,6 +161,7 @@ impl Engine {
 
             // The returned future is the event loop. Commands issued before
             // it is driven are queued, so spawning it here is correct.
+            supervise_audio_output(reporter.output_error_signal(), reporter.clone());
             supervise_spirc(task, reporter.clone());
             let radio_session = session.clone();
             supervise_forwarder(events, sink.clone(), session, reporter.clone());
@@ -380,6 +387,19 @@ fn supervise_spirc(
     });
 }
 
+fn supervise_audio_output(failed: Arc<AtomicBool>, reporter: EngineReporter) {
+    // The callback only latches a flag; the joined runtime owns all reporting.
+    tokio::spawn(async move {
+        loop {
+            if failed.load(Ordering::Acquire) {
+                reporter.session_lost(SessionLossReason::AudioOutputFailed);
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+    });
+}
+
 impl Drop for Engine {
     fn drop(&mut self) {
         self.reporter.begin_teardown();
@@ -494,5 +514,66 @@ mod tests {
         );
         // The remote event waits for metadata; the supervisor reports channel loss.
         assert!(received.try_recv().is_err());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn output_fault_is_reported_without_player_events() {
+        let (output, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let reporter = EngineReporter::new(Arc::new(move |event| {
+            output.send(event).unwrap();
+        }));
+        let failed = reporter.output_error_signal();
+        supervise_audio_output(failed.clone(), reporter);
+        tokio::task::yield_now().await;
+        failed.store(true, Ordering::Release);
+        let event = tokio::time::timeout(std::time::Duration::from_secs(1), received.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(event).unwrap(),
+            serde_json::json!({"type": "sessionLost", "reason": "audioOutputFailed"})
+        );
+        failed.store(true, std::sync::atomic::Ordering::Release);
+        tokio::time::advance(std::time::Duration::from_secs(1)).await;
+        assert!(received.try_recv().is_err());
+    }
+
+
+    #[tokio::test(start_paused = true)]
+    async fn early_output_fault_reports_after_supervisor_starts() {
+        let (output, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let reporter = EngineReporter::new(Arc::new(move |event| {
+            output.send(event).unwrap();
+        }));
+        let failed = reporter.output_error_signal();
+        failed.store(true, Ordering::Release);
+        supervise_audio_output(failed, reporter);
+        let event = tokio::time::timeout(std::time::Duration::from_secs(1), received.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(matches!(
+            event,
+            WireEvent::SessionLost { reason: SessionLossReason::AudioOutputFailed }
+        ));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn output_supervisor_cannot_report_after_teardown() {
+        let (output, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let reporter = EngineReporter::new(Arc::new(move |event| {
+            output.send(event).unwrap();
+        }));
+        let failed = reporter.output_error_signal();
+        reporter.begin_teardown();
+        failed.store(true, Ordering::Release);
+        supervise_audio_output(failed, reporter);
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_secs(1), received.recv())
+                .await
+                .unwrap()
+                .is_none()
+        );
     }
 }
