@@ -5,11 +5,11 @@
 </head>
 <body>
 <h1>Third-party licenses</h1>
-<p>Bopify includes the following open-source software.</p>
+<p>Bopify includes the following open-source software. Source code for each crate is available from its crates.io page, linked below.</p>
 {{#each licenses}}
 <h2 id="{{id}}">{{name}}</h2>
 <p>Used by:</p>
-<ul>{{#each used_by}}<li>{{crate.name}} {{crate.version}}</li>{{/each}}</ul>
+<ul>{{#each used_by}}<li><a href="https://crates.io/crates/{{crate.name}}/{{crate.version}}">{{crate.name}} {{crate.version}}</a></li>{{/each}}</ul>
 <pre>{{text}}</pre>
 {{/each}}
 </body>
