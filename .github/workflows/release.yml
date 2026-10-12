@@ -11,6 +11,7 @@ jobs:
   release:
     # Preview image; the only GitHub-hosted runner with Xcode 27 as of 2026-10.
     runs-on: xcode-27
+    timeout-minutes: 90  # notarization alone is capped at 1h in release.sh
     steps:
       - uses: actions/checkout@v7
         with:
@@ -19,10 +20,16 @@ jobs:
       - name: Install Rust
         run: |
           command -v rustup || curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          export PATH="$HOME/.cargo/bin:$PATH"
+          rustup target add aarch64-apple-darwin
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
       - name: Install Metal Toolchain
         run: xcodebuild -downloadComponent MetalToolchain
+
+      # Third-party build scripts run before the signing keychain exists.
+      - name: Build Rust library
+        run: ./scripts/build-rust.sh
 
       - name: Import Developer ID certificate
         env:
@@ -43,7 +50,9 @@ jobs:
       - name: Write notary key
         env:
           NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
-        run: echo "$NOTARY_KEY_P8" > "$RUNNER_TEMP/notary.p8"
+        run: |
+          umask 077
+          echo "$NOTARY_KEY_P8" > "$RUNNER_TEMP/notary.p8"
 
       - name: Build, sign and notarize
         env:
