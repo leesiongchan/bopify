@@ -81,7 +81,7 @@ It plays audio through librespot, and librespot's own README warns that using it
 For maintainers. You need, once:
 
 - An active Apple Developer Program membership.
-- A **Developer ID Application** certificate (Xcode, Settings, Accounts, Manage Certificates).
+- A **Developer ID Application** certificate (Xcode, Settings, Accounts, Manage Certificates). Creating one requires the [Account Holder role](https://developer.apple.com/help/account/certificates/create-developer-id-certificates/).
 - An App Store Connect API key with the Developer role (`.p8` file, Key ID, Issuer ID).
 - A local notary profile:
   `xcrun notarytool store-credentials bopify-notary --key <path>.p8 --key-id <KEY_ID> --issuer <ISSUER_ID>`
@@ -92,7 +92,7 @@ Then build a signed, notarized DMG at `build/release/Bopify-<version>.dmg`:
 ./scripts/release.sh 0.1.0
 ```
 
-Pushing a `v*` tag (for example `v0.1.0`) does the same in CI and publishes the DMG to GitHub Releases. A tag with a suffix, like `v0.1.0-rc.1`, is published as a prerelease. CI needs these repository secrets: `DEVELOPER_ID_P12_BASE64`, `DEVELOPER_ID_P12_PASSWORD`, `KEYCHAIN_PASSWORD`, `NOTARY_KEY_P8`, `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID`.
+Pushing a `v*` tag (for example `v0.1.0`) does the same in CI and publishes the DMG to GitHub Releases. A tag with a suffix, like `v0.1.0-rc.1`, is published as a prerelease. CI needs these repository secrets: `DEVELOPER_ID_P12_BASE64` (the certificate exported with its private key as `.p12`, then `base64 -i cert.p12`), `DEVELOPER_ID_P12_PASSWORD`, `KEYCHAIN_PASSWORD`, `NOTARY_KEY_P8`, `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID`.
 
 ## License
 
