@@ -28,10 +28,19 @@ click any Enable button for Favorites, Liked Songs or history. Then:
 3. Save the app. Under **User Management**, add your own Spotify account's
    name and email. Quota modes: "Each Spotify user who installs your app will
    need to be added to your app's allowlist". Spotify blocks anyone not on that
-   list, owner included: they get a 403, which Bopify shows as the favorites
-   "forbidden" notice.
-4. Copy the app's **Client ID** and paste it into Library Access, then Save.
-   Spotify opens a consent page naming your app.
+   list, owner included: they get a 403. The Favorite button shows that as its
+   "forbidden" notice; Liked Songs, Recents and Explore show only their generic
+   "couldn't load" text.
+4. Copy the app's **Client ID** (not the Client secret) and paste it into
+   Library Access, then Save. If you opened Library Access from an Enable
+   button, Spotify then opens a consent page naming your app. If you opened it
+   from the status menu, Save just closes the window; click Enable to consent.
+
+## Troubleshooting
+
+If Spotify shows INVALID_CLIENT instead of a consent page, check the Client ID
+and the Redirect URI in the Dashboard, then Save again in Library Access and
+click Enable.
 
 ## Renewing consent
 

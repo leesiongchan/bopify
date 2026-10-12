@@ -698,7 +698,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "4. Paste the app's Client ID below."
+            "value" : "4. Paste the app's Client ID below — not the Client secret."
           }
         }
       }
