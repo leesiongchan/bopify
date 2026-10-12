@@ -6,8 +6,6 @@ import BopifyDomain
 import BopifyPlayback
 import BopifyLibrary
 
-let dashboardLibraryClientID = "25bbd3bacca4412b80f17b892072af71"
-
 /// Chooses concrete services and owns the stable player across engine replacements.
 @MainActor
 @Observable
@@ -38,7 +36,11 @@ final class AppEnvironment {
     }
 
     @ObservationIgnored private let auth: SpotifyAuthService
-    @ObservationIgnored private let libraryAuth: SpotifyAuthService
+    @ObservationIgnored private let libraryAuth: LibraryAuthorization
+    private(set) var libraryClientID: String?
+    let librarySetupWindow = LibrarySetupWindowController()
+    // The scopes an Enable action asked for before any client ID existed; consent resumes after setup.
+    @ObservationIgnored private var pendingLibraryScopes: Set<String> = []
     private(set) var recovery: PlaybackRecoveryCoordinator?
     var connectionStatus: PlaybackConnectionStatus { recovery?.status ?? .ready }
     @ObservationIgnored private var connectionMonitor: PlaybackConnectionMonitor?
@@ -62,11 +64,14 @@ final class AppEnvironment {
 
     init() {
         let auth = SpotifyAuthService(clientID: librespotClientID)
-        let libraryAuth = SpotifyAuthService(clientID: dashboardLibraryClientID,
-                                             store: KeychainTokenStore(service: "com.leesiongchan.bopify.library"),
-                                             callbackPort: 8898, callbackPath: "/callback")
+        let libraryAuth = LibraryAuthorization { clientID in
+            SpotifyAuthService(clientID: clientID,
+                               store: KeychainTokenStore(service: "com.leesiongchan.bopify.library"),
+                               callbackPort: 8898, callbackPath: "/callback")
+        }
         self.auth = auth
         self.libraryAuth = libraryAuth
+        libraryClientID = LibraryAuthorization.storedClientID(in: .standard)
         artworkStore = ArtworkStore()
         let library = SpotifyLibraryClient { scopes in
             try await libraryAuth.validAccessToken(requiredScopes: scopes)
@@ -77,7 +82,7 @@ final class AppEnvironment {
         self.stations = stations
         recents = RecentsModel(service: library)
         explore = ExploreModel(history: library, savedTracks: library, radio: { try await stations.mix(for: $0) })
-        authorizeLibraryScopes = { scopes in _ = try await libraryAuth.authorizeLibraryScopes(scopes) }
+        authorizeLibraryScopes = { scopes in try await libraryAuth.authorize(scopes) }
     }
 
     #if DEBUG
@@ -92,8 +97,12 @@ final class AppEnvironment {
          recoveryEngineFactory: (@Sendable (String, PlaybackEngineConfiguration) async throws -> any ManagedPlaybackEngine)? = nil) {
         auth = playbackAuth ?? SpotifyAuthService(clientID: librespotClientID,
             store: KeychainTokenStore(service: "com.leesiongchan.bopify.preview.\(UUID().uuidString)"))
-        self.libraryAuth = libraryAuth ?? SpotifyAuthService(clientID: dashboardLibraryClientID,
+        let previewDefaults = UserDefaults(suiteName: "com.leesiongchan.bopify.preview.\(UUID().uuidString)")!
+        previewDefaults.set(String(repeating: "0", count: 32), forKey: LibraryAuthorization.defaultsKey)
+        let previewLibraryAuth = libraryAuth ?? SpotifyAuthService(clientID: String(repeating: "0", count: 32),
             store: KeychainTokenStore(service: "com.leesiongchan.bopify.preview.library.\(UUID().uuidString)"))
+        self.libraryAuth = LibraryAuthorization(defaults: previewDefaults) { _ in previewLibraryAuth }
+        libraryClientID = String(repeating: "0", count: 32)
         self.artworkStore = artworkStore
         favorite = FavoriteModel(service: favoriteService)
         likedSongs = LikedSongsModel(service: savedTracksService ?? UnavailableSavedTracks())
@@ -130,6 +139,12 @@ final class AppEnvironment {
 
     private func enableLibrary(scopes: Set<String>) async {
         guard authState == .signedIn, !isEnablingLibrary else { return }
+        guard libraryClientID != nil else {
+            pendingLibraryScopes.formUnion(scopes)
+            librarySetupWindow.show(environment: self)
+            BopifyLog.library.info("library setup requested")
+            return
+        }
         isEnablingLibrary = true
         libraryAuthorizationNotice = nil
         let generation = libraryGeneration
@@ -149,6 +164,17 @@ final class AppEnvironment {
             libraryAuthorizationNotice = String(localized: "favorite.consentFailed")
             BopifyLog.library.notice("library authorization did not complete")
         }
+    }
+
+    func setLibraryClientID(_ raw: String) async {
+        let previous = libraryClientID
+        guard let id = try? await libraryAuth.setClientID(raw) else { return }
+        libraryClientID = id
+        librarySetupWindow.close()
+        if id != previous { clearLibrary() }
+        let scopes = pendingLibraryScopes
+        pendingLibraryScopes = []
+        if !scopes.isEmpty { await enableLibrary(scopes: scopes) }
     }
 
     private func clearLibrary() {

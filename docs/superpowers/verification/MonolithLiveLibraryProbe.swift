@@ -5,7 +5,12 @@ import BopifyLibrary
 
 @main struct MonolithLiveLibraryProbe {
     static func main() async {
-        let auth = SpotifyAuthService(clientID: dashboardLibraryClientID,
+        guard let clientID = ProcessInfo.processInfo.environment["BOPIFY_LIBRARY_CLIENT_ID"]
+            .flatMap(LibraryAuthorization.normalized) else {
+            print("BLOCKED: set BOPIFY_LIBRARY_CLIENT_ID to your Dashboard app's client ID")
+            exit(77)
+        }
+        let auth = SpotifyAuthService(clientID: clientID,
                                       store: KeychainTokenStore(service: "com.leesiongchan.bopify.library"))
         let library = SpotifyLibraryClient { scopes in try await auth.validAccessToken(requiredScopes: scopes) }
         do {
