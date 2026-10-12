@@ -1,91 +1,67 @@
 # Bopify
 
-A native macOS menu-bar Spotify player. Bopify plays audio locally on the
-Mac via librespot — it is not a remote control for the official Spotify
-app.
+A native Spotify player that lives in the macOS menu bar.
 
-## Requirements
+Bopify plays audio on your Mac itself, using [librespot](https://github.com/librespot-org/librespot). It does not remote-control the official Spotify app, so you don't need that app running.
 
+It's a personal tool: built from source, for one account, and not distributed.
+
+## What you need
+
+- macOS 14 or later
+- A Spotify **Premium** account (librespot only works with Premium)
 - Rust 1.85+
-- Xcode 27 with the Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`)
-- `MACOSX_DEPLOYMENT_TARGET=14.0`
-- A Spotify **Premium** account (librespot is Premium-only)
+- Xcode 27 with the Metal Toolchain:
+  `xcodebuild -downloadComponent MetalToolchain`
 
-## Build and test
+## Build
 
-The Rust static library has to exist before anything else will configure —
-the Swift package declares it as a binary target, and `artifacts/` is build
-output that is not in the repository:
+Build the Rust library first. Everything else links against it, and its output (`artifacts/`) isn't checked in.
 
 ```sh
 ./scripts/build-rust.sh
 ```
 
-Swift package (`Packages/BopifyCore`: `BopifyDomain`, `BopifyAuth`,
-`BopifyPlayback`):
-
-```sh
-cd Packages/BopifyCore
-swift build
-swift test
-```
-
-Rust crate (`rust/crates/bopify-core`, the librespot integration):
-
-Run `./scripts/prepare-librespot.sh` before direct Cargo commands on a fresh
-checkout. It verifies the pinned revision and applies our exact queue-occurrence
-selection, startup-restore and remote-mirror patch in `.build/`; unexpected local modifications are rejected.
-The normal build script runs this preparation automatically.
-
-```sh
-cd rust
-cargo build
-cargo test
-```
-
-The app itself:
+Then build the app:
 
 ```sh
 xcodebuild -project Bopify/Bopify.xcodeproj -scheme Bopify \
   -destination 'platform=macOS,arch=arm64' build
 ```
 
-Bopify is an agent app (`LSUIElement`), so it has no Dock icon and no menu
-bar of its own — it appears only as a status item, and you quit it from
-that item's right-click menu.
+Bopify has no Dock icon or app menu. Look for it in the menu bar, and right-click it to quit.
 
-## Spotify client ID
+## Test
 
-Bopify authenticates with librespot's first-party Spotify client ID, not
-one registered on the Spotify Developer Dashboard. Spotify gives third
-parties no way to stream audio natively: the [Web Playback
-SDK](https://developer.spotify.com/documentation/web-playback-sdk) only
-runs in a browser, and the Web API only remote-controls an already-running
-official client. There is no supported path to local playback.
+The Swift packages (`Packages/BopifyCore`):
 
-This sits outside Spotify's developer terms, which expect an app to use
-its own registered client ID. librespot and the projects built on it have
-operated this way for years without Spotify acting against them, but
-tolerated is not authorised, and it is the user's own Spotify account at
-stake, not this app's.
+```sh
+cd Packages/BopifyCore
+swift test
+```
 
-The realistic failure mode is breakage, not a ban: Spotify can revoke or
-change this client ID at any time, and Bopify stops working until it is
-updated.
+The Rust crate (`rust/crates/bopify-core`):
 
-The scope requested is minimal: `streaming`, and nothing else. Bopify
-cannot read your library, playlists, or email. librespot's own CLI
-requests 26 scopes (`OAUTH_SCOPES` in `main.rs` at pinned revision
-`939dc5e`); this app requests one.
+```sh
+./scripts/prepare-librespot.sh   # once per fresh checkout
+cd rust
+cargo test
+```
 
-No telemetry. The OAuth token flows browser -> a loopback listener on
-`127.0.0.1` -> Keychain, and never reaches any third party; the only
-network counterparty is Spotify itself, for authentication and for the
-audio stream. Logging is local `os_log` only.
+`prepare-librespot.sh` checks out the pinned librespot revision into `.build/` and applies our patches to it. It refuses to run over unexpected local changes. `build-rust.sh` already runs it, so you only need it when calling Cargo directly. In that case, also export `MACOSX_DEPLOYMENT_TARGET=14.0` so the Rust output matches the Xcode target.
 
-The consent screen shows **Spotify**, not Bopify, because the client ID
-being authorized is Spotify's own. That is expected — it is not a
-phishing screen.
+## Spotify sign-in and privacy
 
-Bopify is not distributed. It is a personal tool, built from source, for
-one account.
+**Playback uses Spotify's own client ID.** Spotify offers no supported way for third-party apps to stream audio natively: the [Web Playback SDK](https://developer.spotify.com/documentation/web-playback-sdk) only runs in a browser, and the Web API only controls an official client that's already running. So, like librespot, Bopify signs in with librespot's first-party client ID.
+
+What that means for you:
+
+- **The consent screen says "Spotify", not "Bopify".** That's expected, because you're authorizing Spotify's own client ID. It isn't a phishing page.
+- **It's outside Spotify's developer terms.** librespot-based apps have worked this way for years without action from Spotify, but tolerated isn't the same as allowed, and it's your account on the line.
+- **The likely risk is breakage, not a ban.** Spotify can revoke or change that client ID at any time, and playback stops until Bopify is updated.
+
+Playback sign-in asks for one scope: `streaming`. (librespot's own CLI asks for 26.)
+
+**Library features are opt-in and separate.** Favorites, Liked Songs and listening history use a different client ID registered on the Spotify Developer Dashboard. Bopify only asks for those scopes (`user-library-read`, `user-library-modify`, `user-read-recently-played`, `user-top-read`) when you turn the feature on.
+
+**Nothing leaves your Mac except to Spotify.** Sign-in goes from your browser to a listener on `127.0.0.1`, and tokens are stored in the Keychain. There's no telemetry, and logs stay local in `os_log`.
