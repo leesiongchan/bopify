@@ -9,4 +9,5 @@ trap 'rm -f "$temporary"' EXIT
 "$tool" generate --locked --fail --config "$root/rust/about.toml" \
   --manifest-path "$root/rust/crates/bopify-core/Cargo.toml" "$root/rust/about.hbs" > "$temporary"
 [[ -s "$temporary" ]] || { echo "Notice generation produced no output." >&2; exit 1; }
+chmod 0644 "$temporary"
 mv "$temporary" "$out"
