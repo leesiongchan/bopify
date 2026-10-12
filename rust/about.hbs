@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Bopify third-party licenses</title>
+<style>body{font:14px -apple-system,sans-serif;max-width:860px;margin:2em auto;padding:0 1em}pre{white-space:pre-wrap;background:#f4f4f4;padding:1em}</style>
+</head>
+<body>
+<h1>Bopify third-party licenses</h1>
+<p>Bopify includes the following open-source software. Each entry lists the exact package versions used.</p>
+{{#each licenses}}
+<h2>{{name}}</h2>
+<ul>{{#each used_by}}<li>{{crate.name}} {{crate.version}}</li>{{/each}}</ul>
+<pre>{{text}}</pre>
+{{#if (eq id "MPL-2.0")}}
+<p>Source code for the MPL-covered packages is available in these exact-version source archives:</p>
+<ul>{{#each used_by}}<li><a href="https://crates.io/api/v1/crates/{{crate.name}}/{{crate.version}}/download">{{crate.name}} {{crate.version}} source</a></li>{{/each}}</ul>
+{{/if}}
+{{/each}}
+</body>
+</html>
