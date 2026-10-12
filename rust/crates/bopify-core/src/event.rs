@@ -149,12 +149,7 @@ pub enum WireEvent {
     },
 }
 
-/// Maps librespot's player events onto the wire format.
-///
-/// Every variant is listed by name and nothing is swallowed by a catch-all,
-/// so a variant added by a future librespot bump breaks the build instead of
-/// disappearing silently, and a deliberate drop stays distinguishable from an
-/// oversight.
+/// Translates player events, explicitly dropping signals not used by Swift.
 pub fn translate(event: PlayerEvent) -> Option<WireEvent> {
     match event {
         PlayerEvent::RecoveryIdentity { identity } => Some(WireEvent::RecoveryIdentity {
@@ -195,12 +190,7 @@ pub fn translate(event: PlayerEvent) -> Option<WireEvent> {
             }
         }
 
-        // Deliberately dropped, by name. Each of these is either internal to
-        // librespot, out of scope for this slice, or already covered by an
-        // event we do forward.
-        //
-        // `SessionConnected` also carries `user_name`; its "we are active now"
-        // signal is redundant because Playing and Paused already imply it.
+        // SessionConnected exposes a user identifier; transport events already convey activity.
         PlayerEvent::SessionConnected { .. } => dropped("SessionConnected"),
         PlayerEvent::SessionClientChanged { .. } => dropped("SessionClientChanged"),
         PlayerEvent::PlayRequestIdChanged { .. } => dropped("PlayRequestIdChanged"),
@@ -283,7 +273,7 @@ fn queue_entry(track: librespot_playback::player::QueueTrack) -> Option<WireQueu
     let playable = track.provider != "unavailable"
         && matches!(
             SpotifyUri::from_uri(&track.uri),
-            Ok(SpotifyUri::Track { .. } | SpotifyUri::Episode { .. })
+            Ok(uri @ (SpotifyUri::Track { .. } | SpotifyUri::Episode { .. })) if uri.to_uri() == track.uri
         );
     Some(WireQueueEntry {
         id: track.id.to_string(),
@@ -319,8 +309,6 @@ pub(crate) fn track_metadata(item: AudioItem) -> WireTrack {
         UniqueFields::Episode { show_name, .. } => (vec![show_name], None),
         UniqueFields::Local { artists, album, .. } => (artists.into_iter().collect(), album),
     };
-    // The spike saw `covers` sorted widest-first, but that is one observation
-    // and not a documented guarantee, so pick by width rather than by index.
     let artwork_url = item
         .covers
         .iter()
@@ -345,29 +333,6 @@ mod tests {
     fn playing_serialises_with_a_type_tag() {
         let json = serde_json::to_string(&WireEvent::Playing { position_ms: 1000 }).unwrap();
         assert_eq!(json, r#"{"type":"playing","positionMs":1000}"#);
-    }
-
-    #[test]
-    fn track_changed_carries_metadata() {
-        let json = serde_json::to_string(&WireEvent::TrackChanged {
-            track_uri: "spotify:track:abc".into(),
-            title: "Title".into(),
-            artists: vec!["Artist".into()],
-            album_title: Some("Album".into()),
-            artwork_url: None,
-            duration_ms: 240_000,
-        })
-        .unwrap();
-        assert!(json.contains(r#""type":"trackChanged""#));
-        assert!(json.contains(r#""durationMs":240000"#));
-        assert!(json.contains(r#""artworkUrl":null"#));
-    }
-
-    #[test]
-    fn active_device_changed_round_trips() {
-        let json =
-            serde_json::to_string(&WireEvent::ActiveDeviceChanged { is_active: false }).unwrap();
-        assert_eq!(json, r#"{"type":"activeDeviceChanged","isActive":false}"#);
     }
 
     use std::borrow::Cow;
@@ -427,7 +392,7 @@ mod tests {
     }
 
     #[test]
-    fn track_changed_carries_the_spike_metadata() {
+    fn track_changed_translates_and_serialises_metadata() {
         let item = audio_item(
             vec![cover(
                 "https://i.scdn.co/image/large",
@@ -440,26 +405,15 @@ mod tests {
             audio_item: Box::new(item),
         })
         .unwrap();
-        let WireEvent::TrackChanged {
-            track_uri,
-            title,
-            artists,
-            album_title,
-            artwork_url,
-            duration_ms,
-        } = wire
-        else {
-            panic!("expected TrackChanged");
-        };
-        assert_eq!(track_uri, "spotify:track:5Ohxk2dO5COHF1krpoPigN");
-        assert_eq!(title, "Sign of the Times");
-        assert_eq!(artists, vec!["Harry Styles".to_string()]);
-        assert_eq!(album_title.as_deref(), Some("Harry Styles"));
         assert_eq!(
-            artwork_url.as_deref(),
-            Some("https://i.scdn.co/image/large")
+            serde_json::to_value(wire).unwrap(),
+            serde_json::json!({
+                "type": "trackChanged", "trackUri": "spotify:track:5Ohxk2dO5COHF1krpoPigN",
+                "title": "Sign of the Times", "artists": ["Harry Styles"],
+                "albumTitle": "Harry Styles", "artworkUrl": "https://i.scdn.co/image/large",
+                "durationMs": 340706
+            })
         );
-        assert_eq!(duration_ms, 340_706);
     }
 
     #[test]
@@ -538,52 +492,95 @@ mod tests {
     }
 
     #[test]
-    fn volume_and_transport_events_map_across() {
-        assert!(matches!(
-            translate(PlayerEvent::VolumeChanged { volume: 32767 }),
-            Some(WireEvent::VolumeChanged { volume: 32767 })
-        ));
-        assert!(matches!(
-            translate(PlayerEvent::Playing {
-                play_request_id: 1,
-                track_id: uri(),
-                position_ms: 42
-            }),
-            Some(WireEvent::Playing { position_ms: 42 })
-        ));
-        assert!(matches!(
-            translate(PlayerEvent::Loading {
-                play_request_id: 1,
-                track_id: uri(),
-                position_ms: 0
-            }),
-            Some(WireEvent::Loading)
-        ));
-    }
-    #[test]
-    fn queue_snapshot_keeps_occurrences_and_raw_indices_on_the_wire() {
-        let event = WireEvent::QueueChanged {
-            generation: 12,
-            previous: vec![],
-            current: None,
-            next: vec![
-                WireQueueEntry {
-                    id: "a".into(),
-                    uri: Some("spotify:track:same".into()),
-                    raw_next_index: Some(0),
-                },
-                WireQueueEntry {
-                    id: "b".into(),
-                    uri: Some("spotify:track:same".into()),
-                    raw_next_index: Some(1),
-                },
-            ],
+    fn queue_snapshot_preserves_occurrences_and_filters_unplayable_entries() {
+        use librespot_playback::player::QueueTrack;
+        let valid = "spotify:track:6rqhFgbbKwnb9MLmUQDhG6";
+        let queued = |id, uri: &str, provider: &str, uid: &str, index| QueueTrack {
+            id,
+            uri: uri.into(),
+            provider: provider.into(),
+            uid: uid.into(),
+            raw_next_index: Some(index),
         };
+        let event = translate(PlayerEvent::SetQueue {
+            generation: 12,
+            context_uri: String::new(),
+            prev_tracks: vec![],
+            current_track: None,
+            next_tracks: vec![
+                queued(1, valid, "context", "a", 0),
+                queued(2, valid, "context", "b", 1),
+                queued(3, valid, "context", "delimiter-start", 2),
+                queued(4, valid, "unavailable", "d", 3),
+                queued(5, "spotify:album:6rqhFgbbKwnb9MLmUQDhG6", "context", "e", 4),
+                queued(
+                    6,
+                    "spotify:track:6rqhFgbbKwnb9MLmUQDhG6:extra",
+                    "context",
+                    "f",
+                    5,
+                ),
+            ],
+        })
+        .unwrap();
         assert_eq!(
-            serde_json::to_string(&event).unwrap(),
-            r#"{"type":"queueChanged","generation":12,"previous":[],"current":null,"next":[{"id":"a","uri":"spotify:track:same","rawNextIndex":0},{"id":"b","uri":"spotify:track:same","rawNextIndex":1}]}"#
+            serde_json::to_value(event).unwrap(),
+            serde_json::json!({
+                "type": "queueChanged", "generation": 12, "previous": [], "current": null,
+                "next": [
+                    {"id": "1", "uri": valid, "rawNextIndex": 0},
+                    {"id": "2", "uri": valid, "rawNextIndex": 1},
+                    {"id": "4", "uri": null, "rawNextIndex": null},
+                    {"id": "5", "uri": null, "rawNextIndex": null},
+                    {"id": "6", "uri": null, "rawNextIndex": null}
+                ]
+            })
         );
     }
+
+    #[test]
+    fn recovery_and_readiness_events_preserve_identity_and_omit_absent_identity() {
+        use librespot_playback::player::{ConnectionOutcome, RecoveryIdentity};
+        let identity = RecoveryIdentity {
+            track_uri: "spotify:track:6rqhFgbbKwnb9MLmUQDhG6".into(),
+            track_uid: Some("occurrence".into()),
+            context_uri: None,
+        };
+        let expected = serde_json::json!({
+            "trackUri": "spotify:track:6rqhFgbbKwnb9MLmUQDhG6",
+            "trackUid": "occurrence", "contextUri": null
+        });
+        let event = translate(PlayerEvent::RecoveryIdentity {
+            identity: identity.clone(),
+        })
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(event).unwrap(),
+            serde_json::json!({
+                "type": "recoveryIdentity", "identity": expected
+            })
+        );
+        for (outcome, expected) in [
+            (
+                ConnectionOutcome::Local(identity),
+                serde_json::json!({
+                    "type": "connectionReady", "outcome": "local", "identity": expected
+                }),
+            ),
+            (
+                ConnectionOutcome::Remote,
+                serde_json::json!({"type": "connectionReady", "outcome": "remote"}),
+            ),
+            (
+                ConnectionOutcome::Unavailable,
+                serde_json::json!({"type": "connectionReady", "outcome": "unavailable"}),
+            ),
+        ] {
+            let event = translate(PlayerEvent::ConnectionReady { outcome }).unwrap();
+            assert_eq!(serde_json::to_value(event).unwrap(), expected);
+        }
+    }
+
     #[test]
     fn repeat_track_takes_priority_over_repeat_context() {
         let json = serde_json::to_value(

@@ -25,28 +25,13 @@ use crate::{
 /// side must be safe to invoke from a non-main thread.
 pub type EventSink = Arc<dyn Fn(WireEvent) + Send + Sync>;
 
-/// A live Connect device.
-///
-/// Dropping an `Engine` drops the runtime, which joins its worker threads
-/// before returning; that cancels the Spirc task, which releases the last
-/// `Arc<Player>`, whose `Drop` joins the audio thread. So no spawned work,
-/// and therefore no [`EventSink`] call, can outlive the drop.
-///
-/// **Never replace that plain drop with `Runtime::shutdown_timeout` or
-/// `Runtime::shutdown_background`.** Only `Runtime::drop` joins every worker
-/// thread unconditionally; the other two return while tasks may still be
-/// running, which turns "no callback after destroy" into a use-after-free of
-/// the Swift context. Neither substitution produces a compiler error or a
-/// failing test, so this comment is the only guard. Destroy being slow is a
-/// latency complaint, not a bug to fix that way.
+/// A live Connect device whose runtime joins workers before its other fields drop.
+/// Never use timeout or background shutdown: callbacks must finish before Swift releases ctx.
 pub struct Engine {
-    /// Owns every worker, including selection acknowledgements; Drop joins them
-    /// before Swift releases the event callback context.
     runtime: Runtime,
     reporter: EngineReporter,
     spirc: Spirc,
     sink: EventSink,
-    /// For radio lookups. Declared after `runtime`, so the runtime still drops (and joins) first.
     session: Session,
 }
 
@@ -96,16 +81,13 @@ impl Engine {
             // A Spotify Developer Dashboard id is rejected by login5 with a
             // raw HTTP 400, so it must not be overridden here.
             let mut session_config = SessionConfig::default();
-            if let Some(options) = &options { session_config.device_id = options.device_id.clone(); }
+            if let Some(options) = &options {
+                session_config.device_id = options.device_id.clone();
+            }
             let session = Session::new(session_config, None);
             let credentials = Credentials::with_access_token(access_token);
 
-            // Do NOT call session.connect() here. Spirc::new() connects the
-            // session itself (connect/src/spirc.rs:223 at the pinned rev), and
-            // Session holds its transport in a OnceLock whose second `set`
-            // fails -- so a pre-connect makes Spirc::new die with the
-            // misleadingly named SessionError::NotConnected. Connection errors
-            // are classified off Spirc::new below instead.
+            // Spirc connects the session; pre-connecting would initialise its transport twice.
 
             let mixer: Arc<dyn Mixer> =
                 Arc::new(SoftMixer::open(MixerConfig::default()).map_err(|_| {
@@ -123,9 +105,7 @@ impl Engine {
                 move || backend(None, AudioFormat::default()),
             );
 
-            // Subscribe before connecting so nothing emitted during login is
-            // lost: the channel is unbounded and buffers until the forwarder
-            // is spawned, which only happens once the engine really exists.
+            // Subscribe before login so startup events are buffered for the forwarder.
             let events = player.get_player_event_channel();
 
             let (spirc, task) = with_connect_deadline(Spirc::new(
@@ -134,9 +114,18 @@ impl Engine {
                     emit_set_queue_events: true,
                     // Decides from the first connect cluster what to load, so the
                     // device is never active without content (see the startup-restore spec).
-                    initial_volume: options.as_ref().and_then(|o| o.snapshot.as_ref()).map_or(u16::MAX / 2, |s| (s.volume * f64::from(u16::MAX)).round() as u16),
+                    initial_volume: options
+                        .as_ref()
+                        .and_then(|o| o.snapshot.as_ref())
+                        .map_or(u16::MAX / 2, |s| {
+                            (s.volume * f64::from(u16::MAX)).round() as u16
+                        }),
                     startup_restore: true,
-                    startup_mode: options.as_ref().map_or(librespot_connect::StartupMode::ColdLaunch, |o| o.native_startup()),
+                    startup_mode: options
+                        .as_ref()
+                        .map_or(librespot_connect::StartupMode::ColdLaunch, |o| {
+                            o.native_startup()
+                        }),
                     ..Default::default()
                 },
                 session.clone(),
@@ -144,14 +133,7 @@ impl Engine {
                 player,
                 mixer,
             ))
-            .await
-            // This is the only place a bad token or a non-Premium account
-            // surfaces: librespot reports both through the same failure path,
-            // and since Spotify removed `product` from GET /me in February
-            // 2026 it is the only Premium signal available. Classifying it
-            // here, not mapping it to Unknown, is what keeps PremiumRequired
-            // and AuthInvalid reachable in the error taxonomy.
-            ?;
+            .await?;
 
             // The returned future is the event loop. Commands issued before
             // it is driven are queued, so spawning it here is correct.
@@ -172,7 +154,10 @@ impl Engine {
     }
 
     pub fn report_command_loss(&self) {
-        self.reporter.session_lost(SessionLossReason::CommandFailed);
+        let reporter = self.reporter.clone();
+        self.runtime.spawn(async move {
+            reporter.session_lost(SessionLossReason::CommandFailed);
+        });
     }
 
     pub fn play(&self) -> Result<(), BopifyError> {
@@ -268,11 +253,7 @@ impl Engine {
     }
 }
 
-/// Spawns the forwarder under a watcher.
-///
-/// Without the watcher a panic anywhere in translation or serialisation would
-/// kill the task, tokio would swallow it, and event delivery would stop for
-/// good with no terminal `Failed` -- the UI would sit on stale state forever.
+// Report forwarder panics so the UI cannot remain on stale playback state.
 fn supervise_forwarder(
     events: PlayerEventChannel,
     sink: EventSink,
@@ -317,9 +298,6 @@ async fn forward_events(
             }
         }
     }
-    // The channel only closes when the player thread is gone, which during a
-    // normal teardown never gets here: runtime shutdown drops this task
-    // rather than polling it.
     log::error!("engine: player event channel closed");
 }
 
@@ -492,7 +470,6 @@ mod tests {
             mirrored.map(|remote| remote.track_uri),
             Some("spotify:track:abc".to_string())
         );
-        // The remote event waits for metadata; the supervisor reports channel loss.
         assert!(received.try_recv().is_err());
     }
 }

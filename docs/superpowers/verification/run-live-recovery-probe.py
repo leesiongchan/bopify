@@ -27,5 +27,10 @@ args += [str(root / "Bopify/Bopify/PlaybackConnectionMonitor.swift")]
 args += [str(products / (name + ".o")) for name in ["BopifyDomain", "BopifyPlayback", "BopifyAuth", "CBopifyCore"]]
 args += ["-o", str(binary)]
 subprocess.run(args, check=True)
+# A certificate-backed identity keeps Keychain approval valid across rebuilds.
+print("Signing live recovery probe with Apple Development", flush=True)
+subprocess.run(["codesign", "--force", "--sign", "Apple Development", "--identifier",
+                "com.leesiongchan.bopify.live-playback-recovery-probe", str(binary)], check=True)
+subprocess.run(["codesign", "--verify", "--strict", str(binary)], check=True)
 sys.exit(subprocess.run([str(binary)] + (["--cleanup-check"] if options.cleanup_check else [])
                        + (["--physical-check"] if options.physical_check else [])).returncode)
