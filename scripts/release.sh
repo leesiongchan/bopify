@@ -34,17 +34,27 @@ xcodebuild -quiet -exportArchive -archivePath "$out/Bopify.xcarchive" \
 archs=$(lipo -archs "$app/Contents/MacOS/Bopify")
 [[ "$archs" == arm64 ]] || { echo "Expected an arm64-only binary, got: $archs" >&2; exit 1; }
 codesign --verify --strict --verbose=2 "$app"
+# Gatekeeper and notarization need a Developer ID signature with the hardened runtime.
+app_info=$(codesign -dvv "$app" 2>&1)
+[[ "$app_info" == *"Authority=Developer ID Application"* ]] || { echo "App is not signed with a Developer ID Application certificate" >&2; exit 1; }
+[[ "$app_info" == *"flags="*runtime* ]] || { echo "App is missing the hardened runtime flag" >&2; exit 1; }
 
 cp -R "$app" "$out/dmg/"
 ln -s /Applications "$out/dmg/Applications"
 cp LICENSE "$out/dmg/LICENSE.txt"
 ./scripts/gen-notices.sh "$out/dmg/Third-Party Licenses.html"
 hdiutil create -quiet -volname Bopify -srcfolder "$out/dmg" -format UDZO -ov "$dmg"
-codesign --sign "${SIGN_IDENTITY:-Developer ID Application}" --timestamp "$dmg"
+# Sign the DMG with the exact certificate the export used: a name match is ambiguous once a
+# renewed certificate with the same name is in the keychain, a SHA-1 hash is not.
+if [[ -z "${SIGN_IDENTITY:-}" ]]; then
+  codesign -d --extract-certificates="$out/app-cert-" "$app" 2>/dev/null
+  SIGN_IDENTITY=$(shasum -a 1 "$out/app-cert-0" | cut -d' ' -f1)
+fi
+codesign --sign "$SIGN_IDENTITY" --timestamp "$dmg"
 
 echo "Submitting $(basename "$dmg") for notarization"
 # Parse the status rather than trusting the exit code, so a rejection always prints Apple's log.
-xcrun notarytool submit "$dmg" "${notary_auth[@]}" --wait --output-format json > "$out/notary.json" || true
+xcrun notarytool submit "$dmg" "${notary_auth[@]}" --wait --timeout 1h --output-format json > "$out/notary.json" || true
 status=$(plutil -extract status raw -o - "$out/notary.json" 2>/dev/null || echo unknown)
 if [[ "$status" != Accepted ]]; then
   if id=$(plutil -extract id raw -o - "$out/notary.json" 2>/dev/null); then
@@ -55,5 +65,6 @@ if [[ "$status" != Accepted ]]; then
 fi
 
 xcrun stapler staple "$dmg"
+xcrun stapler validate "$dmg"
 spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
 echo "Release ready: $dmg"
