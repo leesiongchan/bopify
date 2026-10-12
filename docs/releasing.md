@@ -3,7 +3,8 @@
 The release pipeline is prepared on `codex/release-pipeline`. It has not yet
 produced a Developer ID export or a notarized DMG: this Mac has no Developer ID
 Application identity. A development-signed archive and automated failure tests
-verify the packaging boundary, not public distribution acceptance.
+verify the packaging boundary, not public distribution acceptance. See the
+[verification record](superpowers/verification/2026-10-13-release-pipeline.md).
 
 Before any public tag, integrate the completed bring-your-own library client
 work and verify it together with the audio/authentication fixes. Installed-account
