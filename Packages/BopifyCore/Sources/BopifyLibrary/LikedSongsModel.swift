@@ -72,7 +72,6 @@ public final class LikedSongsModel {
     public func clear() {
         generation += 1
         pending?.cancel()
-        reveals = 0
         hiddenAt = nil
         tracks = []
         selectedURI = nil

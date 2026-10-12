@@ -112,6 +112,16 @@ struct LikedSongsModelTests {
         #expect(await service.offsets == [0, 50])
         #expect(model.tracks == [track(1), track(2), track(3)])
     }
+    /// Changing the library client ID clears the model while its shelf stays on screen.
+    @Test func clearWhileShownStillRefreshes() async {
+        let service = PagedSavedTracks([0: page([1])])
+        let model = LikedSongsModel(service: service)
+        await model.reveal(at: now)
+        model.clear()
+        await model.refresh()
+        #expect(await service.offsets == [0, 0])
+        #expect(model.tracks == [track(1)])
+    }
     @Test(arguments: [true, false]) func refreshPreservesDeepSelection(stillPresent: Bool) async {
         let service = ControlledSavedTracks()
         let model = LikedSongsModel(service: service)
