@@ -6,7 +6,9 @@ Bopify plays audio on your Mac itself, using [librespot](https://github.com/libr
 
 ## Download
 
-Get the latest `Bopify-<version>.dmg` from [GitHub Releases](https://github.com/leesiongchan/bopify/releases/latest), open it, and drag Bopify to Applications. It's signed and notarized.
+Release packages use `Bopify-<version>.dmg` on [GitHub Releases](https://github.com/leesiongchan/bopify/releases/latest). Open a verified release and drag Bopify to Applications.
+
+This integration branch combines public library setup with the audio/authentication fixes and reviewed release pipeline. Developer ID export, notarization and live acceptance are still pending; see [the integration verification record](docs/superpowers/verification/2026-10-13-public-distribution-integration.md). Build from source to evaluate this revision.
 
 You need an Apple Silicon Mac on macOS 14 or later, and a Spotify **Premium** account (librespot only works with Premium). Bopify has no Dock icon or app menu: look for it in the menu bar, and right-click it to quit.
 
@@ -86,7 +88,7 @@ For maintainers. You need, once:
 - A local notary profile:
   `xcrun notarytool store-credentials bopify-notary --key <path>.p8 --key-id <KEY_ID> --issuer <ISSUER_ID>`
 
-Then build a signed, notarized DMG at `build/release/Bopify-<version>.dmg`:
+Follow [the release setup and acceptance gates](docs/releasing.md), then build a signed, notarized DMG at `build/release/Bopify-<version>.dmg`:
 
 ```sh
 ./scripts/release.sh 0.1.0

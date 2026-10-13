@@ -173,12 +173,13 @@ final class AppEnvironment {
 
     func setLibraryClientID(_ raw: String) async {
         guard LibraryAuthorization.normalized(raw) != nil else { return }
-        // A misconfigured app's consent never redirects (INVALID_CLIENT), so every Save abandons it.
-        // Reset before awaiting so the cancelled consent cannot post its failure notice.
+        // Abandon active consent before it can post a stale notice; preserve a rotated
+        // grant waiting for persistence when Save does not interrupt consent.
+        let hadPendingConsent = isEnablingLibrary
         libraryGeneration += 1
         isEnablingLibrary = false
-        await libraryAuth.cancelPendingWork()
-        BopifyLog.library.info("library setup saved; pending consent cancelled")
+        if hadPendingConsent { await libraryAuth.cancelPendingWork() }
+        BopifyLog.library.info("library setup saved; pendingConsent=\(hadPendingConsent, privacy: .public)")
         let previous = libraryClientID
         guard let id = try? await libraryAuth.setClientID(raw) else { return }
         libraryClientID = id
@@ -215,10 +216,15 @@ final class AppEnvironment {
         let generation = sessionGeneration
         await serialize { [self] in
             guard generation == sessionGeneration else { return }
-            authState = .authenticating
-            let restored = await auth.restore()
-            guard generation == sessionGeneration else { return }
-            if restored != nil { connect() } else { authState = .signedOut }
+            authState = .refreshing
+            do {
+                let restored = try await auth.restore()
+                guard generation == sessionGeneration else { return }
+                if restored != nil { connect() } else { authState = .signedOut }
+            } catch {
+                guard generation == sessionGeneration else { return }
+                authState = .error(error as? PlayerError ?? .credentialUnavailable)
+            }
         }
     }
 

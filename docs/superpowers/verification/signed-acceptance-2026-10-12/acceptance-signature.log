@@ -1,0 +1,30 @@
+Executable=/private/tmp/bopify-signed-acceptance/Bopify.app/Contents/MacOS/Bopify
+Identifier=com.leesiongchan.bopify
+Format=app bundle with Mach-O thin (arm64)
+CodeDirectory v=20500 size=80099 flags=0x10000(runtime) hashes=2492+7 location=embedded
+VersionPlatform=1
+VersionMin=917504
+VersionSDK=1769472
+Hash type=sha256 size=32
+CandidateCDHash sha256=56f01ff8942b0383625696a74ca4eb35ef589685
+CandidateCDHashFull sha256=56f01ff8942b0383625696a74ca4eb35ef589685b03001a1422944a392aa07e3
+Hash choices=sha256
+CMSDigest=56f01ff8942b0383625696a74ca4eb35ef589685b03001a1422944a392aa07e3
+CMSDigestType=2
+Executable Segment base=0
+Executable Segment limit=21872640
+Executable Segment flags=0x1
+Page size=16384
+CDHash=56f01ff8942b0383625696a74ca4eb35ef589685
+Signature size=4787
+Authority=Apple Development: [personal identity redacted]
+Authority=Apple Worldwide Developer Relations Certification Authority
+Authority=Apple Root CA
+Signed Time=12 Oct 2026 at 1:14:02 AM
+Info.plist entries=24
+TeamIdentifier=6RS6K2N242
+Runtime Version=27.0.0
+Sealed Resources version=2 rules=13 files=2
+Internal requirements count=1 size=188
+Total signatures=1
+Chosen signature=1

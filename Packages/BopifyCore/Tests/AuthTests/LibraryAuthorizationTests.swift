@@ -117,6 +117,78 @@ struct LibraryAuthorizationTests {
         }
     }
 
+    @Test(arguments: [KeychainError.unavailable(-25308), .accessDenied(-25293), .corrupt, .unexpected(-1)])
+    func temporaryCredentialReadFailuresPreserveTheLibraryIDAndGrant(_ failure: KeychainError) async throws {
+        try await withSuite { suite, defaults in
+            defaults.set(id, forKey: LibraryAuthorization.defaultsKey)
+            let store = LibraryReadFaultStore(tokens: grant(), failure: failure)
+            let library = LibraryAuthorization(suiteName: suite) { clientID in
+                SpotifyAuthService(clientID: clientID, store: store, openURL: { _ in store.recordBrowser() })
+            }
+            let expected: PlayerError
+            switch failure {
+            case .accessDenied: expected = .credentialAccessDenied
+            case .corrupt: expected = .credentialCorrupt
+            default: expected = .credentialUnavailable
+            }
+            await #expect(throws: expected) {
+                try await library.validAccessToken(requiredScopes: ["user-library-read"])
+            }
+            #expect(defaults.string(forKey: LibraryAuthorization.defaultsKey) == id)
+            #expect(store.clears == 0 && store.browserOpens == 0)
+            store.failure = nil
+            let restored = try await library.validAccessToken(requiredScopes: ["user-library-read"])
+            #expect(restored == "LIBRARY")
+        }
+    }
+
+    @Test func replacingTheClientAbandonsConsentAndRejectsItsStaleCallback() async throws {
+        try await withSuite { suite, defaults in
+            defaults.set(id, forKey: LibraryAuthorization.defaultsKey)
+            let reserved = LoopbackCallbackListener(expectedState: "unused")
+            let port = try await reserved.start()
+            await reserved.stop()
+            let opened = AsyncStream<URL>.makeStream()
+            defer { opened.continuation.finish() }
+            let store = InMemoryTokenStore()
+            let library = LibraryAuthorization(suiteName: suite) { clientID in
+                let config = URLSessionConfiguration.ephemeral
+                config.protocolClasses = [LibraryConsentStubProtocol.self]
+                return SpotifyAuthService(clientID: clientID,
+                    client: TokenClient(clientID: clientID, session: URLSession(configuration: config)),
+                    store: store, callbackPort: UInt16(port), callbackPath: "/callback",
+                    openURL: { opened.continuation.yield($0) })
+            }
+            let deadline = Task {
+                try await Task.sleep(for: .seconds(10))
+                opened.continuation.finish()
+                await library.cancelPendingWork()
+            }
+            defer { deadline.cancel() }
+            let oldConsent = Task { try await library.authorize(["user-library-read"]) }
+            var iterator = opened.stream.makeAsyncIterator()
+            let oldURL = try #require(await iterator.next())
+            let oldQuery = Dictionary(uniqueKeysWithValues: URLComponents(url: oldURL, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value!) })
+            #expect(oldQuery["client_id"] == id)
+            _ = try await library.setClientID(other)
+            await #expect(throws: PlayerError.authDenied) { try await oldConsent.value }
+            let newConsent = Task { try await library.authorize(["user-library-read"]) }
+            let newURL = try #require(await iterator.next())
+            let newQuery = Dictionary(uniqueKeysWithValues: URLComponents(url: newURL, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value!) })
+            #expect(newQuery["client_id"] == other)
+            #expect(newQuery["redirect_uri"] == "http://127.0.0.1:\(port)/callback")
+            let stale = URL(string: "\(newQuery["redirect_uri"]!)?code=STALE&state=\(oldQuery["state"]!)")!
+            let (_, rejected) = try await URLSession.shared.data(from: stale)
+            #expect((rejected as? HTTPURLResponse)?.statusCode == 400)
+            #expect(store.load() == nil)
+            let valid = URL(string: "\(newQuery["redirect_uri"]!)?code=NEW&state=\(newQuery["state"]!)")!
+            _ = try await URLSession.shared.data(from: valid)
+            try await newConsent.value
+            #expect(try await library.validAccessToken(requiredScopes: ["user-library-read"]) == "NEW_LIBRARY")
+            #expect(defaults.string(forKey: LibraryAuthorization.defaultsKey) == other)
+        }
+    }
+
     @Test func savingTheSameIDKeepsTheGrant() async throws {
         try await withSuite { suite, defaults in
             defaults.set(id, forKey: LibraryAuthorization.defaultsKey)
@@ -151,5 +223,37 @@ private final class CreatedServices: @unchecked Sendable {
     func record(_ service: SpotifyAuthService) -> SpotifyAuthService {
         lock.withLock { services.append(service) }
         return service
+    }
+}
+
+private final class LibraryReadFaultStore: TokenStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private var tokens: TokenSet?
+    private var readFault: KeychainError?
+    private var clearCount = 0, browserCount = 0
+    init(tokens: TokenSet, failure: KeychainError) { self.tokens = tokens; readFault = failure }
+    var failure: KeychainError? {
+        get { lock.withLock { readFault } }
+        set { lock.withLock { readFault = newValue } }
+    }
+    var clears: Int { lock.withLock { clearCount } }
+    var browserOpens: Int { lock.withLock { browserCount } }
+    func recordBrowser() { lock.withLock { browserCount += 1 } }
+    func load() throws -> TokenSet? {
+        try lock.withLock { if let readFault { throw readFault }; return tokens }
+    }
+    func save(_ tokens: TokenSet) throws { lock.withLock { self.tokens = tokens } }
+    func clear() throws { lock.withLock { clearCount += 1; tokens = nil } }
+}
+
+private final class LibraryConsentStubProtocol: URLProtocol, @unchecked Sendable {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func stopLoading() {}
+    override func startLoading() {
+        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(#"{"access_token":"NEW_LIBRARY","refresh_token":"NEW_RT","expires_in":3600,"scope":"user-library-read"}"#.utf8))
+        client?.urlProtocolDidFinishLoading(self)
     }
 }
