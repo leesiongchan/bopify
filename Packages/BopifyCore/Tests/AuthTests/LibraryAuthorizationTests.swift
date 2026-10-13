@@ -189,6 +189,90 @@ struct LibraryAuthorizationTests {
         }
     }
 
+    @Test(arguments: [true, false])
+    func failedCredentialRemovalDoesNotPublishTheReplacementClient(_ hasStoredID: Bool) async throws {
+        try await withSuite { suite, defaults in
+            if hasStoredID { defaults.set(id, forKey: LibraryAuthorization.defaultsKey) }
+            let store = LibraryReadFaultStore(tokens: grant(), failure: nil)
+            store.failClear = true
+            let library = LibraryAuthorization(suiteName: suite) { clientID in
+                SpotifyAuthService(clientID: clientID, store: store, openURL: { _ in store.recordBrowser() })
+            }
+            await #expect(throws: PlayerError.credentialUnavailable) { try await library.setClientID(other) }
+            #expect(defaults.string(forKey: LibraryAuthorization.defaultsKey) == (hasStoredID ? id : nil))
+            if hasStoredID {
+                let existing = try await library.validAccessToken(requiredScopes: ["user-library-read"])
+                #expect(existing == "LIBRARY")
+            } else {
+                await #expect(throws: LibraryError.authorizationRequired) {
+                    try await library.validAccessToken(requiredScopes: ["user-library-read"])
+                }
+            }
+            #expect(store.browserOpens == 0)
+            store.failClear = false
+            let replacement = try await library.setClientID(other)
+            #expect(replacement == other && defaults.string(forKey: LibraryAuthorization.defaultsKey) == other)
+            #expect(try store.load() == nil)
+        }
+    }
+
+    @Test func explicitLibraryConsentReplacesACorruptGrant() async throws {
+        try await withSuite { suite, defaults in
+            defaults.set(id, forKey: LibraryAuthorization.defaultsKey)
+            let store = LibraryReadFaultStore(tokens: grant(), failure: .corrupt)
+            let library = LibraryAuthorization(suiteName: suite) { clientID in
+                let config = URLSessionConfiguration.ephemeral
+                config.protocolClasses = [LibraryConsentStubProtocol.self]
+                return SpotifyAuthService(clientID: clientID,
+                    client: TokenClient(clientID: clientID, session: URLSession(configuration: config)), store: store,
+                    callbackPath: "/callback", openURL: { url in
+                        store.recordBrowser()
+                        let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value!) })
+                        let callback = URL(string: "\(query["redirect_uri"]!)?code=REPAIR&state=\(query["state"]!)")!
+                        Task { _ = try? await URLSession.shared.data(from: callback) }
+                    })
+            }
+            await #expect(throws: PlayerError.credentialCorrupt) {
+                try await library.validAccessToken(requiredScopes: ["user-library-read"])
+            }
+            #expect(store.browserOpens == 0 && store.clears == 0)
+            try await library.authorize(["user-library-read"])
+            let repaired = try await library.validAccessToken(requiredScopes: ["user-library-read"])
+            #expect(repaired == "NEW_LIBRARY" && store.browserOpens == 1 && store.clears == 0)
+            let stored = try store.load()
+            #expect(stored?.accessToken == "NEW_LIBRARY")
+            let reopened = LibraryAuthorization(suiteName: suite) { clientID in
+                SpotifyAuthService(clientID: clientID, store: store, openURL: { _ in store.recordBrowser() })
+            }
+            let restored = try await reopened.validAccessToken(requiredScopes: ["user-library-read"])
+            #expect(restored == "NEW_LIBRARY" && store.browserOpens == 1)
+            #expect(defaults.string(forKey: LibraryAuthorization.defaultsKey) == id)
+        }
+    }
+
+    @Test func decliningCorruptGrantReplacementKeepsStoredCredentialsUntouched() async {
+        await withSuite { suite, defaults in
+            defaults.set(id, forKey: LibraryAuthorization.defaultsKey)
+            let store = LibraryReadFaultStore(tokens: grant(), failure: .corrupt)
+            let library = LibraryAuthorization(suiteName: suite) { clientID in
+                let config = URLSessionConfiguration.ephemeral
+                config.protocolClasses = [LibraryConsentStubProtocol.self]
+                return SpotifyAuthService(clientID: clientID,
+                    client: TokenClient(clientID: clientID, session: URLSession(configuration: config)), store: store,
+                    callbackPath: "/callback", openURL: { url in
+                        store.recordBrowser()
+                        let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value!) })
+                        let callback = URL(string: "\(query["redirect_uri"]!)?error=access_denied&state=\(query["state"]!)")!
+                        Task { _ = try? await URLSession.shared.data(from: callback) }
+                    })
+            }
+            await #expect(throws: PlayerError.authDenied) { try await library.authorize(["user-library-read"]) }
+            #expect(throws: KeychainError.corrupt) { try store.load() }
+            #expect(store.clears == 0 && store.browserOpens == 1)
+            #expect(defaults.string(forKey: LibraryAuthorization.defaultsKey) == id)
+        }
+    }
+
     @Test func savingTheSameIDKeepsTheGrant() async throws {
         try await withSuite { suite, defaults in
             defaults.set(id, forKey: LibraryAuthorization.defaultsKey)
@@ -231,10 +315,15 @@ private final class LibraryReadFaultStore: TokenStoring, @unchecked Sendable {
     private var tokens: TokenSet?
     private var readFault: KeychainError?
     private var clearCount = 0, browserCount = 0
-    init(tokens: TokenSet, failure: KeychainError) { self.tokens = tokens; readFault = failure }
+    private var clearFault = false
+    init(tokens: TokenSet, failure: KeychainError?) { self.tokens = tokens; readFault = failure }
     var failure: KeychainError? {
         get { lock.withLock { readFault } }
         set { lock.withLock { readFault = newValue } }
+    }
+    var failClear: Bool {
+        get { lock.withLock { clearFault } }
+        set { lock.withLock { clearFault = newValue } }
     }
     var clears: Int { lock.withLock { clearCount } }
     var browserOpens: Int { lock.withLock { browserCount } }
@@ -242,8 +331,19 @@ private final class LibraryReadFaultStore: TokenStoring, @unchecked Sendable {
     func load() throws -> TokenSet? {
         try lock.withLock { if let readFault { throw readFault }; return tokens }
     }
-    func save(_ tokens: TokenSet) throws { lock.withLock { self.tokens = tokens } }
-    func clear() throws { lock.withLock { clearCount += 1; tokens = nil } }
+    func save(_ tokens: TokenSet) throws {
+        lock.withLock {
+            self.tokens = tokens
+            if readFault == .corrupt { readFault = nil }
+        }
+    }
+    func clear() throws {
+        try lock.withLock {
+            clearCount += 1
+            if clearFault { throw KeychainError.unavailable(-25308) }
+            tokens = nil
+        }
+    }
 }
 
 private final class LibraryConsentStubProtocol: URLProtocol, @unchecked Sendable {

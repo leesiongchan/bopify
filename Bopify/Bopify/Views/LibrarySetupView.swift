@@ -33,6 +33,10 @@ struct LibrarySetupView: View {
             if !clientID.isEmpty && !isValid {
                 Text("librarySetup.invalid").font(.caption).foregroundStyle(.secondary)
             }
+            if let error = environment.librarySetupError {
+                error.localizedText.font(.caption).foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             HStack {
                 Spacer()
                 Button("librarySetup.save") {

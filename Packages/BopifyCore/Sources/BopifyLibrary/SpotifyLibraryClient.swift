@@ -82,6 +82,7 @@ public struct SpotifyLibraryClient: LibraryService, SavedTracksService, Listenin
         catch let error as LibraryError { throw error }
         catch is CancellationError { throw CancellationError() }
         catch PlayerError.authExpired { throw LibraryError.authorizationRequired }
+        catch PlayerError.credentialCorrupt { throw LibraryError.authorizationRequired }
         catch { throw LibraryError.unavailable }
         try Task.checkCancellation()
         var components = URLComponents(string: "https://api.spotify.com")!

@@ -73,6 +73,17 @@ struct SpotifyLibraryClientTests {
         #expect(request.httpMethod == "GET")
         #expect(request.url?.path == "/v1/me/library/contains")
     }
+    @Test func corruptLibraryCredentialsOfferConsentWithoutStartingAnAPIRequest() async {
+        LibraryProtocol.fixture.reset(.init())
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [LibraryProtocol.self]
+        let library = SpotifyLibraryClient(session: URLSession(configuration: config)) { _ in
+            throw PlayerError.credentialCorrupt
+        }
+        await #expect(throws: LibraryError.authorizationRequired) { try await library.savedState(for: uri) }
+        #expect(LibraryProtocol.fixture.requests.isEmpty)
+    }
+
     @Test func statusMappingAndNoRetries() async {
         for (status, error) in [(400, LibraryError.invalidResponse), (401, .authorizationRequired), (403, .forbidden), (429, .rateLimited(retryAfterSeconds: 12)), (500, .unavailable)] {
             LibraryProtocol.fixture.reset(.init(status: status, headers: ["Retry-After": "12"]))

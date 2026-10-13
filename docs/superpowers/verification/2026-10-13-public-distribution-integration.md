@@ -31,7 +31,7 @@ an otherwise pending credential-save retry. The isolated app fixture failed with
 | Check | Result |
 | --- | --- |
 | Public baseline Swift suites | 327 passed |
-| Integrated Swift suites | 347 passed: 177 playback, 59 library, 28 domain, 83 authentication |
+| Integrated Swift suites | 351 passed: 177 playback, 60 library, 28 domain, 86 authentication |
 | Native tests | 151 passed: 57 wrapper, 85 Connect, 7 playback, 1 doctest, 1 explicit faulted-sink contract |
 | Release-script/tooling/credential tests | 21 passed |
 | Locked native build | Passed without warnings/errors |
@@ -60,9 +60,32 @@ real playback, output switching and sleep/wake remain user-deferred.
 No source branch/main merge, push, tag, GitHub Release or signing-secret change
 was performed. The integrated branch is the reviewable result.
 
-The public branch's existing client-change path logs Keychain deletion failure
-through nonthrowing `signOut`; this edge is recorded for final review. It must
-not be mistaken for a verified credential-removal guarantee.
+## Independent review and verified fixes
+
+A fresh integration review found two Important credential-boundary issues, both
+reproduced by failing tests and fixed:
+
+- Client changes previously published a new ID despite failed Keychain deletion.
+  The strict `signOutAndClearCredentials` path now propagates failure, preserves
+  the original library ID and blocks publication of the replacement service.
+  Library Access stays open with a visible error and supports retry. Ordinary
+  nonthrowing sign-out remains compatible.
+- Corrupt library credentials previously offered repeated Retry and blocked even
+  explicit consent. Library requests now expose Enable; explicit user consent
+  can replace an undecodable grant. Background reads and temporary inaccessible
+  credentials remain nondestructive. A reopened actor reads the persisted repair;
+  declining consent preserves the corrupt entry and client ID.
+
+The complete351Swift suite passes after both fixes. No Critical or Minor findings.
+Standalone audio/auth/release work had prior review; this review focused on
+integration. Real DeveloperID/remote/live acceptance remains outside these tests.
+
+Visual verification of Library Access compares the
+[normal setup](public-integration-2026-10-13/library-setup-before-content.png) with
+[failed credential deletion](public-integration-2026-10-13/library-setup-clear-error-content.png).
+The error appears below the client ID field; the window remains open and the
+Save action is available for retry. Direct native content captures complement
+window-server screenshots, whose compositor transform makes text too small.
 
 Commands and full output remain in the ignored workspace
 `.superpowers/sdd/2026-10-13-public-distribution-integration/`. Archive control:

@@ -39,6 +39,7 @@ final class AppEnvironment {
     @ObservationIgnored private let libraryAuth: LibraryAuthorization
     private(set) var libraryClientID: String?
     let librarySetupWindow = LibrarySetupWindowController()
+    private(set) var librarySetupError: PlayerError?
     // The scopes an Enable action asked for before any client ID existed; consent resumes after setup.
     @ObservationIgnored private var pendingLibraryScopes: Set<String> = []
     private(set) var recovery: PlaybackRecoveryCoordinator?
@@ -173,15 +174,22 @@ final class AppEnvironment {
 
     func setLibraryClientID(_ raw: String) async {
         guard LibraryAuthorization.normalized(raw) != nil else { return }
+        librarySetupError = nil
         // Abandon active consent before it can post a stale notice; preserve a rotated
         // grant waiting for persistence when Save does not interrupt consent.
         let hadPendingConsent = isEnablingLibrary
         libraryGeneration += 1
         isEnablingLibrary = false
         if hadPendingConsent { await libraryAuth.cancelPendingWork() }
-        BopifyLog.library.info("library setup saved; pendingConsent=\(hadPendingConsent, privacy: .public)")
         let previous = libraryClientID
-        guard let id = try? await libraryAuth.setClientID(raw) else { return }
+        let id: String
+        do { id = try await libraryAuth.setClientID(raw) }
+        catch {
+            librarySetupError = error as? PlayerError ?? .credentialUnavailable
+            BopifyLog.library.error("library setup could not remove the previous grant")
+            return
+        }
+        BopifyLog.library.info("library setup saved; pendingConsent=\(hadPendingConsent, privacy: .public)")
         libraryClientID = id
         librarySetupWindow.close()
         if let previous, id != previous { clearLibrary() }

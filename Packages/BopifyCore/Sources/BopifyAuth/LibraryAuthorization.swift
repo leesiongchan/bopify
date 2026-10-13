@@ -38,16 +38,23 @@ public actor LibraryAuthorization {
         guard let id = Self.normalized(raw) else { throw LibraryClientIDError.invalid }
         if id == clientID { return id }
         // Detach before awaiting: requests arriving mid-swap fail instead of reaching either client.
-        let previous = auth
+        let previous = auth, previousID = clientID
         auth = nil
         clientID = nil
         // Tokens belong to the client that issued them, and every client shares one Keychain item.
-        await previous?.signOut()
-        let next = makeAuth(id)
-        await next.signOut()
-        defaults.set(id, forKey: Self.defaultsKey)
-        clientID = id
-        auth = next
+        do {
+            try await previous?.signOutAndClearCredentials()
+            let next = makeAuth(id)
+            try await next.signOutAndClearCredentials()
+            defaults.set(id, forKey: Self.defaultsKey)
+            clientID = id
+            auth = next
+        } catch {
+            auth = previous
+            clientID = previousID
+            BopifyLog.auth.error("library client change blocked by credential removal failure")
+            throw error
+        }
         BopifyLog.auth.info("library client ID changed")
         return id
     }
