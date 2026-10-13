@@ -27,10 +27,11 @@ jobs:
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
           if ! command -v rustup >/dev/null 2>&1; then
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
           fi
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           xcodebuild -version
+          rustup show active-toolchain
           cargo --version
           rustup target add aarch64-apple-darwin
           xcodebuild -downloadComponent MetalToolchain

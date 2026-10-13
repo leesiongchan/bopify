@@ -15,10 +15,25 @@ The earlier [release-tooling evidence](superpowers/verification/2026-10-13-relea
 records the original branch's development-signed controls. New integrated controls
 verify packaging only and do not establish public distribution acceptance.
 
+## Distribution route
+
+This workflow publishes a DMG to GitHub Releases. It does not submit the app to
+the Mac App Store or App Review. Developer ID signing and notarization support
+distribution outside the App Store; the App Store Connect key below authenticates
+notarization only. See [Apple's notarization documentation](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution).
+
+The latest dependency update removes the XML/time advisories and yanked macro
+package. The raw audit still reports the RSA advisory, whose private-key attack
+path was not found in the current public-key verification usage. The integration
+verification record preserves that scoped assessment, raw findings and checks;
+reassess it when the dependency or its usage changes.
+
 ## Local signing setup
 
-Use Xcode 27 with the Metal toolchain, Rust/Cargo and the
-`aarch64-apple-darwin` target. The scripts use cbindgen 0.29.4 and cargo-about
+Use Xcode 27 with the Metal toolchain and Rust 1.99+. The checked-in
+`rust-toolchain.toml` selects Rust 1.99.0, Clippy, rustfmt and the
+`aarch64-apple-darwin` target when using rustup. Environment or directory
+overrides take precedence; check `rustup show active-toolchain` before building. The scripts use cbindgen 0.29.4 and cargo-about
 0.9.2, installing exact versions under `.build/release-tools` when necessary.
 
 Install a **Developer ID Application** certificate with its private key for team

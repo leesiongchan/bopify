@@ -20,7 +20,7 @@ Playback works as soon as you sign in. Favorites, Liked Songs and listening hist
 
 You only need this to work on Bopify. Besides macOS 14 or later and Premium, you need:
 
-- Rust 1.85+
+- Rust 1.99+ (rustup uses the pinned 1.99.0 toolchain)
 - Xcode 27 with the Metal Toolchain:
   `xcodebuild -downloadComponent MetalToolchain`
 
