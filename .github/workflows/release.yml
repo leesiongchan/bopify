@@ -14,7 +14,6 @@ concurrency:
 jobs:
   build:
     runs-on: xcode-27
-    environment: release-signing
     timeout-minutes: 90
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
@@ -35,27 +34,19 @@ jobs:
           cargo --version
           rustup target add aarch64-apple-darwin
           xcodebuild -downloadComponent MetalToolchain
-      - name: Verify code before signing
+      - name: Verify code before packaging
         run: |
           python3 -m unittest discover -s scripts/tests -v
           ./scripts/build-rust.sh
           swift test --package-path Packages/BopifyCore
-      - name: Build, sign and notarize
-        env:
-          DEVELOPER_ID_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
-          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
-          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
-          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
-        run: python3 scripts/ci-release.py "${GITHUB_REF_NAME#v}"
+      - name: Package ad-hoc DMG
+        run: ./scripts/release.sh "${GITHUB_REF_NAME#v}" --ad-hoc
       - name: Retain release evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-evidence
           path: |
-            build/release/**/notary*.json
             build/release/**/export-check.json
           if-no-files-found: ignore
           retention-days: 14
@@ -85,5 +76,12 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           prerelease=()
           [[ "$version" == *-* ]] && prerelease=(--prerelease)
+          notes="$RUNNER_TEMP/bopify-release-notes.md"
+          printf '%s\n' \
+            'This release is ad-hoc signed and is not notarized by Apple.' \
+            '' \
+            'After copying Bopify to Applications, try opening it. If macOS blocks it and you trust this download, use System Settings > Privacy & Security > Open Anyway.' \
+            '' \
+            '[Apple installation instructions](https://support.apple.com/en-us/102445)' > "$notes"
           gh release create "$GITHUB_REF_NAME" "release/Bopify-$version.dmg" \
-            --verify-tag --title "Bopify $version" --generate-notes "${prerelease[@]}"
+            --verify-tag --title "Bopify $version" --notes-file "$notes" --generate-notes "${prerelease[@]}"

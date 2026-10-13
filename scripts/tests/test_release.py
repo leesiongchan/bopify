@@ -33,6 +33,7 @@ elif name=='xcodebuild':
     def option(key):return args[args.index(key)+1]
     if label=='archive':
         assert 'ARCHS=arm64' in args
+        Path('archive-identity').write_text(next(a.split('=',1)[1] for a in args if a.startswith('CODE_SIGN_IDENTITY=')))
         app=Path(option('-archivePath'))/'Products/Applications/Bopify.app/Contents'
         (app/'MacOS').mkdir(parents=True)
         (app/'MacOS/Bopify').write_bytes(b'controlled binary boundary')
@@ -54,8 +55,13 @@ elif name=='codesign':
         if os.environ.get('RUNTIME_EXCEPTION'):rights['com.apple.security.cs.disable-library-validation']=True
         sys.stdout.buffer.write(plistlib.dumps(rights))
     elif '--display' in args:
-        print('Authority='+os.environ.get('AUTHORITY','Developer ID Application: Test (6RS6K2N242)'),file=sys.stderr)
-        print('TeamIdentifier=6RS6K2N242',file=sys.stderr)
+        if Path('archive-identity').read_text()=='-':
+            print('Signature='+os.environ.get('ADHOC_SIGNATURE','adhoc'),file=sys.stderr)
+            print('TeamIdentifier='+os.environ.get('ADHOC_TEAM','not set'),file=sys.stderr)
+            if os.environ.get('AUTHORITY'):print('Authority='+os.environ['AUTHORITY'],file=sys.stderr)
+        else:
+            print('Authority='+os.environ.get('AUTHORITY','Developer ID Application: Test (6RS6K2N242)'),file=sys.stderr)
+            print('TeamIdentifier=6RS6K2N242',file=sys.stderr)
         print('CodeDirectory flags='+ ('0x0' if os.environ.get('NO_RUNTIME') else '0x10000(runtime)'),file=sys.stderr)
 elif name=='hdiutil':Path(args[-1]).write_bytes(b'controlled disk image boundary')
 elif name=='xcrun':
@@ -98,8 +104,10 @@ class ReleasePipelineTests(unittest.TestCase):
         for key in ['NOTARY_KEY_PATH','NOTARY_KEY_ID','NOTARY_ISSUER_ID','SIGN_IDENTITY']:
             self.environment.pop(key, None)
 
-    def release(self, version='0.1.0-rc.1', **changes):
-        return subprocess.run(['bash', str(self.root / 'scripts/release.sh'), version], cwd=self.root,
+    def release(self, version='0.1.0-rc.1', ad_hoc=False, **changes):
+        arguments=['bash', str(self.root / 'scripts/release.sh'), version]
+        if ad_hoc:arguments.append('--ad-hoc')
+        return subprocess.run(arguments, cwd=self.root,
                               env=self.environment | changes, capture_output=True, text=True, timeout=30)
 
     def stages(self):
@@ -118,6 +126,39 @@ class ReleasePipelineTests(unittest.TestCase):
         self.assertTrue(infos)
         self.assertTrue(all(plistlib.loads(info.read_bytes())['CFBundleShortVersionString']=='0.1.0' for info in infos))
         self.assertTrue(all((info.parent/'Resources/Third-Party Licenses.html').is_file() for info in infos))
+
+    def test_ad_hoc_release_needs_no_identity_or_notary_credentials(self):
+        result = self.release(ad_hoc=True, MISSING_ID='1', NOTARY_KEY_PATH='/absent/private-key')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.final.read_bytes(), DMG)
+        calls = [json.loads(line) for line in self.trace.read_text().splitlines()]
+        stages = self.stages()
+        self.assertTrue(all(stage not in stages for stage in ['security','export','submit','log','staple','validate','assess']))
+        archive = next(call['args'] for call in calls if call['stage'] == 'archive')
+        self.assertIn('CODE_SIGN_IDENTITY=-', archive)
+        self.assertIn('DEVELOPMENT_TEAM=', archive)
+        signed = next(call['args'] for call in calls if call['stage'] == 'sign')
+        self.assertEqual(signed[signed.index('--sign') + 1], '-')
+        self.assertIn('--timestamp=none', signed)
+        policies = list((self.root / 'build').rglob('export-check.json'))
+        self.assertEqual(len(policies), 1)
+        policy = json.loads(policies[0].read_text())
+        self.assertEqual(policy['signing'], 'ad-hoc')
+        self.assertFalse(policy['notarized'])
+        self.assertIn('not notarized', result.stdout)
+        self.assertTrue((policies[0].parent / 'export/Bopify.app/Contents/Resources/Third-Party Licenses.html').is_file())
+
+    def test_ad_hoc_signature_capability_and_packaging_failures_block_promotion(self):
+        cases = [{'ADHOC_SIGNATURE':'cms'}, {'ADHOC_TEAM':'6RS6K2N242'}, {'AUTHORITY':'Developer ID Application: Test'},
+                 {'NO_RUNTIME':'1'}, {'DEBUGGER':'1'}, {'NO_NETWORK':'1'}, {'RUNTIME_EXCEPTION':'1'},
+                 {'ARCHITECTURES':'arm64 x86_64'}, {'FAIL_STAGE':'hdiutil'}, {'FAIL_STAGE':'sign'}, {'FAIL_STAGE':'codesign'}]
+        for case in cases:
+            with self.subTest(case=case):
+                if self.trace.exists():self.trace.unlink()
+                result = self.release(ad_hoc=True, **case)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(self.final.exists())
+                self.assertNotIn('submit', self.stages())
 
     def test_selected_certificate_is_used_for_archive_export_and_dmg(self):
         fingerprint = 'A' * 40
