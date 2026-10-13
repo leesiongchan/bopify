@@ -5,11 +5,12 @@ It combines the user-supplied library client ID and Library Access UI with the
 audio/authentication fixes and reviewed release tooling. See the
 [integration verification record](superpowers/verification/2026-10-13-public-distribution-integration.md).
 
-This Mac still has no Developer ID Application identity. Actual Developer ID
-export, notarization, Gatekeeper and second-Mac acceptance remain pending.
-Installed-account Keychain access, real playback, audio output changes and
-sleep/wake remain user-deferred checks. The AppKit status-bar layout warning
-remains unresolved; preserve [its investigation](superpowers/verification/2026-10-12-appkit-layout-investigation.md).
+The selected distribution route is now the free, ad-hoc-signed GitHub DMG.
+Developer ID signing and notarization are optional future work, not prerequisites
+for this route. Clean-Mac installation, installed-account Keychain access, real
+playback, audio output changes and sleep/wake remain pending or user-deferred.
+The AppKit status-bar layout warning remains unresolved; preserve
+[its investigation](superpowers/verification/2026-10-12-appkit-layout-investigation.md).
 
 The earlier [release-tooling evidence](superpowers/verification/2026-10-13-release-pipeline.md)
 records the original branch's development-signed controls. New integrated controls
@@ -17,10 +18,20 @@ verify packaging only and do not establish public distribution acceptance.
 
 ## Distribution route
 
-This workflow publishes a DMG to GitHub Releases. It does not submit the app to
-the Mac App Store or App Review. Developer ID signing and notarization support
-distribution outside the App Store; the App Store Connect key below authenticates
-notarization only. See [Apple's notarization documentation](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution).
+This workflow publishes an ad-hoc-signed DMG to GitHub Releases. It uses no
+Apple signing certificate, notarization credentials or Apple Developer Program
+membership. The ad-hoc signature provides integrity checks but does not identify
+the publisher to Gatekeeper; the app is not notarized.
+
+After copying the app to Applications, try opening it. If macOS blocks it and you
+trust the download, use System Settings → Privacy & Security → Open Anyway.
+[Apple's installation instructions](https://support.apple.com/en-us/102445)
+describe this exception; managed Macs may not allow it. Do not disable Gatekeeper
+globally as an installation step.
+
+The existing Developer ID/notarized path remains available for later. Those
+credentials support distribution outside the App Store and do not require an
+App Store listing or App Review.
 
 The latest dependency update removes the XML/time advisories and yanked macro
 package. The raw audit still reports the RSA advisory, whose private-key attack
@@ -28,13 +39,64 @@ path was not found in the current public-key verification usage. The integration
 verification record preserves that scoped assessment, raw findings and checks;
 reassess it when the dependency or its usage changes.
 
-## Local signing setup
+## Local build and free packaging
 
 Use Xcode 27 with the Metal toolchain and Rust 1.99+. The checked-in
 `rust-toolchain.toml` selects Rust 1.99.0, Clippy, rustfmt and the
 `aarch64-apple-darwin` target when using rustup. Environment or directory
 overrides take precedence; check `rustup show active-toolchain` before building. The scripts use cbindgen 0.29.4 and cargo-about
 0.9.2, installing exact versions under `.build/release-tools` when necessary.
+
+From a clean, committed checkout, build the free package:
+
+```sh
+./scripts/release.sh 0.1.0-rc.1 --ad-hoc
+```
+
+The script explicitly selects ad-hoc signing, archives with no development team,
+copies the archived app and verifies it before packaging. It preserves the four
+required sandbox/network/file capabilities and hardened runtime. It rejects
+unexpected identity entitlements, debugger access and runtime exceptions.
+The app and DMG receive ad-hoc signatures; no notarization or Gatekeeper approval
+is claimed. Evidence records `signing: ad-hoc` and `notarized: false`.
+
+The final DMG appears at `build/release/Bopify-<version>.dmg` only after the free
+packaging checks pass. Existing artifacts are never overwritten. Each run keeps
+its archive and policy evidence in a distinct directory. License notices ship
+inside the app and alongside it in the DMG, with exact-version MPL source links.
+
+Switching signing modes or installing another ad-hoc build may cause Keychain
+authorization prompts because file-based Keychain ACLs depend on the app's code
+identity. The app preserves grants on temporary access errors. Test continuity
+with an installed account before publishing an update; automated packaging alone
+does not establish that behavior. See
+[Apple's code requirement documentation](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements).
+
+## GitHub Actions setup
+
+The prepared workflow runs on a future `v*` tag, uses GitHub's `xcode-27` hosted
+image and selects Xcode 27.0 explicitly. No workflow has been triggered as part
+of this preparation.
+
+The current workflow explicitly invokes `release.sh <version> --ad-hoc` after
+its tests. It does not use `ci-release.py`, a signing environment or Apple secrets.
+Protect release branches and version tags so only reviewed inputs are published.
+
+CI bootstraps Rust if needed using the [official rustup installer](https://rustup.rs/)
+and selects the checked-in toolchain pin. A separate publishing job receives
+`contents: write` and downloads only the successfully verified artifact. Action
+revisions are pinned to full commit hashes. Release notes disclose ad-hoc signing,
+absent notarization and the installation exception.
+
+An approved tag creates its GitHub Release after packaging verification; a
+prerelease suffix marks it as a prerelease. Complete local installation and the
+deferred live checks before tagging. The first approved prerelease run must
+validate hosted execution before treating the workflow as accepted.
+
+## Optional Developer ID and notarization setup
+
+The existing paid route uses `./scripts/release.sh <version>` without `--ad-hoc`.
+It never silently falls back to ad-hoc signing if credentials are missing.
 
 Install a **Developer ID Application** certificate with its private key for team
 `6RS6K2N242`. Creating that certificate requires the
@@ -64,38 +126,13 @@ the job at Apple. Retain the job ID and retrieve its log before retrying.
 Notices ship inside `Bopify.app` and alongside it in the DMG. The notices include
 exact-version source links for dependencies distributed under MPL-2.0.
 
-## GitHub Actions setup
-
-The prepared workflow runs on a future `v*` tag, uses GitHub's `xcode-27` hosted
-image and selects Xcode 27.0 explicitly. No workflow has been triggered as part
-of this preparation.
-
-Before enabling releases, configure the **release-signing** environment with
-required reviewers and restrict deployment to approved version tags. Naming an
-environment in YAML does not configure approval or tag protection. Protect the
-release branch and tag creation so only reviewed code receives signing secrets.
-
-Add these environment secrets using GitHub's UI:
-
-- `DEVELOPER_ID_P12_BASE64`: the base64-encoded Developer ID certificate **and
-  private key**, exported as a password-protected `.p12`.
-- `DEVELOPER_ID_P12_PASSWORD`: that export password.
-- `KEYCHAIN_PASSWORD`: a separate randomly generated password.
-- `NOTARY_KEY_P8`: the App Store Connect `.p8` key contents.
-- `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID`: the associated identifiers.
-
-CI bootstraps Rust if needed before secret import, using the
-[official rustup installer](https://rustup.rs/). CI tests run before secret import. Signing uses an isolated temporary keychain,
-trusts `/usr/bin/codesign` for the imported key and restores the original search
-list during cleanup, including setup failures and cancellation. It does not
-change the default keychain. A separate publishing job receives `contents: write`
-and downloads only the successfully verified artifact. Action revisions are
-pinned to full commit hashes. Signing commands necessarily pass passwords to
-Apple's CLI as arguments; process arguments remain visible to the job's user.
-
-An approved tag automatically creates its GitHub Release after verification;
-a prerelease suffix marks it as a prerelease. Do not push a test tag until signing
-setup, library integration and the deferred acceptance checks are complete.
+For future hosted notarized releases, restore the credential helper invocation
+and configure the protected `release-signing` environment before giving it secrets.
+The retained `ci-release.py` uses an isolated temporary keychain and restores the
+original search list on success, failure and cancellation. Current free releases
+do not invoke it. The required optional secrets are `DEVELOPER_ID_P12_BASE64`,
+`DEVELOPER_ID_P12_PASSWORD`, `KEYCHAIN_PASSWORD`, `NOTARY_KEY_P8`, `NOTARY_KEY_ID`
+and `NOTARY_ISSUER_ID`. Keep keys and passwords out of Git and chat.
 
 ## Verification and sources
 

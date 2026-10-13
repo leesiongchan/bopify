@@ -6,9 +6,9 @@ Bopify plays audio on your Mac itself, using [librespot](https://github.com/libr
 
 ## Download
 
-Release packages use `Bopify-<version>.dmg` on [GitHub Releases](https://github.com/leesiongchan/bopify/releases/latest). Open a verified release and drag Bopify to Applications.
+Release packages use `Bopify-<version>.dmg` on [GitHub Releases](https://github.com/leesiongchan/bopify/releases/latest). Drag Bopify to Applications. Current packages are ad-hoc signed and are not notarized by Apple. If macOS blocks opening the app and you trust this download, try opening it once, then choose **System Settings → Privacy & Security → Open Anyway**. See [Apple’s instructions](https://support.apple.com/en-us/102445).
 
-This integration branch combines public library setup with the audio/authentication fixes and reviewed release pipeline. Developer ID export, notarization and live acceptance are still pending; see [the integration verification record](docs/superpowers/verification/2026-10-13-public-distribution-integration.md). Build from source to evaluate this revision.
+This integration branch combines public library setup with the audio/authentication fixes and reviewed release pipeline. Clean-Mac installation and live acceptance are still pending; see [the integration verification record](docs/superpowers/verification/2026-10-13-public-distribution-integration.md). No release has been published from this integration branch yet.
 
 You need an Apple Silicon Mac on macOS 14 or later, and a Spotify **Premium** account (librespot only works with Premium). Bopify has no Dock icon or app menu: look for it in the menu bar, and right-click it to quit.
 
@@ -80,21 +80,17 @@ It plays audio through librespot, and librespot's own README warns that using it
 
 ## Releasing
 
-For maintainers. You need, once:
-
-- An active Apple Developer Program membership.
-- A **Developer ID Application** certificate (Xcode, Settings, Accounts, Manage Certificates). Creating one requires the [Account Holder role](https://developer.apple.com/help/account/certificates/create-developer-id-certificates/).
-- An App Store Connect API key with the Developer role (`.p8` file, Key ID, Issuer ID).
-- A local notary profile:
-  `xcrun notarytool store-credentials bopify-notary --key <path>.p8 --key-id <KEY_ID> --issuer <ISSUER_ID>`
-
-Follow [the release setup and acceptance gates](docs/releasing.md), then build a signed, notarized DMG at `build/release/Bopify-<version>.dmg`:
+Current GitHub releases use the free ad-hoc signing route. No Apple Developer Program membership, signing certificate or notarization credentials are needed. From a clean, committed checkout:
 
 ```sh
-./scripts/release.sh 0.1.0
+./scripts/release.sh 0.1.0-rc.1 --ad-hoc
 ```
 
-Pushing a `v*` tag (for example `v0.1.0`) does the same in CI and publishes the DMG to GitHub Releases. A tag with a suffix, like `v0.1.0-rc.1`, is published as a prerelease. CI needs these repository secrets: `DEVELOPER_ID_P12_BASE64` (the certificate exported with its private key as `.p12`, then `base64 -i cert.p12`), `DEVELOPER_ID_P12_PASSWORD`, `KEYCHAIN_PASSWORD`, `NOTARY_KEY_P8`, `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID`.
+The final DMG is `build/release/Bopify-<version>.dmg`. The script verifies its signature and the app's arm64 architecture, hardened runtime, sandbox capabilities, version and embedded licenses. It does not notarize the app or establish Gatekeeper approval.
+
+Pushing an approved `v*` tag (for example `v0.1.0-rc.1`) builds the ad-hoc DMG in CI and publishes it to GitHub Releases, with the installation limitation in its release notes. A prerelease suffix marks it as a prerelease. Complete the acceptance checks before publishing; see [the release guide](docs/releasing.md).
+
+The Developer ID/notarized route remains available for later via `./scripts/release.sh <version>` and requires the optional signing setup in that guide.
 
 ## License
 

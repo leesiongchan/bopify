@@ -42,7 +42,7 @@ an otherwise pending credential-save retry. The isolated app fixture failed with
 | Same-ID Save fixture | Passed: rotated grant survives Save and retry needs no second refresh/browser |
 | Archive policy checks | arm64, strict/deep signature, hardened runtime, required sandbox/network/file rights, Music category, matching0644notices |
 | Dependency security audit after update | XML/time advisories and yanked package removed; raw scan still exits 1 for RSA only, with a scoped usage assessment and no ignores |
-| Developer ID preflight | Blocked: no usable team6RS6K2N242 Developer ID Application identity |
+| Optional Developer ID preflight | No usable team6RS6K2N242 Developer ID Application identity; no longer required for the selected free route |
 
 New library/auth boundary tests preserve the client ID/grant under four storage
 read faults, recover after the fault clears, replace suspended fixed-port consent,
@@ -55,9 +55,11 @@ unresolved. Neither was suppressed.
 
 ## Pending acceptance
 
-Actual Developer ID export, Apple notarization/stapling/Gatekeeper, second-Mac
-installation and hosted CI execution remain pending. Installed-account Keychain,
-real playback, output switching and sleep/wake remain user-deferred.
+The user selected free ad-hoc distribution after these controls. Actual Developer
+ID export and notarization are optional future checks for the paid route.
+Second-Mac downloaded installation and hosted CI execution remain pending.
+Installed-account Keychain, real playback, output switching and sleep/wake remain
+user-deferred; signing-mode changes also need an installed-grant continuity check.
 No source branch/main merge, push, tag, GitHub Release or signing-secret change
 was performed. The integrated branch is the reviewable result.
 
@@ -216,3 +218,44 @@ launched and no account credentials were accessed by these checks.
 [Rustup toolchain-file selection](https://rust-lang.github.io/rustup/overrides.html#the-toolchain-file).
 [quick-xml 0.42.0 source](https://github.com/tafia/quick-xml/tree/v0.42.0).
 [Current RSA advisory](https://rustsec.org/advisories/RUSTSEC-2023-0071.html).
+
+## Free GitHub release mode — 2026-10-13
+
+The user explicitly selected the free distribution route. GitHub's workflow now
+calls `release.sh <version> --ad-hoc`, without a signing environment, certificate,
+Apple credentials or the credential helper. The existing default Developer ID
+route and its tests remain available; missing credentials never cause an automatic
+fallback. The free mode is explicit.
+
+Shared checks still require a clean checkout, valid version/build number, arm64,
+strict signatures, hardened runtime, all four capabilities, approved entitlements,
+matching embedded notices and preservation of existing final artifacts. Ad-hoc
+archives use an empty development team and are copied without a Developer ID
+export. The app's policy record requires an ad-hoc signature, no team or authority,
+no identity/debugger/runtime-exception entitlements, and records `notarized: false`.
+The DMG is ad-hoc signed without a timestamp and is not submitted to Apple.
+
+Release notes and README disclose absent notarization and Apple's per-app
+Privacy & Security → Open Anyway installation exception. Source branch/tag
+protection and the publishing job's separate write permission remain relevant.
+No workflow, push, tag or GitHub Release has been triggered by this preparation.
+
+The new successful-free-path test failed on the old one-argument script before
+implementation. The full tooling suite now passes 23 tests, including failures
+for incorrect signature/team/authority, lost capabilities, debugger/runtime
+exceptions, wrong architecture, packaging/signature failures, and the retained
+paid path's notarization and credential cleanup checks. ShellCheck and actionlint
+pass. A fresh real ad-hoc Release archive passes strict/deep signature checks with
+hardened runtime, no signing team, and exactly the four required capabilities.
+Independent code review found no material issues.
+
+A physical DMG control will run from the committed inputs and retain its full
+output under `free-release/` in the ignored evidence directory. The archive
+probe is `/private/tmp/bopify-free-archive-control-2026-10-13.xcarchive`.
+This packaging evidence does not establish Gatekeeper approval or installed-account
+behavior. Ad-hoc code identity may change Keychain access across upgrades; the
+existing stores/services and conservative restore logic were kept unchanged.
+
+[Apple installation guidance](https://support.apple.com/en-us/102445).
+[Apple Keychain implementations](https://developer.apple.com/documentation/technotes/tn3137-on-mac-keychains).
+[Apple code requirements](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements).
