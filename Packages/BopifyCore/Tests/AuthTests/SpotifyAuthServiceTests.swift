@@ -136,7 +136,7 @@ struct SpotifyAuthServiceTests {
         let abandoned = Task { try await firstService.authorizeLibraryScopes(["user-library-read"]) }
         var iterator = opened.stream.makeAsyncIterator()
         let firstURL = try #require(await iterator.next())
-        await firstService.signOut()
+        try await firstService.signOut()
 
         let nextService = SpotifyAuthService(clientID: "dashboard", client: makeClient(), store: InMemoryTokenStore(),
                                              callbackPort: UInt16(port), callbackPath: "/callback", openURL: { url in
@@ -216,7 +216,7 @@ struct SpotifyAuthServiceTests {
         let service = SpotifyAuthService(clientID: "dashboard", client: makeClient(), store: store, openURL: { url in
             let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
             Task {
-                await box.value?.signOut()
+                try? await box.value?.signOut()
                 let callback = URL(string: "\(query["redirect_uri"]!)?code=TESTCODE&state=\(query["state"]!)")!
                 _ = try? await URLSession.shared.data(from: callback)
             }
@@ -274,7 +274,7 @@ struct SpotifyAuthServiceTests {
                 let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
                 guard let redirectURI = query["redirect_uri"], let state = query["state"] else { return }
                 Task {
-                    await serviceBox.value?.signOut()
+                    try? await serviceBox.value?.signOut()
                     let callbackURL = URL(string: "\(redirectURI)?code=TESTCODE&state=\(state)")!
                     _ = try? await URLSession.shared.data(from: callbackURL)
                 }
@@ -342,7 +342,7 @@ struct SpotifyAuthServiceTests {
         let service = SpotifyAuthService(clientID: "test", client: TokenClient(clientID: "test", session: URLSession(configuration: config)), store: store)
         let request = Task { try await service.validAccessToken(rejecting: "OLD") }
         for await _ in gate.started.stream { break }
-        await service.signOut()
+        try await service.signOut()
         gate.release()
         do { _ = try await request.value; Issue.record("Stale forced refresh returned") } catch {}
         #expect(store.load() == nil)
@@ -356,7 +356,7 @@ struct SpotifyAuthServiceTests {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [ControlledRefreshProtocol.self]
         let binding = LateBinding<SpotifyAuthService>()
-        let service = SpotifyAuthService(clientID: "test", client: TokenClient(clientID: "test", session: URLSession(configuration: config)), store: store, openURL: { _ in Task { await binding.value?.signOut() } })
+        let service = SpotifyAuthService(clientID: "test", client: TokenClient(clientID: "test", session: URLSession(configuration: config)), store: store, openURL: { _ in Task { try? await binding.value?.signOut() } })
         binding.value = service
         let request = Task { try await service.validAccessToken(rejecting: "OLD") }
         for await _ in gate.started.stream { break }
@@ -401,7 +401,7 @@ struct SpotifyAuthServiceTests {
         let service = SpotifyAuthService(clientID: "test", client: TokenClient(clientID: "test", session: URLSession(configuration: config)), store: store)
         let request = Task { try await service.validAccessToken() }
         for await _ in gate.started.stream { break }
-        await service.signOut()
+        try await service.signOut()
         gate.release()
         do { _ = try await request.value; Issue.record("Stale refresh returned a token") } catch {}
         #expect(store.load() == nil)
@@ -495,7 +495,7 @@ struct SpotifyAuthServiceTests {
         AuthFlowStubProtocol.handler = { _ in (200, Data(#"{"access_token":"UNSAVED","refresh_token":"ROTATED","expires_in":3600}"#.utf8)) }
         let service = SpotifyAuthService(clientID: "test", client: makeClient(), store: store)
         await #expect(throws: PlayerError.credentialSaveFailed) { try await service.validAccessToken() }
-        await service.signOut()
+        try await service.signOut()
         store.failSave = false
         await #expect(throws: PlayerError.authExpired) { try await service.validAccessToken() }
         #expect(store.saved == nil && store.saveCount == 1 && store.clearCount == 1)

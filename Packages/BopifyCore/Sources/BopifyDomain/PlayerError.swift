@@ -9,6 +9,8 @@ public enum PlayerError: Error, Hashable, Sendable {
     /// string deliberately does not promise that signing in again will work.
     case authExpired
     case credentialUnavailable
+    case credentialCleanupRequired
+    case credentialCleanupNotRecorded
     case credentialAccessDenied
     case credentialCorrupt
     case credentialSaveFailed

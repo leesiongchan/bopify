@@ -18,13 +18,14 @@ struct PlayerRootView: View {
                         header
                         switch environment.authState {
                         case .signedOut, .needsReauthentication:
-                            SignInView(status: .idle, onSignIn: requestSignIn)
+                            SignInView(status: environment.isRemovingCredentials ? .removingCredentials : .idle, onSignIn: requestSignIn)
                         case .authenticating:
                             SignInView(status: .authenticating, onSignIn: requestSignIn)
                         case .refreshing:
                             SignInView(status: .restoring, onSignIn: requestSignIn)
                         case let .error(error):
-                            SignInView(status: .error(error), onSignIn: requestSignIn, onRetryCredentials: { Task { await environment.restoreOrPromptSignIn() } })
+                            SignInView(status: .error(error), onSignIn: requestSignIn, onRetryCredentials: { Task { await environment.restoreOrPromptSignIn() } },
+                                       onRetryCleanup: { Task { await environment.signOut() } })
                         case .signedIn:
                             if let player = environment.player {
                                 if environment.connectionStatus != .ready || player.restorationUnavailable {
@@ -45,7 +46,8 @@ struct PlayerRootView: View {
         }
         .environment(environment)
         .onChange(of: environment.presentation.isVisible) { _, visible in
-            if !visible { environment.player?.cancelVolumeEditing() }
+            if visible { environment.artworkStore.retryFailedLoads() }
+            else { environment.player?.cancelVolumeEditing() }
         }
         .task(id: environment.player?.state.currentTrack?.uri) { await environment.refreshFavorite() }
         .onChange(of: environment.favorite.membershipRevision) { _, _ in

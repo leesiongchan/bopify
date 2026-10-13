@@ -11,14 +11,19 @@ public actor LibraryAuthorization {
 
     private let defaults: UserDefaults
     private let makeAuth: @Sendable (String) -> SpotifyAuthService
+    private let orphanedStore: (any TokenStoring)?
+    private let logoutIntent: LogoutIntentStore?
     private var clientID: String?
     private var auth: SpotifyAuthService?
 
     /// `suiteName` nil means `.standard`; the defaults are built here because `UserDefaults` is not `Sendable`.
-    public init(suiteName: String? = nil, makeAuth: @escaping @Sendable (String) -> SpotifyAuthService) {
+    public init(suiteName: String? = nil, orphanedStore: (any TokenStoring)? = nil,
+                logoutIntent: LogoutIntentStore? = nil, makeAuth: @escaping @Sendable (String) -> SpotifyAuthService) {
         let defaults = suiteName.map { UserDefaults(suiteName: $0)! } ?? .standard
         self.defaults = defaults
         self.makeAuth = makeAuth
+        self.orphanedStore = orphanedStore
+        self.logoutIntent = logoutIntent
         clientID = Self.storedClientID(in: defaults)
         auth = clientID.map(makeAuth)
     }
@@ -69,7 +74,22 @@ public actor LibraryAuthorization {
         return try await auth.validAccessToken(requiredScopes: requiredScopes)
     }
 
-    public func signOut() async { await auth?.signOut() }
+    public func signOut() async throws {
+        if let auth { try await auth.signOut(); return }
+        guard let orphanedStore else { throw PlayerError.credentialCleanupRequired }
+        do { try logoutIntent?.begin([.library]) }
+        catch {
+            BopifyLog.auth.error("library cleanup intent could not be persisted; deletion deferred")
+            throw PlayerError.credentialCleanupNotRecorded
+        }
+        do {
+            try orphanedStore.clear()
+            try logoutIntent?.complete(.library)
+        } catch {
+            BopifyLog.auth.error("orphaned library credential cleanup failed")
+            throw PlayerError.credentialCleanupRequired
+        }
+    }
 
     public func cancelPendingWork() async { await auth?.cancelPendingWork() }
 }

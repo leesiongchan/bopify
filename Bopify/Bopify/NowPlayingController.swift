@@ -15,7 +15,7 @@ final class NowPlayingController {
     private var artwork: (url: URL, item: MPMediaItemArtwork)?
     private var isClaimed = false
     private var isStopped = false
-    private var requestedArtwork: URL?
+    private var requestedArtwork: ArtworkLoadRequest?
 
     init(player: PlayerModel, artworkStore: ArtworkStore) {
         self.player = player
@@ -37,6 +37,7 @@ final class NowPlayingController {
             let info = nowPlayingInfo(for: player.state, positionMs: player.displayPositionMs(at: .now), connectionReady: player.isEngineReady)
             // Read the image so artwork that finishes loading later triggers another write.
             _ = info?.artworkURL.flatMap { artworkStore.images[$0] }
+            _ = artworkStore.retryRevision
             return info
         } onChange: { [weak self] in
             Task { @MainActor in self?.observe() }
@@ -75,8 +76,9 @@ final class NowPlayingController {
 
     /// The record view only loads artwork while it is on screen, so the controller asks for it when the URL changes.
     private func loadArtworkIfNeeded(_ url: URL?) {
-        guard url != requestedArtwork else { return }
-        requestedArtwork = url
+        let request = ArtworkLoadRequest(url: url, retryRevision: artworkStore.retryRevision)
+        guard request != requestedArtwork else { return }
+        requestedArtwork = request
         guard let url, artworkStore.images[url] == nil else { return }
         Task { await artworkStore.load(url) }
     }

@@ -23,6 +23,8 @@ struct PlaybackConnectionStatusView: View {
             case .invalidCallback: "error.invalidCallback"
             case .networkUnavailable: "error.networkUnavailable"
             case .playbackSessionLost: "error.playbackSessionLost"
+            case .credentialCleanupRequired: "error.credentialCleanupRequired"
+            case .credentialCleanupNotRecorded: "error.credentialCleanupNotRecorded"
             case .credentialUnavailable: "error.credentialUnavailable"
             case .credentialAccessDenied: "error.credentialAccessDenied"
             case .credentialCorrupt: "error.credentialCorrupt"

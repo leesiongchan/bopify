@@ -11,6 +11,8 @@ import BopifyLibrary
 @Observable
 final class AppEnvironment {
     private(set) var authState: AuthState = .signedOut
+    private(set) var isRemovingCredentials = false
+    @ObservationIgnored private let logoutIntent: LogoutIntentStore?
     private(set) var player: PlayerModel?
     @ObservationIgnored private var nowPlaying: NowPlayingController?
     let artworkStore: ArtworkStore
@@ -64,10 +66,13 @@ final class AppEnvironment {
     @ObservationIgnored private var isSignInInFlight = false
 
     init() {
-        let auth = SpotifyAuthService(clientID: librespotClientID)
-        let libraryAuth = LibraryAuthorization { clientID in
-            SpotifyAuthService(clientID: clientID,
-                               store: KeychainTokenStore(service: "com.leesiongchan.bopify.library"),
+        let intent = LogoutIntentStore()
+        logoutIntent = intent
+        let auth = SpotifyAuthService(clientID: librespotClientID, logoutIntent: intent)
+        let libraryStore = KeychainTokenStore(service: "com.leesiongchan.bopify.library")
+        let libraryAuth = LibraryAuthorization(orphanedStore: libraryStore, logoutIntent: intent) { clientID in
+            SpotifyAuthService(clientID: clientID, store: libraryStore,
+                               logoutIntent: intent, credentialNamespace: .library,
                                callbackPort: 8898, callbackPath: "/callback")
         }
         self.auth = auth
@@ -93,9 +98,11 @@ final class AppEnvironment {
          authorizeLibraryScopes: (@Sendable (Set<String>) async throws -> Void)? = nil,
          playbackAuth: SpotifyAuthService? = nil,
          libraryAuth: SpotifyAuthService? = nil,
+         logoutIntent: LogoutIntentStore? = nil,
          artworkStore: ArtworkStore = ArtworkStore(),
          radioEngine: (any PlaybackEngine)? = nil,
          recoveryEngineFactory: (@Sendable (String, PlaybackEngineConfiguration) async throws -> any ManagedPlaybackEngine)? = nil) {
+        self.logoutIntent = logoutIntent
         auth = playbackAuth ?? SpotifyAuthService(clientID: librespotClientID,
             store: KeychainTokenStore(service: "com.leesiongchan.bopify.preview.\(UUID().uuidString)"))
         // A temp-path suite keeps previews out of ~/Library/Preferences.
@@ -173,6 +180,10 @@ final class AppEnvironment {
     }
 
     func setLibraryClientID(_ raw: String) async {
+        guard !isRemovingCredentials, !hasPendingCleanup else {
+            librarySetupError = .credentialCleanupRequired
+            return
+        }
         guard LibraryAuthorization.normalized(raw) != nil else { return }
         librarySetupError = nil
         // Abandon active consent before it can post a stale notice; preserve a rotated
@@ -220,7 +231,14 @@ final class AppEnvironment {
         await task.value
     }
 
+    private var hasPendingCleanup: Bool {
+        do { return try logoutIntent?.hasPendingCleanup() ?? false }
+        catch { return true }
+    }
+
     func restoreOrPromptSignIn() async {
+        guard !isRemovingCredentials else { return }
+        if hasPendingCleanup { await signOut(); return }
         let generation = sessionGeneration
         await serialize { [self] in
             guard generation == sessionGeneration else { return }
@@ -237,7 +255,11 @@ final class AppEnvironment {
     }
 
     func signIn() async {
-        guard !isSignInInFlight else { return }
+        guard !isSignInInFlight, !isRemovingCredentials else { return }
+        if hasPendingCleanup {
+            await signOut()
+            guard authState == .signedOut else { return }
+        }
         isSignInInFlight = true
         let generation = sessionGeneration
         await serialize { [self] in
@@ -275,14 +297,27 @@ final class AppEnvironment {
     }
 
     func signOut() async {
+        guard !isRemovingCredentials else { return }
+        isRemovingCredentials = true
+        defer { isRemovingCredentials = false }
         sessionGeneration += 1
         connectionMonitor?.stop()
         recovery?.invalidate()
         authState = .signedOut
         pendingLibraryScopes = []
-        let clearingAuth = Task { [auth] in await auth.signOut() }
+        do { try logoutIntent?.begin([.playback, .library]) }
+        catch { BopifyLog.auth.error("logout intent could not be persisted; retrying intent for both stores") }
+        let clearingAuth = Task { [auth] in
+            do { try await auth.signOut(); return nil as PlayerError? }
+            catch { return error as? PlayerError ?? .credentialCleanupRequired }
+        }
+        let clearingLibrary = Task { [libraryAuth] in
+            do { try await libraryAuth.signOut(); return nil as PlayerError? }
+            catch { return error as? PlayerError ?? .credentialCleanupRequired }
+        }
         await serialize { [self] in
-            await clearingAuth.value
+            let playbackError = await clearingAuth.value
+            let libraryError = await clearingLibrary.value
             BopifyLog.auth.info("sign-out starting")
             await recovery?.stop()
             recovery = nil
@@ -296,7 +331,13 @@ final class AppEnvironment {
             player = nil
             artworkStore.clear()
             clearLibrary()
-            await libraryAuth.signOut()
+            if playbackError != nil || libraryError != nil || hasPendingCleanup {
+                let notRecorded = playbackError == .credentialCleanupNotRecorded || libraryError == .credentialCleanupNotRecorded
+                authState = .error(notRecorded ? .credentialCleanupNotRecorded : .credentialCleanupRequired)
+                BopifyLog.auth.error("signed out with credential cleanup pending")
+            } else {
+                BopifyLog.auth.info("sign-out credential cleanup complete")
+            }
         }
     }
 
@@ -342,7 +383,9 @@ final class AppEnvironment {
         nowPlaying = NowPlayingController(player: model, artworkStore: artworkStore)
         authState = .signedIn
         if monitorEnabled {
-            let monitor = PlaybackConnectionMonitor(coordinator: coordinator)
+            let monitor = PlaybackConnectionMonitor(coordinator: coordinator) { [weak artworkStore] in
+                artworkStore?.retryFailedLoads(connectivityRestored: true)
+            }
             connectionMonitor = monitor
             monitor.start()
         }

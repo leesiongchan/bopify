@@ -62,10 +62,13 @@ struct RecordPlayerView: View {
     private struct PressingRequest: Equatable {
         let uri: String?
         let artworkURL: URL?
+        let retryRevision: Int
+        let hasImage: Bool
     }
     private var pressingRequest: PressingRequest {
         PressingRequest(uri: player.state.mirror?.trackURI.rawValue ?? track?.uri.rawValue ?? player.state.queue?.current?.uri?.rawValue,
-                        artworkURL: track?.artwork?.url)
+                        artworkURL: track?.artwork?.url, retryRevision: artworkStore.retryRevision,
+                        hasImage: track?.artwork.flatMap { artworkStore.images[$0.url] } != nil)
     }
     private var recordStatus: Text {
         if let connectionStatus, connectionStatus.isVisible { return connectionStatus.message }
@@ -156,6 +159,10 @@ struct RecordPlayerView: View {
             if !visible { pendingSelection = nil; accessibilityFocus = false; _ = cancelRecord() }
         }
         .onChange(of: accessibilityFocus) { _, focused in presentation.sendAttention(.accessibilityFocus(focused)) }
+        .onChange(of: track?.artwork.flatMap { artworkStore.palettes[$0.url] }) { _, palette in
+            guard let palette else { return }
+            displayedPressing = PressingAppearance(seed: pressingRequest.uri.map(PressingSeed.offset) ?? 0, palette: palette)
+        }
         .task(id: pressingRequest) {
             let request = pressingRequest
             if let url = request.artworkURL { await artworkStore.loadPalette(url) }
