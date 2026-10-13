@@ -1,3 +1,427 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 0d2d841..4db7713 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -159,7 +159,7 @@ checksum = "3b43422f69d8ff38f95f1b2bb76517c91589a924d1559a0e935d7c8ce0274c11"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -170,7 +170,7 @@ checksum = "9035ad2d096bed7955a320ee7e2230574d28fd3c3a0f186cbea1ff3c7eed5dbb"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -472,7 +472,7 @@ dependencies = [
+  "proc-macro2",
+  "quote",
+  "strsim",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -483,7 +483,7 @@ checksum = "fc34b93ccb385b40dc71c6fceac4b2ad23662c7eeb248cf10d529b7e055b6ead"
+ dependencies = [
+  "darling_core",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -511,12 +511,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "deranged"
+-version = "0.5.5"
++version = "0.5.9"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "ececcb659e7ba858fb4f10388c250a7252eb0a27373f1a72b8748afdd248e587"
+-dependencies = [
+- "powerfmt",
+-]
++checksum = "9e9de72ce2ad1f90dc62fa25f0f430ef85eb4b0d8fa0be4f30373bc40a21d28e"
+ 
+ [[package]]
+ name = "derive_builder"
+@@ -536,7 +533,7 @@ dependencies = [
+  "darling",
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -546,7 +543,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "ab63b0e2bf4d5928aff72e83a7dace85d7bba5fe12dcc3c5a572d78caffd3f3c"
+ dependencies = [
+  "derive_builder_core",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -579,7 +576,7 @@ checksum = "97369cbbc041bc366949bc74d34658d6cda5621039731c6310521892a3a20ae0"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -631,7 +628,7 @@ checksum = "67c78a4d8fdf9953a5c9d458f9efe940fd97a0cab0941c075a813ac594733827"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -820,7 +817,7 @@ checksum = "162ee34ebcb7c64a8abebc059ce0fee27c2262618d7b60ed8faf72fef13c3650"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -949,7 +946,7 @@ dependencies = [
+  "proc-macro-crate",
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -1654,7 +1651,7 @@ checksum = "980af8b43c3ad5d8d349ace167ec8170839f753a42d233ba19e08afe1850fa69"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -2217,9 +2214,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "num-conv"
+-version = "0.1.0"
++version = "0.2.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "51d515d32fb182ee37cda2ccdcb92950d6a3c2893aa280e540671c2cd0f3b1d9"
++checksum = "521739c6d2bac4aa25192232afe6841231376b2b26d4d9fae5ecf8ca5772e441"
+ 
+ [[package]]
+ name = "num-derive"
+@@ -2229,7 +2226,7 @@ checksum = "ed3955f1a9c7c0c15e092f9c887db08b1fc683305fdf6eb6684f22555355e202"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -2292,7 +2289,7 @@ dependencies = [
+  "proc-macro-crate",
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -2461,7 +2458,7 @@ checksum = "a948666b637a0f465e8564c73e89d4dde00d72d4d473cc972f390fc3dcee7d9c"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -2759,9 +2756,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "quick-xml"
+-version = "0.38.3"
++version = "0.42.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "42a232e7487fc2ef313d96dde7948e7a3c05101870d8985e4fd8d26aedd27b89"
++checksum = "41b1177fdf999d2321d3fb46ff47159d9c1fb9ad66a4879f8c50a0b504615e9b"
+ dependencies = [
+  "memchr",
+  "serde",
+@@ -2824,9 +2821,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "quote"
+-version = "1.0.42"
++version = "1.0.47"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "a338cc41d27e6cc6dce6cefc13a0729dfbb81c262b1f519331575dd80ef3067f"
++checksum = "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001"
+ dependencies = [
+  "proc-macro2",
+ ]
+@@ -3281,7 +3278,7 @@ checksum = "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -3316,7 +3313,7 @@ checksum = "175ee3e80ae9982737ca543e96133087cbd9a485eecc3bc4de9c1a37b47ea59c"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -3587,6 +3584,17 @@ dependencies = [
+  "unicode-ident",
+ ]
+ 
++[[package]]
++name = "syn"
++version = "3.0.9"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "unicode-ident",
++]
++
+ [[package]]
+ name = "sync_wrapper"
+ version = "1.0.2"
+@@ -3604,7 +3612,18 @@ checksum = "728a70f3dbaf5bab7f0c4b1ac8d7ae5ea60a4b5549c8a5914361c99147a709d2"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
++]
++
++[[package]]
++name = "synstructure"
++version = "0.14.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "901704edd0dfe137f1987838ee4f259e4e063c31371bdb423f7ae38ec6f77f02"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn 3.0.9",
+ ]
+ 
+ [[package]]
+@@ -3700,7 +3719,7 @@ checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -3711,37 +3730,36 @@ checksum = "3ff15c8ecd7de3849db632e14d18d2571fa09dfc5ed93479bc4485c7a517c913"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+ name = "time"
+-version = "0.3.44"
++version = "0.3.55"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "91e7d9e3bb61134e77bde20dd4825b97c010155709965fedf0f49bb138e52a9d"
++checksum = "cdb87b95ec50ddfa440816d227a17b2ccbdda963a316a727fda0fc4334f7d134"
+ dependencies = [
+  "deranged",
+- "itoa",
+  "libc",
+  "num-conv",
+  "num_threads",
+  "powerfmt",
+- "serde",
++ "serde_core",
+  "time-core",
+  "time-macros",
+ ]
+ 
+ [[package]]
+ name = "time-core"
+-version = "0.1.6"
++version = "0.1.9"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "40868e7c1d2f0b8d73e4a8c7f0ff63af4f6d19be117e90bd73eb1d62cf831c6b"
++checksum = "9e1c906769ad99c88eaa54e728060edef082f8e358ff32030cb7c7d315e81109"
+ 
+ [[package]]
+ name = "time-macros"
+-version = "0.2.24"
++version = "0.2.32"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "30cfb0125f12d9c277f35663a0a33f8c30190f4e4574868a330595412d34ebf3"
++checksum = "7e689342a48d2ea927c87ea50cabf8594854bf940e9310208848d680d668ed85"
+ dependencies = [
+  "num-conv",
+  "time-core",
+@@ -3797,7 +3815,7 @@ checksum = "af407857209536a95c8e56f8231ef2c2e2aff839b22e07a1ffcbc617e9db9fa5"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -3989,7 +4007,7 @@ checksum = "81383ab64e72a7a8b8e13130c49e3dab29def6d0c7d76a03087b3cf71c5c6903"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -4245,7 +4263,7 @@ dependencies = [
+  "bumpalo",
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+  "wasm-bindgen-shared",
+ ]
+ 
+@@ -4436,7 +4454,7 @@ checksum = "053e2e040ab57b9dc951b72c264860db7eb3b0200ba345b4e4c3b14f67855ddf"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -4447,7 +4465,7 @@ checksum = "3f316c4a2570ba26bbec722032c4099d8c8bc095efccdc15688708623367e358"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -4802,14 +4820,14 @@ dependencies = [
+ 
+ [[package]]
+ name = "yoke-derive"
+-version = "0.8.1"
++version = "0.8.4"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "b659052874eb698efe5b9e8cf382204678a0086ebf46982b79d6ca3182927e5d"
++checksum = "ec8ebde2db3681e8c9980cc27822030e68752690ddfa9473e739aeb4dbde6d71"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
+- "synstructure",
++ "syn 3.0.9",
++ "synstructure 0.14.0",
+ ]
+ 
+ [[package]]
+@@ -4850,7 +4868,7 @@ dependencies = [
+  "proc-macro-crate",
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+  "zbus_names",
+  "zvariant",
+  "zvariant_utils",
+@@ -4885,7 +4903,7 @@ checksum = "88d2b8d9c68ad2b9e4340d7832716a4d21a22a1154777ad56ea55c51a9cf3831"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -4905,8 +4923,8 @@ checksum = "d71e5d6e06ab090c67b5e44993ec16b72dcbaabc526db883a360057678b48502"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
+- "synstructure",
++ "syn 2.0.109",
++ "synstructure 0.13.2",
+ ]
+ 
+ [[package]]
+@@ -4945,7 +4963,7 @@ checksum = "eadce39539ca5cb3985590102671f2567e659fca9666581ad3411d59207951f3"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -4971,7 +4989,7 @@ dependencies = [
+  "proc-macro-crate",
+  "proc-macro2",
+  "quote",
+- "syn",
++ "syn 2.0.109",
+  "zvariant_utils",
+ ]
+ 
+@@ -4984,6 +5002,6 @@ dependencies = [
+  "proc-macro2",
+  "quote",
+  "serde",
+- "syn",
++ "syn 2.0.109",
+  "winnow",
+ ]
+diff --git a/Cargo.toml b/Cargo.toml
+index 71df187..38de721 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -29,7 +29,7 @@ include = [
+ ]
+ 
+ [workspace.package]
+-rust-version = "1.85"
++rust-version = "1.99"
+ authors = ["Librespot Org"]
+ license = "MIT"
+ repository = "https://github.com/librespot-org/librespot"
 diff --git a/connect/Cargo.toml b/connect/Cargo.toml
 index bc5267f..650640d 100644
 --- a/connect/Cargo.toml
@@ -4785,6 +5209,28 @@ index e91ec5f..ad4e93f 100644
          }
  
          self.update_restrictions();
+diff --git a/core/Cargo.toml b/core/Cargo.toml
+index db963ca..e91d39c 100644
+--- a/core/Cargo.toml
++++ b/core/Cargo.toml
+@@ -85,7 +85,7 @@ pin-project-lite = "0.2"
+ priority-queue = "2.5"
+ protobuf = "3.7"
+ protobuf-json-mapping = "3.7"
+-quick-xml = { version = "0.38", features = ["serialize"] }
++quick-xml = { version = "0.42.0", features = ["serialize"] }
+ rand = { version = "0.9", default-features = false, features = ["thread_rng"] }
+ rsa = "0.9"
+ serde = { version = "1.0", features = ["derive"] }
+@@ -94,7 +94,7 @@ sha1 = { version = "0.10", features = ["oid"] }
+ shannon = "0.2"
+ sysinfo = { version = "0.36", default-features = false, features = ["system"] }
+ thiserror = "2"
+-time = { version = "0.3", features = ["formatting", "parsing"] }
++time = { version = "0.3.55", features = ["formatting", "parsing"] }
+ tokio = { version = "1", features = [
+     "io-util",
+     "macros",
 diff --git a/core/src/authentication.rs b/core/src/authentication.rs
 index 62bab6a..b58e87b 100644
 --- a/core/src/authentication.rs
@@ -4870,6 +5316,65 @@ index 9cf7133..30aa105 100644
              Login5Error::CodeChallenge => Error::unimplemented(err),
          }
      }
+diff --git a/core/src/session.rs b/core/src/session.rs
+index 333678f..c8bebdb 100644
+--- a/core/src/session.rs
++++ b/core/src/session.rs
+@@ -820,7 +820,7 @@ where
+                 loop {
+                     match reader.read_event_into(&mut buf) {
+                         Ok(Event::Start(ref element)) => {
+-                            std::str::from_utf8(element)?.clone_into(&mut current_element)
++                            element.as_ref().clone_into(&mut current_element)
+                         }
+                         Ok(Event::End(_)) => {
+                             current_element = String::new();
+@@ -829,7 +829,7 @@ where
+                             if !current_element.is_empty() {
+                                 let _ = user_attributes.insert(
+                                     current_element.clone(),
+-                                    value.xml_content()?.to_string(),
++                                    value.xml11_content().to_string(),
+                                 );
+                             }
+                         }
+@@ -955,3 +955,36 @@ where
+         Poll::Pending
+     }
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[tokio::test]
++    async fn product_info_dispatch_preserves_attributes_and_xml11_text() {
++        let session = Session::new(SessionConfig::default(), None);
++        session.set_user_attribute("stale", "old");
++        let stream = futures_util::stream::empty::<Result<(u8, Bytes), io::Error>>();
++        let mut dispatch = Box::pin(DispatchTask::new(session.weak(), stream));
++        let xml = "<products><type>premium</type><label>café\r\nA\u{85}B\u{2028}C</label><flag source=\"ap\">true</flag></products>";
++
++        dispatch
++            .as_mut()
++            .dispatch(&session, PacketType::ProductInfo as u8, Bytes::from(xml))
++            .unwrap();
++
++        assert_eq!(
++            session.get_user_attribute("type").as_deref(),
++            Some("premium")
++        );
++        assert_eq!(
++            session.get_user_attribute("label").as_deref(),
++            Some("café\nA\nB\nC")
++        );
++        assert_eq!(
++            session.get_user_attribute("flag source=\"ap\"").as_deref(),
++            Some("true")
++        );
++        assert_eq!(session.get_user_attribute("stale"), None);
++    }
++}
 diff --git a/playback/src/audio_backend/mod.rs b/playback/src/audio_backend/mod.rs
 index f8f43e3..a9547c4 100644
 --- a/playback/src/audio_backend/mod.rs
