@@ -11,6 +11,7 @@
 		BF0F170000000000000000C2 /* BopifyAuth in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B2 /* BopifyAuth */; };
 		BF0F170000000000000000C3 /* BopifyPlayback in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B3 /* BopifyPlayback */; };
 		BF0F170000000000000000C4 /* BopifyLibrary in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B4 /* BopifyLibrary */; };
+		BF0F170000000000000000C5 /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B5 /* Nuke */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +34,7 @@
 				BF0F170000000000000000C2 /* BopifyAuth in Frameworks */,
 				BF0F170000000000000000C3 /* BopifyPlayback in Frameworks */,
 				BF0F170000000000000000C4 /* BopifyLibrary in Frameworks */,
+				BF0F170000000000000000C5 /* Nuke in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -76,6 +78,7 @@
 				BF0F170000000000000000B2 /* BopifyAuth */,
 				BF0F170000000000000000B3 /* BopifyPlayback */,
 				BF0F170000000000000000B4 /* BopifyLibrary */,
+				BF0F170000000000000000B5 /* Nuke */,
 			);
 			productName = Bopify;
 			productReference = 19D0CF2A3061E194001CC3E1 /* Bopify.app */;
@@ -107,6 +110,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				BF0F170000000000000000A1 /* XCLocalSwiftPackageReference "../Packages/BopifyCore" */,
+				BF0F170000000000000000A2 /* XCRemoteSwiftPackageReference "Nuke" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 19D0CF2B3061E194001CC3E1 /* Products */;
@@ -373,6 +377,17 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		BF0F170000000000000000A2 /* XCRemoteSwiftPackageReference "Nuke" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kean/Nuke.git";
+			requirement = {
+				kind = exactVersion;
+				version = 13.2.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		BF0F170000000000000000B1 /* BopifyDomain */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -389,6 +404,11 @@
 		BF0F170000000000000000B4 /* BopifyLibrary */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = BopifyLibrary;
+		};
+		BF0F170000000000000000B5 /* Nuke */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BF0F170000000000000000A2 /* XCRemoteSwiftPackageReference "Nuke" */;
+			productName = Nuke;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

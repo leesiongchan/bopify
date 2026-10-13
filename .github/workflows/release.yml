@@ -37,8 +37,10 @@ jobs:
       - name: Verify code before packaging
         run: |
           python3 -m unittest discover -s scripts/tests -v
+          ./scripts/test-native.sh
           ./scripts/build-rust.sh
           swift test --package-path Packages/BopifyCore
+          python3 scripts/test-app-boundaries.py
       - name: Package ad-hoc DMG
         run: ./scripts/release.sh "${GITHUB_REF_NAME#v}" --ad-hoc
       - name: Retain release evidence

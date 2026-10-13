@@ -5,6 +5,7 @@ enum SignInStatus {
     case idle
     case authenticating
     case restoring
+    case removingCredentials
     case error(PlayerError)
 }
 
@@ -12,6 +13,7 @@ struct SignInView: View {
     let status: SignInStatus
     let onSignIn: () -> Void
     var onRetryCredentials: () -> Void = {}
+    var onRetryCleanup: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 18) {
@@ -19,7 +21,8 @@ struct SignInView: View {
             VStack(spacing: 6) {
                 Group {
                     if case let .error(error) = status {
-                        Text(LocalizedStringKey(error.canRetryCredentials || error == .credentialCorrupt ? "signIn.credentialError" : "signIn.error"))
+                        Text(LocalizedStringKey((error == .credentialCleanupRequired || error == .credentialCleanupNotRecorded) ? "signIn.cleanupError" :
+                                                error.canRetryCredentials || error == .credentialCorrupt ? "signIn.credentialError" : "signIn.error"))
                     } else {
                         Text("signIn.title")
                     }
@@ -44,6 +47,10 @@ struct SignInView: View {
                 Text("signIn.browser")
                     .font(.caption)
                     .foregroundStyle(.primary.opacity(0.7))
+            case .removingCredentials:
+                ProgressView { Text("signIn.removingCredentials") }
+                    .controlSize(.small)
+                    .font(.callout)
             case .restoring:
                 ProgressView { Text("signIn.restoring") }
                     .controlSize(.small)
@@ -53,7 +60,9 @@ struct SignInView: View {
                     .font(.caption)
                     .foregroundStyle(.primary.opacity(0.7))
                     .multilineTextAlignment(.center)
-                if error == .credentialUnavailable || error == .credentialAccessDenied {
+                if error == .credentialCleanupRequired || error == .credentialCleanupNotRecorded {
+                    actionButton("signIn.retryRemoval", action: onRetryCleanup)
+                } else if error == .credentialUnavailable || error == .credentialAccessDenied {
                     actionButton("connection.retryCredentials", action: onRetryCredentials)
                 } else if error == .credentialCorrupt || error == .credentialSaveFailed {
                     actionButton("signIn.again", action: onSignIn)

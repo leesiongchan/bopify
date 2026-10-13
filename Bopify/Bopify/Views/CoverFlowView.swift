@@ -92,7 +92,7 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
                                 .accessibilityValue(Text(index == selectedIndex ? "library.selected" : ""))
                                 .accessibilityAction(named: Text("library.play")) { onPlay(track) }
                                 .help(label(for: track))
-                                .task(id: track.artwork?.url) {
+                                .task(id: ArtworkLoadRequest(url: track.artwork?.url, retryRevision: artworkStore.retryRevision)) {
                                     if let url = track.artwork?.url { await artworkStore.load(url) }
                                 }
                         }

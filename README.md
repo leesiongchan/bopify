@@ -46,15 +46,19 @@ cd Packages/BopifyCore
 swift test
 ```
 
-The Rust crate (`rust/crates/bopify-core`):
+The wrapper and patched librespot unit tests and doctests (run from the repository root):
 
 ```sh
-./scripts/prepare-librespot.sh   # once per fresh checkout
-cd rust
-cargo test
+./scripts/test-native.sh
 ```
 
-`prepare-librespot.sh` checks out the pinned librespot revision into `.build/` and applies our patches to it. It refuses to run over unexpected local changes. `build-rust.sh` already runs it, so you only need it when calling Cargo directly. In that case, also export `MACOSX_DEPLOYMENT_TARGET=14.0` so the Rust output matches the Xcode target.
+Headless app boundary checks also compile the Debug app without signing or launching it, then exercise logout and artwork with synthetic stores and HTTP responses:
+
+```sh
+python3 scripts/test-app-boundaries.py
+```
+
+Both commands are release CI gates before packaging. It prepares the pinned librespot sources, sets the macOS 14 deployment target, and uses locked dependencies. Connect and playback use the shipping lock; core tests require the separate upstream workspace and its lock. Network integration tests and explicitly ignored audio-device tests are excluded. A fresh run may download dependencies; cached local runs can additionally use `CARGO_NET_OFFLINE=true`. If your shell sets `RUSTUP_TOOLCHAIN`, unset it to use the checked-in pin.
 
 ## Spotify sign-in and privacy
 

@@ -1,6 +1,56 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "error.credentialCleanupNotRecorded" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bopify stopped playback, but could not save your sign-out request. Saved sign-in may return after restarting. Check free disk space and file access, then retry removal."
+          }
+        }
+      }
+    },
+    "signIn.retryRemoval" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry removal"
+          }
+        }
+      }
+    },
+    "signIn.removingCredentials" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Removing saved sign-in…"
+          }
+        }
+      }
+    },
+    "signIn.cleanupError" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not finish signing out"
+          }
+        }
+      }
+    },
+    "error.credentialCleanupRequired" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bopify stopped playback, but could not finish removing saved sign-in. Unlock Keychain or check its access, then retry removal."
+          }
+        }
+      }
+    },
     "" : {
 
     },

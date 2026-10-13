@@ -14,6 +14,9 @@ public actor SpotifyAuthService {
     private let clientID: String
     private let client: TokenClient
     private let store: any TokenStoring
+    private let logoutIntent: LogoutIntentStore?
+    private let credentialNamespace: CredentialNamespace
+    private var logoutRequested = false
     private let callbackPort: UInt16?
     private let callbackPath: String
     private let openURL: @Sendable (URL) -> Void
@@ -28,6 +31,8 @@ public actor SpotifyAuthService {
         clientID: String,
         client: TokenClient? = nil,
         store: any TokenStoring = KeychainTokenStore(),
+        logoutIntent: LogoutIntentStore? = nil,
+        credentialNamespace: CredentialNamespace = .playback,
         callbackPort: UInt16? = nil,
         callbackPath: String = "/login",
         openURL: @Sendable @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }
@@ -35,12 +40,16 @@ public actor SpotifyAuthService {
         self.clientID = clientID
         self.client = client ?? TokenClient(clientID: clientID)
         self.store = store
+        self.logoutIntent = logoutIntent
+        self.credentialNamespace = credentialNamespace
         self.callbackPort = callbackPort
         self.callbackPath = callbackPath
         self.openURL = openURL
     }
 
     public func restore() throws -> TokenSet? {
+        try checkCleanupIntent()
+        guard !logoutRequested else { return nil }
         do { tokens = try store.load() }
         catch KeychainError.accessDenied { throw PlayerError.credentialAccessDenied }
         catch KeychainError.corrupt { throw PlayerError.credentialCorrupt }
@@ -51,12 +60,14 @@ public actor SpotifyAuthService {
     }
 
     public func signIn() async throws -> TokenSet {
-        try await authorize(scopes: ["streaming"], validateGrant: false)
+        try await prepareForConsent()
+        return try await authorize(scopes: ["streaming"], validateGrant: false)
     }
 
     public func authorizeLibraryScopes(_ scopes: Set<String>) async throws -> TokenSet {
         let libraryScopes: Set<String> = ["user-library-read", "user-library-modify", "user-read-recently-played", "user-top-read"]
         guard !scopes.isEmpty, scopes.isSubset(of: libraryScopes) else { throw LibraryError.authorizationRequired }
+        try await prepareForConsent()
         let existing: Set<String>
         do { existing = (try tokens ?? restore())?.grantedScopes.intersection(libraryScopes) ?? [] }
         catch PlayerError.credentialCorrupt {
@@ -154,6 +165,8 @@ public actor SpotifyAuthService {
     }
 
     private func validAccessToken(requiredScopes: Set<String>, rejecting rejectedAccessToken: String?) async throws -> String {
+        try checkCleanupIntent()
+        guard !logoutRequested else { throw PlayerError.authExpired }
         guard let current = try tokens ?? restore() else {
             if !requiredScopes.isEmpty { throw LibraryError.authorizationRequired }
             throw PlayerError.authExpired
@@ -182,6 +195,7 @@ public actor SpotifyAuthService {
     }
 
     private func persist(_ tokens: TokenSet) throws {
+        try checkCleanupIntent()
         do { try store.save(tokens) }
         catch {
             BopifyLog.auth.error("credential persistence failed")
@@ -226,9 +240,41 @@ public actor SpotifyAuthService {
         BopifyLog.auth.debug("pending authorization cancelled")
     }
 
-    public func signOut() async {
-        do { try await signOutAndClearCredentials() }
-        catch { BopifyLog.auth.error("sign-out ended without removing stored credentials") }
+    public func signOut() async throws {
+        logoutRequested = true
+        do { try logoutIntent?.begin([credentialNamespace]) }
+        catch {
+            tokens = nil
+            await cancelPendingWork()
+            BopifyLog.auth.error("credential cleanup intent could not be persisted; deletion deferred")
+            throw PlayerError.credentialCleanupNotRecorded
+        }
+        do {
+            try await signOutAndClearCredentials()
+            try logoutIntent?.complete(credentialNamespace)
+        } catch {
+            BopifyLog.auth.error("sign-out requires credential cleanup retry")
+            throw PlayerError.credentialCleanupRequired
+        }
+    }
+
+    private func checkCleanupIntent() throws {
+        do {
+            if try logoutIntent?.isPending(credentialNamespace) == true {
+                throw PlayerError.credentialCleanupRequired
+            }
+        } catch { throw PlayerError.credentialCleanupRequired }
+    }
+
+    private func prepareForConsent() async throws {
+        let pending: Bool
+        do { pending = try logoutIntent?.isPending(credentialNamespace) ?? false }
+        catch { throw PlayerError.credentialCleanupRequired }
+        if logoutRequested || pending {
+            try await signOut()
+            BopifyLog.auth.info("credential cleanup completed before explicit consent")
+        }
+        logoutRequested = false
     }
 
     /// Client changes must confirm that the previous client's stored grant is gone.
