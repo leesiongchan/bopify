@@ -57,7 +57,12 @@ public actor SpotifyAuthService {
     public func authorizeLibraryScopes(_ scopes: Set<String>) async throws -> TokenSet {
         let libraryScopes: Set<String> = ["user-library-read", "user-library-modify", "user-read-recently-played", "user-top-read"]
         guard !scopes.isEmpty, scopes.isSubset(of: libraryScopes) else { throw LibraryError.authorizationRequired }
-        let existing = (try tokens ?? restore())?.grantedScopes.intersection(libraryScopes) ?? []
+        let existing: Set<String>
+        do { existing = (try tokens ?? restore())?.grantedScopes.intersection(libraryScopes) ?? [] }
+        catch PlayerError.credentialCorrupt {
+            existing = []
+            BopifyLog.auth.notice("explicit library consent will replace a corrupt grant")
+        }
         let required = existing.union(scopes)
         return try await authorize(scopes: required, validateGrant: true)
     }
@@ -222,20 +227,26 @@ public actor SpotifyAuthService {
     }
 
     public func signOut() async {
+        do { try await signOutAndClearCredentials() }
+        catch { BopifyLog.auth.error("sign-out ended without removing stored credentials") }
+    }
+
+    /// Client changes must confirm that the previous client's stored grant is gone.
+    public func signOutAndClearCredentials() async throws {
         generation += 1
         pendingRefresh = nil
         refresh?.task.cancel()
         refresh = nil
-        BopifyLog.auth.info("signOut")
-        do {
-            try store.clear()
-        } catch {
-            let description = String(describing: error)
-            BopifyLog.auth.error("failed to clear token store error=\(description, privacy: .public)")
-        }
         tokens = nil
+        BopifyLog.auth.info("signOut")
+        let removal = Result { try store.clear() }
         let listener = activeListener
         activeListener = nil
         if let listener { await listener.stop() }
+        do { try removal.get() }
+        catch {
+            BopifyLog.auth.error("stored credential removal failed")
+            throw PlayerError.credentialUnavailable
+        }
     }
 }

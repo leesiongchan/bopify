@@ -422,7 +422,9 @@ struct SpotifyAuthServiceTests {
         }
         await #expect(throws: expected) { try await service.restore() }
         await #expect(throws: expected) { try await service.validAccessToken() }
-        await #expect(throws: expected) { try await service.authorizeLibraryScopes(["user-library-read"]) }
+        if error != .corrupt {
+            await #expect(throws: expected) { try await service.authorizeLibraryScopes(["user-library-read"]) }
+        }
         #expect(store.saveCount == 0 && store.clearCount == 0)
         store.readError = nil
         #expect(try await service.restore() == store.saved)
