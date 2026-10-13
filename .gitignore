@@ -9,3 +9,6 @@ xcuserdata/
 .worktrees/
 .superpowers/
 build/
+scripts/tests/__pycache__/
+Bopify/Bopify/Resources/LICENSE.txt
+Bopify/Bopify/Resources/Third-Party Licenses.html

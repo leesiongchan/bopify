@@ -5,6 +5,12 @@ import OSLog
     static var result: Int32 = 0
 
     static func main() {
+        if CommandLine.arguments.contains("expanded") {
+            guard #available(macOS 27.0, *) else {
+                FileHandle.standardError.write(Data("ERROR: expanded requires macOS 27\n".utf8))
+                exit(2)
+            }
+        }
         let app = NSApplication.shared
         app.setActivationPolicy(CommandLine.arguments.contains("regular") ? .regular : .accessory)
         let delegate = Delegate()
@@ -29,8 +35,15 @@ import OSLog
             let start = Date()
             Logger(subsystem: "bopify.validation", category: "statusitem").notice("minimal status item started")
             let square = CommandLine.arguments.contains("square")
-            item = NSStatusBar.system.statusItem(withLength: square ? NSStatusItem.squareLength : NSStatusItem.variableLength)
-            item?.button?.image = NSImage(systemSymbolName: "music.note", accessibilityDescription: "Minimal status item")
+            if !CommandLine.arguments.contains("noitem") {
+                item = NSStatusBar.system.statusItem(withLength: square ? NSStatusItem.squareLength : NSStatusItem.variableLength)
+                if !CommandLine.arguments.contains("noimage") {
+                    item?.button?.image = NSImage(systemSymbolName: "music.note", accessibilityDescription: "Minimal status item")
+                }
+                if CommandLine.arguments.contains("expanded"), let item {
+                    if #available(macOS 27.0, *) { item.expandedInterfaceDelegate = self }
+                }
+            }
             Task { @MainActor in
                 do {
                     try await Task.sleep(for: .seconds(3))
@@ -43,7 +56,7 @@ import OSLog
                     for failure in failures {
                         FileHandle.standardOutput.write(Data("DIAGNOSTIC: \(failure.composedMessage)\n".utf8))
                     }
-                    FileHandle.standardOutput.write(Data("RESULT: regular=\(CommandLine.arguments.contains("regular")) square=\(square) recursionCount=\(failures.count)\n".utf8))
+                    FileHandle.standardOutput.write(Data("RESULT: noitem=\(CommandLine.arguments.contains("noitem")) noimage=\(CommandLine.arguments.contains("noimage")) expanded=\(CommandLine.arguments.contains("expanded")) regular=\(CommandLine.arguments.contains("regular")) square=\(square) recursionCount=\(failures.count)\n".utf8))
                     result = failures.isEmpty ? 0 : 1
                 } catch {
                     FileHandle.standardError.write(Data("ERROR: diagnostic collection failed: \(error)\n".utf8))
@@ -54,4 +67,11 @@ import OSLog
             }
         }
     }
+}
+
+@available(macOS 27.0, *)
+extension StatusItemRepro.Delegate: NSStatusItemExpandedInterfaceDelegate {
+    // Registration control only: this reproduction never presents an expanded interface.
+    func statusItem(_ statusItem: NSStatusItem, didBegin session: NSStatusItemExpandedInterfaceSession) {}
+    func statusItemDidEndExpandedInterfaceSession(_ statusItem: NSStatusItem, animated: Bool) {}
 }

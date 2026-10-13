@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import Security
 @testable import BopifyAuth
 import BopifyDomain
 
@@ -15,10 +16,27 @@ struct TokenStoreTests {
                  grantedScopes: ["streaming"])
     }
 
+    @Test(arguments: [errSecInteractionNotAllowed, errSecNotAvailable, errSecAuthFailed, errSecUserCanceled, OSStatus(-9999)])
+    func failedReadIsNeverReportedAsMissing(_ status: OSStatus) throws {
+        let expected: KeychainError
+        switch status {
+        case errSecInteractionNotAllowed, errSecNotAvailable: expected = .unavailable(status)
+        case errSecAuthFailed, errSecUserCanceled: expected = .accessDenied(status)
+        default: expected = .unexpected(status)
+        }
+        #expect(throws: expected) { try KeychainTokenStore.decode(status: status, item: nil) }
+    }
+
+    @Test func onlyMissingItemReturnsNil() throws {
+        #expect(try KeychainTokenStore.decode(status: errSecItemNotFound, item: nil) == nil)
+        #expect(throws: KeychainError.corrupt) { try KeychainTokenStore.decode(status: errSecSuccess, item: nil) }
+        #expect(throws: KeychainError.corrupt) { try KeychainTokenStore.decode(status: errSecSuccess, item: "wrong type" as CFString) }
+    }
+
     @Test func roundTripsATokenSet() throws {
         let store = makeStore()
         try store.save(sample)
-        let loaded = try #require(store.load())
+        let loaded = try #require(try store.load())
         #expect(loaded == sample)
         try store.clear()
     }
@@ -29,19 +47,31 @@ struct TokenStoreTests {
         let updated = TokenSet(accessToken: "AT2", refreshToken: "RT2",
                                expiresAt: sample.expiresAt, grantedScopes: ["streaming"])
         try store.save(updated)
-        #expect(store.load()?.accessToken == "AT2")
+        #expect(try store.load()?.accessToken == "AT2")
         try store.clear()
     }
 
-    @Test func returnsNilWhenNothingIsStored() {
-        #expect(makeStore().load() == nil)
+    @Test func returnsNilWhenNothingIsStored() throws {
+        #expect(try makeStore().load() == nil)
     }
 
     @Test func clearRemovesTheItem() throws {
         let store = makeStore()
         try store.save(sample)
         try store.clear()
-        #expect(store.load() == nil)
+        #expect(try store.load() == nil)
+    }
+
+    @Test func corruptStoredCredentialsAreNotReportedAsMissing() throws {
+        let service = "my.bopify.tests.\(UUID().uuidString)"
+        let store = KeychainTokenStore(service: service)
+        defer { try? store.clear() }
+        try store.save(sample)
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                   kSecAttrService as String: service,
+                                   kSecAttrAccount as String: "spotify-tokens"]
+        #expect(SecItemUpdate(query as CFDictionary, [kSecValueData as String: Data("invalid".utf8)] as CFDictionary) == errSecSuccess)
+        #expect(throws: (any Error).self) { _ = try store.load() }
     }
 
     @Test func clearOnAnEmptyStoreIsNotAnError() throws {
@@ -57,10 +87,10 @@ struct TokenStoreTests {
                                     expiresAt: sample.expiresAt, grantedScopes: ["user-library-read"])
         try playback.save(sample)
         try library.save(libraryToken)
-        #expect(playback.load() == sample)
-        #expect(library.load() == libraryToken)
+        #expect(try playback.load() == sample)
+        #expect(try library.load() == libraryToken)
         try library.clear()
-        #expect(playback.load() == sample)
-        #expect(library.load() == nil)
+        #expect(try playback.load() == sample)
+        #expect(try library.load() == nil)
     }
 }

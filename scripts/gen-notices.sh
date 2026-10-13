@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
-# Writes the license texts of every Rust crate linked into the app; MIT and
-# Apache both require them to ship with binary copies.
 set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
 out=${1:?usage: scripts/gen-notices.sh <absolute-output-path>}
-cd "$(dirname "$0")/../rust"
-cargo install cargo-about --locked --version 0.9.2 --features cli 2>/dev/null || true
-cargo about generate --config about.toml --manifest-path crates/bopify-core/Cargo.toml about.hbs > "$out"
+[[ "$out" == /* ]] || { echo "Notice output must be an absolute path." >&2; exit 1; }
+tool=$("$root/scripts/release-tool.sh" cargo-about)
+temporary=$(mktemp "${out}.tmp.XXXXXX")
+trap 'rm -f "$temporary"' EXIT
+"$tool" generate --locked --fail --config "$root/rust/about.toml" \
+  --manifest-path "$root/rust/crates/bopify-core/Cargo.toml" "$root/rust/about.hbs" > "$temporary"
+[[ -s "$temporary" ]] || { echo "Notice generation produced no output." >&2; exit 1; }
+chmod 0644 "$temporary"
+mv "$temporary" "$out"

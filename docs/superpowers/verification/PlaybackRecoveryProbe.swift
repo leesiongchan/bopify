@@ -24,6 +24,12 @@ import BopifyLibrary
     @MainActor static func run() async {
         let started = Date()
         BopifyLog.playback.notice("UI diagnostics probe started")
+        if CommandLine.arguments.contains("--credentials-only") {
+            await checkCredentials()
+            try! checkUIDiagnostics(since: started)
+            print("PASS: isolated credential UI diagnostics")
+            return
+        }
         _ = PlaybackConnectionStatusView(status: .offline, restorationUnavailable: false, onRetry: {}, onReconnect: {})
         let store = ProbeTokenStore(), libraryStore = ProbeTokenStore()
         let saved = TokenSet(accessToken: "PLAYBACK_FAKE", refreshToken: "RT_FAKE", expiresAt: .distantFuture, grantedScopes: ["streaming"])
@@ -68,6 +74,102 @@ import BopifyLibrary
         await checkAnimationInterruption()
         try! checkUIDiagnostics(since: started)
         print("PASS: stable player/library, serialized replacement, stable device ID, late-create sign-out, no unsolicited browser")
+    }
+
+    @MainActor static func press(_ object: NSObject) {
+        let selector = NSSelectorFromString("accessibilityPerformPress")
+        precondition(object.responds(to: selector))
+        typealias Press = @convention(c) (AnyObject, Selector) -> Bool
+        precondition(unsafeBitCast(object.method(for: selector), to: Press.self)(object, selector))
+    }
+
+    @MainActor static func checkCredentials() async {
+        for (fault, expected) in [(KeychainError.unavailable(-25308), PlayerError.credentialUnavailable),
+                                  (.accessDenied(-25293), .credentialAccessDenied), (.corrupt, .credentialCorrupt)] {
+            let store = CredentialProbeStore(), factory = ProbeFactory(), opened = ProbeBrowser()
+            store.readError = fault
+            let environment = AppEnvironment(previewPlayer: PlayerModel(), favoriteService: ProbeLibrary(),
+                playbackAuth: SpotifyAuthService(clientID: "probe", store: store, openURL: { _ in opened.record() }),
+                artworkStore: makePreviewArtworkStore(), recoveryEngineFactory: { token, options in try await factory.create(token, options) })
+            await environment.restoreOrPromptSignIn()
+            precondition(environment.authState == .error(expected) && factory.options.isEmpty && opened.count == 0)
+            precondition(store.saveCount == 0 && store.clearCount == 0 && store.saved.accessToken == "FAKE")
+            let panel = StatusPanel(content: PlayerRootView(environment: environment))
+            panel.orderFrontRegardless(); await render()
+            precondition(element("Saved sign-in needs attention", panel) != nil)
+            let action = expected == .credentialCorrupt ? "Sign in again" : "Retry saved sign-in"
+            precondition(enabled(action, panel) == true)
+            await capture(panel, "credential-startup-\(expected)")
+            panel.setContentSize(NSSize(width: 320, height: 480)); await render()
+            precondition(enabled(action, panel) == true)
+            await capture(panel, "credential-startup-narrow-\(expected)")
+            if expected != .credentialCorrupt {
+                let reads = store.readCount
+                press(element(action, panel)!); await render()
+                precondition(store.readCount > reads && environment.authState == .error(expected))
+                precondition(factory.options.isEmpty && opened.count == 0)
+                store.readError = nil
+                press(element(action, panel)!); await factory.waitForCount(1)
+                let engine = ProbeEngine(); factory.release(engine); await settle(); engine.ready(); await render()
+                precondition(environment.authState == .signedIn && environment.connectionStatus == .ready && opened.count == 0)
+            }
+            panel.orderOut(nil)
+            let progress = StatusPanel(content: PlayerSurface { SignInView(status: .restoring, onSignIn: {}) })
+            progress.orderFrontRegardless(); await render()
+            precondition(element("Checking saved sign-in…", progress) != nil)
+            precondition(element("Finish signing in in your browser.", progress) == nil)
+            progress.orderOut(nil); await environment.prepareForQuit()
+        }
+        print("PASS: startup credential errors, narrow layout, actual retry action, preserved grant and no browser")
+
+        let store = ProbeTokenStore(), factory = ProbeFactory(), opened = ProbeBrowser()
+        try! store.save(TokenSet(accessToken: "FAKE", refreshToken: "RT", expiresAt: .distantFuture, grantedScopes: ["streaming"]))
+        let player = PlayerModel()
+        let environment = AppEnvironment(previewPlayer: player, favoriteService: ProbeLibrary(),
+            playbackAuth: SpotifyAuthService(clientID: "probe", store: store, openURL: { _ in opened.record() }),
+            artworkStore: makePreviewArtworkStore(), recoveryEngineFactory: { token, options in try await factory.create(token, options) })
+        await environment.restoreOrPromptSignIn(); await factory.waitForCount(1)
+        var engine = ProbeEngine(); factory.release(engine); await settle(); engine.ready(); await settle()
+        let panel = StatusPanel(content: PlayerRootView(environment: environment))
+        environment.playerWindowController.attach(to: panel)
+        panel.orderFrontRegardless()
+        for mode in [PlayerMode.compact, .expanded, .queue] {
+            environment.presentation.resetEngagement()
+            environment.presentation.sendAttention(.visibility(true))
+            if mode != .compact { environment.presentation.sendAttention(.accessibilityFocus(true)) }
+            environment.presentation.requestQueue(mode == .queue)
+            await render(); await render()
+            environment.playerWindowController.apply(mode: mode, reduceMotion: true)
+            precondition(environment.presentation.mode == mode)
+            let frame = panel.frame
+            let creation = factory.options.count + 1
+            engine.emit(.sessionLost(.spircEnded)); await factory.waitForCount(creation)
+            factory.fail(.credentialSaveFailed); await render()
+            precondition(environment.connectionStatus == .failed(.credentialSaveFailed) && environment.player === player && panel.frame == frame)
+            await capture(panel, "credential-recovery-\(mode.rawValue)")
+            if mode == .compact {
+                let button = popups(panel.contentView!).first!
+                let item = button.menu!.items.first { $0.title == "Retry saved sign-in" && $0.action != nil }!
+                precondition(NSApp.sendAction(item.action!, to: item.target, from: item))
+            } else {
+                precondition(enabled("Retry saved sign-in", panel) == true)
+                checkStatusRow(message: String(localized: "error.credentialSaveFailed"), action: "Retry saved sign-in", panel: panel)
+                press(element("Retry saved sign-in", panel)!)
+            }
+            await factory.waitForCount(creation + 1)
+            engine = ProbeEngine(); factory.release(engine); await settle(); engine.ready(); await render()
+            precondition(environment.connectionStatus == .ready && opened.count == 0 && panel.frame == frame)
+        }
+        for error in [PlayerError.premiumRequired, .unknown] {
+            let view = PlaybackConnectionStatusView(status: .failed(error), restorationUnavailable: false, onRetry: {}, onReconnect: {})
+            precondition(view.actionKey == nil)
+        }
+        let corrupt = PlaybackConnectionStatusView(status: .failed(.credentialCorrupt), restorationUnavailable: false, onRetry: { preconditionFailure("Unexpected reread") }, onReconnect: { opened.record() })
+        precondition(corrupt.actionKey == "connection.reconnect")
+        corrupt.performAction(); precondition(opened.count == 1)
+        precondition(statusRowFailures.isEmpty, statusRowFailures.joined(separator: "; "))
+        panel.orderOut(nil); await environment.prepareForQuit()
+        print("PASS: compact/expanded/queue credential retry, stable frame/player, no consent; explicit corrupt-grant replacement")
     }
 
     @MainActor static func checkAnimationInterruption() async {
@@ -419,4 +521,23 @@ actor ProbeLibrary: LibraryService, SavedTracksService, ListeningHistoryService 
     func save(_ uri: SpotifyURI) async throws {}
     func remove(_ uri: SpotifyURI) async throws {}
     func savedTracks(offset: Int, limit: Int) async throws -> SavedTracksPage { SavedTracksPage(tracks: [PlaybackRecoveryProbe.track], nextOffset: nil, total: 1) }
+}
+
+nonisolated final class CredentialProbeStore: TokenStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    nonisolated let saved = TokenSet(accessToken: "FAKE", refreshToken: "RT", expiresAt: .distantFuture, grantedScopes: ["streaming"])
+    private var fault: KeychainError?
+    private var reads = 0, saves = 0, clears = 0
+    nonisolated var readError: KeychainError? {
+        get { lock.withLock { fault } }
+        set { lock.withLock { fault = newValue } }
+    }
+    nonisolated var readCount: Int { lock.withLock { reads } }
+    nonisolated var saveCount: Int { lock.withLock { saves } }
+    nonisolated var clearCount: Int { lock.withLock { clears } }
+    nonisolated func load() throws -> TokenSet? {
+        try lock.withLock { reads += 1; if let fault { throw fault }; return saved }
+    }
+    nonisolated func save(_ value: TokenSet) throws { lock.withLock { saves += 1 } }
+    nonisolated func clear() throws { lock.withLock { clears += 1 } }
 }

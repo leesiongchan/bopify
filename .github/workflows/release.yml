@@ -2,76 +2,87 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ['v*']
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  release:
-    # Preview image; the only GitHub-hosted runner with Xcode 27 as of 2026-10.
+  build:
     runs-on: xcode-27
-    timeout-minutes: 90  # notarization alone is capped at 1h in release.sh
+    environment: release-signing
+    timeout-minutes: 90
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0  # release.sh derives the build number from the commit count
-
-      - name: Install Rust
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify build tools
         run: |
-          command -v rustup || curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
           export PATH="$HOME/.cargo/bin:$PATH"
-          rustup target add aarch64-apple-darwin
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          fi
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-
-      - name: Install Metal Toolchain
-        run: xcodebuild -downloadComponent MetalToolchain
-
-      # Third-party build scripts run before the signing keychain exists.
-      - name: Build Rust library
-        run: ./scripts/build-rust.sh
-
-      - name: Import Developer ID certificate
+          xcodebuild -version
+          cargo --version
+          rustup target add aarch64-apple-darwin
+          xcodebuild -downloadComponent MetalToolchain
+      - name: Verify code before signing
+        run: |
+          python3 -m unittest discover -s scripts/tests -v
+          ./scripts/build-rust.sh
+          swift test --package-path Packages/BopifyCore
+      - name: Build, sign and notarize
         env:
           DEVELOPER_ID_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
           DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        run: |
-          certificate="$RUNNER_TEMP/developer-id.p12"
-          keychain="$RUNNER_TEMP/signing.keychain-db"
-          echo -n "$DEVELOPER_ID_P12_BASE64" | base64 --decode -o "$certificate"
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
-          security set-keychain-settings -lut 21600 "$keychain"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
-          security import "$certificate" -P "$DEVELOPER_ID_P12_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
-          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$keychain"
-          security list-keychain -d user -s "$keychain"
-
-      - name: Write notary key
-        env:
           NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
-        run: |
-          umask 077
-          echo "$NOTARY_KEY_P8" > "$RUNNER_TEMP/notary.p8"
-
-      - name: Build, sign and notarize
-        env:
-          NOTARY_KEY_PATH: ${{ runner.temp }}/notary.p8
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
-        run: ./scripts/release.sh "${GITHUB_REF_NAME#v}"
+        run: python3 scripts/ci-release.py "${GITHUB_REF_NAME#v}"
+      - name: Retain release evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-evidence
+          path: |
+            build/release/**/notary*.json
+            build/release/**/export-check.json
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload verified DMG
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verified-dmg
+          path: build/release/Bopify-*.dmg
+          if-no-files-found: error
+          retention-days: 14
 
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: verified-dmg
+          path: release
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           version="${GITHUB_REF_NAME#v}"
           prerelease=()
           [[ "$version" == *-* ]] && prerelease=(--prerelease)
-          gh release create "$GITHUB_REF_NAME" "build/release/Bopify-$version.dmg" --title "Bopify $version" --generate-notes "${prerelease[@]}"
-
-      - name: Remove signing material
-        if: always()
-        run: |
-          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
-          rm -f "$RUNNER_TEMP/developer-id.p12" "$RUNNER_TEMP/notary.p8"
+          gh release create "$GITHUB_REF_NAME" "release/Bopify-$version.dmg" \
+            --verify-tag --title "Bopify $version" --generate-notes "${prerelease[@]}"

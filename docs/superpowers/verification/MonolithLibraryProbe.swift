@@ -11,7 +11,7 @@ import BopifyAuth
         let release = DispatchSemaphore(value: 0)
         init(service: String) { base = KeychainTokenStore(service: service) }
         func save(_ tokens: TokenSet) throws { try base.save(tokens) }
-        func load() -> TokenSet? { base.load() }
+        func load() throws -> TokenSet? { try base.load() }
         func clear() throws {
             entered.continuation.yield(())
             release.wait()
@@ -92,14 +92,16 @@ import BopifyAuth
                                         playbackAuth: SpotifyAuthService(clientID: librespotClientID, store: playbackStore),
                                         libraryAuth: SpotifyAuthService(clientID: "dashboard", store: libraryStore))
         await signingOut.prepareForQuit()
-        precondition(playbackStore.load() == token && libraryStore.load()?.accessToken == "LIBRARY_FAKE",
+        let savedPlayback = try! playbackStore.load(), savedLibrary = try! libraryStore.load()
+        precondition(savedPlayback == token && savedLibrary?.accessToken == "LIBRARY_FAKE",
                      "quit preserves both grants")
         let pendingConsent = Task { await signingOut.enableLikedSongs() }
         await library.waitForConsent()
         await signingOut.signOut()
         await library.finishConsent()
         await pendingConsent.value
-        precondition(playbackStore.load() == nil && libraryStore.load() == nil, "sign-out clears both grants")
+        let clearedPlayback = try! playbackStore.load(), clearedLibrary = try! libraryStore.load()
+        precondition(clearedPlayback == nil && clearedLibrary == nil, "sign-out clears both grants")
         precondition(signingOut.authState == .signedOut && signingOut.likedSongs.tracks.isEmpty,
                      "late consent cannot restore browsing")
         let racingLibrary = Library()

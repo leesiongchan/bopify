@@ -5,16 +5,12 @@ import BopifyDomain
 
 public protocol TokenStoring: Sendable {
     func save(_ tokens: TokenSet) throws
-    func load() -> TokenSet?
+    func load() throws -> TokenSet?
     func clear() throws
 }
 
-/// Direct SecItem: no maintained Swift wrapper is needed for a ~60-line
-/// surface. kSecUseDataProtectionKeychain is omitted because, per TN3137,
-/// it needs an application-identifier entitlement that only team signing
-/// grants; the app ships ad-hoc signed, so it would fail every operation
-/// with errSecMissingEntitlement (-34018). Revisit only if Bopify is ever
-/// signed with a real team.
+/// Keep the existing file-based Keychain identity so installed users retain
+/// their saved grant; changing Keychain implementations requires a migration.
 public struct KeychainTokenStore: TokenStoring {
     private let service: String
     private let account = "spotify-tokens"
@@ -48,24 +44,33 @@ public struct KeychainTokenStore: TokenStoring {
         BopifyLog.keychain.debug("save succeeded")
     }
 
-    public func load() -> TokenSet? {
+    public func load() throws -> TokenSet? {
         var query = baseQuery
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
-        guard status == errSecSuccess else {
-            if status == errSecItemNotFound {
-                BopifyLog.keychain.debug("load found nothing stored")
-            } else {
-                BopifyLog.keychain.error("load failed status=\(status, privacy: .public)")
-            }
+        return try Self.decode(status: status, item: item)
+    }
+
+    // Only absence is a signed-out state; storage and decoding failures preserve the grant.
+    static func decode(status: OSStatus, item: CFTypeRef?) throws -> TokenSet? {
+        if status == errSecItemNotFound {
+            BopifyLog.keychain.debug("load found nothing stored")
             return nil
+        }
+        guard status == errSecSuccess else {
+            BopifyLog.keychain.error("load failed status=\(status, privacy: .public)")
+            switch status {
+            case errSecInteractionNotAllowed, errSecNotAvailable: throw KeychainError.unavailable(status)
+            case errSecAuthFailed, errSecUserCanceled: throw KeychainError.accessDenied(status)
+            default: throw KeychainError.unexpected(status)
+            }
         }
         guard let data = item as? Data,
               let stored = try? JSONDecoder().decode(Stored.self, from: data) else {
             BopifyLog.keychain.error("load found a stored token set that could not be decoded")
-            return nil
+            throw KeychainError.corrupt
         }
         BopifyLog.keychain.debug("load succeeded")
         return stored.tokenSet
@@ -97,4 +102,9 @@ public struct KeychainTokenStore: TokenStoring {
     }
 }
 
-public enum KeychainError: Error, Hashable, Sendable { case unexpected(OSStatus) }
+public enum KeychainError: Error, Hashable, Sendable {
+    case unavailable(OSStatus)
+    case accessDenied(OSStatus)
+    case corrupt
+    case unexpected(OSStatus)
+}

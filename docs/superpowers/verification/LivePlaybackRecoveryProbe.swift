@@ -45,7 +45,11 @@ import BopifyPlayback
     @concurrent static func continueManualCheck() async { _ = readLine() }
     static func run() async {
         let store = KeychainTokenStore()
-        guard let saved = store.load() else { record("BLOCKED: saved playback grant is inaccessible"); exit(77) }
+        let saved: TokenSet
+        do {
+            guard let loaded = try store.load() else { record("BLOCKED: no saved playback grant"); exit(77) }
+            saved = loaded
+        } catch { record("BLOCKED: saved playback grant is inaccessible"); exit(77) }
         record("CHECK: saved grant found; expired=\(saved.expiresAt < .now), refreshAvailable=\(saved.refreshToken != nil)")
         let auth = SpotifyAuthService(clientID: librespotClientID, store: store, openURL: { _ in })
         let player = PlayerModel()
@@ -84,7 +88,7 @@ import BopifyPlayback
         do {
             coordinator.start()
             try await ready(coordinator)
-            guard let initialGrant = store.load() else { throw CheckFailure.failed("Refreshed grant inaccessible") }
+            guard let initialGrant = try store.load() else { throw CheckFailure.failed("Refreshed grant inaccessible") }
             record("CHECK: initial grant expiry=\(initialGrant.expiresAt.ISO8601Format())")
             guard !player.restorationUnavailable else { throw CheckFailure.failed("No restorable Spotify session is available") }
             guard player.state.isActiveDevice else {
@@ -189,7 +193,7 @@ import BopifyPlayback
                 "65-minute playback passed initial OAuth expiry")
             try await replace(coordinator)
             try check(player.state.phase == .playing, "playback recovery after initial OAuth expiry")
-            try check((store.load()?.expiresAt ?? .distantPast) > initialGrant.expiresAt, "replacement refreshed persisted playback grant")
+            try check((try store.load()?.expiresAt ?? .distantPast) > initialGrant.expiresAt, "replacement refreshed persisted playback grant")
             guard await finish(coordinator, other: other, otherPlayer: otherPlayer, baseline: baseline, auth: auth) else { exit(77) }
             record("PASS: live acceptance complete; host network and physical sleep were not changed")
         } catch {
