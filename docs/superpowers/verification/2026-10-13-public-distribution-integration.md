@@ -34,7 +34,7 @@ an otherwise pending credential-save retry. The isolated app fixture failed with
 | Integrated Swift suites | 351 passed: 177 playback, 60 library, 28 domain, 86 authentication |
 | Native tests after dependency update | 171 passed: 57 wrapper, 85 Connect, 19 core, 7 playback, 2 doctests, 1 explicit faulted-sink contract |
 | Release-script/tooling/credential tests | 21 passed |
-| Locked native build | Passed without warnings/errors |
+| Locked native build | Passed; pre-existing cbindgen diagnostics assessed in the free-release record below |
 | Clippy with `-D warnings` | Passed |
 | ShellCheck and actionlint | Passed |
 | Debug app build and development-signed archive | Passed |
@@ -183,7 +183,7 @@ non-yanked releases on this verification date.
 | Final check | Result |
 | --- | --- |
 | Rust compiler selected from pin | 1.99.0, verified with environment override removed |
-| Locked native build | Passed without warnings/errors |
+| Locked native build | Passed; pre-existing cbindgen diagnostics assessed in the free-release record below |
 | Native suites and explicit sink contract | 171 passed, with the device-dependent ignored test explicitly run |
 | Swift suites against final rebuilt library | 351 passed |
 | Release-script/tooling/credential suites | 21 passed |
@@ -249,9 +249,10 @@ pass. A fresh real ad-hoc Release archive passes strict/deep signature checks wi
 hardened runtime, no signing team, and exactly the four required capabilities.
 Independent code review found no material issues.
 
-A physical DMG control will run from the committed inputs and retain its full
-output under `free-release/` in the ignored evidence directory. The archive
-probe is `/private/tmp/bopify-free-archive-control-2026-10-13.xcarchive`.
+A physical DMG control ran successfully from the committed inputs. Full output
+and read-only mounted inspection remain under `free-release/` in the ignored
+evidence directory. The archive probe is
+`/private/tmp/bopify-free-archive-control-2026-10-13.xcarchive`.
 This packaging evidence does not establish Gatekeeper approval or installed-account
 behavior. Ad-hoc code identity may change Keychain access across upgrades; the
 existing stores/services and conservative restore logic were kept unchanged.
@@ -259,3 +260,51 @@ existing stores/services and conservative restore logic were kept unchanged.
 [Apple installation guidance](https://support.apple.com/en-us/102445).
 [Apple Keychain implementations](https://developer.apple.com/documentation/technotes/tn3137-on-mac-keychains).
 [Apple code requirements](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements).
+
+### Physical free-package verification
+
+Source commit: `fbf6e789bc2c48dcfd4125012774d8bb57a8b322`. The complete real command
+`./scripts/release.sh 0.1.0-rc.1 --ad-hoc` passed without a certificate or Apple
+notarization credentials and produced:
+`build/release/Bopify-0.1.0-rc.1.dmg`.
+SHA-256: `072ecc54a3239b7aeab356066f16d2a8c108985bb623f7393a42b489cca8e856`.
+App version: 0.1.0; build: 248.
+
+The final DMG's signature verifies. A read-only mount with `diskutil image attach`
+confirmed the app's strict/deep ad-hoc signature, no team/authority, arm64,
+hardened runtime, exactly the required four entitlements, version/build metadata,
+matching embedded and adjacent 0644 license files, and the /Applications shortcut.
+The image was unmounted. No app was launched or installed. A duplicate-version
+run rejected promotion and preserved the exact DMG hash.
+
+Gatekeeper assessment of the packaged app returned exit 3, rejected. This is the
+expected limitation of the chosen unnotarized ad-hoc route; it is disclosed in
+README and release notes. The packaging script intentionally does not claim
+Gatekeeper approval. Actual browser-downloaded clean-Mac installation and the
+installed-account/live checks remain pending. Hosted execution is also pending.
+No push, tag, GitHub Release or remote secret change was performed.
+
+### Corrected generator-diagnostic assessment
+
+Earlier build summaries missed uppercase cbindgen WARN messages. Both the
+previous dependency-update build and this physical build contain the same eleven
+messages: four correct omissions of private Rust constants/static state, and
+seven failed resolutions of BopifyError while scanning its Rust-only ALL array.
+The existing configuration excludes BopifyError because the ABI carries i32
+error codes, but the generator still visits that associated constant. These are
+pre-existing generator diagnostics, not compiler warnings introduced by this
+release-mode change. The earlier claim that the whole native build was
+warning-free was incorrect and has been corrected in the tables above.
+
+Read-only review found no public ABI defect: all 16 exported C functions match
+the header, with no missing or extra declarations; BopifyError is not an ABI type.
+Strict Clang C11 syntax verification of the actual generated header passes with
+`-Wall -Wextra -Werror`. The seven missing-type messages can be removed by also
+excluding cbindgen's internal ALLBopifyError constant; an in-memory experiment
+changed only two blank lines in the header. That optional generator configuration
+change was not included in this free-release task. The four private-item parse
+diagnostics would remain. No diagnostics were globally suppressed.
+
+The existing Xcode supported-platform diagnostic also remains while archive
+returns success. AppKit's separate runtime layout investigation is unchanged.
+[Official cbindgen export configuration](https://github.com/mozilla/cbindgen/blob/v0.29.4/docs.md).
