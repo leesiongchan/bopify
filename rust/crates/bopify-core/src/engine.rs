@@ -162,7 +162,7 @@ impl Engine {
             // The returned future is the event loop. Commands issued before
             // it is driven are queued, so spawning it here is correct.
             supervise_audio_output(reporter.output_error_signal(), reporter.clone());
-            supervise_spirc(task, reporter.clone());
+            supervise_spirc(task, session.clone(), reporter.clone());
             let radio_session = session.clone();
             supervise_forwarder(events, sink.clone(), session, reporter.clone());
             Ok::<_, BopifyError>((spirc, radio_session))
@@ -375,14 +375,21 @@ async fn with_connect_deadline<T>(
 
 fn supervise_spirc(
     task: impl std::future::Future<Output = ()> + Send + 'static,
+    session: Session,
     reporter: EngineReporter,
 ) {
     let task = tokio::spawn(task);
     tokio::spawn(async move {
-        match task.await {
-            Ok(()) => reporter.session_lost(SessionLossReason::SpircEnded),
-            Err(why) if why.is_cancelled() => {}
-            Err(_) => reporter.session_lost(SessionLossReason::SpircPanicked),
+        tokio::select! {
+            _ = session.invalidated() => {
+                log::info!("engine: session invalidated, reporting loss before Connect cleanup");
+                reporter.session_lost(SessionLossReason::Legacy);
+            },
+            result = task => match result {
+                Ok(()) => reporter.session_lost(SessionLossReason::SpircEnded),
+                Err(why) if why.is_cancelled() => {},
+                Err(_) => reporter.session_lost(SessionLossReason::SpircPanicked),
+            },
         }
     });
 }
@@ -427,6 +434,43 @@ mod tests {
         );
     }
 
+    #[tokio::test(start_paused = true)]
+    async fn invalid_session_reports_loss_while_spirc_is_stalled() {
+        for already_invalid in [false, true] {
+            let session = Session::new(SessionConfig::default(), None);
+            let (output, mut received) = tokio::sync::mpsc::unbounded_channel();
+            let reporter = EngineReporter::new(Arc::new(move |event| {
+                output.send(event).unwrap();
+            }));
+            if already_invalid { session.shutdown(); }
+            supervise_spirc(std::future::pending(), session.clone(), reporter);
+            tokio::task::yield_now().await;
+            if !already_invalid { session.shutdown(); }
+            let event = tokio::time::timeout(std::time::Duration::from_secs(1), received.recv())
+                .await
+                .expect("session invalidation must report without waiting for Spirc HTTP cleanup")
+                .unwrap();
+            assert!(matches!(event, WireEvent::SessionLost { .. }));
+            assert!(received.recv().await.is_none());
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn invalid_session_during_teardown_never_reports_recovery() {
+        let session = Session::new(SessionConfig::default(), None);
+        let (output, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let reporter = EngineReporter::new(Arc::new(move |event| {
+            output.send(event).unwrap();
+        }));
+        reporter.begin_teardown();
+        supervise_spirc(std::future::pending(), session.clone(), reporter);
+        session.shutdown();
+        let result = tokio::time::timeout(std::time::Duration::from_secs(1), received.recv())
+            .await
+            .expect("shutdown observer must finish during intentional teardown");
+        assert!(result.is_none());
+    }
+
     #[tokio::test]
     async fn spirc_completion_and_panic_report_even_with_the_player_alive() {
         for panics in [false, true] {
@@ -440,6 +484,7 @@ mod tests {
                         panic!("test spirc");
                     }
                 },
+                Session::new(SessionConfig::default(), None),
                 reporter,
             );
             let event = received.recv().await.unwrap();

@@ -126,3 +126,12 @@ python3 scripts/test-app-boundaries.py
 Local full logs and offscreen images are under
 `/private/tmp/bopify-three-gaps-implementation/` and
 `/private/tmp/bopify-gaps-*`; maintained fixtures and scripts are in this commit.
+
+The later user-assisted playback, output-switching and short sleep/wake checks
+are recorded in [live release acceptance](2026-10-14-live-release-acceptance.md).
+That report supersedes the live-test deferral above for those specific checks
+and records diagnostics and release gates that remain open.
+
+The subsequent [live diagnostic investigation](2026-10-14-live-diagnostic-fixes.md)
+records the native session-invalidation fix and an independent rendering
+reproduction; no reliable popover workaround is claimed.
