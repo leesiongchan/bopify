@@ -32,7 +32,7 @@ The existing PlaybackRecoveryProbe retains its native-specific action assertions
 
 - Final Debug app build: passed, code signing disabled.
 - Swift packages: 360 tests passed (177 playback, 60 library, 28 domain, 95 auth).
-- Python tooling: 27 tests passed; scene-evidence parser: 6 tests passed after red assertions.
+- Python tooling: 27 tests passed; scene-evidence parser: 11 tests passed after the independent-review regression fix (38 Python tests total).
 - Final native UI fixture: all nine geometry/local-name/help checks and both hidden states passed; overall exit 77 for incomplete input/keyboard qualification.
 - Existing fake-engine recovery probe: passed with exit 0, including current compact/expanded/queue geometry, actual handler dispatch, detached-command blocking, restoration retry, permanent-error explanation, 100 replacements plus 10 failed creations, single live engine/create, stale-input rejection, teardown and interrupted animations.
 - That recovery run's strict UI diagnostic check was clean. The separately validated pure SwiftUI popover reproduction still emits the transaction warning; this run does not close either historical AppKit finding.

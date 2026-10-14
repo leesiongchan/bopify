@@ -20,13 +20,25 @@ def classify(returncode, stdout, mode, timed_out=False):
         return 'invalid'
     found_mode, valid, diagnostics, transactions = results[0]
     diagnostics, transactions = int(diagnostics), int(transactions)
-    required = ['started', 'window-shown', 'control-observed', 'collection-requested'] if mode == 'control' else [
-        'started', 'window-shown', 'show-requested', 'content-appeared', 'did-show',
-        'close-requested', 'did-close', 'content-disappeared', 'collection-requested']
+    ordered = ['started', 'window-shown', 'control-observed', 'collection-requested'] if mode == 'control' else [
+        'started', 'window-shown', 'show-requested', 'did-show', 'close-requested']
+    if mode == 'binding':
+        ordered += ['binding-dismiss-requested']
+    elif mode == 'outside':
+        ordered += ['outside-click-posted', 'outside-click-delivered']
+    if mode != 'control':
+        ordered += ['did-close', 'collection-requested']
+    required = ordered if mode == 'control' else ordered + ['content-appeared', 'content-disappeared']
     markers = re.findall(r'^LOG: .* bopify\.validation/\S+ fixture (\S+)$', stdout, re.M)
     if (found_mode != mode or valid != 'true' or transactions > diagnostics
             or any(markers.count(event) != 1 for event in required)
             or (returncode == 0) != (diagnostics == 0)):
+        return 'invalid'
+    positions = [markers.index(event) for event in ordered]
+    if positions != sorted(positions) or mode == 'control' and markers != ordered:
+        return 'invalid'
+    if mode != 'control' and not (markers.index('show-requested') < markers.index('content-appeared') < markers.index('close-requested')
+            and markers.index('close-requested') < markers.index('content-disappeared') < markers.index('collection-requested')):
         return 'invalid'
     return 'reproduced' if diagnostics else 'valid_clean'
 

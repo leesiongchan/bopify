@@ -12,6 +12,8 @@ import OSLog
     private weak var popover: NSPopover?
     private var popoverID: ObjectIdentifier?
     private var running = false
+    private var clickMonitor: Any?
+    private let clickTag = Int64.random(in: 1...Int64.max)
 
     init(mode: String) { self.mode = mode; super.init() }
 
@@ -42,6 +44,17 @@ import OSLog
             NSApp.activate()
             mark("window-shown")
             print("READY: pid=\(getpid())"); fflush(stdout)
+            if mode == "outside", let window = NSApp.windows.first(where: { $0.title == "SwiftUI scene popover fixture" }) {
+                let targetWindow = window.windowNumber
+                let tag = clickTag
+                clickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+                    let isTarget = event.windowNumber == targetWindow
+                        && abs(event.locationInWindow.x - 24) < 2 && abs(event.locationInWindow.y - 24) < 2
+                        && event.cgEvent?.getIntegerValueField(.eventSourceUserData) == tag
+                    if isTarget { MainActor.assumeIsolated { self?.mark("outside-click-delivered") } }
+                    return event
+                }
+            }
             if mode == "control" {
                 mark("control-observed")
             } else {
@@ -69,13 +82,14 @@ import OSLog
                     }
                     // Target only blank content in this process; never send input to the user's app.
                     let point = CGPoint(x: window.frame.minX + 24, y: screen.frame.maxY - window.frame.minY - 24)
+                    mark("outside-click-posted")
                     for type in [CGEventType.leftMouseDown, .leftMouseUp] {
                         guard let event = CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left) else {
                             throw NSError(domain: "SceneFixture.MissingEvent", code: 2)
                         }
+                        event.setIntegerValueField(.eventSourceUserData, value: clickTag)
                         event.postToPid(getpid())
                     }
-                    mark("outside-click-posted")
                 default: break // missing-close deliberately exercises the invalid-evidence path.
                 }
                 if mode != "missing-close" {
@@ -89,6 +103,7 @@ import OSLog
             print("INVALID: \(error) events=\(events)")
             _ = try? collect()
         }
+        if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
         NotificationCenter.default.removeObserver(self)
         fflush(stdout)
         exit(result)
@@ -112,18 +127,26 @@ import OSLog
         for entry in entries {
             print("LOG: \(entry.date.ISO8601Format()) \(entry.subsystem)/\(entry.category) \(entry.composedMessage)")
         }
-        let required = mode == "control"
+        var ordered = mode == "control"
             ? ["started", "window-shown", "control-observed", "collection-requested"]
-            : ["started", "window-shown", "show-requested", "content-appeared", "did-show", "close-requested", "did-close", "content-disappeared", "collection-requested"]
-        let uniqueAndLogged = required.allSatisfy { event in
-            events.filter { $0 == event }.count == 1 && entries.contains { $0.composedMessage == "fixture \(event)" }
+            : ["started", "window-shown", "show-requested", "did-show", "close-requested"]
+        if mode == "binding" { ordered += ["binding-dismiss-requested"] }
+        if mode == "outside" { ordered += ["outside-click-posted", "outside-click-delivered"] }
+        if mode != "control" { ordered += ["did-close", "collection-requested"] }
+        let required = mode == "control" ? ordered : ordered + ["content-appeared", "content-disappeared"]
+        let logged = entries.filter { $0.subsystem == "bopify.validation" && $0.composedMessage.hasPrefix("fixture ") }
+            .map { String($0.composedMessage.dropFirst("fixture ".count)) }
+        func validates(_ observed: [String]) -> Bool {
+            guard required.allSatisfy({ event in observed.filter { $0 == event }.count == 1 }) else { return false }
+            if mode == "control" { return observed == ordered }
+            let positions = ordered.compactMap { observed.firstIndex(of: $0) }
+            guard positions == positions.sorted(),
+                  let show = observed.firstIndex(of: "show-requested"), let appear = observed.firstIndex(of: "content-appeared"),
+                  let request = observed.firstIndex(of: "close-requested"), let disappear = observed.firstIndex(of: "content-disappeared"),
+                  let collect = observed.firstIndex(of: "collection-requested") else { return false }
+            return show < appear && appear < request && request < disappear && disappear < collect
         }
-        let lifecycleOrder = mode == "control" || {
-            guard let show = events.firstIndex(of: "did-show"), let request = events.firstIndex(of: "close-requested"),
-                  let close = events.firstIndex(of: "did-close") else { return false }
-            return show < request && request < close
-        }()
-        let valid = uniqueAndLogged && lifecycleOrder && !presented && popover?.isShown != true
+        let valid = validates(events) && validates(logged) && !presented && popover?.isShown != true
         let needles = ["Ignoring request to entangle context after pre-commit", "Entangling fence requested after pre-commit",
                        "cannot add handler", "Invalid attempt to open a new transaction during CA commit"]
         let diagnostics = entries.filter { entry in needles.contains { entry.composedMessage.contains($0) } }
