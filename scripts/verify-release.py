@@ -54,9 +54,10 @@ def export(app, version, build, ad_hoc=False):
     require(not (set(rights) - CAPABILITIES - identity_keys), 'Export contains unapproved entitlements, including possible debugger/runtime exceptions.')
     info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
     require(info['CFBundleIdentifier'] == 'com.leesiongchan.bopify', 'Export bundle identity changed.')
+    require(info.get('LSMinimumSystemVersion') == '26.0', 'Export must declare the macOS 26.0 minimum.')
     require(info['CFBundleShortVersionString'] == version and info['CFBundleVersion'] == build, 'Export version does not match requested release.')
     report = {'bundle': info['CFBundleIdentifier'], 'version': version, 'build': build,
-              'architecture': 'arm64', 'team': None if ad_hoc else TEAM, 'runtime': True,
+              'architecture': 'arm64', 'minimum_macos': '26.0', 'team': None if ad_hoc else TEAM, 'runtime': True,
               'entitlements': rights, 'signing': 'ad-hoc' if ad_hoc else 'developer-id'}
     if ad_hoc:
         report['notarized'] = False

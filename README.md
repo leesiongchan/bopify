@@ -10,7 +10,7 @@ Release packages use `Bopify-<version>.dmg` on [GitHub Releases](https://github.
 
 This integration branch combines public library setup with the audio/authentication fixes and reviewed release pipeline. Clean-Mac installation and live acceptance are still pending; see [the integration verification record](docs/superpowers/verification/2026-10-13-public-distribution-integration.md). No release has been published from this integration branch yet.
 
-You need an Apple Silicon Mac on macOS 14 or later, and a Spotify **Premium** account (librespot only works with Premium). Bopify has no Dock icon or app menu: look for it in the menu bar, and right-click it to quit.
+You need an Apple Silicon Mac on macOS 26 or later, and a Spotify **Premium** account (librespot only works with Premium). Bopify has no Dock icon or app menu: look for it in the menu bar, and right-click it to quit.
 
 ## Library features
 
@@ -18,7 +18,7 @@ Playback works as soon as you sign in. Favorites, Liked Songs and listening hist
 
 ## Build from source
 
-You only need this to work on Bopify. Besides macOS 14 or later and Premium, you need:
+You only need this to work on Bopify. Besides macOS 26 or later and Premium, you need:
 
 - Rust 1.99+ (rustup uses the pinned 1.99.0 toolchain)
 - Xcode 27 with the Metal Toolchain:
@@ -58,7 +58,7 @@ Headless app boundary checks also compile the Debug app without signing or launc
 python3 scripts/test-app-boundaries.py
 ```
 
-Both commands are release CI gates before packaging. It prepares the pinned librespot sources, sets the macOS 14 deployment target, and uses locked dependencies. Connect and playback use the shipping lock; core tests require the separate upstream workspace and its lock. Network integration tests and explicitly ignored audio-device tests are excluded. A fresh run may download dependencies; cached local runs can additionally use `CARGO_NET_OFFLINE=true`. If your shell sets `RUSTUP_TOOLCHAIN`, unset it to use the checked-in pin.
+Both commands are release CI gates before packaging. It prepares the pinned librespot sources, sets the macOS 26 deployment target, and uses locked dependencies. Connect and playback use the shipping lock; core tests require the separate upstream workspace and its lock. Network integration tests and explicitly ignored audio-device tests are excluded. A fresh run may download dependencies; cached local runs can additionally use `CARGO_NET_OFFLINE=true`. If your shell sets `RUSTUP_TOOLCHAIN`, unset it to use the checked-in pin.
 
 ## Spotify sign-in and privacy
 

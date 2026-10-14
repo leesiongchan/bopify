@@ -280,12 +280,18 @@ final class AppEnvironment {
     func retryPlaybackConnection() { recovery?.retryNow() }
 
     func reconnectSpotify() async {
-        guard !isSignInInFlight, authState == .signedIn else { return }
+        guard !isSignInInFlight, authState == .signedIn, needsPlaybackReauthentication else {
+            BopifyLog.auth.debug("Playback reauthorization ignored: no current request or authorization already pending")
+            return
+        }
         isSignInInFlight = true
         let generation = sessionGeneration
         await serialize { [self] in
             defer { isSignInInFlight = false }
-            guard generation == sessionGeneration else { return }
+            guard generation == sessionGeneration, needsPlaybackReauthentication else {
+                BopifyLog.auth.debug("Queued playback reauthorization discarded after connection or session changed")
+                return
+            }
             do {
                 _ = try await auth.signIn()
                 guard generation == sessionGeneration else { return }
@@ -294,6 +300,10 @@ final class AppEnvironment {
                 BopifyLog.auth.notice("playback reauthorization did not complete")
             }
         }
+    }
+
+    private var needsPlaybackReauthentication: Bool {
+        connectionStatus == .needsReauthentication || connectionStatus == .failed(.credentialCorrupt)
     }
 
     func signOut() async {

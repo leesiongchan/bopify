@@ -67,60 +67,32 @@ struct PlaybackConnectionStatusView: View {
     }
 }
 
-// AppKit owns the compact menu's accessibility label and keyboard action together.
-struct CompactPlaybackConnectionMenu: NSViewRepresentable {
+struct CompactPlaybackConnectionMenu: View {
     let connection: PlaybackConnectionStatusView
-    func makeCoordinator() -> Handler { Handler(connection: connection) }
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSView, context: Context) -> CGSize? {
-        guard let width = proposal.width else { return nil }
-        return CGSize(width: width, height: proposal.height ?? 24)
-    }
-    func makeNSView(context: Context) -> NSView {
-        // The container allows the compact frame to be narrower than AppKit's intrinsic menu width.
-        let container = NSView(frame: .zero)
-        let button = NSPopUpButton(frame: .zero, pullsDown: true)
-        button.autoresizingMask = [.width, .height]
-        button.isBordered = false
-        button.font = .systemFont(ofSize: 10)
-        button.controlSize = .small
-        button.cell?.lineBreakMode = .byTruncatingTail
-        button.cell?.usesSingleLineMode = true
-        container.addSubview(button)
-        return container
-    }
-    func updateNSView(_ container: NSView, context: Context) {
-        let button = container.subviews[0] as! NSPopUpButton
-        context.coordinator.connection = connection
-        let menu = NSMenu()
-        let caption = connection.restorationUnavailable && connection.status == .ready
-            ? String(localized: "connection.retry") : connection.messageString
-        let title = NSMenuItem(title: caption, action: nil, keyEquivalent: "")
-        if case .failed = connection.status {
-            title.image = NSImage(systemSymbolName: "exclamationmark.circle", accessibilityDescription: connection.messageString)
+
+    var body: some View {
+        Menu {
+            if connection.messageKey != connection.actionKey { connection.message }
+            connection.actions
+        } label: {
+            HStack(spacing: 3) {
+                if case .failed = connection.status {
+                    Image(systemName: "exclamationmark.circle")
+                } else {
+                    Text(connection.restorationUnavailable && connection.status == .ready
+                        ? String(localized: "connection.retry") : connection.messageString)
+                        .lineLimit(1).truncationMode(.tail)
+                }
+                Image(systemName: "chevron.down").font(.system(size: 6, weight: .bold)).opacity(0.6)
+            }
+            .font(.system(size: 10))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Capsule())
         }
-        menu.addItem(title)
-        if caption != connection.messageString || title.image != nil {
-            menu.addItem(NSMenuItem(title: connection.messageString, action: nil, keyEquivalent: ""))
-        }
-        if let action = connection.actionKey {
-            let item = NSMenuItem(title: String(localized: String.LocalizationValue(action)), action: #selector(Handler.performRecoveryAction(_:)), keyEquivalent: "")
-            item.target = context.coordinator
-            menu.addItem(item)
-        }
-        button.menu = menu
-        if case .failed = connection.status {
-            button.imagePosition = .imageOnly
-        } else {
-            button.imagePosition = .noImage
-        }
-        button.setAccessibilityLabel(connection.messageString)
-        // The observed local menu element is the cell, which otherwise uses the shortened caption.
-        button.cell?.setAccessibilityLabel(connection.messageString)
-        button.setAccessibilityHelp(connection.messageString)
-    }
-    final class Handler: NSObject {
-        var connection: PlaybackConnectionStatusView
-        init(connection: PlaybackConnectionStatusView) { self.connection = connection }
-        @objc func performRecoveryAction(_ sender: Any?) { connection.performAction() }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .accessibilityLabel(Text(connection.messageString))
+        .help(connection.messageString)
     }
 }
