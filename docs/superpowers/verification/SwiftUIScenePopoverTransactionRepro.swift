@@ -41,6 +41,7 @@ import OSLog
             try await wait { NSApp.windows.contains { $0.title == "SwiftUI scene popover fixture" && $0.isVisible } }
             NSApp.activate()
             mark("window-shown")
+            print("READY: pid=\(getpid())"); fflush(stdout)
             if mode == "control" {
                 mark("control-observed")
             } else {
@@ -56,10 +57,16 @@ import OSLog
                 case "outside":
                     guard CGPreflightPostEventAccess() else {
                         print("UNAVAILABLE: event posting not authorized; no permission was requested")
+                        _ = try? collect()
                         exit(77)
                     }
                     guard let window = NSApp.windows.first(where: { $0.title == "SwiftUI scene popover fixture" }),
                           let screen = NSScreen.screens.first else { throw NSError(domain: "SceneFixture.MissingWindow", code: 2) }
+                    guard NSApp.isActive, window.isKeyWindow else {
+                        print("UNAVAILABLE: fixture was not granted foreground/key-window activation; outside-click delivery cannot be qualified")
+                        _ = try? collect()
+                        exit(77)
+                    }
                     // Target only blank content in this process; never send input to the user's app.
                     let point = CGPoint(x: window.frame.minX + 24, y: screen.frame.maxY - window.frame.minY - 24)
                     for type in [CGEventType.leftMouseDown, .leftMouseUp] {
@@ -80,6 +87,7 @@ import OSLog
             result = try collect()
         } catch {
             print("INVALID: \(error) events=\(events)")
+            _ = try? collect()
         }
         NotificationCenter.default.removeObserver(self)
         fflush(stdout)
