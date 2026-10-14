@@ -116,12 +116,12 @@ required by its canonical generated representation, not source trailing whitespa
 The exact generated patch and reverse application were verified; no whitespace
 check was suppressed. Native compilation still emits the eleven previously
 assessed cbindgen warnings, and Debug app builds retain skipped AppIntents metadata
-extraction. These are not claimed fixed.
+extraction. The rc3 Release build also reports the existing supported-platform
+destination diagnostic. These are not claimed fixed.
 
 Local logs and rejected candidates are in `/private/tmp/bopify-live-triage/`.
 No raw account logs are committed. The earlier live checks cover rc2, not a live
-run of this new native fix. The existing rc2 DMG is unchanged. Fresh packaging
-and live verification of the changed artifact, real sign-out/re-consent,
+run of this new native fix. The existing rc2 DMG is unchanged. Live verification of the changed artifact, real sign-out/re-consent,
 clean-Mac quarantine installation and hosted Actions remain separate gates.
 
 ## Apple Feedback draft — not submitted
@@ -139,3 +139,19 @@ the direct-close reproduction. The complete live stack is in local redacted
 runtime evidence. Apple acknowledgement and a supported workaround remain absent.
 Recommended next step: compare this reproduction on another supported OS/SDK,
 then assess a verified framework fix or a separately designed presentation change.
+
+## Prepared rc3 free DMG
+
+`build/release/Bopify-0.1.0-rc.3.dmg` was built successfully from code commit
+`be310ea2adca2bb6eee6f352c680b872a573b43c`. App version 0.1.0, build 252.
+SHA-256: `ceacc11955c2d00b2939ac2db99831959ef865d9dc9f5097c930c6f2d6977e16`.
+
+A read-only mount of the actual DMG passed strict/deep ad-hoc signature,
+arm64/hardened-runtime and exact four-capability checks, without team or debugger
+entitlement. The executable contains the new transport, loop-exit and engine
+supervision diagnostic markers. Embedded and adjacent license files match and
+are readable mode 0644, including Nuke 13.2.0. The Applications symlink is valid.
+The verification mount was ejected. This artifact is not notarized and has not
+been live-tested, installed or published. The earlier running rc2 app and its
+mount remain intact. Local artifact verification JSON and build log are retained
+in `/private/tmp/bopify-live-triage/`.
