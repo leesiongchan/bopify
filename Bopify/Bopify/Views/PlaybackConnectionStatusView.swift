@@ -114,7 +114,7 @@ struct CompactPlaybackConnectionMenu: NSViewRepresentable {
             button.imagePosition = .noImage
         }
         button.setAccessibilityLabel(connection.messageString)
-        // The exported menu element is the cell, which otherwise announces the shortened caption.
+        // The observed local menu element is the cell, which otherwise uses the shortened caption.
         button.cell?.setAccessibilityLabel(connection.messageString)
         button.setAccessibilityHelp(connection.messageString)
     }

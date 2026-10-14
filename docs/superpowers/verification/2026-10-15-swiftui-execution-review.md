@@ -10,10 +10,12 @@ The corrected Swift fixture compiled with Swift 6 warnings-as-errors targeting m
 
 Evidence: `/private/tmp/bopify-scene-review-all-red.log`, `/private/tmp/bopify-scene-popover-reviewed/`, `/private/tmp/bopify-swiftui-review-tooling-tests.log`.
 
-## Deferred Minor findings
+## Resolved Minor findings (2026-10-15)
 
-- The design's original audit paragraph still says the declarative App/Window reproduction has not been tested, despite its current execution status and completed evidence report. The verification report is authoritative; that baseline sentence needs a wording update.
-- The production comment says the exported menu element is the cell. Evidence establishes the observed local accessibility element; exported-client/VoiceOver verification remains open. The comment needs a narrower wording update.
+Both wording corrections were completed following the user's instruction:
+
+- Updated the design to state that the declarative App/Window reproduction was tested, linked its evidence, and retained the outside-click qualification limit.
+- Narrowed the production comment to the observed local accessibility element. Exported-client/VoiceOver verification remains open.
 
 ## Review limits and rulings
 
