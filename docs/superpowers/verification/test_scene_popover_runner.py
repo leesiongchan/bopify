@@ -12,6 +12,11 @@ def output(mode='binding', diagnostics=0, valid=True):
     events = ['started', 'window-shown', 'control-observed', 'collection-requested'] if mode == 'control' else [
         'started', 'window-shown', 'show-requested', 'content-appeared', 'did-show',
         'close-requested', 'did-close', 'content-disappeared', 'collection-requested']
+    if mode == 'binding':
+        events.insert(events.index('did-close'), 'binding-dismiss-requested')
+    if mode == 'outside':
+        events.insert(events.index('did-close'), 'outside-click-posted')
+        events.insert(events.index('did-close'), 'outside-click-delivered')
     logs = '\n'.join('LOG: time bopify.validation/test fixture ' + event for event in events)
     return logs + f'\nRESULT: mode={mode} lifecycleValidated={str(valid).lower()} diagnostics={diagnostics} invalidTransactions={min(1, diagnostics)}\n'
 
@@ -32,6 +37,30 @@ class SceneEvidenceTests(unittest.TestCase):
                            (0, output() + output()), (-9, output())]:
             with self.subTest(code=code, text=text):
                 self.assertEqual(runner.classify(code, text, 'binding'), 'invalid')
+
+    def test_outside_requires_posted_and_delivered_click(self):
+        self.assertEqual(runner.classify(0, output('outside'), 'outside'), 'valid_clean')
+        for event in ['outside-click-posted', 'outside-click-delivered']:
+            with self.subTest(event=event):
+                text = output('outside').replace('fixture ' + event, 'unrelated')
+                self.assertEqual(runner.classify(0, text, 'outside'), 'invalid')
+
+    def test_reversed_lifecycle_is_invalid(self):
+        lines = output().splitlines()
+        logs, result = lines[:-1], lines[-1]
+        self.assertEqual(runner.classify(0, '\n'.join(list(reversed(logs)) + [result]), 'binding'), 'invalid')
+
+    def test_dismissal_before_delivered_click_is_invalid(self):
+        text = output('outside').replace('fixture outside-click-delivered', 'fixture temp')
+        text = text.replace('fixture did-close', 'fixture outside-click-delivered').replace('fixture temp', 'fixture did-close')
+        self.assertEqual(runner.classify(0, text, 'outside'), 'invalid')
+
+    def test_binding_requires_requested_dismissal(self):
+        self.assertEqual(runner.classify(0, output().replace('fixture binding-dismiss-requested', 'unrelated'), 'binding'), 'invalid')
+
+    def test_control_must_never_show_popover(self):
+        text = output('control') + 'LOG: time bopify.validation/test fixture did-show\n'
+        self.assertEqual(runner.classify(0, text, 'control'), 'invalid')
 
     def test_timeout_is_invalid_even_with_a_result(self):
         self.assertEqual(runner.classify(0, output(), 'binding', timed_out=True), 'invalid')
