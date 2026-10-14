@@ -37,7 +37,7 @@ elif name=='xcodebuild':
         app=Path(option('-archivePath'))/'Products/Applications/Bopify.app/Contents'
         (app/'MacOS').mkdir(parents=True)
         (app/'MacOS/Bopify').write_bytes(b'controlled binary boundary')
-        info={'CFBundleIdentifier':'com.leesiongchan.bopify','CFBundleShortVersionString':next(a.split('=',1)[1] for a in args if a.startswith('MARKETING_VERSION=')),'CFBundleVersion':next(a.split('=',1)[1] for a in args if a.startswith('CURRENT_PROJECT_VERSION='))}
+        info={'LSMinimumSystemVersion':os.environ.get('MINIMUM_MACOS','26.0'),'CFBundleIdentifier':'com.leesiongchan.bopify','CFBundleShortVersionString':next(a.split('=',1)[1] for a in args if a.startswith('MARKETING_VERSION=')),'CFBundleVersion':next(a.split('=',1)[1] for a in args if a.startswith('CURRENT_PROJECT_VERSION='))}
         (app/'Info.plist').write_bytes(plistlib.dumps(info))
         shutil.copytree(Path.cwd()/'Bopify/Bopify/Resources',app/'Resources')
     else:
@@ -126,6 +126,12 @@ class ReleasePipelineTests(unittest.TestCase):
         self.assertTrue(infos)
         self.assertTrue(all(plistlib.loads(info.read_bytes())['CFBundleShortVersionString']=='0.1.0' for info in infos))
         self.assertTrue(all((info.parent/'Resources/Third-Party Licenses.html').is_file() for info in infos))
+
+    def test_old_macos_minimum_cannot_promote_release(self):
+        result = self.release(ad_hoc=True, MINIMUM_MACOS='14.0')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.final.exists())
+        self.assertNotIn('sign', self.stages())
 
     def test_ad_hoc_release_needs_no_identity_or_notary_credentials(self):
         result = self.release(ad_hoc=True, MISSING_ID='1', NOTARY_KEY_PATH='/absent/private-key')

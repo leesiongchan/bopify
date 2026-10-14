@@ -17,7 +17,7 @@ subprocess.run(['xcodebuild', '-project', str(ROOT / 'Bopify/Bopify.xcodeproj'),
 
 common = ['swiftc', '-parse-as-library', '-D', 'DEBUG', '-swift-version', '6',
           '-default-isolation', 'MainActor', '-warnings-as-errors',
-          '-target', 'arm64-apple-macosx14.0', '-module-cache-path', str(OUTPUT / 'module-cache'),
+          '-target', 'arm64-apple-macosx26.0', '-module-cache-path', str(OUTPUT / 'module-cache'),
           '-I', str(PRODUCTS), '-I', str(ROOT / 'Packages/BopifyCore/Sources/CBopifyCore/include'),
           '-L', str(PRODUCTS), '-lbopify_core', '-liconv', '-lobjc']
 for framework in ['AudioToolbox', 'CoreAudio', 'IOKit', 'CoreFoundation', 'Foundation', 'SystemConfiguration', 'Security']:

@@ -1,5 +1,7 @@
 # SwiftUI recovery-menu qualification
 
+> Historical qualification result. The 2026-10-15 continuation replaces the adapter and raises the minimum to macOS 26; see [current implementation and evidence](2026-10-15-modern-swiftui-recovery-menu.md). Earlier unqualified results below remain historical evidence.
+
 Execution started 2026-10-14; final checks completed 2026-10-15. Host: macOS 27.0.1 (26A434), arm64, Xcode 27 / Swift 6.4. The macOS 14 minimum is unchanged.
 
 ## Shipping result

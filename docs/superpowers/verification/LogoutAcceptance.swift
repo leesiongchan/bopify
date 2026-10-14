@@ -70,6 +70,8 @@ nonisolated struct FakeLibrary: LibraryService, SavedTracksService, ListeningHis
 @main struct LogoutAcceptance {
     @MainActor static func main() async throws {
         let root = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
+        try await staleReconnect(root)
+        try await explicitReconnect()
         for (p, l) in [(false, false), (false, true), (true, false), (true, true)] {
             try await matrix(root, playbackFails: p, libraryFails: l)
         }
@@ -77,7 +79,7 @@ nonisolated struct FakeLibrary: LibraryService, SavedTracksService, ListeningHis
         try await startup(root, malformed: true)
         try await unrecorded(root)
         try await quit(root)
-        print("PASS: all 8 headless AppEnvironment scenarios; zero browser requests, Keychain calls, windows or external network")
+        print("PASS: logout and recovery authorization boundaries; no real browser, Keychain calls, windows or external network")
     }
     @MainActor static func checked(_ condition: @autoclosure () throws -> Bool) rethrows {
         let result = try condition()
@@ -130,6 +132,42 @@ nonisolated struct FakeLibrary: LibraryService, SavedTracksService, ListeningHis
         precondition(env.presentation.activePopover == nil && env.playerWindowController.invalidations == 1)
         precondition(env.artworkStore.clearCount == 1)
     }
+    @MainActor static func explicitReconnect() async throws {
+        for fault in [PlayerError.authDenied, .credentialCorrupt] {
+            let browser = Counter(), playback = FakeStore()
+            let auth = SpotifyAuthService(clientID: "synthetic", store: playback, openURL: { _ in browser.increment() })
+            let env = AppEnvironment(previewPlayer: PlayerModel(), favoriteService: FakeLibrary(track:
+                Track(uri: SpotifyURI("spotify:track:6rqhFgbbKwnb9MLmUQDhG6")!, title: "Synthetic", artists: [], albumTitle: nil, artwork: nil, durationMs: 100000)),
+                playbackAuth: auth, recoveryEngineFactory: { _, _ in throw fault })
+            await env.restoreOrPromptSignIn()
+            try await wait { env.connectionStatus == .needsReauthentication || env.connectionStatus == .failed(.credentialCorrupt) }
+            let reconnect = Task { await env.reconnectSpotify() }
+            try await wait { browser.value == 1 }
+            await env.reconnectSpotify()
+            precondition(browser.value == 1, "Duplicate reconnect must not launch a second authorization")
+            await env.prepareForQuit()
+            await reconnect.value
+            precondition(playback.hasTokens && browser.value == 1)
+        }
+        print("PASS: explicit expired/corrupt sign-in opens once, duplicate is ignored, quit cancels safely")
+    }
+
+    @MainActor static func staleReconnect(_ root: URL) async throws {
+        let path = try directory(root, "stale-reconnect")
+        defer { try? FileManager.default.removeItem(at: path) }
+        let intent = LogoutIntentStore(url: path.appendingPathComponent("intent.json"))
+        let playback = FakeStore(), library = FakeStore(), browser = Counter(), creates = Counter(), engine = RecoveryStubEngine()
+        let (env, _) = make(intent, playback: playback, library: library, engine: engine, browser: browser, creates: creates)
+        try await populate(env, engine: engine)
+        await env.reconnectSpotify()
+        precondition(browser.value == 0 && creates.value == 1 && env.connectionStatus == .ready,
+            "A stale reconnect selection must not authorize after playback recovered")
+        await env.signOut()
+        await env.reconnectSpotify()
+        precondition(browser.value == 0 && creates.value == 1 && env.authState == .signedOut)
+        print("PASS: stale reconnect after recovery or sign-out cannot open authorization")
+    }
+
     @MainActor static func matrix(_ root: URL, playbackFails: Bool, libraryFails: Bool) async throws {
         let path = try directory(root, "matrix")
         defer { try? FileManager.default.removeItem(at: path) }

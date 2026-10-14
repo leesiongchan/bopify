@@ -1,5 +1,7 @@
 # SwiftUI Recovery Menu Implementation Plan
 
+> Resumed 2026-10-15 following explicit user approval to target newer macOS and finish the recommended migration. Use macOS 26 for the active deployment settings. Original macOS 14 retention requirements below are superseded; current-OS UI evidence permits implementing the replacement in the integration branch, while macOS 26 runtime, keyboard-navigation-enabled and VoiceOver acceptance remain explicit release checks. See [the continuation report](../verification/2026-10-15-modern-swiftui-recovery-menu.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the compact native recovery menu only if a smaller SwiftUI implementation preserves its layout, accessibility and real recovery actions on supported macOS versions.

@@ -68,7 +68,7 @@ if count==int(os.environ.get('FAIL_CALL','0')):sys.exit(101)
             self.assertNotIn('--ignored', args)
             self.assertNotIn('--all-features', args)
             self.assertNotIn('--offline', args)
-            self.assertEqual(call['deployment'], '14.0')
+            self.assertEqual(call['deployment'], '26.0')
             self.assertEqual(call['target_dir'], str(self.root / 'rust/target'))
             packages = [args[i + 1] for i, arg in enumerate(args) if arg == '-p']
             self.assertEqual(packages, ['bopify-core', 'librespot-connect', 'librespot-playback'] if index < 2 else ['librespot-core'])

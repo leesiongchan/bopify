@@ -1,5 +1,7 @@
 # SwiftUI-first migration
 
+> Continuation approved 2026-10-15: the user permits a newer macOS target and requests the menu migration. The active minimum is macOS 26; references to retaining macOS 14 below describe the original design. The compact menu is now SwiftUI, with current input evidence and remaining acceptance limits recorded in [the continuation report](../verification/2026-10-15-modern-swiftui-recovery-menu.md). The native panel and wheel boundaries remain.
+
 Status: design and plans approved in chat; native execution completed 2026-10-15 with qualification gates retained. Audit baseline: `672e2cf` on `codex/public-distribution-integration`. The native player shell is retained. Qualification found and corrected a native menu-cell accessibility label; the SwiftUI control replacement remains deferred. Evidence is recorded in the popover and recovery-menu verification reports.
 
 ## Intent and constraints

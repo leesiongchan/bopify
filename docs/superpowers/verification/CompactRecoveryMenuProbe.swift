@@ -8,12 +8,10 @@ import BopifyDomain
 @MainActor @Observable private final class MenuState {
     var status: PlaybackConnectionStatus = .ready
     var unavailable = false
-    var retries = 0
-    var reconnects = 0
     var capsuleSize = CGSize.zero
     var connection: PlaybackConnectionStatusView {
         PlaybackConnectionStatusView(status: status, restorationUnavailable: unavailable,
-            onRetry: { self.retries += 1 }, onReconnect: { self.reconnects += 1 })
+            onRetry: {}, onReconnect: {})
     }
 }
 
@@ -44,11 +42,7 @@ private struct MenuFixtureView: View {
     let output: URL
     let panel = FixturePanel(contentRect: NSRect(x: 200, y: 200, width: 142, height: 142),
         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-    var pendingAction = ""
-    var selectionFailure: String?
-    var selectionFinished = false
     var rows: [[String: Any]] = []
-    var inputVerified = true
     var fullNamesVerified = true
 
     init(output: URL) { self.output = output; super.init() }
@@ -70,29 +64,6 @@ private struct MenuFixtureView: View {
         precondition(object.responds(to: selector))
         typealias Getter = @convention(c) (AnyObject, Selector) -> CGRect
         return unsafeBitCast(object.method(for: selector), to: Getter.self)(object, selector)
-    }
-    @discardableResult func press(_ object: NSObject, action: String = "accessibilityPerformPress") -> Bool {
-        let selector = NSSelectorFromString(action)
-        guard object.responds(to: selector) else { return false }
-        typealias Action = @convention(c) (AnyObject, Selector) -> Bool
-        return unsafeBitCast(object.method(for: selector), to: Action.self)(object, selector)
-    }
-    @objc func selectPending(_ timer: Timer) {
-        defer { selectionFinished = true }
-        let nodes = NSApp.windows.filter(\.isVisible).compactMap(\.contentView).flatMap(tree)
-        if let action = nodes.first(where: { text($0, pendingAction) && attribute($0, "accessibilityRole") as? String == "AXMenuItem" }), press(action) {
-            print("SELECTED: \(pendingAction)")
-        } else {
-            selectionFailure = "Cannot select actual menu action through public accessibility: \(pendingAction)"
-            print("Visible fixture accessibility roles: \(nodes.compactMap { attribute($0, "accessibilityRole") as? String })")
-            key(53, "\u{1b}")
-        }
-    }
-    func key(_ code: UInt16, _ characters: String) {
-        guard NSApp.isActive, CGPreflightPostEventAccess() else { return }
-        for down in [true, false] {
-            CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: down)?.postToPid(getpid())
-        }
     }
     func render() async { try? await Task.sleep(for: .milliseconds(250)) }
     func capture(_ name: String) async {
@@ -125,7 +96,7 @@ private struct MenuFixtureView: View {
             ("credential-retry", .failed(.credentialSaveFailed), false, "Retry saved sign-in"),
             ("permanent", .failed(.premiumRequired), false, nil),
             ("ready", .ready, false, nil), ("stopped", .stopped, false, nil)]
-        for (name, status, unavailable, action) in cases {
+        for (name, status, unavailable, _) in cases {
             state.status = status; state.unavailable = unavailable
             await render()
             let connection = state.connection
@@ -151,39 +122,14 @@ private struct MenuFixtureView: View {
             let bounds = frame(button)
             precondition(abs(state.capsuleSize.width - 94) < 0.5 && abs(state.capsuleSize.height - 24) < 0.5, "Capsule layout changed: \(state.capsuleSize)")
             precondition(attribute(button, "accessibilityHelp") as? String == connection.messageString)
-            let retries = state.retries, reconnects = state.reconnects
-            if let action {
-                pendingAction = action
-                selectionFailure = nil
-                selectionFinished = false
-                let timer = Timer(timeInterval: 0.4, target: self, selector: #selector(selectPending(_:)), userInfo: nil, repeats: false)
-                RunLoop.main.add(timer, forMode: .common)
-                let inputAvailable = NSApp.isActive && CGPreflightPostEventAccess()
-                if inputAvailable { _ = press(button, action: "accessibilityPerformShowMenu") || press(button) }
-                if !inputAvailable {
-                    timer.invalidate()
-                    inputVerified = false
-                    print("UNVERIFIED: menu input unavailable; active=\(NSApp.isActive)")
-                } else {
-                    let selectionDeadline = ContinuousClock.now + .seconds(3)
-                    while !selectionFinished && ContinuousClock.now < selectionDeadline { await render() }
-                    if !selectionFinished { selectionFailure = "Actual menu selection did not complete"; timer.invalidate(); key(53, "\u{1b}") }
-                    await render()
-                    if let selectionFailure { print("UNVERIFIED: \(selectionFailure)"); inputVerified = false }
-                    else {
-                        let reconnect = status == .needsReauthentication || status == .failed(.credentialCorrupt)
-                        precondition(state.retries == retries + (reconnect ? 0 : 1) && state.reconnects == reconnects + (reconnect ? 1 : 0), "Action dispatch count incorrect")
-                    }
-                }
-            }
             precondition(panel.frame == initialFrame, "Panel frame changed")
             rows.append(["case": name, "message": connection.messageString, "width": state.capsuleSize.width, "height": state.capsuleSize.height, "accessibilityWidth": bounds.width, "accessibilityHeight": bounds.height,
-                         "retries": state.retries, "reconnects": state.reconnects, "inputVerified": inputVerified, "fullNameVerified": nameMatches])
-            print("PASS: \(name) 94x24 help; fullNameVerified=\(nameMatches) inputVerified=\(inputVerified) counts=\(state.retries)/\(state.reconnects)"); fflush(stdout)
+                         "fullNameVerified": nameMatches])
+            print("PASS: \(name) 94x24 help; fullNameVerified=\(nameMatches)"); fflush(stdout)
         }
         try! JSONSerialization.data(withJSONObject: rows, options: [.prettyPrinted, .sortedKeys]).write(to: output.appendingPathComponent("menu-results.json"))
-        print("RESULT: geometryValidated=true fullNamesValidated=\(fullNamesVerified) inputVerified=\(inputVerified) keyboardVerified=false")
-        exit(fullNamesVerified ? 77 : 2) // Keyboard qualification remains open; a failed name remains a failed gate.
+        print("RESULT: geometryValidated=true fullNamesValidated=\(fullNamesVerified); input qualification is in RecoveryMenuUITests")
+        exit(fullNamesVerified ? 0 : 2)
     }
 }
 
