@@ -1,6 +1,6 @@
 # SwiftUI-first migration
 
-Status: design approved in chat, 2026-10-14; implementation plans pending review. Audit baseline: `672e2cf` on `codex/public-distribution-integration`. This document records the approved direction and the implementation choices still requiring review. No production UI changes have been made for this migration.
+Status: design and plans approved in chat; native execution completed 2026-10-15 with qualification gates retained. Audit baseline: `672e2cf` on `codex/public-distribution-integration`. The native player shell is retained. Qualification found and corrected a native menu-cell accessibility label; the SwiftUI control replacement remains deferred. Evidence is recorded in the popover and recovery-menu verification reports.
 
 ## Intent and constraints
 
