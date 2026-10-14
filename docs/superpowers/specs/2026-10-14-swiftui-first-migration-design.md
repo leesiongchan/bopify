@@ -8,7 +8,7 @@ Prefer supported SwiftUI APIs where they simplify Bopify without losing player b
 
 Assumed behavior to preserve: a movable player that stays visible when another app activates, optional Keep on top, keyboard playback controls, current record/queue animations and position restoration, left-click status-item toggling and right-click menu access. A migration succeeds only when the same behavior and accessibility work through a smaller implementation. Removing every AppKit import is not a success criterion.
 
-The open AppKit diagnostics are a separate problem. Existing minimal SwiftUI popover content hosted in both an ordinary window and a nonactivating panel reproduces the transaction warning. A fully declarative SwiftUI App/Window reproduction has not yet been tested. Framework choice alone is not evidence of a fix; see [live diagnostic findings](../verification/2026-10-14-live-diagnostic-fixes.md).
+The open AppKit diagnostics are a separate problem. Existing minimal SwiftUI popover content hosted in both an ordinary window and a nonactivating panel reproduces the transaction warning. The warning also reproduced in six validated binding-dismissal runs with a fully declarative SwiftUI App/Window on macOS 27.0.1. Outside-click qualification remains unavailable. Framework choice alone is not evidence of a fix; see [declarative popover evidence](../verification/2026-10-14-swiftui-scene-popover-evidence.md).
 
 ## Approaches and decision
 
