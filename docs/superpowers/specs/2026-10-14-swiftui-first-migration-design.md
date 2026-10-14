@@ -1,6 +1,6 @@
 # SwiftUI-first migration
 
-Status: proposed written design for review, 2026-10-14. Audit baseline: `672e2cf` on `codex/public-distribution-integration`. This document records the approved direction and the implementation choices still requiring review. No production UI changes have been made for this migration.
+Status: design approved in chat, 2026-10-14; implementation plans pending review. Audit baseline: `672e2cf` on `codex/public-distribution-integration`. This document records the approved direction and the implementation choices still requiring review. No production UI changes have been made for this migration.
 
 ## Intent and constraints
 
