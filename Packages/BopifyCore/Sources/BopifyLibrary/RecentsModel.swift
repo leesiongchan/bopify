@@ -68,7 +68,6 @@ public final class RecentsModel: CoverFlowSource {
         isLoading = false
         error = nil
         retryAfter = nil
-        reveals = 0
         BopifyLog.library.debug("recents cleared")
     }
 

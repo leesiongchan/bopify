@@ -8,10 +8,23 @@ public enum PlayerError: Error, Hashable, Sendable {
     /// taxonomy and is accurate for the Swift-side throws; the user-facing
     /// string deliberately does not promise that signing in again will work.
     case authExpired
+    case credentialUnavailable
+    case credentialCleanupRequired
+    case credentialCleanupNotRecorded
+    case credentialAccessDenied
+    case credentialCorrupt
+    case credentialSaveFailed
     case premiumRequired
     case networkUnavailable
     case playbackSessionLost
     case unknown
+
+    public var canRetryCredentials: Bool {
+        switch self {
+        case .credentialUnavailable, .credentialAccessDenied, .credentialSaveFailed: true
+        default: false
+        }
+    }
 
     /// Mirrors the stable codes in the Rust `BopifyError`.
     public init(ffiCode: Int32) {

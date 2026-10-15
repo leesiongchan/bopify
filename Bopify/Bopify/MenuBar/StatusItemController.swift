@@ -205,6 +205,10 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         keepOnTop.target = self
         keepOnTop.state = environment.presentation.keepOnTop ? .on : .off
         menu.addItem(keepOnTop)
+        let libraryItem = NSMenuItem(title: String(localized: "menu.libraryAccess"),
+                                     action: #selector(showLibraryAccess(_:)), keyEquivalent: "")
+        libraryItem.target = self
+        menu.addItem(libraryItem)
         menu.addItem(.separator())
 
         let signOutItem = NSMenuItem(title: String(localized: "menu.signOut"),
@@ -223,6 +227,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     @objc private func signOut(_ sender: Any?) {
         Task { await environment.signOut() }
     }
+    @objc private func showLibraryAccess(_ sender: Any?) { environment.librarySetupWindow.show(environment: environment) }
     @objc private func toggleKeepOnTop(_ sender: Any?) { environment.presentation.keepOnTop.toggle() }
 
     @objc private func quit(_ sender: Any?) {

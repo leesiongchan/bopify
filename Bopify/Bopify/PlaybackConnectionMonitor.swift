@@ -4,11 +4,16 @@ import BopifyPlayback
 
 @MainActor final class PlaybackConnectionMonitor {
     private let coordinator: PlaybackRecoveryCoordinator
+    private let onConnectivityRestored: @MainActor () -> Void
+    private var networkAvailable: Bool?
     private var monitor: NWPathMonitor?
     private var observers: [NSObjectProtocol] = []
     private var generation = 0
 
-    init(coordinator: PlaybackRecoveryCoordinator) { self.coordinator = coordinator }
+    init(coordinator: PlaybackRecoveryCoordinator, onConnectivityRestored: @escaping @MainActor () -> Void = {}) {
+        self.coordinator = coordinator
+        self.onConnectivityRestored = onConnectivityRestored
+    }
 
     func start() {
         guard monitor == nil else { return }
@@ -20,7 +25,10 @@ import BopifyPlayback
             let available = path.status == .satisfied
             Task { @MainActor in
                 guard let self, self.generation == mine, self.monitor != nil else { return }
+                let restored = self.networkAvailable == false && available
+                self.networkAvailable = available
                 self.coordinator.setNetworkAvailable(available)
+                if restored { self.onConnectivityRestored() }
             }
         }
         monitor.start(queue: DispatchQueue(label: "bopify.connection"))
@@ -35,6 +43,7 @@ import BopifyPlayback
             Task { @MainActor in
                 guard let self, self.generation == mine, self.monitor != nil else { return }
                 self.coordinator.wake()
+                self.onConnectivityRestored()
             }
         })
     }
@@ -43,6 +52,7 @@ import BopifyPlayback
         generation += 1
         monitor?.cancel()
         monitor = nil
+        networkAvailable = nil
         let center = NSWorkspace.shared.notificationCenter
         observers.forEach(center.removeObserver)
         observers = []

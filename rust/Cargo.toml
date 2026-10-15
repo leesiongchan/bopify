@@ -4,7 +4,8 @@ resolver = "3"
 
 [workspace.package]
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.99"
+license = "MIT"
 
 # Pinned deliberately: librespot has no stable released API. Upgrading is
 # a decision, not a side effect of a build.

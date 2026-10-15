@@ -209,6 +209,21 @@ struct PlaybackRecoveryCoordinatorTests {
         await recovery.stop()
     }
 
+    @Test(arguments: [PlayerError.credentialUnavailable, .credentialAccessDenied, .credentialSaveFailed])
+    func credentialFailuresRequireExplicitRetry(_ error: PlayerError) async {
+        let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
+        let recovery = coordinator(gate, clock)
+        recovery.start(); await gate.waitForCreationCount(1); gate.failNext(with: error); await settle()
+        #expect(recovery.status == .failed(error))
+        recovery.setNetworkAvailable(false); recovery.setNetworkAvailable(true); recovery.wake()
+        clock.advance(by: .seconds(60)); await settle()
+        #expect(recovery.status == .failed(error) && gate.configurations.count == 1)
+        recovery.retryNow(); await settle()
+        #expect(gate.configurations.count == 2)
+        if gate.configurations.count == 2 { gate.failNext(with: error) }
+        await recovery.stop()
+    }
+
     @Test(arguments: [true, false]) func explicitPlaybackResolvesUnavailableAndReplacesSnapshot(_ playing: Bool) async {
         let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
         let recovery = coordinator(gate, clock)

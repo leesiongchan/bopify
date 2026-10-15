@@ -4,15 +4,17 @@ import BopifyDomain
 import BopifyLibrary
 import BopifyPlayback
 
-// Matches AppEnvironment's constant: the probe builds outside the app target.
-let dashboardLibraryClientID = "25bbd3bacca4412b80f17b892072af71"
-
 /// One real recently-played, top-items and station request. Prints counts and categories only:
 /// never tokens, URIs, titles or response bodies. Creates a short-lived "Bopify Probe" Connect device.
 @main struct LibraryTabsLiveProbe {
     static func main() async {
         var blocked = false
-        let auth = SpotifyAuthService(clientID: dashboardLibraryClientID,
+        guard let clientID = ProcessInfo.processInfo.environment["BOPIFY_LIBRARY_CLIENT_ID"]
+            .flatMap(LibraryAuthorization.normalized) else {
+            print("BLOCKED: set BOPIFY_LIBRARY_CLIENT_ID to your Dashboard app's client ID")
+            exit(77)
+        }
+        let auth = SpotifyAuthService(clientID: clientID,
                                       store: KeychainTokenStore(service: "com.leesiongchan.bopify.library"),
                                       callbackPort: 8898, callbackPath: "/callback")
         let library = SpotifyLibraryClient { scopes in try await auth.validAccessToken(requiredScopes: scopes) }
