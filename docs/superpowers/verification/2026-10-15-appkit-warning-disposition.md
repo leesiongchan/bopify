@@ -2,6 +2,10 @@
 
 Investigated 2026-10-15 in the isolated public-distribution integration worktree at `ffcf0dd`. Host: macOS 27.0.1 (26A434), Xcode 27, Swift 6.4, arm64. Every new control targets macOS 26.0. The release candidate rc4 remains unchanged.
 
+## User decision — 2026-10-15
+
+The user confirmed that only the current macOS 27 Mac is available and explicitly instructed not to send feedback. Keep the evidence bundle and draft local; no report was submitted. Apple Feedback reached its sign-in page only, and the isolated browser session was closed. macOS 26 runtime acceptance remains unverified. The earlier submission recommendation below is superseded by this decision.
+
 ## Finding
 
 No verified application fix was found. The warning reproduces with both a minimal public NSStatusItem and a declarative SwiftUI MenuBarExtra. Configuring the native image while the item is hidden does not reliably prevent it. The strict application diagnostic gate remains open. This is evidence of a framework path independent of Bopify, not an Apple-confirmed defect or proof of harmlessness.
