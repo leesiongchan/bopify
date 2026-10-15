@@ -136,7 +136,7 @@ struct SpotifyAuthServiceTests {
         let abandoned = Task { try await firstService.authorizeLibraryScopes(["user-library-read"]) }
         var iterator = opened.stream.makeAsyncIterator()
         let firstURL = try #require(await iterator.next())
-        await firstService.signOut()
+        try await firstService.signOut()
 
         let nextService = SpotifyAuthService(clientID: "dashboard", client: makeClient(), store: InMemoryTokenStore(),
                                              callbackPort: UInt16(port), callbackPath: "/callback", openURL: { url in
@@ -216,7 +216,7 @@ struct SpotifyAuthServiceTests {
         let service = SpotifyAuthService(clientID: "dashboard", client: makeClient(), store: store, openURL: { url in
             let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
             Task {
-                await box.value?.signOut()
+                try? await box.value?.signOut()
                 let callback = URL(string: "\(query["redirect_uri"]!)?code=TESTCODE&state=\(query["state"]!)")!
                 _ = try? await URLSession.shared.data(from: callback)
             }
@@ -274,7 +274,7 @@ struct SpotifyAuthServiceTests {
                 let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
                 guard let redirectURI = query["redirect_uri"], let state = query["state"] else { return }
                 Task {
-                    await serviceBox.value?.signOut()
+                    try? await serviceBox.value?.signOut()
                     let callbackURL = URL(string: "\(redirectURI)?code=TESTCODE&state=\(state)")!
                     _ = try? await URLSession.shared.data(from: callbackURL)
                 }
@@ -342,7 +342,7 @@ struct SpotifyAuthServiceTests {
         let service = SpotifyAuthService(clientID: "test", client: TokenClient(clientID: "test", session: URLSession(configuration: config)), store: store)
         let request = Task { try await service.validAccessToken(rejecting: "OLD") }
         for await _ in gate.started.stream { break }
-        await service.signOut()
+        try await service.signOut()
         gate.release()
         do { _ = try await request.value; Issue.record("Stale forced refresh returned") } catch {}
         #expect(store.load() == nil)
@@ -356,7 +356,7 @@ struct SpotifyAuthServiceTests {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [ControlledRefreshProtocol.self]
         let binding = LateBinding<SpotifyAuthService>()
-        let service = SpotifyAuthService(clientID: "test", client: TokenClient(clientID: "test", session: URLSession(configuration: config)), store: store, openURL: { _ in Task { await binding.value?.signOut() } })
+        let service = SpotifyAuthService(clientID: "test", client: TokenClient(clientID: "test", session: URLSession(configuration: config)), store: store, openURL: { _ in Task { try? await binding.value?.signOut() } })
         binding.value = service
         let request = Task { try await service.validAccessToken(rejecting: "OLD") }
         for await _ in gate.started.stream { break }
@@ -401,12 +401,142 @@ struct SpotifyAuthServiceTests {
         let service = SpotifyAuthService(clientID: "test", client: TokenClient(clientID: "test", session: URLSession(configuration: config)), store: store)
         let request = Task { try await service.validAccessToken() }
         for await _ in gate.started.stream { break }
-        await service.signOut()
+        try await service.signOut()
         gate.release()
         do { _ = try await request.value; Issue.record("Stale refresh returned a token") } catch {}
         #expect(store.load() == nil)
     }
 
+
+    @Test(arguments: [KeychainError.unavailable(-25308), .accessDenied(-25293), .corrupt, .unexpected(-9999)])
+    func failedRestorationPreservesCredentialsAndDoesNotOpenConsent(_ error: KeychainError) async throws {
+        let store = FaultTokenStore()
+        store.readError = error
+        AuthFlowStubProtocol.handler = { _ in Issue.record("Unexpected token request"); return (500, Data()) }
+        let service = SpotifyAuthService(clientID: "test", client: makeClient(), store: store, openURL: { _ in Issue.record("Unexpected consent") })
+        let expected: PlayerError
+        switch error {
+        case .accessDenied: expected = .credentialAccessDenied
+        case .corrupt: expected = .credentialCorrupt
+        default: expected = .credentialUnavailable
+        }
+        await #expect(throws: expected) { try await service.restore() }
+        await #expect(throws: expected) { try await service.validAccessToken() }
+        if error != .corrupt {
+            await #expect(throws: expected) { try await service.authorizeLibraryScopes(["user-library-read"]) }
+        }
+        #expect(store.saveCount == 0 && store.clearCount == 0)
+        store.readError = nil
+        #expect(try await service.restore() == store.saved)
+        #expect(try await service.validAccessToken() == "OLD")
+        store.readError = error
+        await #expect(throws: expected) { try await service.restore() }
+        #expect(try await service.validAccessToken() == "OLD")
+    }
+
+    @Test func consentSaveFailurePreservesThePreviousGrant() async throws {
+        let store = FaultTokenStore()
+        store.failSave = true
+        AuthFlowStubProtocol.handler = { _ in (200, Data(self.success.utf8)) }
+        let service = SpotifyAuthService(clientID: "test", client: makeClient(), store: store, openURL: { url in
+            let query = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!
+            let redirect = query.first { $0.name == "redirect_uri" }!.value!
+            let state = query.first { $0.name == "state" }!.value!
+            Task { _ = try? await URLSession.shared.data(from: URL(string: "\(redirect)?code=TEST&state=\(state)")!) }
+        })
+        _ = try await service.restore()
+        await #expect(throws: PlayerError.credentialSaveFailed) { try await service.signIn() }
+        #expect(store.saved?.accessToken == "OLD" && store.clearCount == 0)
+        #expect(try await service.validAccessToken() == "OLD")
+    }
+
+    @Test func failedRefreshSaveCanRetryPersistenceWithoutRefreshingAgain() async throws {
+        let store = FaultTokenStore(expired: true)
+        store.failSave = true
+        AuthFlowStubProtocol.handler = { _ in (200, Data(#"{"access_token":"NEW","refresh_token":"ROTATED","expires_in":3600}"#.utf8)) }
+        let service = SpotifyAuthService(clientID: "test", client: makeClient(), store: store)
+        await #expect(throws: PlayerError.credentialSaveFailed) { try await service.validAccessToken() }
+        #expect(store.saved?.accessToken == "OLD")
+        store.failSave = false
+        AuthFlowStubProtocol.handler = { _ in Issue.record("Repeated refresh after token rotation"); return (500, Data()) }
+        #expect(try await service.validAccessToken() == "NEW")
+        #expect(store.saved?.refreshToken == "ROTATED" && store.saveCount == 2)
+    }
+
+    @Test func expiredPendingRefreshIsSavedThenRenewedUsingTheRotatedGrant() async throws {
+        let store = FaultTokenStore(expired: true)
+        store.failSave = true
+        AuthFlowStubProtocol.handler = { _ in (200, Data(#"{"access_token":"EXPIRED","refresh_token":"ROTATED","expires_in":-1}"#.utf8)) }
+        let service = SpotifyAuthService(clientID: "test", client: makeClient(), store: store)
+        await #expect(throws: PlayerError.credentialSaveFailed) { try await service.validAccessToken() }
+        store.failSave = false
+        AuthFlowStubProtocol.handler = { request in
+            var body = request.httpBody ?? Data()
+            if let stream = request.httpBodyStream {
+                stream.open(); defer { stream.close() }
+                var buffer = [UInt8](repeating: 0, count: 4096)
+                while stream.hasBytesAvailable {
+                    let count = stream.read(&buffer, maxLength: buffer.count)
+                    if count <= 0 { break }
+                    body.append(contentsOf: buffer[..<count])
+                }
+            }
+            #expect(String(data: body, encoding: .utf8)?.contains("refresh_token=ROTATED") == true)
+            return (200, Data(#"{"access_token":"FRESH","expires_in":3600}"#.utf8))
+        }
+        #expect(try await service.validAccessToken() == "FRESH")
+        #expect(store.saved?.accessToken == "FRESH" && store.saved?.refreshToken == "ROTATED")
+        #expect(store.saveCount == 3)
+    }
+
+    @Test func signOutDiscardsAnUnsavedRotatedGrant() async throws {
+        let store = FaultTokenStore(expired: true)
+        store.failSave = true
+        AuthFlowStubProtocol.handler = { _ in (200, Data(#"{"access_token":"UNSAVED","refresh_token":"ROTATED","expires_in":3600}"#.utf8)) }
+        let service = SpotifyAuthService(clientID: "test", client: makeClient(), store: store)
+        await #expect(throws: PlayerError.credentialSaveFailed) { try await service.validAccessToken() }
+        try await service.signOut()
+        store.failSave = false
+        await #expect(throws: PlayerError.authExpired) { try await service.validAccessToken() }
+        #expect(store.saved == nil && store.saveCount == 1 && store.clearCount == 1)
+    }
+
+    @Test func newConsentDiscardsAnUnsavedRotatedGrant() async throws {
+        let store = FaultTokenStore(expired: true)
+        store.failSave = true
+        AuthFlowStubProtocol.handler = { _ in (200, Data(#"{"access_token":"UNSAVED","refresh_token":"ROTATED","expires_in":3600}"#.utf8)) }
+        let service = SpotifyAuthService(clientID: "test", client: makeClient(), store: store, openURL: { url in
+            let query = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!
+            let redirect = query.first { $0.name == "redirect_uri" }!.value!
+            let state = query.first { $0.name == "state" }!.value!
+            Task { _ = try? await URLSession.shared.data(from: URL(string: "\(redirect)?code=TEST&state=\(state)")!) }
+        })
+        await #expect(throws: PlayerError.credentialSaveFailed) { try await service.validAccessToken() }
+        store.failSave = false
+        AuthFlowStubProtocol.handler = { _ in (200, Data(self.success.utf8)) }
+        #expect(try await service.signIn().accessToken == "AT")
+        #expect(try await service.validAccessToken() == "AT")
+        #expect(store.saved?.refreshToken == "RT" && store.saveCount == 2)
+    }
+
+    @Test func allRefreshWaitersFailWhenPersistenceFails() async throws {
+        let gate = RefreshGate()
+        ControlledRefreshProtocol.gate = gate
+        let store = FailingSaveTokenStore()
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [ControlledRefreshProtocol.self]
+        let service = SpotifyAuthService(clientID: "test", client: TokenClient(clientID: "test", session: URLSession(configuration: config)), store: store)
+        let first = Task { try await service.validAccessToken() }
+        for await _ in gate.started.stream { break }
+        let second = Task { try await service.validAccessToken(rejecting: "OLD") }
+        for _ in 0..<100 { await Task.yield() }
+        gate.release()
+        for request in [first, second] {
+            await #expect(throws: PlayerError.credentialSaveFailed) { try await request.value }
+        }
+        #expect(store.load()?.accessToken == "OLD")
+        #expect(store.saveCount == 1)
+    }
 
     @Test func listeningHistoryConsentWidensTheLibraryGrant() async throws {
         let widened = #"{"access_token":"WIDE","token_type":"Bearer","expires_in":3600,"refresh_token":"RT","scope":"user-library-read user-read-recently-played user-top-read"}"#
@@ -469,4 +599,51 @@ private final class ControlledRefreshProtocol: URLProtocol, @unchecked Sendable 
             client?.urlProtocolDidFinishLoading(self)
         }
     }
+}
+
+private final class FailingSaveTokenStore: TokenStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    var saveCount: Int { lock.withLock { count } }
+    func load() -> TokenSet? {
+        TokenSet(accessToken: "OLD", refreshToken: "RT", expiresAt: .distantPast, grantedScopes: ["streaming"])
+    }
+    func save(_ tokens: TokenSet) throws {
+        lock.withLock { count += 1 }
+        throw KeychainError.unexpected(-25308)
+    }
+    func clear() throws { Issue.record("Unexpected credential deletion") }
+}
+
+private final class FaultTokenStore: TokenStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private var tokens: TokenSet?
+    private var readFault: KeychainError?
+    private var saveFault = false
+    private var saves = 0, clears = 0
+    init(expired: Bool = false) {
+        tokens = TokenSet(accessToken: "OLD", refreshToken: "RT", expiresAt: expired ? .distantPast : .distantFuture, grantedScopes: ["streaming"])
+    }
+    var saved: TokenSet? { lock.withLock { tokens } }
+    var saveCount: Int { lock.withLock { saves } }
+    var clearCount: Int { lock.withLock { clears } }
+    var readError: KeychainError? {
+        get { lock.withLock { readFault } }
+        set { lock.withLock { readFault = newValue } }
+    }
+    var failSave: Bool {
+        get { lock.withLock { saveFault } }
+        set { lock.withLock { saveFault = newValue } }
+    }
+    func load() throws -> TokenSet? {
+        try lock.withLock { if let readFault { throw readFault }; return tokens }
+    }
+    func save(_ tokens: TokenSet) throws {
+        try lock.withLock {
+            saves += 1
+            if saveFault { throw KeychainError.unavailable(-25308) }
+            self.tokens = tokens
+        }
+    }
+    func clear() throws { lock.withLock { clears += 1; tokens = nil } }
 }

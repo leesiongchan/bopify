@@ -1,6 +1,56 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "error.credentialCleanupNotRecorded" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bopify stopped playback, but could not save your sign-out request. Saved sign-in may return after restarting. Check free disk space and file access, then retry removal."
+          }
+        }
+      }
+    },
+    "signIn.retryRemoval" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry removal"
+          }
+        }
+      }
+    },
+    "signIn.removingCredentials" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Removing saved sign-in…"
+          }
+        }
+      }
+    },
+    "signIn.cleanupError" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not finish signing out"
+          }
+        }
+      }
+    },
+    "error.credentialCleanupRequired" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bopify stopped playback, but could not finish removing saved sign-in. Unlock Keychain or check its access, then retry removal."
+          }
+        }
+      }
+    },
     "" : {
 
     },
@@ -82,6 +132,16 @@
         }
       }
     },
+    "connection.retryCredentials" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry saved sign-in"
+          }
+        }
+      }
+    },
     "connection.retryRestoration" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -129,6 +189,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Spotify rejected your credentials. Signing in again may not help."
+          }
+        }
+      }
+    },
+    "error.credentialAccessDenied" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bopify can’t access your saved sign-in. Check its access in Keychain Access, then retry."
+          }
+        }
+      }
+    },
+    "error.credentialCorrupt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your saved sign-in couldn’t be read. Sign in again to replace it."
+          }
+        }
+      }
+    },
+    "error.credentialSaveFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bopify couldn’t save your sign-in. Check Keychain access, then try again."
+          }
+        }
+      }
+    },
+    "error.credentialUnavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved sign-in is unavailable. Unlock macOS Keychain, then retry."
           }
         }
       }
@@ -603,6 +703,126 @@
         }
       }
     },
+    "librarySetup.clientID" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Client ID"
+          }
+        }
+      }
+    },
+    "librarySetup.copy" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy"
+          }
+        }
+      }
+    },
+    "librarySetup.intro" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Favorites, Liked Songs and listening history need your own free Spotify app. Spotify lets each app serve only five people, so Bopify can't share one. Playback works without it."
+          }
+        }
+      }
+    },
+    "librarySetup.invalid" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A Client ID is 32 letters and numbers."
+          }
+        }
+      }
+    },
+    "librarySetup.openDashboard" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Spotify Developer Dashboard"
+          }
+        }
+      }
+    },
+    "librarySetup.save" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save"
+          }
+        }
+      }
+    },
+    "librarySetup.step1" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1. Open the Spotify Developer Dashboard and click Create app. Your account needs Premium."
+          }
+        }
+      }
+    },
+    "librarySetup.step2" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2. Add this Redirect URI and tick Web API:"
+          }
+        }
+      }
+    },
+    "librarySetup.step3" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "3. Save the app. Under User Management, add your own Spotify account's name and email — Spotify blocks anyone not on that list, owner included."
+          }
+        }
+      }
+    },
+    "librarySetup.step4" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "4. Paste the app's Client ID below — not the Client secret."
+          }
+        }
+      }
+    },
+    "librarySetup.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Library Access"
+          }
+        }
+      }
+    },
+    "menu.libraryAccess" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Library Access…"
+          }
+        }
+      }
+    },
     "menu.options" : {
       "localizations" : {
         "en" : {
@@ -896,6 +1116,16 @@
         }
       }
     },
+    "signIn.again" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in again"
+          }
+        }
+      }
+    },
     "signIn.authenticating" : {
       "localizations" : {
         "en" : {
@@ -926,6 +1156,16 @@
         }
       }
     },
+    "signIn.credentialError" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved sign-in needs attention"
+          }
+        }
+      }
+    },
     "signIn.error" : {
       "localizations" : {
         "en" : {
@@ -942,6 +1182,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Spotify Premium required"
+          }
+        }
+      }
+    },
+    "signIn.restoring" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking saved sign-in…"
           }
         }
       }

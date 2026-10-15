@@ -1,0 +1,89 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: xcode-27
+    timeout-minutes: 90
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify build tools
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+          fi
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          xcodebuild -version
+          rustup show active-toolchain
+          cargo --version
+          rustup target add aarch64-apple-darwin
+          xcodebuild -downloadComponent MetalToolchain
+      - name: Verify code before packaging
+        run: |
+          python3 -m unittest discover -s scripts/tests -v
+          ./scripts/test-native.sh
+          ./scripts/build-rust.sh
+          swift test --package-path Packages/BopifyCore
+          python3 scripts/test-app-boundaries.py
+      - name: Package ad-hoc DMG
+        run: ./scripts/release.sh "${GITHUB_REF_NAME#v}" --ad-hoc
+      - name: Retain release evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-evidence
+          path: |
+            build/release/**/export-check.json
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload verified DMG
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verified-dmg
+          path: build/release/Bopify-*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: verified-dmg
+          path: release
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          prerelease=()
+          [[ "$version" == *-* ]] && prerelease=(--prerelease)
+          notes="$RUNNER_TEMP/bopify-release-notes.md"
+          printf '%s\n' \
+            'This release is ad-hoc signed and is not notarized by Apple.' \
+            '' \
+            'After copying Bopify to Applications, try opening it. If macOS blocks it and you trust this download, use System Settings > Privacy & Security > Open Anyway.' \
+            '' \
+            '[Apple installation instructions](https://support.apple.com/en-us/102445)' > "$notes"
+          gh release create "$GITHUB_REF_NAME" "release/Bopify-$version.dmg" \
+            --verify-tag --title "Bopify $version" --notes-file "$notes" --generate-notes "${prerelease[@]}"

@@ -12,6 +12,12 @@ extension PlayerError {
         case .premiumRequired: Text("error.premiumRequired")
         case .networkUnavailable: Text("error.networkUnavailable")
         case .playbackSessionLost: Text("error.playbackSessionLost")
+        case .credentialCleanupNotRecorded: Text("error.credentialCleanupNotRecorded")
+        case .credentialCleanupRequired: Text("error.credentialCleanupRequired")
+        case .credentialUnavailable: Text("error.credentialUnavailable")
+        case .credentialAccessDenied: Text("error.credentialAccessDenied")
+        case .credentialCorrupt: Text("error.credentialCorrupt")
+        case .credentialSaveFailed: Text("error.credentialSaveFailed")
         case .unknown: Text("error.unknown")
         }
     }

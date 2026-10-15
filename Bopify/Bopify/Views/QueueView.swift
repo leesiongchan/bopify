@@ -78,7 +78,7 @@ struct QueueView: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .task(id: url) { if let url { await artworkStore.load(url) } }
+        .task(id: ArtworkLoadRequest(url: url, retryRevision: artworkStore.retryRevision)) { if let url { await artworkStore.load(url) } }
     }
 }
 

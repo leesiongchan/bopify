@@ -14,6 +14,9 @@ public actor SpotifyAuthService {
     private let clientID: String
     private let client: TokenClient
     private let store: any TokenStoring
+    private let logoutIntent: LogoutIntentStore?
+    private let credentialNamespace: CredentialNamespace
+    private var logoutRequested = false
     private let callbackPort: UInt16?
     private let callbackPath: String
     private let openURL: @Sendable (URL) -> Void
@@ -21,12 +24,15 @@ public actor SpotifyAuthService {
     // Sign-out and new consent invalidate suspended work before it can persist credentials.
     private var generation = 0
     private var refresh: (id: UUID, generation: Int, task: Task<TokenSet, Error>)?
+    private var pendingRefresh: (generation: Int, tokens: TokenSet)?
     private var activeListener: LoopbackCallbackListener?
 
     public init(
         clientID: String,
         client: TokenClient? = nil,
         store: any TokenStoring = KeychainTokenStore(),
+        logoutIntent: LogoutIntentStore? = nil,
+        credentialNamespace: CredentialNamespace = .playback,
         callbackPort: UInt16? = nil,
         callbackPath: String = "/login",
         openURL: @Sendable @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }
@@ -34,26 +40,40 @@ public actor SpotifyAuthService {
         self.clientID = clientID
         self.client = client ?? TokenClient(clientID: clientID)
         self.store = store
+        self.logoutIntent = logoutIntent
+        self.credentialNamespace = credentialNamespace
         self.callbackPort = callbackPort
         self.callbackPath = callbackPath
         self.openURL = openURL
     }
 
-    public func restore() -> TokenSet? {
-        tokens = store.load()
+    public func restore() throws -> TokenSet? {
+        try checkCleanupIntent()
+        guard !logoutRequested else { return nil }
+        do { tokens = try store.load() }
+        catch KeychainError.accessDenied { throw PlayerError.credentialAccessDenied }
+        catch KeychainError.corrupt { throw PlayerError.credentialCorrupt }
+        catch { throw PlayerError.credentialUnavailable }
         let found = tokens != nil
         BopifyLog.auth.debug("restore found=\(found, privacy: .public)")
         return tokens
     }
 
     public func signIn() async throws -> TokenSet {
-        try await authorize(scopes: ["streaming"], validateGrant: false)
+        try await prepareForConsent()
+        return try await authorize(scopes: ["streaming"], validateGrant: false)
     }
 
     public func authorizeLibraryScopes(_ scopes: Set<String>) async throws -> TokenSet {
         let libraryScopes: Set<String> = ["user-library-read", "user-library-modify", "user-read-recently-played", "user-top-read"]
         guard !scopes.isEmpty, scopes.isSubset(of: libraryScopes) else { throw LibraryError.authorizationRequired }
-        let existing = (tokens ?? restore())?.grantedScopes.intersection(libraryScopes) ?? []
+        try await prepareForConsent()
+        let existing: Set<String>
+        do { existing = (try tokens ?? restore())?.grantedScopes.intersection(libraryScopes) ?? [] }
+        catch PlayerError.credentialCorrupt {
+            existing = []
+            BopifyLog.auth.notice("explicit library consent will replace a corrupt grant")
+        }
         let required = existing.union(scopes)
         return try await authorize(scopes: required, validateGrant: true)
     }
@@ -62,6 +82,7 @@ public actor SpotifyAuthService {
         refresh?.task.cancel()
         refresh = nil
         generation += 1
+        pendingRefresh = nil
         let myGeneration = generation
         BopifyLog.auth.info("signIn starting generation=\(myGeneration, privacy: .public)")
         let previousListener = activeListener
@@ -70,7 +91,7 @@ public actor SpotifyAuthService {
         guard generation == myGeneration else { throw PlayerError.authDenied }
         let pkce = PKCEPair.random()
         let state = UUID().uuidString
-        let listener = LoopbackCallbackListener(expectedState: state)
+        let listener = LoopbackCallbackListener(expectedState: state, expectedPath: callbackPath)
         activeListener = listener
         let port: Int
         do { port = try await listener.start(port: callbackPort) }
@@ -120,7 +141,7 @@ public actor SpotifyAuthService {
         if validateGrant && !scopes.isSubset(of: tokens.grantedScopes) {
             throw LibraryError.authorizationRequired
         }
-        try store.save(tokens)
+        try persist(tokens)
         BopifyLog.auth.debug("saved token set to store")
         self.tokens = tokens
         return tokens
@@ -144,20 +165,22 @@ public actor SpotifyAuthService {
     }
 
     private func validAccessToken(requiredScopes: Set<String>, rejecting rejectedAccessToken: String?) async throws -> String {
-        guard let current = tokens ?? restore() else {
+        try checkCleanupIntent()
+        guard !logoutRequested else { throw PlayerError.authExpired }
+        guard let current = try tokens ?? restore() else {
             if !requiredScopes.isEmpty { throw LibraryError.authorizationRequired }
             throw PlayerError.authExpired
         }
         guard requiredScopes.isSubset(of: current.grantedScopes) else { throw LibraryError.authorizationRequired }
-        if !current.needsRefresh(), current.accessToken != rejectedAccessToken { return current.accessToken }
+        if pendingRefresh == nil, !current.needsRefresh(), current.accessToken != rejectedAccessToken { return current.accessToken }
         guard let refreshToken = current.refreshToken else { throw PlayerError.authExpired }
         let myGeneration = generation
         let pending: (id: UUID, generation: Int, task: Task<TokenSet, Error>)
         if let refresh, refresh.generation == myGeneration {
             pending = refresh
         } else {
-            let task = Task { [client] in
-                try await client.refresh(refreshToken: refreshToken, grantedScopes: current.grantedScopes)
+            let task = Task {
+                try await self.refreshAndPersist(refreshToken: refreshToken, scopes: current.grantedScopes, generation: myGeneration)
             }
             pending = (UUID(), myGeneration, task)
             refresh = pending
@@ -166,19 +189,49 @@ public actor SpotifyAuthService {
         defer { if refresh?.id == pending.id { refresh = nil } }
         let refreshed = try await pending.task.value
         guard generation == myGeneration else { throw PlayerError.authExpired }
-        // Only the first waiter writes; other waiters consume the same result.
-        if refresh?.id == pending.id {
-            try store.save(refreshed)
-            tokens = refreshed
-            BopifyLog.auth.info("token refresh succeeded")
-        }
         try Task.checkCancellation()
         guard requiredScopes.isSubset(of: refreshed.grantedScopes) else { throw LibraryError.authorizationRequired }
         return refreshed.accessToken
     }
 
+    private func persist(_ tokens: TokenSet) throws {
+        try checkCleanupIntent()
+        do { try store.save(tokens) }
+        catch {
+            BopifyLog.auth.error("credential persistence failed")
+            throw PlayerError.credentialSaveFailed
+        }
+    }
+
+    private func refreshAndPersist(refreshToken: String, scopes: Set<String>, generation mine: Int) async throws -> TokenSet {
+        let refreshed: TokenSet
+        if let pendingRefresh, pendingRefresh.generation == mine {
+            let pending = pendingRefresh.tokens
+            try persistRefresh(pending, generation: mine)
+            if !pending.needsRefresh() { return pending }
+            guard let rotated = pending.refreshToken else { throw PlayerError.authExpired }
+            refreshed = try await client.refresh(refreshToken: rotated, grantedScopes: pending.grantedScopes)
+        } else {
+            refreshed = try await client.refresh(refreshToken: refreshToken, grantedScopes: scopes)
+        }
+        try persistRefresh(refreshed, generation: mine)
+        return refreshed
+    }
+
+    private func persistRefresh(_ refreshed: TokenSet, generation mine: Int) throws {
+        guard generation == mine else { throw PlayerError.authExpired }
+        try Task.checkCancellation()
+        // A rotated refresh grant must survive a temporary save failure for manual retry.
+        pendingRefresh = (mine, refreshed)
+        try persist(refreshed)
+        pendingRefresh = nil
+        tokens = refreshed
+        BopifyLog.auth.info("token refresh persisted")
+    }
+
     public func cancelPendingWork() async {
         generation += 1
+        pendingRefresh = nil
         refresh?.task.cancel()
         refresh = nil
         let listener = activeListener
@@ -187,20 +240,59 @@ public actor SpotifyAuthService {
         BopifyLog.auth.debug("pending authorization cancelled")
     }
 
-    public func signOut() async {
+    public func signOut() async throws {
+        logoutRequested = true
+        do { try logoutIntent?.begin([credentialNamespace]) }
+        catch {
+            tokens = nil
+            await cancelPendingWork()
+            BopifyLog.auth.error("credential cleanup intent could not be persisted; deletion deferred")
+            throw PlayerError.credentialCleanupNotRecorded
+        }
+        do {
+            try await signOutAndClearCredentials()
+            try logoutIntent?.complete(credentialNamespace)
+        } catch {
+            BopifyLog.auth.error("sign-out requires credential cleanup retry")
+            throw PlayerError.credentialCleanupRequired
+        }
+    }
+
+    private func checkCleanupIntent() throws {
+        do {
+            if try logoutIntent?.isPending(credentialNamespace) == true {
+                throw PlayerError.credentialCleanupRequired
+            }
+        } catch { throw PlayerError.credentialCleanupRequired }
+    }
+
+    private func prepareForConsent() async throws {
+        let pending: Bool
+        do { pending = try logoutIntent?.isPending(credentialNamespace) ?? false }
+        catch { throw PlayerError.credentialCleanupRequired }
+        if logoutRequested || pending {
+            try await signOut()
+            BopifyLog.auth.info("credential cleanup completed before explicit consent")
+        }
+        logoutRequested = false
+    }
+
+    /// Client changes must confirm that the previous client's stored grant is gone.
+    public func signOutAndClearCredentials() async throws {
         generation += 1
+        pendingRefresh = nil
         refresh?.task.cancel()
         refresh = nil
-        BopifyLog.auth.info("signOut")
-        do {
-            try store.clear()
-        } catch {
-            let description = String(describing: error)
-            BopifyLog.auth.error("failed to clear token store error=\(description, privacy: .public)")
-        }
         tokens = nil
+        BopifyLog.auth.info("signOut")
+        let removal = Result { try store.clear() }
         let listener = activeListener
         activeListener = nil
         if let listener { await listener.stop() }
+        do { try removal.get() }
+        catch {
+            BopifyLog.auth.error("stored credential removal failed")
+            throw PlayerError.credentialUnavailable
+        }
     }
 }

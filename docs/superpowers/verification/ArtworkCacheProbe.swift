@@ -61,16 +61,20 @@ private nonisolated final class ArtworkProtocol: URLProtocol, @unchecked Sendabl
             await store.load(failed)
             precondition(store.images[failed] == nil)
         }
-        precondition(ArtworkProtocol.requestCount == 3, "Failure retried without an explicit reset")
+        precondition(ArtworkProtocol.requestCount == 5, "Transient retries or cooldown suppression changed")
         for index in 0..<115 { await store.load(URL(string: "https://artwork.invalid/cache/\(index)")!) }
-        precondition(store.images.count == 112, "Unbounded cache")
+        let bytes = store.images.values.reduce(0) { total, image in
+            guard let bitmap = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return total }
+            return total + bitmap.bytesPerRow * bitmap.height
+        }
+        precondition(store.images.count <= 112 && bytes <= 32 * 1024 * 1024, "Unbounded cache")
         store.clear()
         precondition(store.images.isEmpty)
         await store.load(url)
         precondition(store.images.count == 1, "Cache did not recover after clear")
         await verifyPalettes(configuration: configuration, url: url)
         await verifyExtraction()
-        print("PASS: coalescing, image publication, 640px downsampling, HTTP/decode failure caching, 112-entry cap, clear/reload")
+        print("PASS: coalescing, image publication, 640px downsampling, bounded transient retries, finite failure cooldowns, 32MiB/112-entry cap, clear/reload")
     }
 
     @MainActor private static func wait(_ gate: PaletteGate, count: Int) async {
@@ -141,7 +145,7 @@ private nonisolated final class ArtworkProtocol: URLProtocol, @unchecked Sendabl
         await failed.value
         await store.loadPalette(url)
         let failedCount = await gate.count
-        precondition(failedCount == 6 && store.palettes[url] == nil, "Palette failure was not cached for the image lifetime")
+        precondition(failedCount == 6 && store.palettes[url] == nil, "Palette failure did not respect its cooldown")
         for path in ["failure", "invalid"] {
             let failedURL = URL(string: "https://artwork.invalid/\(path)")!
             await store.loadPalette(failedURL)
@@ -150,7 +154,7 @@ private nonisolated final class ArtworkProtocol: URLProtocol, @unchecked Sendabl
         }
         store.clear()
         precondition(store.palettes.isEmpty)
-        print("PASS: lazy palettes, coalescing, decoded image reuse, clear/eviction/replacement races, failure lifetimes")
+        print("PASS: lazy palettes, coalescing, decoded image reuse, clear/eviction/replacement races, failure cooldowns")
     }
 
     @MainActor static func verifyExtraction() async {

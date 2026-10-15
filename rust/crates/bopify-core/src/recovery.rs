@@ -61,14 +61,15 @@ impl EngineCreateOptions {
             {
                 return Err(BopifyError::InvalidArgument);
             }
-            if let Some(identity) = &s.identity {
-                if !matches!(
+            if let Some(identity) = &s.identity
+                && !matches!(
                     librespot_core::SpotifyUri::from_uri(&identity.track_uri),
                     Ok(uri @ (librespot_core::SpotifyUri::Track { .. }
-                        | librespot_core::SpotifyUri::Episode { .. })) if uri.to_uri() == identity.track_uri
-                ) {
-                    return Err(BopifyError::InvalidArgument);
-                }
+                        | librespot_core::SpotifyUri::Episode { .. }))
+                        if uri.to_uri() == identity.track_uri
+                )
+            {
+                return Err(BopifyError::InvalidArgument);
             }
         }
         Ok(())
