@@ -37,9 +37,11 @@ import OSLog
             let square = CommandLine.arguments.contains("square")
             if !CommandLine.arguments.contains("noitem") {
                 item = NSStatusBar.system.statusItem(withLength: square ? NSStatusItem.squareLength : NSStatusItem.variableLength)
+                if CommandLine.arguments.contains("staged") { item?.isVisible = false }
                 if !CommandLine.arguments.contains("noimage") {
                     item?.button?.image = NSImage(systemSymbolName: "music.note", accessibilityDescription: "Minimal status item")
                 }
+                if CommandLine.arguments.contains("staged") { item?.isVisible = true }
                 if CommandLine.arguments.contains("expanded"), let item {
                     if #available(macOS 27.0, *) { item.expandedInterfaceDelegate = self }
                 }

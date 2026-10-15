@@ -1,5 +1,7 @@
 # AppKit status-item layout investigation
 
+> Follow-up 2026-10-15: macOS 26-targeted native, visibility-staged and declarative SwiftUI MenuBarExtra controls all reproduced the warning. See the [current disposition](2026-10-15-appkit-warning-disposition.md). The original macOS 14 commands and observations below remain historical.
+
 The recursive-layout warning remains unresolved. The current evidence isolates a failing path in AppKit's status-item window using public status-item APIs, without Bopify's player, panel, SwiftUI, Spotify, or credentials. No production implementation or diagnostic assertion was changed. This does not establish harmlessness, a regression from another OS version, or an Apple-confirmed defect.
 
 Environment: macOS 27.0.1 (26A434), Xcode 27.0 (27A266a), arm64, logged-in desktop. Base application revision: `27f2339`. All runs below are account-free.

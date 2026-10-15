@@ -75,6 +75,10 @@ Artifact size: 10015708 bytes. SHA-256: `2324cd98fed7db675af05bc55733242455494dc
 
 This is the user's selected free, ad-hoc distribution: it is not notarized and has no Developer ID identity. Packaging success does not close the acceptance gates below. The rebuild still emits the existing eleven cbindgen warnings (skipped non-exported items and unresolved BopifyError type messages); they are not claimed resolved. Xcode also logged its Supported platforms diagnostic while the archive/export completed. macOS27 warned that the verification mount's hdiutil command is deprecated; this is a local tooling message, not an app runtime finding. Evidence: `/private/tmp/bopify-modern-menu-rc4-release.log`, `/private/tmp/bopify-modern-menu-rc4-acceptance.json`, `/private/tmp/bopify-modern-menu-rc4-detach.log`, and `build/release/0.1.0-rc.4.iwk7ml/export-check.json`.
 
+## AppKit follow-up
+
+The [2026-10-15 warning disposition](2026-10-15-appkit-warning-disposition.md) records fresh macOS 26-targeted native, visibility-staged and declarative SwiftUI MenuBarExtra reproductions. All three warn; no reliable application workaround is verified. Three clean debugger runs of the current recovery probe do not supersede the positive failures. The strict diagnostic gate remains open.
+
 ## Remaining acceptance
 
 Keyboard opening with system-wide all-controls navigation enabled, VoiceOver speech, and macOS 26 runtime remain unverified. Normal keyboard menu selection and Escape have separate automated coverage. Actual Spotify sign-out/reconsent, new native recovery live tests, clean-machine installation and hosted release CI remain separate gates. The AppKit transaction and historical recursive-layout findings remain open; this migration is not presented as their fix. No tag, push or GitHub release publication is authorized by this work.
