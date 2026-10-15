@@ -3,6 +3,9 @@
 import argparse
 import hashlib
 import json
+import os
+import signal
+import time
 from pathlib import Path
 import plistlib
 import re
@@ -22,24 +25,71 @@ def qualification_exit(build_exit, summary, expected_count):
     return 77 if skipped else 0
 
 
+def stop_owned_ui_processes(binaries):
+    expected = {str(Path(binary).resolve()) for binary in binaries}
+    for requested_signal in [signal.SIGTERM, signal.SIGKILL]:
+        listing = subprocess.run(['/bin/ps', '-axo', 'pid=,comm=', '-ww'], capture_output=True, text=True, check=True)
+        owned = []
+        for line in listing.stdout.splitlines():
+            fields = line.strip().split(None, 1)
+            if len(fields) == 2 and fields[1].startswith('/') and str(Path(fields[1]).resolve()) in expected:
+                owned.append(int(fields[0]))
+        for pid in owned:
+            try:
+                os.kill(pid, requested_signal)
+            except ProcessLookupError:
+                pass
+        if owned and requested_signal == signal.SIGTERM:
+            time.sleep(0.1)
+
+
+def run_ui_tests(command, log, owned_binaries, timeout=240):
+    process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+    log.write(f'UI_AUTOMATION_PID={process.pid}\n')
+    log.flush()
+    try:
+        return process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return 124
+    finally:
+        # XCTest launches its runner and fixture through system services, outside xcodebuild's process group.
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            pass
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait()
+        stop_owned_ui_processes(owned_binaries)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--derived-data', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--candidate-source', type=Path)
-    parser.add_argument('--only-testing', help='One XCTest method for focused diagnosis')
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--only-testing', help='One XCTest method for focused diagnosis')
+    mode.add_argument('--check-pending-retry', choices=['changed', 'unchanged'], help='Public in-process AX tracking check; no global input or XCTest')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[3]
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=True)
     products = args.derived_data.resolve() / 'Build/Products/Debug'
+    run_id = hashlib.sha256(str(out).encode()).hexdigest()[:12]
     app = out / 'RecoveryMenuInteraction.app'
     contents = app / 'Contents'
     (contents / 'MacOS').mkdir(parents=True, exist_ok=True)
     shutil.copytree(products / 'Bopify.app/Contents/Resources', contents / 'Resources', dirs_exist_ok=True)
     binary = contents / 'MacOS/RecoveryMenuInteraction'
     (contents / 'Info.plist').write_bytes(plistlib.dumps({'CFBundleExecutable': binary.name,
-        'CFBundleIdentifier': 'com.leesiongchan.bopify.recovery-menu-interaction', 'CFBundleName': 'RecoveryMenuInteraction',
+        'CFBundleIdentifier': 'com.leesiongchan.bopify.recovery-menu-interaction.r' + run_id, 'CFBundleName': 'RecoveryMenuInteraction',
         'CFBundlePackageType': 'APPL', 'LSMinimumSystemVersion': '26.0'}))
     source = args.candidate_source.resolve() if args.candidate_source else root / 'Bopify/Bopify/Views/PlaybackConnectionStatusView.swift'
     fixture = root / 'docs/superpowers/verification/RecoveryMenuInteractionApp.swift'
@@ -63,6 +113,16 @@ def main():
         subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, check=True)
     subprocess.run(['codesign', '--force', '--sign', '-', str(app)], check=True)
 
+    if args.check_pending_retry:
+        with (out / 'tracking.log').open('w') as log:
+            code = run_ui_tests([str(binary), '--output', str(out), '--check-pending-retry', args.check_pending_retry], log, [binary], timeout=10)
+        metadata = {'exit_code': code, 'coverage': 'local-menu-tracking-and-public-AX-selection',
+            'compiled_sources': {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in snapshots.items()},
+            'minimum_target': '26.0', 'global_input': False}
+        (out / 'run-metadata.json').write_text(json.dumps(metadata, indent=2) + '\n')
+        print(f'Pending retry check exit={code}; evidence: {out}', flush=True)
+        raise SystemExit(code)
+
     project = out / 'RecoveryMenuTests.xcodeproj'
     project.mkdir(exist_ok=True)
     # The automation target stays outside the shipping Xcode project and launches only the fake app above.
@@ -80,7 +140,7 @@ def main():
     add(products_id, 'PBXGroup', children=[product_id], name='Products', sourceTree='<group>')
     add(group, 'PBXGroup', children=[file_id, products_id], sourceTree='<group>')
     add(project_debug, 'XCBuildConfiguration', name='Debug', buildSettings={'SDKROOT': 'macosx', 'MACOSX_DEPLOYMENT_TARGET': '26.0', 'SWIFT_VERSION': '6.0', 'ALWAYS_SEARCH_USER_PATHS': 'NO', 'SWIFT_TREAT_WARNINGS_AS_ERRORS': 'YES', 'CODE_SIGN_IDENTITY': '-', 'CODE_SIGN_STYLE': 'Manual'})
-    add(target_debug, 'XCBuildConfiguration', name='Debug', buildSettings={'PRODUCT_NAME': 'RecoveryMenuTests', 'PRODUCT_BUNDLE_IDENTIFIER': 'com.leesiongchan.bopify.recovery-menu-tests', 'GENERATE_INFOPLIST_FILE': 'YES', 'SWIFT_STRICT_CONCURRENCY': 'complete', 'SWIFT_VERSION': '6.0', 'ENABLE_APP_SANDBOX': 'NO'})
+    add(target_debug, 'XCBuildConfiguration', name='Debug', buildSettings={'PRODUCT_NAME': 'RecoveryMenuTests', 'PRODUCT_BUNDLE_IDENTIFIER': 'com.leesiongchan.bopify.recovery-menu-tests.r' + run_id, 'GENERATE_INFOPLIST_FILE': 'YES', 'SWIFT_STRICT_CONCURRENCY': 'complete', 'SWIFT_VERSION': '6.0', 'ENABLE_APP_SANDBOX': 'NO'})
     add(project_config, 'XCConfigurationList', buildConfigurations=[project_debug], defaultConfigurationIsVisible=0, defaultConfigurationName='Debug')
     add(target_config, 'XCConfigurationList', buildConfigurations=[target_debug], defaultConfigurationIsVisible=0, defaultConfigurationName='Debug')
     add(target, 'PBXNativeTarget', name='RecoveryMenuTests', productName='RecoveryMenuTests', productType='com.apple.product-type.bundle.ui-testing', productReference=product_id, buildConfigurationList=target_config, buildPhases=[sources, frameworks], buildRules=[], dependencies=[])
@@ -107,14 +167,7 @@ def main():
     if args.only_testing:
         command += ['-only-testing:RecoveryMenuTests/RecoveryMenuUITests/' + args.only_testing]
     with (out / 'ui-tests.log').open('w') as log:
-        process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
-        try:
-            code = process.wait(timeout=240)
-        except subprocess.TimeoutExpired:
-            process.terminate()
-            try: process.wait(timeout=10)
-            except subprocess.TimeoutExpired: process.kill(); process.wait()
-            code = 124
+        code = run_ui_tests(command, log, [binary, out / 'DerivedData/Build/Products/Debug/RecoveryMenuTests-Runner.app/Contents/MacOS/RecoveryMenuTests-Runner'])
     result = subprocess.run(['xcrun', 'xcresulttool', 'get', 'test-results', 'summary', '--path', str(result_bundle)], capture_output=True, text=True)
     try:
         summary = json.loads(result.stdout) if result.returncode == 0 else {}

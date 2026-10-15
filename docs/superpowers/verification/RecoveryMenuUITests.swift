@@ -106,17 +106,75 @@ import XCTest
         XCTAssertEqual(state()["retries"] as? Int, 0)
         XCTAssertEqual(state()["reconnects"] as? Int, 0)
     }
-    func testStateChangesCannotTurnRetryIntoReconnect() throws {
+    private func recordState(_ name: String) throws {
+        let data = try Data(contentsOf: output.appendingPathComponent("state.json"))
+        let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.json")
+        attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+    }
+    func testStateChangesCannotReinterpretPendingRetry() throws {
+        launch()
+        menu.click()
+        let retry = app.menuItems["Retry now"]
+        XCTAssertTrue(retry.waitForExistence(timeout: 3))
+        wait { self.state()["menuOpen"] as? Bool == true }
+        let frame = retry.frame, dialog = app.dialogs["Recovery Menu Test"]
+        let origin = dialog.frame.origin
+        let pendingPoint = dialog.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: frame.midX - origin.x, dy: frame.midY - origin.y))
+        try recordState("retry-tracking-before-change")
+        try command("reauthentication")
+        let updated = app.descendants(matching: .menuButton).matching(NSPredicate(format: "title == %@ OR label == %@", "Reconnect Spotify", "Reconnect Spotify")).firstMatch
+        XCTAssertTrue(updated.waitForExistence(timeout: 3))
+        let revision = state()["snapshotNumber"] as! Int
+        wait { (self.state()["snapshotNumber"] as? Int ?? 0) > revision }
+        if state()["menuOpen"] as? Bool == true {
+            let titles = state()["menuTitles"] as! [String]
+            XCTAssertTrue(titles.contains("Retry now"), "A pending retry must keep its original command")
+            XCTAssertFalse(titles.contains("Reconnect Spotify"), "Authorization must not replace retry under the pointer")
+            try recordState("original-retry-retained-after-action-change")
+            pendingPoint.click()
+            wait { self.state()["menuOpen"] as? Bool == false }
+        } else {
+            try recordState("retry-automatically-dismissed-after-action-change")
+        }
+        XCTAssertEqual(state()["reconnects"] as? Int, 0)
+        XCTAssertTrue((state()["retries"] as? Int ?? -1) <= 1)
+    }
+    func testRecoveredConnectionDoesNotReplacePendingReconnect() throws {
+        launch()
+        try command("reauthentication")
+        menu.click()
+        let reconnect = app.menuItems["Reconnect Spotify"]
+        XCTAssertTrue(reconnect.waitForExistence(timeout: 3))
+        wait { self.state()["menuOpen"] as? Bool == true }
+        let frame = reconnect.frame, dialog = app.dialogs["Recovery Menu Test"]
+        let origin = dialog.frame.origin
+        let pendingPoint = dialog.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: frame.midX - origin.x, dy: frame.midY - origin.y))
+        try command("ready")
+        wait { !self.menu.exists }
+        if state()["menuOpen"] as? Bool == true {
+            XCTAssertEqual(state()["menuTitles"] as? [String], ["Reconnect Spotify"])
+            try recordState("original-reconnect-retained-after-ready")
+            pendingPoint.click()
+            wait { self.state()["menuOpen"] as? Bool == false }
+        }
+        // The headless AppEnvironment regression separately proves recovered/signed-out callbacks cannot authorize.
+        XCTAssertEqual(state()["retries"] as? Int, 0)
+        XCTAssertTrue((state()["reconnects"] as? Int ?? -1) <= 1)
+        try recordState("pending-reconnect-finished-after-ready")
+    }
+    func testPendingRetryStaysRetryWhenActionIsUnchanged() throws {
         launch()
         menu.click()
         XCTAssertTrue(app.menuItems["Retry now"].waitForExistence(timeout: 3))
-        let displayedRetry = app.menuItems["Retry now"]
-        try command("reauthentication")
-        if displayedRetry.exists { displayedRetry.click() }
-        else { app.typeKey(.escape, modifierFlags: []) }
-        XCTAssertEqual(state()["reconnects"] as? Int, 0, "A displayed retry must never turn into browser sign-in")
-        try command("ready")
-        wait { !self.menu.exists }
+        wait { self.state()["menuOpen"] as? Bool == true }
+        try command("reconnecting")
+        XCTAssertTrue(app.menuItems["Retry now"].exists)
+        app.menuItems["Retry now"].click()
+        wait { self.state()["retries"] as? Int == 1 }
+        XCTAssertEqual(state()["reconnects"] as? Int, 0)
+        try recordState("unchanged-action-selected-once")
     }
     func testPermanentAndLongestExplanation() throws {
         launch()

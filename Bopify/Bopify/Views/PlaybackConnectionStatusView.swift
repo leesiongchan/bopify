@@ -92,6 +92,8 @@ struct CompactPlaybackConnectionMenu: View {
         .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
+        // Keep a pending selection attached to its original command when recovery changes.
+        .id(connection.actionKey)
         .accessibilityLabel(Text(connection.messageString))
         .help(connection.messageString)
     }
