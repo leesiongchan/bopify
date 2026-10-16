@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -62,6 +63,54 @@ fi
         result=self.run_script('build-rust.sh',TOOL_VERSION='0.28.0')
         self.assertNotEqual(result.returncode,0)
         self.assertFalse((self.root/'artifacts/include/bopify_core.h').exists())
+
+
+class ReleaseToolInstallationTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        (self.root / 'scripts').mkdir()
+        (self.root / 'bin').mkdir()
+        shutil.copy2(ROOT / 'scripts/release-tool.sh', self.root / 'scripts/release-tool.sh')
+        cargo = self.root / 'bin/cargo'
+        cargo.write_text('''#!/usr/bin/env python3
+import os
+from pathlib import Path
+import sys
+args = sys.argv[1:]
+assert args[0] == 'install' and '--locked' in args
+name = args[1]
+if name == 'cargo-about':
+    assert '--features' in args and 'cli' in args[args.index('--features') + 1].split(',')
+root = Path(args[args.index('--root') + 1])
+version = args[args.index('--version') + 1]
+if not os.environ.get('SKIP_BINARY'):
+    binary = root / 'bin' / name
+    binary.parent.mkdir(parents=True, exist_ok=True)
+    binary.write_text('#!/bin/sh\\nprintf "' + name + ' ' + version + '\\\\n"\\n')
+    binary.chmod(0o755)
+'''.replace('#!/usr/bin/env python3', '#!' + sys.executable, 1))
+        cargo.chmod(0o755)
+        self.environment = dict(os.environ, PATH=str(self.root / 'bin') + ':/usr/bin:/bin:/usr/sbin:/sbin')
+
+    def install(self, name, **changes):
+        return subprocess.run(['bash', str(self.root / 'scripts/release-tool.sh'), name],
+                              env=self.environment | changes, capture_output=True, text=True)
+
+    def test_fresh_install_produces_the_pinned_executable_for_each_tool(self):
+        for name, version in [('cbindgen', '0.29.4'), ('cargo-about', '0.9.2')]:
+            with self.subTest(name=name):
+                result = self.install(name)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                binary = Path(result.stdout.strip())
+                self.assertTrue(binary.is_file(), result.stdout)
+                self.assertEqual(subprocess.check_output([str(binary), '--version'], text=True).strip(), name + ' ' + version)
+
+    def test_install_without_an_executable_fails_at_the_installer(self):
+        result = self.install('cbindgen', SKIP_BINARY='1')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, '')
 
 
 class LibrespotPreparationTests(unittest.TestCase):
