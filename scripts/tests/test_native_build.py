@@ -14,7 +14,7 @@ class NativeBuildTests(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
         for name in ['scripts','rust','bin']:(self.root/name).mkdir()
-        for name in ['build-rust.sh','gen-header.sh','release-tool.sh']:
+        for name in ['build-rust.sh','release-tool.sh']:
             shutil.copy2(ROOT/'scripts'/name,self.root/'scripts'/name)
         self.tool('cargo', '''case "$1" in
   install) exit 13 ;;
@@ -59,7 +59,7 @@ fi
         self.assertNotEqual(result.returncode,0)
 
     def test_wrong_header_tool_and_install_failure_cannot_generate_header(self):
-        result=self.run_script('gen-header.sh',TOOL_VERSION='0.28.0')
+        result=self.run_script('build-rust.sh',TOOL_VERSION='0.28.0')
         self.assertNotEqual(result.returncode,0)
         self.assertFalse((self.root/'artifacts/include/bopify_core.h').exists())
 

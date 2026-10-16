@@ -12,7 +12,9 @@ TARGET=aarch64-apple-darwin            # arm64 only; for universal, build
                                        # x86_64-apple-darwin too and lipo them
 
 cargo build --release --locked --manifest-path rust/Cargo.toml --target "$TARGET"
-./scripts/gen-header.sh
+header_tool=$(./scripts/release-tool.sh cbindgen)
+mkdir -p artifacts/include
+(cd rust && "$header_tool" --config cbindgen.toml --crate bopify-core --output ../artifacts/include/bopify_core.h)
 
 rm -rf artifacts/BopifyCoreFFI.xcframework
 xcodebuild -create-xcframework \

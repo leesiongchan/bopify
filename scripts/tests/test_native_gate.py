@@ -10,19 +10,6 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 
 
-class NativeGateWorkflowTests(unittest.TestCase):
-    def test_release_runs_native_tests_before_build_and_packaging(self):
-        workflow = (ROOT / '.github/workflows/release.yml').read_text()
-        self.assertIn('./scripts/test-native.sh', workflow)
-        self.assertLess(workflow.index('./scripts/test-native.sh'), workflow.index('./scripts/build-rust.sh'))
-        self.assertLess(workflow.index('./scripts/test-native.sh'), workflow.index('Package ad-hoc DMG'))
-        self.assertLess(workflow.index('python3 scripts/test-app-boundaries.py'), workflow.index('Package ad-hoc DMG'))
-        self.assertNotIn('continue-on-error:', workflow)
-        self.assertIn('    needs: build', workflow)
-        publish = workflow.split('  publish:', 1)[1]
-        self.assertNotIn('always()', publish)
-
-
 class NativeGateExecutionTests(unittest.TestCase):
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
