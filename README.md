@@ -48,10 +48,9 @@ Build the Rust library first, then run from the repository root:
 ```sh
 ./scripts/test-native.sh
 swift test --package-path Packages/BopifyCore
-python3 -m unittest discover -s scripts/tests -v
 ```
 
-These checks run locally; the release workflow only builds, packages and publishes.
+The release workflow runs these checks before uploading the DMG for publication.
 
 ## Release
 

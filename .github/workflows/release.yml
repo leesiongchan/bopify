@@ -44,6 +44,10 @@ jobs:
         env:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: ./scripts/release.sh "$RELEASE_VERSION"
+      - name: Test native playback
+        run: ./scripts/test-native.sh
+      - name: Test Swift packages
+        run: swift test --package-path Packages/BopifyCore
       - name: Upload verified DMG
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
