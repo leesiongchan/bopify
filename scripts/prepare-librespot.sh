@@ -22,7 +22,8 @@ if git -C "$source_dir" diff --quiet HEAD; then
 fi
 actual_patch=$(mktemp)
 trap 'rm -f "$actual_patch"' EXIT
-git -C "$source_dir" diff --no-ext-diff --binary HEAD > "$actual_patch"
+# Match the checked-in patch's algorithm regardless of the runner's Git config.
+git -C "$source_dir" diff --no-ext-diff --binary --diff-algorithm=histogram HEAD > "$actual_patch"
 cmp -s "$patch_file" "$actual_patch" || {
   echo "Unexpected librespot modifications; leaving the checkout untouched." >&2; exit 1;
 }
