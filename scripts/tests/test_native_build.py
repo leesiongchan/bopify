@@ -64,4 +64,51 @@ fi
         self.assertFalse((self.root/'artifacts/include/bopify_core.h').exists())
 
 
+class LibrespotPreparationTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.source = self.root / '.build/librespot-939dc5e'
+        self.source.mkdir(parents=True)
+        (self.root / 'scripts').mkdir()
+        (self.root / 'rust/patches').mkdir(parents=True)
+        self.environment = dict(os.environ, GIT_CONFIG_GLOBAL='/dev/null', GIT_CONFIG_NOSYSTEM='1')
+        self.git('init', '--quiet')
+        self.file = self.source / 'fixture.txt'
+        self.file.write_text('a\nb\nc\na\nb\nb\na\n')
+        self.git('add', 'fixture.txt')
+        self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '--quiet', '-m', 'fixture')
+        revision = self.git('rev-parse', 'HEAD').stdout.strip()
+        self.file.write_text('c\nb\na\nb\na\nc\n')
+        patch = self.git('diff', '--no-ext-diff', '--binary', '--diff-algorithm=histogram', 'HEAD').stdout
+        (self.root / 'rust/patches/librespot-queue-selection.patch').write_text(patch)
+        self.git('checkout', '--', 'fixture.txt')
+        script = (ROOT / 'scripts/prepare-librespot.sh').read_text()
+        (self.root / 'scripts/prepare-librespot.sh').write_text(
+            script.replace('939dc5ee9d833e1980f9495241219d9d4868a061', revision))
+
+    def git(self, *arguments):
+        return subprocess.run(['git', '-C', str(self.source), *arguments], env=self.environment,
+                              capture_output=True, text=True, check=True)
+
+    def prepare(self):
+        return subprocess.run(['bash', str(self.root / 'scripts/prepare-librespot.sh')],
+                              env=self.environment, capture_output=True, text=True)
+
+    def test_fresh_preparation_and_rerun_work_with_default_git_configuration(self):
+        for _ in range(2):
+            result = self.prepare()
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(self.file.read_text(), 'c\nb\na\nb\na\nc\n')
+
+    def test_unexpected_modifications_are_rejected_and_preserved(self):
+        result = self.prepare()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.file.write_text('unexpected local changes\n')
+        result = self.prepare()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.file.read_text(), 'unexpected local changes\n')
+
+
 if __name__=='__main__':unittest.main()
