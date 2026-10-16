@@ -13,7 +13,13 @@ if [[ -x "$local_bin" ]] && [[ "$("$local_bin" --version)" == "$name $version" ]
 elif command -v "$name" >/dev/null && [[ "$("$name" --version)" == "$name $version" ]]; then
   command -v "$name"
 else
-  cargo install "$name" --locked --version "$version" --root "$root/.build/release-tools" >&2
-  [[ "$("$local_bin" --version)" == "$name $version" ]]
+  install_options=(--locked --version "$version" --root "$root/.build/release-tools")
+  if [[ "$name" == cargo-about ]]; then
+    install_options+=(--features cli)
+  fi
+  cargo install "$name" "${install_options[@]}" >&2
+  [[ -x "$local_bin" && "$("$local_bin" --version)" == "$name $version" ]] || {
+    echo "Failed to install $name $version." >&2; exit 1;
+  }
   printf '%s\n' "$local_bin"
 fi
