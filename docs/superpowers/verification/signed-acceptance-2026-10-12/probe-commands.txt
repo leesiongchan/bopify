@@ -1,4 +1,0 @@
-Original run UUID (synthetic test namespace only): b69b97de-ca37-4531-9861-52a4452bf738
-/private/tmp/bopify-signed-acceptance/KeychainProbe.app/Contents/MacOS/KeychainProbe write b69b97de-ca37-4531-9861-52a4452bf738
-/private/tmp/bopify-signed-acceptance/KeychainProbe.app/Contents/MacOS/KeychainProbe verify b69b97de-ca37-4531-9861-52a4452bf738
-/private/tmp/bopify-signed-acceptance/KeychainProbe.app/Contents/MacOS/KeychainProbe cleanup b69b97de-ca37-4531-9861-52a4452bf738

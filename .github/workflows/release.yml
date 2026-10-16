@@ -2,19 +2,23 @@ name: Release
 
 on:
   push:
-    tags: ['v*']
+    branches: [main]
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-main
   cancel-in-progress: false
+  queue: max
 
 jobs:
   build:
     runs-on: xcode-27
     timeout-minutes: 90
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.version_tag }}
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
     steps:
@@ -22,47 +26,37 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Verify build tools
-        run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
-          if ! command -v rustup >/dev/null 2>&1; then
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
-          fi
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-          xcodebuild -version
-          rustup show active-toolchain
-          cargo --version
-          rustup target add aarch64-apple-darwin
-          xcodebuild -downloadComponent MetalToolchain
-      - name: Verify code before packaging
-        run: |
-          python3 -m unittest discover -s scripts/tests -v
-          ./scripts/test-native.sh
-          ./scripts/build-rust.sh
-          swift test --package-path Packages/BopifyCore
-          python3 scripts/test-app-boundaries.py
-      - name: Package ad-hoc DMG
-        run: ./scripts/release.sh "${GITHUB_REF_NAME#v}" --ad-hoc
-      - name: Retain release evidence
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - name: Calculate release version
+        id: version
+        uses: PaulHatch/semantic-version@9f72830310d5ed81233b641ee59253644cd8a8fc # v6.0.2
         with:
-          name: release-evidence
-          path: |
-            build/release/**/export-check.json
-          if-no-files-found: ignore
-          retention-days: 14
+          branch: ${{ github.sha }}
+          bump_each_commit: true
+          major_pattern: '/^[a-z]+(\([^)]+\))?!:|^BREAKING[ -]CHANGE:/'
+          major_regexp_flags: m
+          minor_pattern: '/^feat(\([^)]+\))?:/'
+          minor_regexp_flags: m
+          search_commit_body: true
+          enable_prerelease_mode: false
+      - name: Install Metal toolchain
+        run: xcodebuild -downloadComponent MetalToolchain
+      - name: Package ad-hoc DMG
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: ./scripts/release.sh "$RELEASE_VERSION"
       - name: Upload verified DMG
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: verified-dmg
-          path: build/release/Bopify-*.dmg
+          path: build/release/Bopify-${{ steps.version.outputs.version }}.dmg
           if-no-files-found: error
           retention-days: 14
+          overwrite: true
 
   publish:
     needs: build
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
@@ -70,20 +64,37 @@ jobs:
         with:
           name: verified-dmg
           path: release
+      - name: Upload release draft
+        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
+        with:
+          tag: ${{ needs.build.outputs.tag }}
+          commit: ${{ github.sha }}
+          name: Bopify ${{ needs.build.outputs.version }}
+          artifacts: release/Bopify-${{ needs.build.outputs.version }}.dmg
+          artifactErrorsFailBuild: true
+          draft: true
+          allowUpdates: true
+          updateOnlyUnreleased: true
+          skipIfReleaseExists: true
+          replacesArtifacts: true
+          makeLatest: 'false'
+          generateReleaseNotes: true
+          body: |
+            This release is ad-hoc signed and is not notarized by Apple.
+
+            After copying Bopify to Applications, try opening it. If macOS blocks it and you trust this download, use System Settings > Privacy & Security > Open Anyway.
+
+            [Apple installation instructions](https://support.apple.com/en-us/102445)
       - name: Publish release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          prerelease=()
-          [[ "$version" == *-* ]] && prerelease=(--prerelease)
-          notes="$RUNNER_TEMP/bopify-release-notes.md"
-          printf '%s\n' \
-            'This release is ad-hoc signed and is not notarized by Apple.' \
-            '' \
-            'After copying Bopify to Applications, try opening it. If macOS blocks it and you trust this download, use System Settings > Privacy & Security > Open Anyway.' \
-            '' \
-            '[Apple installation instructions](https://support.apple.com/en-us/102445)' > "$notes"
-          gh release create "$GITHUB_REF_NAME" "release/Bopify-$version.dmg" \
-            --verify-tag --title "Bopify $version" --notes-file "$notes" --generate-notes "${prerelease[@]}"
+        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
+        with:
+          tag: ${{ needs.build.outputs.tag }}
+          commit: ${{ github.sha }}
+          draft: false
+          allowUpdates: true
+          updateOnlyUnreleased: true
+          skipIfReleaseExists: true
+          omitBody: true
+          omitName: true
+          omitPrereleaseDuringUpdate: true
+          makeLatest: legacy

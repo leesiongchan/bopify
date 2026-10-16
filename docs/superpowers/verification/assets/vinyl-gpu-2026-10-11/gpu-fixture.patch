@@ -1,9 +1,0 @@
---- a/VinylPressingProbe.swift
-+++ b/VinylPressingProbe.swift
-@@ -82,0 +83 @@
-+        panel.setFrameOrigin(NSPoint(x: NSScreen.screens[0].visibleFrame.minX + 80, y: NSScreen.screens[0].visibleFrame.minY + 80))
-@@ -87 +88,3 @@
--            print("GPU CONTROL: expanded 182pt, dark, scale \(panel.backingScaleFactor), \(seconds)s"); fflush(stdout)
-+            try require(panel.backingScaleFactor == 2, "GPU fixture requires 2x display")
-+            let _ = try await capture(panel, output: output, name: "scene")
-+            print("GPU CONTROL: pid=\(ProcessInfo.processInfo.processIdentifier) window=\(panel.windowNumber) display=\(String(describing: panel.screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")])) frame=\(panel.frame) scale=\(panel.backingScaleFactor) track=\(String(describing: player.state.currentTrack?.uri)) thermal=\(ProcessInfo.processInfo.thermalState.rawValue) hold=\(seconds)s"); fflush(stdout)

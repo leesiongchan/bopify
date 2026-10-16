@@ -1,7 +1,6 @@
 // The header is named inside the xcframework rather than in
 // artifacts/include so it cannot desync from the archive Swift links
-// against: gen-header.sh alone would otherwise change the declarations
-// without rebuilding the .a. The slice name tracks build-rust.sh, which
+// against. The slice name tracks build-rust.sh, which
 // builds arm64 only; a universal build renames it and this stops compiling,
 // which is the loud failure to want here.
 module CBopifyCore {
