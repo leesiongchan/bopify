@@ -34,6 +34,7 @@ public actor LoopbackCallbackListener {
     }
 
     public func start(port: UInt16? = nil) async throws -> Int {
+        try Task.checkCancellation()
         guard listener == nil, continuation == nil, port != 0 else { throw CallbackError.listenerFailed }
         acceptedResult = nil
         pendingResult = nil
