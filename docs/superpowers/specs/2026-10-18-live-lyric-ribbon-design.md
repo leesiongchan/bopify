@@ -1,6 +1,6 @@
 # Live lyric ribbon for local playback
 
-Status: the user approved the local-first design on October 18, 2026. This written specification is ready for review; implementation has not started. Execution remains native, with commits and pushes directly to `main`.
+Status: the user approved this written specification on October 18, 2026. The [implementation plan](../plans/2026-10-18-live-lyric-ribbon.md) is ready for review; implementation has not started. Execution remains native, with commits and pushes directly to `main`.
 
 ## Purpose and scope
 
