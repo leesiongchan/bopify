@@ -14,6 +14,20 @@ public final class EventBridge: Sendable {
     public let events: AsyncStream<PlaybackEvent>
     private let continuation: AsyncStream<PlaybackEvent>.Continuation
     private let radioWaiters = OSAllocatedUnfairLock(initialState: RadioWaiters())
+    private let lyricWaiters = OSAllocatedUnfairLock(initialState: LyricWaiters())
+    private let lyricSleep: @Sendable (Duration) async throws -> Void
+
+    private struct LyricWaiter: Sendable {
+        let track: SpotifyURI
+        let continuation: CheckedContinuation<TrackLyrics, any Error>
+        let watchdog: Task<Void, Never>
+    }
+
+    private struct LyricWaiters: Sendable {
+        var lastID: UInt64 = 0
+        var waiting: [UInt64: LyricWaiter] = [:]
+        var finished = false
+    }
 
     private struct RadioWaiters: Sendable {
         var lastID: UInt64 = 0
@@ -26,7 +40,24 @@ public final class EventBridge: Sendable {
         let requestID: UInt64?
     }
 
-    public init() {
+    // A damaged ID must still route a lyric message away from playback's payload logging.
+    private struct LyricEnvelope: Decodable {
+        let type: String
+        let requestID: UInt64?
+        private enum CodingKeys: String, CodingKey { case type, requestID }
+        init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            type = try c.decode(String.self, forKey: .type)
+            requestID = try? c.decode(UInt64.self, forKey: .requestID)
+        }
+    }
+
+    public convenience init() {
+        self.init(lyricSleep: { try await Task.sleep(for: $0) })
+    }
+
+    init(lyricSleep: @escaping @Sendable (Duration) async throws -> Void) {
+        self.lyricSleep = lyricSleep
         var escaped: AsyncStream<PlaybackEvent>.Continuation!
         // Queue metadata bursts must not evict readiness or playback transitions.
         self.events = AsyncStream(bufferingPolicy: .unbounded) { escaped = $0 }
@@ -85,6 +116,63 @@ public final class EventBridge: Sendable {
         }
     }
 
+    func lyrics(for track: SpotifyURI, _ send: (UInt64) throws -> Void) async throws -> TrackLyrics {
+        let id = lyricWaiters.withLock { state in
+            state.lastID += 1
+            return state.lastID
+        }
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let registered = lyricWaiters.withLock { state in
+                    guard !state.finished else { return false }
+                    let sleep = lyricSleep
+                    // Attach the timer before send: even a synchronous callback can cancel it.
+                    let watchdog = Task { [weak self] in
+                        do { try await sleep(.seconds(35)) } catch { return }
+                        guard !Task.isCancelled else { return }
+                        self?.resolveLyrics(id, with: .failure(LyricFailure.network))
+                    }
+                    state.waiting[id] = LyricWaiter(track: track, continuation: continuation, watchdog: watchdog)
+                    return true
+                }
+                guard registered else { return continuation.resume(throwing: PlayerError.playbackSessionLost) }
+                if Task.isCancelled { return resolveLyrics(id, with: .failure(CancellationError())) }
+                BopifyLog.playback.debug("lyrics request queued id=\(id, privacy: .public)")
+                do { try send(id) } catch { resolveLyrics(id, with: .failure(error)) }
+            }
+        } onCancel: {
+            resolveLyrics(id, with: .failure(CancellationError()))
+        }
+    }
+
+    private func resolveLyrics(_ id: UInt64, track: SpotifyURI? = nil, with result: Result<TrackLyrics, any Error>) {
+        guard let waiter = lyricWaiters.withLock({ $0.waiting.removeValue(forKey: id) }) else { return }
+        waiter.watchdog.cancel()
+        let result = track.map { $0 != waiter.track } == true
+            ? .failure(LyricFailure.unavailable) : result
+        let outcome: String
+        switch result {
+        case .success: outcome = "success"
+        case let .failure(reason as LyricFailure): outcome = reason.rawValue
+        case .failure(is CancellationError): outcome = "cancelled"
+        case .failure: outcome = "engineFailure"
+        }
+        BopifyLog.playback.debug("lyrics request completed id=\(id, privacy: .public) outcome=\(outcome, privacy: .public)")
+        waiter.continuation.resume(with: result)
+    }
+
+    private func deliverLyrics(_ data: Data, requestID: UInt64?) {
+        guard let reply = try? JSONDecoder().decode(LyricReply.self, from: data) else {
+            BopifyLog.playback.error("lyrics reply decode failed")
+            if let requestID { resolveLyrics(requestID, with: .failure(LyricFailure.unavailable)) }
+            return
+        }
+        switch reply {
+        case let .lyrics(id, lyrics): resolveLyrics(id, track: reply.trackURI, with: .success(lyrics))
+        case let .failed(id, track, reason): resolveLyrics(id, track: track, with: .failure(reason))
+        }
+    }
+
     /// Balances exactly one `retainedContext()`, and takes that same pointer
     /// so the pairing is visible at the call site.
     ///
@@ -100,6 +188,11 @@ public final class EventBridge: Sendable {
     func yield(rawJSON: UnsafeRawBufferPointer) {
         guard let base = rawJSON.baseAddress, !rawJSON.isEmpty else { return }
         let data = Data(bytes: base, count: rawJSON.count)
+        if let envelope = try? JSONDecoder().decode(LyricEnvelope.self, from: data),
+           LyricReply.eventTypes.contains(envelope.type) {
+            deliverLyrics(data, requestID: envelope.requestID)
+            return
+        }
         // Radio replies answer one caller; the playback stream never sees them.
         if let envelope = try? JSONDecoder().decode(Envelope.self, from: data),
            RadioReply.eventTypes.contains(envelope.type) {
@@ -115,17 +208,18 @@ public final class EventBridge: Sendable {
             BopifyLog.playback.error("event decode failed payload=\(payload, privacy: .private)")
             return
         }
-        if case .sessionLost = event { failRadioWaiters() }
-        if case .failed(.playbackSessionLost) = event { failRadioWaiters() }
+        if case .sessionLost = event { failRadioWaiters(); failLyricWaiters() }
+        if case .failed(.playbackSessionLost) = event { failRadioWaiters(); failLyricWaiters() }
         continuation.yield(event)
     }
 
-    /// Ends the stream for its consumer and fails any radio request still
+    /// Ends the stream for its consumer and fails any radio or lyric request still
     /// waiting. Idempotent, and independent of the engine: events yielded
     /// after it are dropped, not delivered.
     public func finish() {
         continuation.finish()
         failRadioWaiters()
+        failLyricWaiters()
     }
 
     private func failRadioWaiters() {
@@ -135,6 +229,18 @@ public final class EventBridge: Sendable {
             return Array(state.waiting.values)
         }
         for waiter in waiting { waiter.resume(throwing: PlayerError.playbackSessionLost) }
+    }
+
+    private func failLyricWaiters() {
+        let waiting = lyricWaiters.withLock { state in
+            state.finished = true
+            defer { state.waiting = [:] }
+            return Array(state.waiting.values)
+        }
+        for waiter in waiting {
+            waiter.watchdog.cancel()
+            waiter.continuation.resume(throwing: PlayerError.playbackSessionLost)
+        }
     }
 
     /// A bridge dropped without an explicit `finish()` would otherwise leave

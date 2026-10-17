@@ -1,6 +1,6 @@
 # Spotify lyric retrieval bridge
 
-Status: approved by the user on October 17, 2026. This extends the completed native ribbon study with a typed lyric retrieval API. Implementation has not started.
+Status: implemented and verified on October 17, 2026, following user approval. The typed retrieval API passes boundary/regression tests, final Debug/Release builds and a live Swift API smoke test; see the [verification record](../../spotify-lyrics-probe.md). The ribbon remains a Debug fixture study.
 
 ## Purpose and verified starting point
 

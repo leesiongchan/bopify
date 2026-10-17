@@ -38,4 +38,9 @@ public final class StubPlaybackEngine: PlaybackEngine, @unchecked Sendable {
         throw RadioFailure.unavailable
     }
 
+    public func requestLyrics(for track: SpotifyURI) async throws -> TrackLyrics {
+        record("lyrics:\(track.rawValue)")
+        throw LyricFailure.unavailable
+    }
+
 }

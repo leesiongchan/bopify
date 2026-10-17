@@ -75,6 +75,8 @@ nonisolated final class PreviewPlaybackEngine: PlaybackEngine, @unchecked Sendab
         RadioMix(contextURI: SpotifyURI("spotify:playlist:preview-radio")!, tracks: tracks)
     }
 
+    func requestLyrics(for track: SpotifyURI) async throws -> TrackLyrics { throw LyricFailure.unavailable }
+
     /// Call with the lock held.
     private var currentPosition: Int64 {
         positionMs + Int64((playingSince.map { Date().timeIntervalSince($0) } ?? 0) * 1000)

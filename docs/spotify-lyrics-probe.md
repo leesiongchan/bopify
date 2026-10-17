@@ -1,6 +1,6 @@
 # Spotify lyric retrieval probe
 
-Investigated October 17, 2026. Live retrieval through the pinned librespot method succeeded for two tracks after the user approved a normal macOS Keychain consent prompt. The native ribbon is not connected to this source yet.
+Verified October 17, 2026. Both the standalone pinned-librespot probe and the implemented Swift engine API retrieved real Spotify lyrics. The native ribbon still uses Debug fixtures.
 
 ## Confirmed capability
 
@@ -8,7 +8,7 @@ Bopify already depends on librespot metadata/core at revision `939dc5ee9d833e198
 
 This is Spotify's internal color-lyrics service, outside its documented public Web API. Source availability is not proof that the current session can retrieve lyrics. [Spotify Web API documentation](https://developer.spotify.com/documentation/web-api).
 
-## Live probe result
+## Standalone Rust probe result
 
 A disposable Rust probe compiled successfully with Rust 1.99.0 against the exact pinned librespot source and cached dependencies. It calls `Lyrics::get` with a 30-second deadline, reports only sync type, line counts and timestamp validity, and never prints lyric text or credentials. It creates no player or Connect receiver and issues no playback commands.
 
@@ -35,26 +35,47 @@ Both responses passed the pinned `Lyrics::get` deserializer. All returned start 
 
 Automatic approval review had rejected compiling a replacement auth library for a different runner after the initial denial, classifying that route as credential-access bypass without specific authorization. That route was not executed. The successful retry used the explicitly approved, normal Keychain consent flow instead. No Keychain access-control changes were made by the probe.
 
-## Existing integration pattern
+## Implemented Swift API smoke test
 
-The current radio request/reply flow supplies the pattern for a lyric bridge:
+A temporary Debug-only hook used `AppEnvironment.connect()`'s normal engine-change callback, waited for the current player to become ready, and called `engine.requestLyrics(for:)` for `spotify:track:11dFghVXANMlKmJXsNCbNl`. It reused the real Bopify engine, session and ordinary authentication flow. It created no second probe engine and issued no playback commands.
+
+```text
+lyric_bridge_smoke=success mode=lineSynced lines=60 valid_starts=60 provider_present=true rtl=false
+lyric_bridge_playback same_epoch=true same_track=true same_remote_track=true same_phase=true same_active_device=true position_delta_ms=0
+```
+
+This exercises the Swift protocol, C ABI, Rust worker, pinned SDK call, wire decoder and continuation resolution together. No words, provider text, raw response or credential values were printed or persisted. The diagnostic hook was removed after the test. Playback state and identity were unchanged across this request; this is a structural smoke test, not an audio continuity measurement.
+
+## Implemented integration
+
+The lyric bridge extends the existing radio request/reply flow:
 
 | Boundary | Existing pattern to reuse |
 | --- | --- |
-| Rust worker | [Engine](../rust/crates/bopify-core/src/engine.rs) owns the authenticated session, runtime and event sink; `request_radio` spawns work against that session |
-| Deadline | [Radio resolver](../rust/crates/bopify-core/src/radio.rs) wraps the request in a 30-second timeout; use an outer bound without changing session-wide retry behavior |
+| Rust worker | [Engine](../rust/crates/bopify-core/src/engine.rs) owns the authenticated session, runtime and event sink; `request_lyrics` spawns work against that session |
+| Deadline | [Radio resolver](../rust/crates/bopify-core/src/radio.rs) supplies the pattern for the lyric resolver's 30-second outer timeout without changing session-wide retry behavior |
 | FFI | [ffi.rs](../rust/crates/bopify-core/src/ffi.rs) validates input and dispatches a request ID through the existing engine handle |
 | Swift API | [PlaybackEngine](../Packages/BopifyCore/Sources/BopifyDomain/PlaybackEngine.swift) and [LibrespotEngine](../Packages/BopifyCore/Sources/BopifyPlayback/LibrespotEngine.swift) provide typed async requests |
 | Replies | [EventBridge](../Packages/BopifyCore/Sources/BopifyPlayback/EventBridge.swift) registers continuations before sending, correlates replies by ID, drops late replies and fails waiters on teardown/session loss |
-| Engine replacement | [AppEnvironment](../Bopify/Bopify/AppEnvironment.swift) routes requests through the current engine and rejects obsolete engine epochs |
+| Engine replacement | [AppEnvironment](../Bopify/Bopify/AppEnvironment.swift) owns the current engine; future ribbon integration must reject obsolete epochs |
 
-The proposed addition is an async lyric request for a canonical Spotify track URI, returning a typed result with synchronization mode, lines, provider attribution, language and RTL metadata. Requests should distinguish missing lyrics, temporary network failure and unavailable/unsupported responses. Malformed timestamps must fail validation; an empty response must not be called instrumental without evidence. Define the exact Rust/Swift contract before implementation.
+`PlaybackEngine.requestLyrics(for:)` returns immutable lyric lines, synchronization mode, provider attribution, language and RTL metadata. Rust accepts canonical tracks, rejects malformed timed starts and bounds responses to 2,000 lines and 262,144 UTF-8 text bytes. Swift separates lyric and radio waiters, validates reply identity, handles cancellation/teardown and cancels its 35-second watchdog on completion. A missing resource maps to `noLyrics`, transient errors/deadlines to `network`, and unsupported/forbidden/malformed results to `unavailable`.
 
-## Conditions to verify before integration
+The C ABI preserves the existing guard contract: null input or handle returns invalid argument (`-1`), while a destroyed handle returns session lost (`-2`). No dependency, authentication, playback command or ribbon UI change was needed.
 
-- The pinned parser requires all declared fields and accepts only `UNSYNCED` and `LINE_SYNCED`. The two live line-synced responses passed; unsynced, unavailable, RTL and changed-schema responses still need coverage. A raw request through the same session client can distinguish a parser failure from access failure without printing the body if that becomes necessary. [Pinned parser](../.build/librespot-939dc5e/metadata/src/lyrics.rs).
-- librespot requests and rate-limit retries need an outer deadline. A cancelled Swift waiter does not currently cancel the Rust radio task; bounded late results are dropped. Preserve that lifecycle contract or explicitly design request cancellation.
-- Test the app-owned boundary: wire decoding, malformed replies, request correlation, timeout, cancellation, session loss and teardown. Reuse existing radio fixtures and bridge test patterns; do not substitute a successful fixture for live Spotify verification.
+## Verification
+
+- Rust wrapper: 76 tests pass, including normalization limits, multibyte text, URI validation, wire spelling, controlled source errors, timeout and FFI guards.
+- Full native Rust script: Connect 86, playback 11 and core 21 tests pass, with relevant doctests passing. One existing audio-output test is ignored because it requires usable hardware.
+- Swift package: 383 tests across 40 suites pass, including lyric decoding, callback ordering, equal IDs across channels, malformed replies, cancellation, timer cleanup, timeout and terminal events.
+- Native app: 51 tests across 7 suites pass. Existing AppIntents metadata and system `linkd.autoShortcut` warnings remain.
+- Final Debug and Release app builds pass after removing the temporary diagnostic hook. Rust formatting and Clippy pass. The build script generates the lyric C declaration and XCFramework; the Swift FFI smoke test links and invokes the new symbol.
+
+## Remaining integration and live coverage
+
+- The pinned parser requires all declared fields and accepts only `UNSYNCED` and `LINE_SYNCED`. Upstream schema changes can therefore make lyrics unavailable until the dependency supports them. [Pinned parser](../.build/librespot-939dc5e/metadata/src/lyrics.rs).
+- Cancelled Swift lyric waiters do not cancel Rust work; it remains bounded by the 30-second deadline, and late replies are dropped. A Rust cancellation ABI remains outside this increment.
+- Unit tests cover constructed unsynced and RTL SDK values plus failure/lifecycle paths. Live unsynced, RTL, unavailable/rate-limited and changed-schema responses remain untested; fixture coverage does not establish their current catalog behavior.
 - The ribbon remains Debug-only. Connecting it to real playback additionally requires occurrence/session identity, a precise explicit-seek signal, provider attribution and rejection of stale lyric loads. The stable player already has one playback-event consumer; observe its state rather than add a second stream consumer.
 
-Product source and shared interfaces were not changed by this probe. The proposed next implementation is specified in the [Spotify lyric bridge design](superpowers/specs/2026-10-17-spotify-lyrics-bridge-design.md). Production readiness remains as described in the [native validation record](lyric-ribbon-native-validation.md).
+The retrieval API follows the [approved bridge design](superpowers/specs/2026-10-17-spotify-lyrics-bridge-design.md). The ribbon remains a separate study with the limits described in the [native validation record](lyric-ribbon-native-validation.md); this bridge does not make that UI production-ready.
