@@ -6,6 +6,8 @@ These are candidates for exploration. Saved listening spaces are the leading pro
 
 The fresh creative shortlist emphasizes a small record crate, temporary song detours and alternate recordings. These explore listening rituals and musical discovery. Among smaller AI additions, turning independent music writing into a listening trail remains a product candidate, while a typed playback assistant is the smaller experiment.
 
+Lyrics offer another direction: a compact reading surface, navigation by remembered words and personal annotations tied to musical moments. Provider rights and the permitted Spotify integration need to be established before synced lyrics become an implementation choice.
+
 ## Existing capabilities
 
 Bopify already supports local playback, queue selection, shuffle and repeat, radio through Explore, Recents, Liked Songs, a floating player and play-here handoff. The original PRD lists some of these as future work, so source code is the baseline for new ideas.
@@ -215,12 +217,68 @@ The current [StatusPanel](../Bopify/Bopify/MenuBar/StatusPanel.swift) already su
 
 **Tradeoff:** the smallest new interaction candidate, useful as polish rather than a major discovery feature. Sleeve already offers a shortcut-driven Now Playing HUD; Bopify's hypothesis is the specific hold-and-release interaction. [What is new in Sleeve 2](https://replay.software/updates/whats-new-in-sleeve-2).
 
+## Lyrics as reading navigation and memory
+
+### Lyric ribbon with reading hold
+
+Show the current line and a little surrounding context in a small floating ribbon. Holding a shortcut could reveal it over the current app. A reading hold freezes the displayed passage while music continues, with a Return to live action when the listener is ready. This lets someone reread a line without chasing an automatically scrolling page or interrupting playback.
+
+**First experiment:** a small timed-text fixture and a ribbon that handles pause, seek and reading hold. Bopify already has an [interpolated playback position](../Packages/BopifyCore/Sources/BopifyPlayback/PlayerModel.swift) and [floating panel](../Bopify/Bopify/MenuBar/StatusPanel.swift); no lyric model, parser, provider or ribbon exists. Line timing is sufficient for the first version; word highlighting is a separate scope and data requirement.
+
+**Validation:** pause and seek across line boundaries, scroll back while music continues and return to the live line. Check long lines, right-to-left text, instrumental passages, reduced motion and missing lyrics. A display following another device must not imply that local seek controls can operate that remote device.
+
+**Tradeoff:** the strongest visual fit with a menu bar player. Its value would come from compact presentation and reading control.
+
+### Find a line and return to it
+
+Search a remembered phrase within the current song's available lyrics and jump to the corresponding timestamp. Repeated chorus lines should appear as separate occurrences so the listener can choose the intended moment. Searching alone does not alter playback.
+
+**First experiment:** exact text search within the loaded lyric document and a user-selected line-to-seek action. This is not catalog-wide lyric search: LRCLIB's documented search parameters concern track metadata, not the words of every song. [LRCLIB API Documentation](https://lrclib.net/docs).
+
+The existing [seek command](../Packages/BopifyCore/Sources/BopifyPlayback/PlayerModel.swift) can move ready, seekable local playback to an absolute position. Unsynced text can support reading and search but cannot supply reliable playback timestamps.
+
+**Validation:** test repeated lines, punctuation, non-Latin text and plain lyrics without timestamps. After seeking, highlight the authoritative playback position rather than assuming the seek succeeded.
+
+**Tradeoff:** useful navigation with a narrow interaction. It depends on correct recording matching and line timing; a live version must not silently inherit studio timestamps.
+
+### Verse bookmarks and margin notes
+
+Save a lyric occurrence as a musical bookmark and attach a personal note explaining why it matters. Later, return to that exact passage. This extends the earlier moment-bookmark idea with a textual anchor, making it easier to recognize the saved moment.
+
+**First experiment:** store the track reference, timestamp, provider document reference and user-authored note. Resolve lyric text for display under the provider's permitted retention rules. Do not assume a selected line can be stored indefinitely or exported on a share card.
+
+**Validation:** bookmark two occurrences of the same chorus, restart the app and distinguish both return points. If a provider revises the text or timing, retain the note and expose the changed anchor rather than attaching it to another line silently.
+
+**Tradeoff:** the strongest personal-memory candidate. It shares storage and return-position primitives with ordinary bookmarks, while excerpt storage and sharing require separate permission.
+
+### Language lens on demand
+
+Select a line to reveal a translation, optional pronunciation help and an explanation of an unfamiliar idiom. Keep those details in a temporary reading panel so they do not crowd the compact player. Offer literal meaning and contextual interpretation as distinct kinds of help.
+
+**First experiment:** show provider-supplied translations for a small supported language pair. AI-assisted explanation or transliteration is a later candidate only where the independent lyric source permits that processing. Do not feed Spotify-sourced lyrics into a model or present a generated interpretation as the songwriter's confirmed intention.
+
+**Validation:** review idioms, ambiguous pronouns, proper names and mixed-language passages with a fluent reader. Distinguish an unavailable translation from a failed request, and assess whether the panel helps more than a simple translation toggle.
+
+**Tradeoff:** potentially useful for multilingual listening, with greater language-quality and rights requirements. Translation alone has first-party competition: Spotify announced worldwide availability for tracks with translations on February 4, 2026. [Get More From Lyrics on Spotify With These 3 Upgrades](https://newsroom.spotify.com/2026-02-04/lyric-translations-offline-previews/).
+
+### Lyric source and integration research
+
+LRCLIB documents plain text, line-timed LRC and optional word-timed records, along with instrumental flags. Track title and artist are matching inputs; album and duration help disambiguate versions. It is a technical candidate to evaluate, not evidence that every catalog entry is correct or cleared for every intended use. [LRCLIB API Documentation](https://lrclib.net/docs).
+
+LyricFind offers licensed static, line-by-line and word-by-word display products, with translations offered separately. Access, supported catalog and permission for storage, excerpts, transformation or model processing need to be established for the selected feature. [LyricFind Lyric Display](https://www.lyricfind.com/products/lyric-display), [LyricFind Translations](https://www.lyricfind.com/products/translations).
+
+Spotify's published compliance guidance lists synchronizing its recordings with lyrics as a disallowed use case. This is a separate integration question from obtaining the lyric text; a third-party lyric license alone does not establish permission for synchronized Spotify playback. The synced concepts above remain conditional on a permitted integration. [Spotify Compliance Tips](https://developer.spotify.com/compliance-tips).
+
 ## Priorities for further exploration
 
 These priorities reflect product fit and dependency scope, not measured user demand or implementation estimates.
 
 | Candidate | Reason to explore | Main uncertainty | Suggested order |
 | --- | --- | --- | --- |
+| Lyric ribbon with reading hold | Makes lyrics available without chasing a scrolling page | Permitted synced display and recording match | Strongest compact lyrics candidate |
+| Find a lyric line | Makes remembered words useful for navigation | Reliable line timing and repeated occurrences | After lyric matching and display |
+| Verse bookmarks and notes | Connects a remembered lyric to a musical moment | Stable anchors and permitted excerpt retention | Strongest lyrics memory candidate |
+| Language lens | Helps listeners understand unfamiliar language | Translation quality and processing rights | Later language-focused probe |
 | Personal record crate | Makes choosing from a small collection one decision | Added value over favorites and Explore | Strongest fresh compact-player candidate |
 | Borrow one song | Makes interruptions reversible | Automatic return before native advancement | Small probe using saved-position primitives |
 | Other takes | Reveals alternate performances of a composition | Recording and catalog identity matching | Strongest fresh discovery candidate |
