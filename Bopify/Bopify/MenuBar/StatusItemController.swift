@@ -209,6 +209,22 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                                      action: #selector(showLibraryAccess(_:)), keyEquivalent: "")
         libraryItem.target = self
         menu.addItem(libraryItem)
+        #if DEBUG
+        let lyrics = NSMenuItem(title: environment.isLiveLyricsVisible
+            ? String(localized: "menu.hide", table: "LyricRibbon")
+            : String(localized: "menu.show", table: "LyricRibbon"),
+            action: #selector(toggleLiveLyrics(_:)), keyEquivalent: "")
+        lyrics.target = self
+        lyrics.isEnabled = environment.authState == .signedIn && environment.player != nil
+        menu.addItem(lyrics)
+        if environment.isLiveLyricsVisible {
+            let focus = NSMenuItem(title: String(localized: "menu.focus", table: "LyricRibbon"),
+                action: #selector(focusLiveLyrics(_:)), keyEquivalent: "")
+            focus.target = self
+            focus.isEnabled = environment.authState == .signedIn && environment.player != nil
+            menu.addItem(focus)
+        }
+        #endif
         if environment.isAuthorizingPlayback {
             let cancel = NSMenuItem(title: String(localized: "signIn.cancel"), action: #selector(cancelPlaybackAuthorization(_:)), keyEquivalent: "")
             cancel.target = self
@@ -237,6 +253,13 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     @objc private func signOut(_ sender: Any?) {
         Task { await environment.signOut() }
     }
+    #if DEBUG
+    @objc private func toggleLiveLyrics(_ sender: Any?) {
+        if environment.isLiveLyricsVisible { environment.hideLiveLyrics() }
+        else { environment.showLiveLyrics() }
+    }
+    @objc private func focusLiveLyrics(_ sender: Any?) { environment.focusLiveLyrics() }
+    #endif
     @objc private func cancelPlaybackAuthorization(_ sender: Any?) { environment.cancelPlaybackAuthorization() }
     @objc private func cancelLibraryAuthorization(_ sender: Any?) { environment.cancelLibraryAuthorization() }
     @objc private func showLibraryAccess(_ sender: Any?) { environment.librarySetupWindow.show(environment: environment) }

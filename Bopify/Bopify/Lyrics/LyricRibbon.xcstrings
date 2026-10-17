@@ -60,6 +60,36 @@
           }
         }
       }
+    },
+    "menu.show": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Lyrics (Debug)"
+          }
+        }
+      }
+    },
+    "menu.hide": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide Lyrics (Debug)"
+          }
+        }
+      }
+    },
+    "menu.focus": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Focus Lyrics (Debug)"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
