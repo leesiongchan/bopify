@@ -78,7 +78,7 @@ Apple's Live Captions provides a related native precedent for movable, resizable
 
 The browser study verifies the held-text/catch-up interaction and preserves workspace-theme choices when switching directions. Native focus, system materials, true larger-text behavior, screen placement and playback integration still require separate validation after a direction is chosen.
 
-The subsequent [Spotify lyric probe](spotify-lyrics-probe.md) confirms that the pinned librespot dependency already provides a lyric request. Its disposable executable compiled, but Keychain denied the credential helper, so live endpoint access and payload compatibility remain unverified. The document records the existing Rust–Swift request/reply pattern and the remaining consent requirement.
+The subsequent [Spotify lyric probe](spotify-lyrics-probe.md) confirms that the pinned librespot dependency already provides a lyric request. After explicit consent for a normal Keychain prompt, the probe retrieved two live line-synced responses with 60 and 59 lines through the existing method. Both passed the pinned parser, and every returned start timestamp parsed successfully. The document records the request/reply pattern to reuse; the ribbon remains fixture-backed until the bridge and playback adapter are implemented.
 
 ## Timing and matching determine trust
 
