@@ -84,9 +84,9 @@ final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
         if model.isKeyboardInteracting, !canRead { model.keyboardSelection = .hide }
         let screens = NSScreen.screens.map(\.visibleFrame)
         let preferred = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1024, height: 768)
-        let visible = Self.screen(for: anchor, screens: screens, preferred: preferred)
-        let layout = LyricRibbonLayout.measure(content: model.content, width: min(448, visible.width),
-            textScale: textScale, availableHeight: max(100, visible.height - 40))
+        let placement = Self.placement(content: model.content, saved: anchor, textScale: textScale,
+            screens: screens, preferred: preferred)
+        let layout = placement.layout
         let root = LyricRibbonView(model: model, layout: layout, onHide: onHide,
             onDragHeader: { [weak self] event in self?.panel.performDrag(with: event) })
         if let host { host.rootView = root }
@@ -100,8 +100,15 @@ final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
             panel.contentView = container
             self.host = host
         }
-        let frame = Self.reachableFrame(saved: anchor, size: layout.panelSize, screens: screens, preferred: preferred)
-        panel.setFrame(frame, display: true)
+        panel.setFrame(placement.frame, display: true)
+    }
+
+    static func placement(content: LyricContent, saved: CGRect?, textScale: CGFloat,
+                          screens: [CGRect], preferred: CGRect) -> (layout: LyricRibbonLayout, frame: CGRect) {
+        let visible = screen(for: saved, screens: screens, preferred: preferred)
+        let layout = LyricRibbonLayout.measure(content: content, width: min(448, visible.width),
+            textScale: textScale, availableHeight: max(100, visible.height - 40))
+        return (layout, reachableFrame(saved: saved, size: layout.panelSize, screens: screens, preferred: preferred))
     }
 
     static func reachableFrame(saved: CGRect?, size: CGSize, screens: [CGRect], preferred: CGRect) -> CGRect {
@@ -113,12 +120,22 @@ final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
     }
 
     private static func screen(for saved: CGRect?, screens: [CGRect], preferred: CGRect) -> CGRect {
-        if let saved, saved.origin.x.isFinite, saved.origin.y.isFinite,
-           let screen = screens.first(where: { $0.intersects(saved) }) { return screen }
+        if let saved, saved.origin.x.isFinite, saved.origin.y.isFinite {
+            let overlaps = screens.map { screen in
+                let intersection = screen.intersection(saved)
+                return (screen, intersection.isNull ? 0 : intersection.width * intersection.height)
+            }
+            if let largest = overlaps.filter({ $0.1 > 0 }).max(by: { $0.1 < $1.1 }) { return largest.0 }
+        }
         return preferred
     }
 
     func windowDidMove(_ notification: Notification) { if panel.isVisible { saveFrame() } }
+    func windowDidChangeScreen(_ notification: Notification) {
+        guard panel.isVisible else { return }
+        anchor = panel.frame
+        refreshLayout(textScale: textScale)
+    }
     func windowShouldClose(_ sender: NSWindow) -> Bool { onHide(); return false }
     @objc private func screensChanged() { refreshLayout(textScale: textScale) }
 
