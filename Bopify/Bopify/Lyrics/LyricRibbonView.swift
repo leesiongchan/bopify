@@ -97,12 +97,17 @@ struct LyricRibbonView: View {
             if reduceTransparency || contrast == .increased {
                 shape.fill(Color(nsColor: .windowBackgroundColor))
             } else {
-                shape.fill(.regularMaterial)
-                    .overlay(shape.fill(Color(red: 0.08, green: 0.10, blue: 0.085).opacity(0.86)))
+                shape.fill(Color(red: 0.08, green: 0.10, blue: 0.085).opacity(0.75))
+                    .glassEffect(.regular, in: shape)
             }
         }
-        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous)
-            .strokeBorder(.primary.opacity(contrast == .increased ? 0.5 : 0.13), lineWidth: 1).allowsHitTesting(false))
+        .overlay {
+            if reduceTransparency || contrast == .increased {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .strokeBorder(.primary.opacity(contrast == .increased ? 0.5 : 0.13), lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+        }
         .preferredColorScheme(.dark)
         .onHover { hovered = $0 }
         .onChange(of: model.keyboardSelection) { _, selection in focusedControl = selection }
