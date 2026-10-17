@@ -223,6 +223,8 @@ The current [StatusPanel](../Bopify/Bopify/MenuBar/StatusPanel.swift) already su
 
 Show the current line and a little surrounding context in a small floating ribbon. Holding a shortcut could reveal it over the current app. A reading hold freezes the displayed passage while music continues, with a Return to live action when the listener is ready. This lets someone reread a line without chasing an automatically scrolling page or interrupting playback.
 
+The [lyric ribbon research](lyric-ribbon-research.md) compares persistent display, shortcut peek and close reading, and examines reading hold, focus, timing and source access in more depth.
+
 **First experiment:** a small timed-text fixture and a ribbon that handles pause, seek and reading hold. Bopify already has an [interpolated playback position](../Packages/BopifyCore/Sources/BopifyPlayback/PlayerModel.swift) and [floating panel](../Bopify/Bopify/MenuBar/StatusPanel.swift); no lyric model, parser, provider or ribbon exists. Line timing is sufficient for the first version; word highlighting is a separate scope and data requirement.
 
 **Validation:** pause and seek across line boundaries, scroll back while music continues and return to the live line. Check long lines, right-to-left text, instrumental passages, reduced motion and missing lyrics. A display following another device must not imply that local seek controls can operate that remote device.
