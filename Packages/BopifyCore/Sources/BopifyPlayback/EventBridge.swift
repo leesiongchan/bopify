@@ -28,7 +28,8 @@ public final class EventBridge: Sendable {
 
     public init() {
         var escaped: AsyncStream<PlaybackEvent>.Continuation!
-        self.events = AsyncStream(bufferingPolicy: .bufferingNewest(64)) { escaped = $0 }
+        // Queue metadata bursts must not evict readiness or playback transitions.
+        self.events = AsyncStream(bufferingPolicy: .unbounded) { escaped = $0 }
         self.continuation = escaped
     }
 

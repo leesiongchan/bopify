@@ -6,6 +6,35 @@ import CBopifyCore
 
 @Suite("EventBridge")
 struct EventBridgeTests {
+    @Test func queueMetadataBurstPreservesReadinessAndPlaybackTransitionsInOrder() async {
+        let bridge = EventBridge()
+        let ctx = bridge.retainedContext()
+        defer { EventBridge.releaseContext(ctx) }
+        func send(_ payload: String) {
+            Array(payload.utf8).withUnsafeBufferPointer {
+                bopifyEventTrampoline($0.baseAddress!, UInt($0.count), ctx)
+            }
+        }
+        send(#"{"type":"connectionReady","outcome":"remote"}"#)
+        send(#"{"type":"queueChanged","generation":1,"previous":[],"current":null,"next":[]}"#)
+        var expected: [PlaybackEvent] = [.connectionReady(.remote),
+            .queueChanged(PlaybackQueue(generation: 1, previous: [], current: nil, next: []))]
+        for index in 0..<80 {
+            if index == 40 {
+                send(#"{"type":"paused","positionMs":3210}"#)
+                expected.append(.paused(positionMs: 3210))
+            }
+            send(#"{"type":"queueMetadata","generation":1,"entryID":"\#(index)","track":null}"#)
+            expected.append(.queueMetadata(generation: 1, entryID: String(index), track: nil))
+        }
+        send(#"{"type":"sessionLost","reason":"spircEnded"}"#)
+        expected.append(.sessionLost(.spircEnded))
+        bridge.finish()
+        var received: [PlaybackEvent] = []
+        for await event in bridge.events { received.append(event) }
+        #expect(received == expected)
+    }
+
     @Test func deliversAnEventPushedFromABackgroundThread() async throws {
         let bridge = EventBridge()
         let json = Array(#"{"type":"playing","positionMs":4200}"#.utf8)
