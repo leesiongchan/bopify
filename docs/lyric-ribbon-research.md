@@ -52,6 +52,30 @@ Prefer restrained cue changes. Respect Reduce Motion without making cue accuracy
 
 A persistent ribbon should have stable placement and explicit hide control. A click-through option would make its reading controls inaccessible by pointer, so it should not be an assumed first-version behavior. Screen sharing, multiple displays and fullscreen applications need evaluation before promising that it stays visible or private in every context.
 
+## Modern visual design directions
+
+The [interactive visual study](mockups/lyric-ribbon-directions.html) compares three proposed surfaces on a simulated desktop. It uses original sample text and a manually advanced playback clock, with no audio or lyric service. Browser effects approximate native materials; this is a design artifact rather than an implemented ribbon.
+
+| Direction | Initial study size | Visual emphasis | Tradeoff |
+| --- | --- | --- | --- |
+| A Quiet ribbon | About 448 by 157 points | Dark, rounded, left-aligned, current and previous cues | Leading candidate for background listening; long cues need larger-text and wrapping tests |
+| B Caption strip | About 648 by 139 points | Wider, centered, two-cue presentation | Gives phrases more horizontal room but occupies more of the desktop |
+| C Reading card | About 350 by 263 points | Warm, opaque surface with previous, current and next cues | More useful reading context, with a substantially larger vertical presence |
+
+These sizes are exploration choices, not platform requirements or final geometry. A is the current recommendation for persistent use. Carry Bopify's rounded shapes, system typography and semantic text hierarchy into the design. Keep album identity small so the lyric text remains the focus.
+
+Apple's current material guidance distinguishes standard materials for content from Liquid Glass for controls and navigation. The proposed lyric surface should use a sufficiently opaque standard material; any glass treatment belongs sparingly on its functional controls. Thicker materials can improve contrast for text. A browser blur or a glass-heavy appearance alone would not establish conformity with that guidance. [Apple Human Interface Guidelines Materials](https://developer.apple.com/design/human-interface-guidelines/materials).
+
+The study starts A with roughly 23-point primary lyric text and 14-point preceding text, plus smaller track metadata and controls. Those sizes need testing at actual desktop viewing distance and with larger text. Prefer semantic system colors over artwork-derived lyric colors, and provide opaque backgrounds when transparency is reduced. [Apple Human Interface Guidelines Typography](https://developer.apple.com/design/human-interface-guidelines/typography).
+
+Keep the surface's size and position stable as cues change. If animation is retained, begin with a brief opacity transition and validate comfort; avoid recurring blur, bouncing or large scrolling movement around a peripheral desktop overlay. Reduce Motion should simplify presentation without degrading cue timing. This follows Apple's recommendation to use motion purposefully and make its experience optional. [Apple Human Interface Guidelines Motion](https://developer.apple.com/design/human-interface-guidelines/motion).
+
+The reading state should remain explicit in every direction: Reading plus music continues, and an always-visible Back to live action. Live-mode controls can reveal on hover or keyboard focus without shifting the text. An initial location near the lower screen edge should remain movable and clear of the Dock; do not follow the pointer or jump between screens automatically.
+
+Apple's Live Captions provides a related native precedent for movable, resizable text windows, customizable text appearance and an option to keep the window onscreen. This supports giving the listener placement and legibility control, rather than treating a lyric overlay as fixed decoration. [Get captions of spoken and computer audio on Mac](https://support.apple.com/guide/mac-help/get-captions-of-spoken-and-computer-audio-mchldd11f4fd/mac).
+
+The browser study verifies the held-text/catch-up interaction and preserves workspace-theme choices when switching directions. Native focus, system materials, true larger-text behavior, screen placement and playback integration still require separate validation after a direction is chosen.
+
 ## Timing and matching determine trust
 
 Bopify already exposes interpolated local or mirrored playback position through [PlayerModel](../Packages/BopifyCore/Sources/BopifyPlayback/PlayerModel.swift). A lyric projection can read that position without changing the playback engine. Reading state must stay separate from playback state.
