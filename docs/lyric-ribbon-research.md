@@ -1,6 +1,6 @@
 # Lyric ribbon research
 
-Research date: October 17, 2026. Status: direction A selected; clean retro visual refinement under review. Native implementation design remains unapproved.
+Research date: October 17, 2026. Status: the clean retro refinement of direction A is approved. The [proposed native design](superpowers/specs/2026-10-17-lyric-ribbon-design.md) is ready for review.
 
 The lyric ribbon would let a listener glance at the words and reread a passage while music continues. The value to test is whether it fits working on a Mac without taking keyboard focus or demanding attention. The primary use remains a choice between persistent background display, a brief shortcut peek and deliberate close reading.
 
@@ -114,4 +114,4 @@ Use a small original timed-text fixture containing long cues, repeated choruses,
 
 Check focus by typing continuously in another app while opening, reading and dismissing the ribbon. Evaluate fullscreen use, display changes, larger text, right-to-left layout and VoiceOver navigation. Verify that hiding the ribbon stops its display work and that a late or failed lyric load never interrupts music.
 
-Product success is that someone can glance, hold a passage and return to live without losing their place in either work or music. The selected visual direction is the compact quiet ribbon. Its refined appearance and persistent-display behavior still need review before completing the native design. This research does not select a provider or start implementation.
+Product success is that someone can glance, hold a passage and return to live without losing their place in either work or music. The approved visual direction is the compact quiet ribbon with clean retro styling. The proposed native design starts with an original-fixture interaction study to validate focus, placement and reading behavior before live integration. This research does not select a provider or start implementation.
