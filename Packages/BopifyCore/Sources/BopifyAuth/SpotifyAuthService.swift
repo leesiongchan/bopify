@@ -60,11 +60,13 @@ public actor SpotifyAuthService {
     }
 
     public func signIn() async throws -> TokenSet {
+        try Task.checkCancellation()
         try await prepareForConsent()
         return try await authorize(scopes: ["streaming"], validateGrant: false)
     }
 
     public func authorizeLibraryScopes(_ scopes: Set<String>) async throws -> TokenSet {
+        try Task.checkCancellation()
         let libraryScopes: Set<String> = ["user-library-read", "user-library-modify", "user-read-recently-played", "user-top-read"]
         guard !scopes.isEmpty, scopes.isSubset(of: libraryScopes) else { throw LibraryError.authorizationRequired }
         try await prepareForConsent()
@@ -79,6 +81,7 @@ public actor SpotifyAuthService {
     }
 
     private func authorize(scopes: Set<String>, validateGrant: Bool) async throws -> TokenSet {
+        try Task.checkCancellation()
         refresh?.task.cancel()
         refresh = nil
         generation += 1
@@ -88,10 +91,25 @@ public actor SpotifyAuthService {
         let previousListener = activeListener
         activeListener = nil
         if let previousListener { await previousListener.stop() }
+        try Task.checkCancellation()
         guard generation == myGeneration else { throw PlayerError.authDenied }
-        let pkce = PKCEPair.random()
         let state = UUID().uuidString
         let listener = LoopbackCallbackListener(expectedState: state, expectedPath: callbackPath)
+        return try await withTaskCancellationHandler {
+            do { return try await authorize(scopes: scopes, validateGrant: validateGrant, generation: myGeneration, listener: listener, state: state) }
+            catch {
+                await stopAuthorization(listener)
+                if Task.isCancelled { throw CancellationError() }
+                throw error
+            }
+        } onCancel: {
+            Task { await listener.stop() }
+        }
+    }
+
+    private func authorize(scopes: Set<String>, validateGrant: Bool, generation myGeneration: Int,
+                           listener: LoopbackCallbackListener, state: String) async throws -> TokenSet {
+        let pkce = PKCEPair.random()
         activeListener = listener
         let port: Int
         do { port = try await listener.start(port: callbackPort) }
@@ -100,6 +118,7 @@ public actor SpotifyAuthService {
             if generation != myGeneration { throw PlayerError.authDenied }
             throw error
         }
+        try Task.checkCancellation()
         guard generation == myGeneration else {
             await stopAuthorization(listener)
             throw PlayerError.authDenied
@@ -121,14 +140,17 @@ public actor SpotifyAuthService {
         }
         catch {
             await stopAuthorization(listener)
+            if Task.isCancelled { throw CancellationError() }
             if generation != myGeneration { throw PlayerError.authDenied }
             let description = String(describing: error)
             BopifyLog.auth.error("callback wait failed error=\(description, privacy: .public)")
             throw PlayerError.invalidCallback
         }
         await stopAuthorization(listener)
+        try Task.checkCancellation()
 
         let tokens = try await client.exchange(code: code, redirectURI: redirectURI, pkce: pkce)
+        try Task.checkCancellation()
         BopifyLog.auth.info("token exchange succeeded")
         // A signOut() during any of the awaits above already cleared the
         // store; a widened generation means that happened, so this result is
@@ -142,8 +164,13 @@ public actor SpotifyAuthService {
             throw LibraryError.authorizationRequired
         }
         try persist(tokens)
-        BopifyLog.auth.debug("saved token set to store")
+        // Refreshes of the previous grant can start while consent waits in the browser.
+        generation += 1
+        refresh?.task.cancel()
+        refresh = nil
+        pendingRefresh = nil
         self.tokens = tokens
+        BopifyLog.auth.info("new authorization grant persisted; previous refresh invalidated")
         return tokens
     }
 
