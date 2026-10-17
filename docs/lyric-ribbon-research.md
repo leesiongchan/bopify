@@ -1,6 +1,6 @@
 # Lyric ribbon research
 
-Research date: October 17, 2026. Status: the clean retro refinement of direction A is approved. The [proposed native design](superpowers/specs/2026-10-17-lyric-ribbon-design.md) is ready for review.
+Research date: October 17, 2026. Status: the clean retro refinement of direction A and the [native design](superpowers/specs/2026-10-17-lyric-ribbon-design.md) are approved. The [implementation plan](superpowers/plans/2026-10-17-lyric-ribbon.md) is ready for review.
 
 The lyric ribbon would let a listener glance at the words and reread a passage while music continues. The value to test is whether it fits working on a Mac without taking keyboard focus or demanding attention. The primary use remains a choice between persistent background display, a brief shortcut peek and deliberate close reading.
 
