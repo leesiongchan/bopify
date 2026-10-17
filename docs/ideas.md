@@ -4,7 +4,7 @@ Updated October 17, 2026. Direction: explore distinctive features and technical 
 
 These are candidates for exploration. Saved listening spaces are the leading product idea; the first useful experiment is restoring a saved context, track and timestamp across switches and app restarts.
 
-Among smaller AI additions, turning independent music writing into a listening trail is the strongest product candidate, while a typed playback assistant is the smaller experiment. A further direction is an AI DJ that blends songs and adds spoken hosting, matching the requested meaning of AI mix. This requires a separate audio architecture and a viable source of music with permission for the intended processing.
+The fresh creative shortlist emphasizes a small record crate, temporary song detours and alternate recordings. These explore listening rituals and musical discovery. Among smaller AI additions, turning independent music writing into a listening trail remains a product candidate, while a typed playback assistant is the smaller experiment.
 
 ## Existing capabilities
 
@@ -55,6 +55,8 @@ Basic external controls already exist in the [Spotifast Raycast extension](https
 ## AI opportunities
 
 ### AI DJ with blended transitions and spoken hosting
+
+**Status:** set aside. Retained as a researched option.
 
 Create a personal radio experience that blends song endings into the next track and adds occasional spoken hosting. The requested experience includes both overlapping music and an AI voice; a generated playlist alone would not satisfy it.
 
@@ -153,13 +155,77 @@ This needs investigation at the audio boundary. The [Rust engine](../rust/crates
 
 **Tradeoff:** useful daily behavior rather than a distinctive headline feature; native routing complexity makes it a separate probe.
 
+## Listening rituals and musical discovery
+
+### Personal record crate
+
+Keep a deliberately small shelf of pinned albums or playlist contexts. Press Pick one and Bopify selects a record from that shelf, reveals it and starts playback. Named crates such as Sunday morning or Loud guitars make choosing music a single decision. The creative hypothesis is that a small collection can feel more inviting than another large library.
+
+This differs from the listening inbox: crates are reusable favorites, with no unread status or completion tracking. It also differs from saved spaces: choosing a record starts that context rather than restoring a stored listening position.
+
+**First experiment:** pin album or playlist contexts explicitly, persist a small local collection and select one item randomly on request. Existing [PlayRequest](../Packages/BopifyCore/Sources/BopifyDomain/PlaybackEngine.swift) can load these contexts. Pinning the album behind an arbitrary track needs more metadata: the current [Track model](../Packages/BopifyCore/Sources/BopifyDomain/Track.swift) has an album title, not an album URI.
+
+**Validation:** build a small crate, restart the app and play a selected context. Compare the number of actions and perceived choice effort with opening Explore or browsing a playlist. No recommendation model or listening-history analysis is required.
+
+**Tradeoff:** modest new state and a compact interaction, with enough overlap with favorites that the one-decision experience must provide the value.
+
+### Borrow one song
+
+While listening to an album, open a track as a temporary detour. A return action takes the listener back to the album and timestamp they left. The intended eventual flow is to return automatically after that song ends.
+
+This is a small interaction built on the saved-position foundation, rather than a separate collection of named sessions. The first probe can use an explicit Return button. Automatic return requires native completion handling before Spotify advances to another song; it cannot rely solely on a delayed Swift end-of-track event.
+
+The existing [recovery snapshot](../Packages/BopifyCore/Sources/BopifyDomain/PlaybackRecovery.swift) and [load request](../Packages/BopifyCore/Sources/BopifyDomain/PlaybackEngine.swift) provide context, track and position primitives. They do not preserve a frozen shuffle queue.
+
+**Validation:** take a detour from the middle of an album, return and recover the saved position. Define cancellation when the listener deliberately starts a different session, signs out or transfers playback. Evaluate automatic return separately.
+
+**Tradeoff:** useful everyday behavior with little interface, but automatic continuation is more involved than saving a bookmark.
+
+### Other takes of this song
+
+Open a compact shelf of other recordings of the current composition: studio, live, acoustic or cover versions when the data identifies them. Play one sequentially, with a return point to the original listening context. This could make a familiar track a doorway into a different performance.
+
+MusicBrainz distinguishes a composition from its recordings and models links between them. Those relationships are a candidate source for verified alternatives; matching only song-title strings would confuse unrelated songs. [MusicBrainz Work](https://musicbrainz.org/doc/Work).
+
+**First experiment:** use a small manually verified set of recording-to-work matches, show available linked recordings and confirm the Spotify catalog match for each. Treat release editions and remasters separately from genuinely different performances. Missing work links or ambiguous catalog matches should produce an incomplete shelf rather than invented alternatives.
+
+**Validation:** check familiar standards, a studio/live pair, a cover and unrelated songs with the same title. Measure correct relationships and playable catalog matches before building general discovery.
+
+**Tradeoff:** the strongest new music-discovery hypothesis, with a substantial metadata-matching dependency. MusicBrainz supports recording, work and relationship queries, but Bopify has no client or cross-catalog identity layer yet. [MusicBrainz API](https://musicbrainz.org/doc/MusicBrainz_API).
+
+### Follow the people behind a recording
+
+Turn a credit into a listening trail: choose a bassist, producer or composer, inspect another credited recording and decide what to hear next. Keep the first view to a few useful credits with an explicit source, rather than a large graph.
+
+MusicBrainz relationships represent connections such as production credits, band membership and samples; recording-level relationships can identify personnel. [MusicBrainz Relationships](https://musicbrainz.org/doc/Relationships).
+
+**First experiment:** a user-invoked external credits lookup or a manually verified small collection. Integrated trails require a matching layer between the playing recording, external credits and playable Spotify items. The current [Track model](../Packages/BopifyCore/Sources/BopifyDomain/Track.swift) supplies names and duration, not personnel or recording identifiers.
+
+**Validation:** verify credits against a small set of recordings and make ambiguous editions visible. Check whether listeners actually follow a credit to another recording, rather than simply opening and dismissing the panel.
+
+**Tradeoff:** a richer musical rabbit hole, with data coverage and matching costs similar to Other takes. These are alternative first uses of a shared metadata subsystem, not two features to build together by default.
+
+### Hold to peek
+
+Hold a configurable shortcut to reveal a compact Now Playing card over the current app; release it to dismiss. The user can check the track and progress without changing keyboard focus or leaving their work.
+
+The current [StatusPanel](../Bopify/Bopify/MenuBar/StatusPanel.swift) already supports nonactivating presentation, but normal opening [makes the panel key](../Bopify/Bopify/MenuBar/StatusItemController.swift). A peek needs a separate show-and-hide path and global key-down/key-up handling. No global hotkey registration currently exists.
+
+**Validation:** hold and release the shortcut while typing in another app and while using a fullscreen app. Verify that focus and typed input stay with the original app and that the overlay dismisses when focus or key state is lost. Test modifier conflicts and accessibility without adding playback gestures to the first probe.
+
+**Tradeoff:** the smallest new interaction candidate, useful as polish rather than a major discovery feature. Sleeve already offers a shortcut-driven Now Playing HUD; Bopify's hypothesis is the specific hold-and-release interaction. [What is new in Sleeve 2](https://replay.software/updates/whats-new-in-sleeve-2).
+
 ## Priorities for further exploration
 
 These priorities reflect product fit and dependency scope, not measured user demand or implementation estimates.
 
 | Candidate | Reason to explore | Main uncertainty | Suggested order |
 | --- | --- | --- | --- |
-| AI DJ with blended transitions and spoken hosting | Matches the requested AI mix experience | Music-source permission and a new mixing subsystem | Resolve source path before an audio probe |
+| Personal record crate | Makes choosing from a small collection one decision | Added value over favorites and Explore | Strongest fresh compact-player candidate |
+| Borrow one song | Makes interruptions reversible | Automatic return before native advancement | Small probe using saved-position primitives |
+| Other takes | Reveals alternate performances of a composition | Recording and catalog identity matching | Strongest fresh discovery candidate |
+| Follow recording credits | Makes discovery follow musicians and producers | Credit coverage and recording identity | Alternative metadata probe to Other takes |
+| Hold to peek | Checks Now Playing without taking keyboard focus | Reliable global hold-and-release behavior | Small interaction probe |
 | Saved listening spaces | Strong fit with compact playback and existing recovery state | Reliable resume across context changes | First product probe |
 | Typed playback assistant | Small AI task with a defined action set | Added value over shortcuts and deterministic parsing | First AI feasibility probe |
 | Music writing into listening trails | Turns independent discovery into playable collections | Extraction quality, catalog matching and setup friction | Strongest new AI product bet |
