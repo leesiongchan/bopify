@@ -72,5 +72,45 @@ struct LyricRibbonWindowTests {
         try key(36)
         #expect(hideRequested)
     }
+
+    @Test func greatestOverlapDeterminesTheDestinationDisplay() {
+        let tall = CGRect(x: -1000, y: 0, width: 1000, height: 1200)
+        let short = CGRect(x: 0, y: 0, width: 1000, height: 480)
+        let moved = CGRect(x: -40, y: 20, width: 448, height: 400)
+        let frame = LyricRibbonWindowController.reachableFrame(saved: moved, size: moved.size,
+            screens: [tall, short], preferred: tall)
+        #expect(short.contains(frame))
+    }
+
+    @Test func draggingLongPassageToShortDisplayRemeasuresTheViewport() throws {
+        let tall = CGRect(x: -1000, y: 0, width: 1000, height: 1200)
+        let short = CGRect(x: 0, y: 0, width: 1000, height: 480)
+        let content = LyricContent.timed(try LyricDocument(cues: [
+            LyricCue(id: "long", startMs: 0, text: String(repeating: "A little room for the rain.\n", count: 100)),
+        ]))
+        let original = LyricRibbonWindowController.placement(content: content,
+            saved: CGRect(x: -900, y: 20, width: 448, height: 157), textScale: 1, screens: [tall, short], preferred: tall)
+        let destination = LyricRibbonWindowController.placement(content: content,
+            saved: CGRect(x: 50, y: 20, width: 448, height: original.layout.panelSize.height),
+            textScale: 1, screens: [tall, short], preferred: tall)
+        #expect(original.layout.panelSize.height > 480)
+        #expect(destination.layout.panelSize.height <= 440)
+        #expect(destination.layout.textViewportHeight < original.layout.textViewportHeight)
+        #expect(short.contains(destination.frame))
+    }
+
+    @Test func screenChangeNotificationRefreshesVisibleLayout() throws {
+        let suite = "lyric-screen-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = LyricRibbonModel(snapshot: lyricTestSnapshot())
+        let controller = LyricRibbonWindowController(model: model, defaults: defaults, onHide: {})
+        defer { controller.hide(); controller.panel.close() }
+        controller.show()
+        let shortHeight = controller.panel.frame.height
+        model.completeLoad(.plain(String(repeating: "A long passage with room to read.\n", count: 100)), token: model.beginLoad())
+        controller.windowDidChangeScreen(Notification(name: NSWindow.didChangeScreenNotification, object: controller.panel))
+        #expect(controller.panel.frame.height > shortHeight)
+    }
 }
 #endif

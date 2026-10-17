@@ -4,7 +4,7 @@ Validated October 17, 2026 on Apple Silicon with Xcode 27.0. This is the Debug-o
 
 ## Automated checks
 
-The complete `BopifyAppTests` run passed: **46 tests across 7 suites**, including 26 lyric timeline, reading, layout, panel and preview tests. Debug and Release app builds both succeeded. Release binary inspection found no lyric study symbols or `--lyric-ribbon-preview` launch flag.
+The complete `BopifyAppTests` run passed: **49 tests across 7 suites**, including 29 lyric timeline, reading, layout, panel and preview tests. Debug and Release app builds both succeeded. Release binary inspection found no lyric study symbols or `--lyric-ribbon-preview` launch flag.
 
 Tests cover timestamp boundaries, simultaneous and repeated cues, invalid input, explicit gaps, unknown duration, pause, correction versus seek, held text at playback end, same-recording occurrence replacement, session replacement, stale load completion, hide/reopen behavior, late clock ticks after cancellation, bounded text measurement, reachable frame recovery and explicit keyboard actions. No playback engine is supplied to the lyric model or session.
 
@@ -52,6 +52,10 @@ The native surface retains the approved browser study's compact silhouette, dark
 ![Native larger text](mockups/lyric-ribbon-native-large.png)
 
 ## Remaining manual coverage
+
+Fresh code review identified a display-transition issue: a long ribbon could retain a tall display's viewport after being dragged onto a shorter display. The fix remeasures through AppKit's screen-change callback and selects the destination by greatest window overlap. Deterministic tests cover overlapping screens, the tall-to-short transition and callback wiring. A real drag between the connected displays also shrank the long ribbon from 1,010 to 830 points, keeping the footer within the shorter display. The drag call itself returns immediately, so it cannot serve as a drag-completion hook. [Apple window dragging](https://developer.apple.com/documentation/appkit/nswindow/performdrag(with:)).
+
+Two minor review items remain deferred: unchanged passages are measured on each clock tick, and Hold text exposes its mode as a descriptive button value rather than native toggle semantics. Neither is treated as completed accessibility or performance validation for a live release.
 
 VoiceOver speech/navigation, fullscreen Spaces, physical display disconnection, and changed system Reduce Transparency/Increase Contrast settings were not exercised end to end. Accessibility structure and display-recovery geometry were checked separately; these do not establish those broader results. The study should receive those manual checks before its native experience is treated as release-ready.
 
