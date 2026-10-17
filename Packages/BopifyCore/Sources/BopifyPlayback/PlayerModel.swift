@@ -21,6 +21,8 @@ public enum QueueSelectionStatus: Equatable, Sendable {
 @Observable
 public final class PlayerModel {
     public private(set) var engineEpoch: UInt64 = 0
+    public private(set) var playbackRevision: UInt64 = 0
+    public private(set) var seekRevision: UInt64 = 0
     public private(set) var isEngineReady = false
     public private(set) var restorationUnavailable = false
     @ObservationIgnored public var onSessionLost: (@MainActor (SessionLossReason, PlaybackRecoverySnapshot) -> Void)?
@@ -450,6 +452,7 @@ public final class PlayerModel {
                 : String(localized: "command.unavailable", defaultValue: "That action is unavailable.")
             BopifyLog.playback.debug("player command rejected")
         case let .trackChanged(track):
+            playbackRevision &+= 1
             frozenDisplayPositionMs = nil
             positionUpdatedAt = .now
             BopifyLog.playback.debug("track changed title=\(track.title, privacy: .private)")
@@ -478,7 +481,12 @@ public final class PlayerModel {
             state.isActiveDevice = true
             state.remote = nil; state.staleRemote = nil
             resolveUnavailableRestoration()
-        case let .seeked(position), let .positionCorrection(position):
+        case let .seeked(position):
+            seekRevision &+= 1
+            frozenDisplayPositionMs = nil
+            positionUpdatedAt = .now
+            state.positionMs = position
+        case let .positionCorrection(position):
             frozenDisplayPositionMs = nil
             positionUpdatedAt = .now
             state.positionMs = position
