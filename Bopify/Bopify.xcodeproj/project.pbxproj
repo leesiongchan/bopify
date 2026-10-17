@@ -12,16 +12,40 @@
 		BF0F170000000000000000C3 /* BopifyPlayback in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B3 /* BopifyPlayback */; };
 		BF0F170000000000000000C4 /* BopifyLibrary in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B4 /* BopifyLibrary */; };
 		BF0F170000000000000000C5 /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B5 /* Nuke */; };
+		BF0F180000000000000000D1 /* BopifyDomain in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B1 /* BopifyDomain */; };
+		BF0F180000000000000000D2 /* BopifyAuth in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B2 /* BopifyAuth */; };
+		BF0F180000000000000000D3 /* BopifyPlayback in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B3 /* BopifyPlayback */; };
+		BF0F180000000000000000D4 /* BopifyLibrary in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B4 /* BopifyLibrary */; };
+		BF0F180000000000000000D5 /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B5 /* Nuke */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		19D0CF2A3061E194001CC3E1 /* Bopify.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Bopify.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BF0F18000000000000000001 /* BopifyAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BopifyAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		BF0F1800000000000000000B /* Exceptions for Bopify in BopifyAppTests */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				BopifyApp.swift,
+			);
+			target = BF0F18000000000000000002 /* BopifyAppTests */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		19D0CF2C3061E194001CC3E1 /* Bopify */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				BF0F1800000000000000000B /* Exceptions for Bopify in BopifyAppTests */,
+			);
 			path = Bopify;
+			sourceTree = "<group>";
+		};
+		BF0F18000000000000000004 /* BopifyAppTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = BopifyAppTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -37,6 +61,16 @@
 				BF0F170000000000000000C5 /* Nuke in Frameworks */,
 			);
 		};
+		BF0F18000000000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+				BF0F180000000000000000D1 /* BopifyDomain in Frameworks */,
+				BF0F180000000000000000D2 /* BopifyAuth in Frameworks */,
+				BF0F180000000000000000D3 /* BopifyPlayback in Frameworks */,
+				BF0F180000000000000000D4 /* BopifyLibrary in Frameworks */,
+				BF0F180000000000000000D5 /* Nuke in Frameworks */,
+			);
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -44,6 +78,7 @@
 			isa = PBXGroup;
 			children = (
 				19D0CF2C3061E194001CC3E1 /* Bopify */,
+				BF0F18000000000000000004 /* BopifyAppTests */,
 				19D0CF2B3061E194001CC3E1 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -52,6 +87,7 @@
 			isa = PBXGroup;
 			children = (
 				19D0CF2A3061E194001CC3E1 /* Bopify.app */,
+				BF0F18000000000000000001 /* BopifyAppTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -83,6 +119,32 @@
 			productName = Bopify;
 			productReference = 19D0CF2A3061E194001CC3E1 /* Bopify.app */;
 			productType = "com.apple.product-type.application";
+		};
+		BF0F18000000000000000002 /* BopifyAppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BF0F18000000000000000008 /* Build configuration list for PBXNativeTarget "BopifyAppTests" */;
+			buildPhases = (
+				BF0F18000000000000000006 /* Sources */,
+				BF0F18000000000000000005 /* Frameworks */,
+				BF0F18000000000000000007 /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				19D0CF2C3061E194001CC3E1 /* Bopify */,
+				BF0F18000000000000000004 /* BopifyAppTests */,
+			);
+			name = BopifyAppTests;
+			packageProductDependencies = (
+				BF0F170000000000000000B1 /* BopifyDomain */,
+				BF0F170000000000000000B2 /* BopifyAuth */,
+				BF0F170000000000000000B3 /* BopifyPlayback */,
+				BF0F170000000000000000B4 /* BopifyLibrary */,
+				BF0F170000000000000000B5 /* Nuke */,
+			);
+			productName = BopifyAppTests;
+			productReference = BF0F18000000000000000001 /* BopifyAppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -118,6 +180,7 @@
 			projectRoot = "";
 			targets = (
 				19D0CF293061E194001CC3E1 /* Bopify */,
+				BF0F18000000000000000002 /* BopifyAppTests */,
 			);
 		};
 /* End PBXProject section */
@@ -128,10 +191,20 @@
 			files = (
 			);
 		};
+		BF0F18000000000000000007 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		19D0CF263061E194001CC3E1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		BF0F18000000000000000006 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
 			);
@@ -349,6 +422,50 @@
 			};
 			name = Release;
 		};
+		BF0F18000000000000000009 /* Debug configuration for PBXNativeTarget "BopifyAppTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				BUNDLE_LOADER = "";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @loader_path/Frameworks @executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leesiongchan.bopify.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "";
+			};
+			name = Debug;
+		};
+		BF0F1800000000000000000A /* Release configuration for PBXNativeTarget "BopifyAppTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				BUNDLE_LOADER = "";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @loader_path/Frameworks @executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leesiongchan.bopify.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -367,6 +484,15 @@
 				19D0CF373061E195001CC3E1 /* Release configuration for PBXNativeTarget "Bopify" */,
 			);
 			defaultConfigurationName = Release;
+		};
+		BF0F18000000000000000008 /* Build configuration list for PBXNativeTarget "BopifyAppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BF0F18000000000000000009 /* Debug configuration for PBXNativeTarget "BopifyAppTests" */,
+				BF0F1800000000000000000A /* Release configuration for PBXNativeTarget "BopifyAppTests" */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
 

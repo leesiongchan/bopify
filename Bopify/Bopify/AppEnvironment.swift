@@ -25,6 +25,7 @@ final class AppEnvironment {
     private(set) var libraryAuthorizationNotice: String?
     @ObservationIgnored private let authorizeLibraryScopes: @Sendable (Set<String>) async throws -> Void
     @ObservationIgnored private var libraryGeneration = 0
+    @ObservationIgnored private var libraryAuthorization: Task<Void, Never>?
     let presentation = PlayerPresentation(
         mode: .compact,
         keepOnTop: UserDefaults.standard.bool(forKey: "player.keepOnTop"))
@@ -56,14 +57,9 @@ final class AppEnvironment {
     // Authorization and final teardown remain serialized; recovery has its own worker.
     @ObservationIgnored private var pending: Task<Void, Never> = Task {}
 
-    /// `signIn()`'s in-flight guard used to read `authState`, but `authState`
-    /// is mutated inside `serialize`d blocks belonging to *other*
-    /// operations too — an enqueued sign-out can overwrite it out from under
-    /// a sign-in still waiting in the chain. A guard is only as good as the
-    /// thing it reads, so this tracks sign-in-in-flight on its own, and
-    /// `authState` goes back to being purely a description of what the UI
-    /// should show.
-    @ObservationIgnored private var isSignInInFlight = false
+    // Queued lifecycle operations can change authState while consent is still pending.
+    private(set) var isAuthorizingPlayback = false
+    @ObservationIgnored private var playbackAuthorization: Task<Void, Never>?
 
     init() {
         let intent = LogoutIntentStore()
@@ -158,25 +154,44 @@ final class AppEnvironment {
             BopifyLog.library.info("library setup requested")
             return
         }
-        isEnablingLibrary = true
-        libraryAuthorizationNotice = nil
         let generation = libraryGeneration
-        defer { if generation == libraryGeneration { isEnablingLibrary = false } }
-        do {
-            try await authorizeLibraryScopes(scopes)
-            guard authState == .signedIn, generation == libraryGeneration else { return }
-            await refreshFavorite()
-            guard generation == libraryGeneration else { return }
-            await likedSongs.refresh()
-            guard generation == libraryGeneration else { return }
-            await recents.refresh()
-            guard generation == libraryGeneration else { return }
-            await explore.refresh()
-        } catch {
-            guard authState == .signedIn, generation == libraryGeneration else { return }
-            libraryAuthorizationNotice = String(localized: "favorite.consentFailed")
-            BopifyLog.library.notice("library authorization did not complete")
+        let task = Task { [self] in
+            defer {
+                if generation == libraryGeneration { isEnablingLibrary = false; libraryAuthorization = nil }
+            }
+            do {
+                try await authorizeLibraryScopes(scopes)
+                try Task.checkCancellation()
+                guard authState == .signedIn, generation == libraryGeneration else { return }
+                await refreshFavorite()
+                guard generation == libraryGeneration, !Task.isCancelled else { return }
+                await likedSongs.refresh()
+                guard generation == libraryGeneration, !Task.isCancelled else { return }
+                await recents.refresh()
+                guard generation == libraryGeneration, !Task.isCancelled else { return }
+                await explore.refresh()
+            } catch is CancellationError {
+                BopifyLog.library.info("library authorization cancelled")
+            } catch {
+                guard authState == .signedIn, generation == libraryGeneration else { return }
+                libraryAuthorizationNotice = String(localized: "favorite.consentFailed")
+                BopifyLog.library.notice("library authorization did not complete")
+            }
         }
+        libraryAuthorization = task
+        libraryAuthorizationNotice = nil
+        isEnablingLibrary = true
+        await task.value
+    }
+
+    func cancelPlaybackAuthorization() {
+        playbackAuthorization?.cancel()
+        BopifyLog.auth.info("playback authorization cancellation requested")
+    }
+
+    func cancelLibraryAuthorization() {
+        libraryAuthorization?.cancel()
+        BopifyLog.library.info("library authorization cancellation requested")
     }
 
     func setLibraryClientID(_ raw: String) async {
@@ -189,6 +204,8 @@ final class AppEnvironment {
         // Abandon active consent before it can post a stale notice; preserve a rotated
         // grant waiting for persistence when Save does not interrupt consent.
         let hadPendingConsent = isEnablingLibrary
+        libraryAuthorization?.cancel()
+        libraryAuthorization = nil
         libraryGeneration += 1
         isEnablingLibrary = false
         if hadPendingConsent { await libraryAuth.cancelPendingWork() }
@@ -211,6 +228,8 @@ final class AppEnvironment {
     }
 
     private func clearLibrary() {
+        libraryAuthorization?.cancel()
+        libraryAuthorization = nil
         libraryGeneration += 1
         isEnablingLibrary = false
         libraryAuthorizationNotice = nil
@@ -220,7 +239,7 @@ final class AppEnvironment {
         explore.clear()
     }
 
-    private func serialize(_ operation: @escaping @MainActor () async -> Void) async {
+    private func serialize(_ operation: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
         let previous = pending
         let task = Task { @MainActor in
             await previous.value
@@ -228,7 +247,7 @@ final class AppEnvironment {
         }
         pending = task
         BopifyLog.playback.debug("engine lifecycle operation enqueued")
-        await task.value
+        return task
     }
 
     private var hasPendingCleanup: Bool {
@@ -251,48 +270,56 @@ final class AppEnvironment {
                 guard generation == sessionGeneration else { return }
                 authState = .error(error as? PlayerError ?? .credentialUnavailable)
             }
-        }
+        }.value
     }
 
     func signIn() async {
-        guard !isSignInInFlight, !isRemovingCredentials else { return }
+        guard !isAuthorizingPlayback, !isRemovingCredentials else { return }
         if hasPendingCleanup {
             await signOut()
             guard authState == .signedOut else { return }
         }
-        isSignInInFlight = true
+        isAuthorizingPlayback = true
         let generation = sessionGeneration
-        await serialize { [self] in
-            defer { isSignInInFlight = false }
+        let task = serialize { [self] in
+            defer { isAuthorizingPlayback = false; playbackAuthorization = nil }
             guard generation == sessionGeneration else { return }
-            authState = .authenticating
             do {
+                try Task.checkCancellation()
+                authState = .authenticating
                 _ = try await auth.signIn()
                 guard generation == sessionGeneration else { return }
                 connect()
+            } catch is CancellationError {
+                guard generation == sessionGeneration else { return }
+                authState = .signedOut
+                BopifyLog.auth.info("sign-in cancelled")
             } catch {
                 guard generation == sessionGeneration else { return }
                 authState = .error(error as? PlayerError ?? .unknown)
             }
         }
+        playbackAuthorization = task
+        await task.value
     }
 
     func retryPlaybackConnection() { recovery?.retryNow() }
 
     func reconnectSpotify() async {
-        guard !isSignInInFlight, authState == .signedIn, needsPlaybackReauthentication else {
+        guard !isAuthorizingPlayback, authState == .signedIn, needsPlaybackReauthentication else {
             BopifyLog.auth.debug("Playback reauthorization ignored: no current request or authorization already pending")
             return
         }
-        isSignInInFlight = true
+        isAuthorizingPlayback = true
         let generation = sessionGeneration
-        await serialize { [self] in
-            defer { isSignInInFlight = false }
+        let task = serialize { [self] in
+            defer { isAuthorizingPlayback = false; playbackAuthorization = nil }
             guard generation == sessionGeneration, needsPlaybackReauthentication else {
                 BopifyLog.auth.debug("Queued playback reauthorization discarded after connection or session changed")
                 return
             }
             do {
+                try Task.checkCancellation()
                 _ = try await auth.signIn()
                 guard generation == sessionGeneration else { return }
                 recovery?.start()
@@ -300,6 +327,8 @@ final class AppEnvironment {
                 BopifyLog.auth.notice("playback reauthorization did not complete")
             }
         }
+        playbackAuthorization = task
+        await task.value
     }
 
     private var needsPlaybackReauthentication: Bool {
@@ -309,6 +338,8 @@ final class AppEnvironment {
     func signOut() async {
         guard !isRemovingCredentials else { return }
         isRemovingCredentials = true
+        playbackAuthorization?.cancel()
+        libraryAuthorization?.cancel()
         defer { isRemovingCredentials = false }
         sessionGeneration += 1
         connectionMonitor?.stop()
@@ -348,10 +379,12 @@ final class AppEnvironment {
             } else {
                 BopifyLog.auth.info("sign-out credential cleanup complete")
             }
-        }
+        }.value
     }
 
     func prepareForQuit() async {
+        playbackAuthorization?.cancel()
+        libraryAuthorization?.cancel()
         sessionGeneration += 1
         connectionMonitor?.stop()
         recovery?.invalidate()
@@ -371,7 +404,7 @@ final class AppEnvironment {
             player?.stop()
             player = nil
             BopifyLog.playback.info("prepare for quit complete")
-        }
+        }.value
     }
 
     // Called only inside serialize; the retry loop returns immediately and owns its lifetime.
