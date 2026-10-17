@@ -4,7 +4,7 @@ Validated October 17, 2026 on Apple Silicon with Xcode 27.0. This is the Debug-o
 
 ## Automated checks
 
-The complete `BopifyAppTests` run passed: **49 tests across 7 suites**, including 29 lyric timeline, reading, layout, panel and preview tests. Debug and Release app builds both succeeded. Release binary inspection found no lyric study symbols or `--lyric-ribbon-preview` launch flag.
+The complete `BopifyAppTests` run passed: **51 tests across 7 suites**, including 31 lyric timeline, reading, layout, panel and preview tests. Debug and Release app builds both succeeded. Release binary inspection found no lyric study symbols or `--lyric-ribbon-preview` launch flag.
 
 Tests cover timestamp boundaries, simultaneous and repeated cues, invalid input, explicit gaps, unknown duration, pause, correction versus seek, held text at playback end, same-recording occurrence replacement, session replacement, stale load completion, hide/reopen behavior, late clock ticks after cancellation, bounded text measurement, reachable frame recovery and explicit keyboard actions. No playback engine is supplied to the lyric model or session.
 
@@ -36,7 +36,7 @@ xcodebuild -project Bopify/Bopify.xcodeproj -scheme Bopify \
 | Larger text | Scale 1.5 increases reserved height and wraps the current line without truncation |
 | Right-to-left sample | Arabic text shapes and wraps in the native text view; the original logical text is exposed through accessibility |
 | Plain sample | Ordinary text reading, with no Live label or Hold text action |
-| Accessibility structure | Track, elapsed time, lyric text area, status and intentional reading/hide controls are exposed |
+| Accessibility structure | Track, elapsed time, lyric text area, status and intentional reading/hide controls are exposed; Hold text has the stable accessible label “Hold text”, native `AXCheckBox` role and value 0 live / 1 held |
 | Window placement | Movable independently of the main player; separate preview frame preference |
 
 Native testing caught and corrected first-click rejection, hidden controls in explicit keyboard mode and repeated-show scroll resets. Regression tests cover the affected policies and state transitions. The explicit keyboard loop works without changing the user's system-wide button navigation preference. Apple's focus guidance explains that ordinary button tabbing depends on that preference. [Apple SwiftUI focus cookbook](https://developer.apple.com/videos/play/wwdc2023/10162/).
@@ -55,7 +55,9 @@ The native surface retains the approved browser study's compact silhouette, dark
 
 Fresh code review identified a display-transition issue: a long ribbon could retain a tall display's viewport after being dragged onto a shorter display. The fix remeasures through AppKit's screen-change callback and selects the destination by greatest window overlap. Deterministic tests cover overlapping screens, the tall-to-short transition and callback wiring. A real drag between the connected displays also shrank the long ribbon from 1,010 to 830 points, keeping the footer within the shorter display. The drag call itself returns immediately, so it cannot serve as a drag-completion hook. [Apple window dragging](https://developer.apple.com/documentation/appkit/nswindow/performdrag(with:)).
 
-Two minor review items remain deferred: unchanged passages are measured on each clock tick, and Hold text exposes its mode as a descriptive button value rather than native toggle semantics. Neither is treated as completed accessibility or performance validation for a live release.
+Both minor review items are resolved. Passage updates reuse the displayed text view's layout manager and cached height; only changed attributed text or width triggers measurement. Regression tests verify reuse across ten unchanged updates and viewport changes, preserved selection, and invalidation for new words, text scale and width. Native larger-text rendering was rechecked. AppKit provides the layout pass through [ensureLayout(for:)](https://developer.apple.com/documentation/appkit/nslayoutmanager/ensurelayout(for:)). This establishes the removed repeated work, not a live-playback performance benchmark.
+
+Hold text now uses a native [button-style Toggle](https://developer.apple.com/documentation/swiftui/togglestyle/button), preserving the compact appearance while exposing an on/off state. Native accessibility inspection verified its stable label and 0/1 value transitions. Tab/Space activation, Escape dismissal, held text across advancing playback, immediate catch-up and actual pointer clicks preserving a scratch editor's typing focus all passed again. The screenshots above show the updated control.
 
 VoiceOver speech/navigation, fullscreen Spaces, physical display disconnection, and changed system Reduce Transparency/Increase Contrast settings were not exercised end to end. Accessibility structure and display-recovery geometry were checked separately; these do not establish those broader results. The study should receive those manual checks before its native experience is treated as release-ready.
 

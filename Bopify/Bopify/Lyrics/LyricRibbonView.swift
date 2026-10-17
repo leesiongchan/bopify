@@ -70,10 +70,12 @@ struct LyricRibbonView: View {
                 Spacer(minLength: 4)
                 HStack(spacing: 5) {
                     if isTimed {
-                        Button(model.isHeld ? "Back to live" : "Hold text") {
-                            if model.isHeld { model.backToLive() } else { model.holdText() }
-                        }
-                        .accessibilityValue(model.isHeld ? "Text held" : "Following playback")
+                        Toggle(model.isHeld ? "Back to live" : "Hold text", isOn: Binding(
+                            get: { model.isHeld },
+                            set: { if $0 { model.holdText() } else { model.backToLive() } }
+                        ))
+                        .toggleStyle(.button)
+                        .accessibilityLabel("Hold text")
                         .disabled(!model.isHeld && model.projection?.interval != .cue)
                         .focusable(interactions: [.edit, .activate])
                         .focused($focusedControl, equals: .reading)
@@ -118,13 +120,33 @@ struct LyricRibbonView: View {
     }
 }
 
-private struct LyricPassageView: NSViewRepresentable {
+struct LyricPassageView: NSViewRepresentable {
     let text: NSAttributedString
     let width: CGFloat
     let height: CGFloat
     let resetRevision: UInt64
 
-    final class Coordinator { var resetRevision: UInt64? }
+    final class Coordinator {
+        var resetRevision: UInt64?
+        private var layoutWidth: CGFloat?
+        private var textHeight: CGFloat = 0
+
+        func updateText(_ view: NSTextView, text: NSAttributedString, width: CGFloat, height: CGFloat) {
+            guard let storage = view.textStorage, let container = view.textContainer,
+                  let manager = view.layoutManager else { return }
+            let width = max(1, width)
+            let textChanged = !storage.isEqual(to: text)
+            if textChanged { storage.setAttributedString(text) }
+            if textChanged || layoutWidth != width {
+                container.containerSize = CGSize(width: width, height: .greatestFiniteMagnitude)
+                manager.ensureLayout(for: container)
+                textHeight = ceil(manager.usedRect(for: container).height)
+                layoutWidth = width
+            }
+            let size = CGSize(width: width, height: max(height, textHeight))
+            if view.frame.size != size { view.setFrameSize(size) }
+        }
+    }
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -152,10 +174,8 @@ private struct LyricPassageView: NSViewRepresentable {
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
-        guard let view = scroll.documentView as? NSTextView, let storage = view.textStorage else { return }
-        if !storage.isEqual(to: text) { storage.setAttributedString(text) }
-        view.textContainer?.containerSize = CGSize(width: max(1, width), height: .greatestFiniteMagnitude)
-        view.setFrameSize(CGSize(width: max(1, width), height: max(height, LyricRibbonLayout.textHeight(text, width: width))))
+        guard let view = scroll.documentView as? NSTextView else { return }
+        context.coordinator.updateText(view, text: text, width: width, height: height)
         if context.coordinator.resetRevision != resetRevision {
             scroll.contentView.scroll(to: .zero)
             scroll.reflectScrolledClipView(scroll.contentView)
