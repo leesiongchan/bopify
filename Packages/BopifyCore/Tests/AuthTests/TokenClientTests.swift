@@ -131,4 +131,22 @@ struct TokenClientTests {
         #expect(tokens.grantedScopes == ["streaming"])
     }
 
+    @Test(arguments: [
+        #"{"access_token":"","expires_in":3600}"#,
+        #"{"access_token":"AT","expires_in":3600,"token_type":"Other"}"#,
+    ]) func rejectsUnusableTokenResponses(_ body: String) async {
+        StubProtocol.handler = { _ in (200, Data(body.utf8)) }
+        await #expect(throws: PlayerError.unknown) { _ = try await makeClient().refresh(refreshToken: "RT") }
+    }
+
+    @Test(arguments: [
+        #"{"access_token":"AT","expires_in":true}"#,
+        #"{"access_token":"AT","expires_in":3600,"refresh_token":42}"#,
+        #"{"access_token":"AT","expires_in":3600,"scope":42}"#,
+        #"{"access_token":"AT","expires_in":3600,"token_type":42}"#,
+    ]) func rejectsWrongTokenFieldTypes(_ body: String) async {
+        StubProtocol.handler = { _ in (200, Data(body.utf8)) }
+        await #expect(throws: PlayerError.unknown) { _ = try await makeClient().refresh(refreshToken: "RT") }
+    }
+
 }
