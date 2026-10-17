@@ -19,6 +19,8 @@ nonisolated enum LyricContent: Equatable, Sendable {
     case loading, timed(LyricDocument), plain(String), instrumental, noMatch, failure
 }
 
+nonisolated enum LyricRibbonControl: Hashable { case reading, hide }
+
 nonisolated struct LyricLoadToken: Equatable, Sendable {
     let generation: UInt64
     let sessionID: String
@@ -31,6 +33,8 @@ final class LyricRibbonModel {
     private(set) var content: LyricContent = .loading
     private(set) var projection: LyricProjection?
     private(set) var isVisible = false
+    var isKeyboardInteracting = false
+    var keyboardSelection: LyricRibbonControl?
     private(set) var scrollResetRevision: UInt64 = 0
     private var heldProjection: LyricProjection?
     private var generation: UInt64 = 0
@@ -55,6 +59,7 @@ final class LyricRibbonModel {
     }
 
     func show() {
+        guard !isVisible else { return }
         isVisible = true
         reproject(resetScroll: true)
         BopifyLog.playback.debug("lyric ribbon shown")
@@ -65,6 +70,8 @@ final class LyricRibbonModel {
         heldProjection = nil
         projection = nil
         isVisible = false
+        isKeyboardInteracting = false
+        keyboardSelection = nil
         BopifyLog.playback.debug("lyric ribbon hidden")
     }
 

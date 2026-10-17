@@ -43,6 +43,27 @@ xcodebuild -project Bopify/Bopify.xcodeproj -scheme Bopify \
 
 ## Test
 
+### Lyric ribbon development preview
+
+The native lyric ribbon study is available only in Debug builds. It uses
+original sample words and a simulated clock, with no sign-in or Spotify connection.
+
+```sh
+xcodebuild -project Bopify/Bopify.xcodeproj -scheme Bopify \
+  -configuration Debug -destination 'platform=macOS,arch=arm64' \
+  -derivedDataPath build/lyric-ribbon-study CODE_SIGNING_ALLOWED=NO build
+open -n build/lyric-ribbon-study/Build/Products/Debug/Bopify.app \
+  --args --lyric-ribbon-preview
+```
+
+Use the study window to change samples, advance or pause the clock and enter
+explicit keyboard interaction with **Focus Ribbon**. The ribbon's **Hold text**
+action preserves a passage while the simulated song advances; **Back to live**
+catches up immediately. [Native validation notes](docs/lyric-ribbon-native-validation.md)
+record checks and remaining manual coverage.
+
+### Test suites
+
 Build the Rust library first, then run from the repository root:
 
 ```sh

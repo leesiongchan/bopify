@@ -11,13 +11,19 @@ struct LyricRibbonLayout {
         if let previous, !previous.isEmpty {
             let paragraph = NSMutableParagraphStyle()
             paragraph.paragraphSpacing = 6
+            paragraph.alignment = .natural
+            paragraph.baseWritingDirection = .natural
             result.append(NSAttributedString(string: previous + "\n", attributes: [
                 .font: NSFont.systemFont(ofSize: 14 * scale), .foregroundColor: NSColor.secondaryLabelColor,
                 .paragraphStyle: paragraph,
             ]))
         }
+        let currentParagraph = NSMutableParagraphStyle()
+        currentParagraph.alignment = .natural
+        currentParagraph.baseWritingDirection = .natural
         result.append(NSAttributedString(string: current, attributes: [
             .font: NSFont.systemFont(ofSize: 23 * scale, weight: .medium), .foregroundColor: NSColor.labelColor,
+            .paragraphStyle: currentParagraph,
         ]))
         return result
     }

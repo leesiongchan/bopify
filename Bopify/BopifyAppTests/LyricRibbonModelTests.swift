@@ -125,6 +125,15 @@ struct LyricRibbonModelTests {
         #expect(model.projection?.current?.startMs == 80_000)
         #expect(model.isVisible)
     }
+
+    @Test func showingAnAlreadyVisibleHeldPassagePreservesScroll() throws {
+        let model = try model()
+        model.holdText()
+        let revision = model.scrollResetRevision
+        model.show()
+        #expect(model.isHeld)
+        #expect(model.scrollResetRevision == revision)
+    }
 }
 
 nonisolated func lyricTestSnapshot(position: Int64 = 72_000) -> LyricPlaybackSnapshot {
