@@ -43,13 +43,25 @@ Native testing caught and corrected first-click rejection, hidden controls in ex
 
 ## Visual evidence
 
-The native surface retains the approved browser study's compact silhouette, dark vinyl palette, rounded edge and text hierarchy. Native system text is slightly different from browser text rendering; previous and current cues remain visually distinct. Larger text grows the reserved viewport rather than clipping the line.
+The native surface retains the approved browser study's compact silhouette, dark vinyl palette, rounded edge and text hierarchy. The approved glass follow-up replaces the standard-material background and 86%-opacity dark overlay with one regular Liquid Glass effect and a 75%-opacity charcoal-green fill. The glass supplies its own edge; the explicit border remains only for the opaque accessibility fallback. Typography, the vinyl mark, warm accents and the AppKit window/text bridges remain intact. The implementation follows Apple's [custom glass API](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views).
+
+Native system text is slightly different from browser text rendering; previous and current cues remain visually distinct. Larger text grows the reserved viewport rather than clipping the line. The captures below use the actual ribbon sources in a disposable native harness over owned backdrops. They capture composited screen pixels: window-only captures omit the desktop blending and misleadingly show a flat dark surface.
 
 ![Native quiet ribbon](mockups/lyric-ribbon-native-live.png)
 
 ![Native reading state](mockups/lyric-ribbon-native-reading.png)
 
 ![Native larger text](mockups/lyric-ribbon-native-large.png)
+
+![Glass over a light backdrop](mockups/lyric-ribbon-glass-light.png)
+
+![Glass over a patterned backdrop](mockups/lyric-ribbon-glass-busy.png)
+
+Dark, white and saturated patterned backdrops were inspected. The first untinted glass pass was too bright over white, so the charcoal fill was tuned for small text. A spot check of solid glyph pixels against the uniform background in the final white-backdrop capture measured approximately 4.58:1 for metadata, the previous cue and status. This is a controlled screenshot measurement, not a complete contrast audit across all desktop content.
+
+The same native harness injected Reduce Transparency and Increased Contrast environment values without changing system preferences. Both select the opaque surface; Increased Contrast adds the stronger border. The [reduced-transparency capture](mockups/lyric-ribbon-glass-reduced-transparency.png) and [increased-contrast capture](mockups/lyric-ribbon-glass-increased-contrast.png) record those branches. System-setting propagation remains unverified end to end.
+
+In the rebuilt app, actual pointer activation of Hold text kept TextEdit frontmost with its `AXTextArea` focused. Actual header dragging moved the panel by the requested 20 horizontal and 10 vertical points while TextEdit remained frontmost. Tab/Space returned the native reading toggle to value 0; Escape hid the ribbon and reopening succeeded. The final code passed all 51 tests and Debug/Release builds again. The focused review found no correctness issues.
 
 ## Remaining manual coverage
 
@@ -61,4 +73,4 @@ Hold text now uses a native [button-style Toggle](https://developer.apple.com/do
 
 VoiceOver speech/navigation, fullscreen Spaces, physical display disconnection, and changed system Reduce Transparency/Increase Contrast settings were not exercised end to end. Accessibility structure and display-recovery geometry were checked separately; these do not establish those broader results. The study should receive those manual checks before its native experience is treated as release-ready.
 
-The appearance was inspected over the current desktop and a light TextEdit document. No claim is made about every desktop background or screen-sharing configuration. Live lyric sourcing, provider matching, rights and Spotify integration remain outside this increment.
+The appearance was inspected over the current desktop, a light TextEdit document and the controlled dark, white and patterned backdrops above. No claim is made about every desktop background or screen-sharing configuration. Live lyric sourcing, provider matching, rights and Spotify integration remain outside this increment.
