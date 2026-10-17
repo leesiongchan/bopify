@@ -48,9 +48,15 @@ Build the Rust library first, then run from the repository root:
 ```sh
 ./scripts/test-native.sh
 swift test --package-path Packages/BopifyCore
+xcodebuild -project Bopify/Bopify.xcodeproj -scheme BopifyAppTests \
+  -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO test
 ```
 
-The release workflow runs these checks before uploading the DMG for publication.
+The Debug app test scheme runs without an app host. Authentication and artwork
+tests use injected services and local network fixtures.
+Pull requests build the app and run these checks. Releases also verify the mounted
+DMG and a copied installation before uploading it for publication. These checks
+do not exercise live Spotify sign-in, audio hardware, or Gatekeeper acceptance.
 
 ## Release
 
