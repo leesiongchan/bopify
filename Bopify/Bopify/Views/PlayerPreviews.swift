@@ -142,7 +142,7 @@ private nonisolated struct PreviewLibraryServices: LibraryService, SavedTracksSe
     var reduceMotion = false
     var diameter: CGFloat = 182
     var image: Image? {
-        isArtworkMissing ? nil : artworkStore.images[previewArtworkURL(index)].map { Image(nsImage: $0) }
+        isArtworkMissing ? nil : artworkStore.image(for: previewArtworkURL(index)).map { Image(nsImage: $0) }
     }
 }
 
@@ -189,7 +189,7 @@ struct RecordPreviewScene: View {
                 await fixture.artworkStore.loadPalette(url)
                 guard !Task.isCancelled, index == fixture.index else { return }
                 pressing = PressingAppearance(seed: seed,
-                                              palette: fixture.artworkStore.palettes[url] ?? .neutral)
+                                              palette: fixture.artworkStore.palette(for: url) ?? .neutral)
             }
     }
 }

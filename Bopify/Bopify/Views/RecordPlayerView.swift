@@ -58,7 +58,7 @@ struct RecordPlayerView: View {
     private var occurrenceID: String {
         player.state.mirror?.trackURI.rawValue ?? player.state.queue?.current?.id ?? player.state.currentTrack?.uri.rawValue ?? "missing"
     }
-    private var image: Image? { track?.artwork.flatMap { artworkStore.images[$0.url] }.map { Image(nsImage: $0) } }
+    private var image: Image? { track?.artwork.flatMap { artworkStore.image(for: $0.url) }.map { Image(nsImage: $0) } }
     private struct PressingRequest: Equatable {
         let uri: String?
         let artworkURL: URL?
@@ -68,7 +68,7 @@ struct RecordPlayerView: View {
     private var pressingRequest: PressingRequest {
         PressingRequest(uri: player.state.mirror?.trackURI.rawValue ?? track?.uri.rawValue ?? player.state.queue?.current?.uri?.rawValue,
                         artworkURL: track?.artwork?.url, retryRevision: artworkStore.retryRevision,
-                        hasImage: track?.artwork.flatMap { artworkStore.images[$0.url] } != nil)
+                        hasImage: track?.artwork.flatMap { artworkStore.image(for: $0.url) } != nil)
     }
     private var recordStatus: Text {
         if let connectionStatus, connectionStatus.isVisible { return connectionStatus.message }
@@ -160,7 +160,7 @@ struct RecordPlayerView: View {
             if !visible { pendingSelection = nil; accessibilityFocus = false; _ = cancelRecord() }
         }
         .onChange(of: accessibilityFocus) { _, focused in presentation.sendAttention(.accessibilityFocus(focused)) }
-        .onChange(of: track?.artwork.flatMap { artworkStore.palettes[$0.url] }) { _, palette in
+        .onChange(of: track?.artwork.flatMap { artworkStore.palette(for: $0.url) }) { _, palette in
             guard let palette else { return }
             displayedPressing = PressingAppearance(seed: pressingRequest.uri.map(PressingSeed.offset) ?? 0, palette: palette)
         }
@@ -168,7 +168,7 @@ struct RecordPlayerView: View {
             let request = pressingRequest
             if let url = request.artworkURL { await artworkStore.loadPalette(url) }
             guard !Task.isCancelled, request == pressingRequest else { return }
-            let palette = request.artworkURL.flatMap { artworkStore.palettes[$0] } ?? .neutral
+            let palette = request.artworkURL.flatMap { artworkStore.palette(for: $0) } ?? .neutral
             let ready = PressingAppearance(seed: request.uri.map(PressingSeed.offset) ?? 0, palette: palette)
             displayedPressing = ready
         }

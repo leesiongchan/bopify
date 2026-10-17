@@ -36,7 +36,7 @@ final class NowPlayingController {
         let info = withObservationTracking {
             let info = nowPlayingInfo(for: player.state, positionMs: player.displayPositionMs(at: .now), connectionReady: player.isEngineReady)
             // Read the image so artwork that finishes loading later triggers another write.
-            _ = info?.artworkURL.flatMap { artworkStore.images[$0] }
+            _ = info?.artworkURL.flatMap { artworkStore.image(for: $0) }
             _ = artworkStore.retryRevision
             return info
         } onChange: { [weak self] in
@@ -79,12 +79,12 @@ final class NowPlayingController {
         let request = ArtworkLoadRequest(url: url, retryRevision: artworkStore.retryRevision)
         guard request != requestedArtwork else { return }
         requestedArtwork = request
-        guard let url, artworkStore.images[url] == nil else { return }
+        guard let url, artworkStore.image(for: url) == nil else { return }
         Task { await artworkStore.load(url) }
     }
 
     private func artworkItem(for url: URL?) -> MPMediaItemArtwork? {
-        guard let url, let image = artworkStore.images[url] else { return nil }
+        guard let url, let image = artworkStore.image(for: url) else { return nil }
         if let artwork, artwork.url == url { return artwork.item }
         let item = Self.makeArtwork(image)
         artwork = (url, item)

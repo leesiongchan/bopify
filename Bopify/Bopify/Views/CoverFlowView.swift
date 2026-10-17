@@ -231,7 +231,7 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
     }
     private func cover(for track: Track) -> some View {
         let face = Group {
-            if let url = track.artwork?.url, let image = artworkStore.images[url] {
+            if let url = track.artwork?.url, let image = artworkStore.image(for: url) {
                 Image(nsImage: image).resizable().scaledToFill()
             } else {
                 ZStack {
