@@ -3,14 +3,12 @@ name: Release
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.event.pull_request.number || 'main' }}
+  group: release-main
   cancel-in-progress: false
   queue: max
 
@@ -29,7 +27,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Calculate release version
-        if: github.event_name == 'push'
         id: version
         uses: PaulHatch/semantic-version@9f72830310d5ed81233b641ee59253644cd8a8fc # v6.0.2
         with:
@@ -44,18 +41,9 @@ jobs:
       - name: Install Metal toolchain
         run: xcodebuild -downloadComponent MetalToolchain
       - name: Package ad-hoc DMG
-        if: github.event_name == 'push'
         env:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: ./scripts/release.sh "$RELEASE_VERSION"
-      - name: Build native library for pull request
-        if: github.event_name == 'pull_request'
-        run: ./scripts/build-rust.sh
-      - name: Build macOS app for pull request
-        if: github.event_name == 'pull_request'
-        run: >-
-          xcodebuild -project Bopify/Bopify.xcodeproj -scheme Bopify
-          -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO build
       - name: Test native playback
         run: ./scripts/test-native.sh
       - name: Test Swift packages
@@ -65,7 +53,6 @@ jobs:
           xcodebuild -project Bopify/Bopify.xcodeproj -scheme BopifyAppTests
           -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO test
       - name: Upload verified DMG
-        if: github.event_name == 'push'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: verified-dmg
@@ -75,7 +62,6 @@ jobs:
           overwrite: true
 
   publish:
-    if: github.event_name == 'push'
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 15
