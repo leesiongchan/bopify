@@ -41,7 +41,7 @@ struct QueueView: View {
         let url = track?.artwork?.url
         let label = HStack(spacing: 12) {
             Group {
-                if let url, let image = artworkStore.images[url] {
+                if let url, let image = artworkStore.image(for: url) {
                     Image(nsImage: image).resizable().scaledToFill()
                 } else {
                     ZStack {

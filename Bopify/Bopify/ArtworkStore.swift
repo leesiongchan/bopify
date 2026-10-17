@@ -14,32 +14,25 @@ struct ArtworkLoadRequest: Equatable {
 @MainActor
 @Observable
 final class ArtworkStore {
-    private(set) var images: [URL: NSImage] = [:]
-    private(set) var palettes: [URL: ArtworkPalette] = [:]
     private(set) var retryRevision = 0
-    private struct ImageLoad {
-        let id: UUID
-        let task: Task<Void, Never>
-        var consumers: [UUID: CheckedContinuation<Void, Never>]
-    }
-    @ObservationIgnored private var pending: [URL: ImageLoad] = [:]
-    @ObservationIgnored private var pendingPalettes: [URL: (id: UUID, task: Task<ArtworkPalette?, Never>)] = [:]
-    @ObservationIgnored private var failedPalettes: [URL: ContinuousClock.Instant] = [:]
+    private var cacheRevision = 0
     private struct Failure {
         let retryAt: ContinuousClock.Instant
         let transport: Bool
+        let transient: Bool
     }
     @ObservationIgnored private var failures: [URL: Failure] = [:]
     @ObservationIgnored private var failedURLs: [URL] = []
-    @ObservationIgnored private var recent: [URL] = []
-    @ObservationIgnored private var costs: [URL: Int] = [:]
-    @ObservationIgnored private var totalCost = 0
-    @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var retryTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingPalettes: [URL: (id: UUID, image: NSImage, task: Task<Void, Never>)] = [:]
     @ObservationIgnored private let decoder = ArtworkDecoder()
     @ObservationIgnored private let configuration: ImagePipeline.Configuration
     @ObservationIgnored private var pipeline: ImagePipeline
+    @ObservationIgnored private var imageCache: ImageCache
+    @ObservationIgnored private let now: () -> ContinuousClock.Instant
 
-    init(configuration: URLSessionConfiguration = .ephemeral) {
+    init(configuration: URLSessionConfiguration = .ephemeral, now: @escaping () -> ContinuousClock.Instant = { .now }) {
+        self.now = now
         configuration.urlCache = nil
         configuration.httpCookieStorage = nil
         configuration.urlCredentialStorage = nil
@@ -49,13 +42,17 @@ final class ArtworkStore {
             return (200..<300).contains(response.statusCode) ? nil : ArtworkHTTPFailure(response)
         }
         var settings = ImagePipeline.Configuration(dataLoader: loader)
-        // Observable dictionaries own retention; a second decoded/disk cache would outlive clear().
-        settings.imageCache = nil
+        let cache = ImageCache(costLimit: 32 * 1024 * 1024, countLimit: 112)
+        cache.entryCostLimit = 1
+        settings.imageCache = cache
         settings.isResumableDataEnabled = false
         settings.maximumResponseDataSize = 8 * 1024 * 1024
         settings.dataLoadingQueue = TaskQueue(maxConcurrentOperationCount: 4)
-        self.configuration = settings
+        imageCache = cache
         pipeline = ImagePipeline(configuration: settings)
+        // A reset template must not retain the previous session's cache.
+        settings.imageCache = nil
+        self.configuration = settings
     }
 
     convenience init(session: URLSession) { self.init(configuration: session.configuration) }
@@ -69,168 +66,104 @@ final class ArtworkStore {
 
     convenience init(previewImages: [URL: NSImage]) {
         self.init()
-        for (url, image) in previewImages { cache(image, for: url) }
+        for (url, image) in previewImages { pipeline.cache[request(url)] = ImageContainer(image: image) }
     }
     #endif
 
+    private func request(_ url: URL) -> ImageRequest {
+        var request = ImageRequest(url: url)
+        request.thumbnail = .init(maxPixelSize: 640)
+        return request
+    }
+
+    private func container(for url: URL) -> ImageContainer? {
+        _ = cacheRevision
+        return pipeline.cache[request(url)]
+    }
+
+    func image(for url: URL) -> NSImage? { container(for: url)?.image }
+    func palette(for url: URL) -> ArtworkPalette? {
+        container(for: url)?.userInfo["bopify.palette"] as? ArtworkPalette
+    }
+
     func load(_ url: URL) async {
-        guard url.scheme == "https" || url.scheme == "http", !Task.isCancelled else { return }
-        if images[url] != nil { touch(url); return }
-        let consumer = UUID()
-        await withTaskCancellationHandler {
-            await withCheckedContinuation { continuation in
-                guard !Task.isCancelled else { continuation.resume(); return }
-                if var existing = pending[url] {
-                    existing.consumers[consumer] = continuation
-                    pending[url] = existing
-                } else {
-                    let version = generation, id = UUID()
-                    let task = Task { [weak self] in
-                        guard let self else { return }
-                        await self.fetch(url, generation: version)
-                        self.finish(url, requestID: id)
-                    }
-                    pending[url] = ImageLoad(id: id, task: task, consumers: [consumer: continuation])
-                }
-            }
-        } onCancel: {
-            Task { @MainActor in self.cancelConsumer(url, consumer: consumer) }
+        guard url.scheme == "https" || url.scheme == "http", !Task.isCancelled,
+              image(for: url) == nil else { return }
+        if let failure = failures[url] {
+            guard failure.retryAt <= now() else { return }
+            removeFailure(url)
+            scheduleRetry()
         }
-    }
-
-    private func cancelConsumer(_ url: URL, consumer: UUID) {
-        guard var request = pending[url], let continuation = request.consumers.removeValue(forKey: consumer) else { return }
-        if request.consumers.isEmpty {
-            pending[url] = nil
-            request.task.cancel()
-        } else { pending[url] = request }
-        continuation.resume()
-    }
-
-    private func finish(_ url: URL, requestID: UUID) {
-        guard let request = pending[url], request.id == requestID else { return }
-        pending[url] = nil
-        request.consumers.values.forEach { $0.resume() }
-    }
-
-    private func fetch(_ url: URL, generation version: Int) async {
-        for attempt in 0..<3 {
-            guard !Task.isCancelled, generation == version else { return }
-            if images[url] != nil { touch(url); return }
-            if let failure = failures[url], failure.retryAt > .now { return }
-            var request = ImageRequest(url: url)
-            request.thumbnail = .init(maxPixelSize: 640)
-            do {
-                // The retry job shares one budget; its cancellation propagates into Nuke.
-                let image = try await pipeline.imageTask(with: request).image
-                guard !Task.isCancelled, generation == version else { return }
-                if images[url] == nil { cache(image, for: url) }
-                removeFailure(url)
-                failedPalettes[url] = nil
-                return
-            } catch {
-                guard !Task.isCancelled, generation == version else { return }
-                if case .cancelled = error { return }
-                let underlying = error.dataLoadingError
-                if let transport = underlying as? URLError, transport.code == .cancelled { return }
-                let http = underlying as? ArtworkHTTPFailure
-                let status = http?.status
-                let serverDelay = http?.retryAfter ?? 0
-                let transport = underlying as? URLError
-                let retryableTransport = transport.map {
-                    [.timedOut, .cannotFindHost, .cannotConnectToHost, .networkConnectionLost,
-                     .dnsLookupFailed, .notConnectedToInternet].contains($0.code)
-                } ?? false
-                let transient = retryableTransport || status.map { $0 == 408 || $0 == 429 || (500..<600).contains($0) } == true
-                if transient, attempt < 2, serverDelay <= 3 {
-                    BopifyLog.playback.debug("artwork transient failure; retry scheduled")
-                    do { try await Task.sleep(for: .seconds(max(Double(attempt + 1), serverDelay))) }
-                    catch { return }
-                    continue
-                }
-                recordFailure(url, transient: transient, transport: retryableTransport, serverDelay: serverDelay)
-                BopifyLog.playback.debug("artwork unavailable; retry cooldown recorded")
-                return
-            }
+        let pipeline = self.pipeline
+        do {
+            _ = try await pipeline.imageTask(with: request(url)).image
+            guard !Task.isCancelled, pipeline === self.pipeline else { return }
+            removeFailure(url)
+            cacheRevision += 1
+        } catch {
+            guard !Task.isCancelled, pipeline === self.pipeline, image(for: url) == nil else { return }
+            if case .cancelled = error { return }
+            let underlying = error.dataLoadingError
+            let transport = underlying as? URLError
+            if transport?.code == .cancelled { return }
+            let http = underlying as? ArtworkHTTPFailure
+            let retryableTransport = transport.map {
+                [.timedOut, .cannotFindHost, .cannotConnectToHost, .networkConnectionLost,
+                 .dnsLookupFailed, .notConnectedToInternet].contains($0.code)
+            } ?? false
+            let transient = retryableTransport || http.map { $0.status == 408 || $0.status == 429 || (500..<600).contains($0.status) } == true
+            guard failures[url] == nil else { return }
+            failures[url] = Failure(retryAt: now().advanced(by: .seconds(max(transient ? 30 : 600, http?.retryAfter ?? 0))),
+                                    transport: retryableTransport, transient: transient)
+            failedURLs.append(url)
+            while failedURLs.count > 112 { failures[failedURLs.removeFirst()] = nil }
+            scheduleRetry()
+            BopifyLog.playback.debug("artwork unavailable; retry cooldown recorded")
         }
     }
 
     func loadPalette(_ url: URL) async {
-        guard url.scheme == "https" || url.scheme == "http" else { return }
-        let version = generation
+        let pipeline = self.pipeline
         await load(url)
-        guard !Task.isCancelled, generation == version else { return }
-        guard palettes[url] == nil else { return }
-        if let retryAt = failedPalettes[url], retryAt > .now { return }
-        guard let image = images[url]?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
-        let request: (id: UUID, task: Task<ArtworkPalette?, Never>)
-        if let existing = pendingPalettes[url] {
-            request = existing
-        } else {
+        guard !Task.isCancelled, pipeline === self.pipeline, palette(for: url) == nil,
+              let image = image(for: url),
+              let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+        if let pending = pendingPalettes[url], pending.image === image { await pending.task.value; return }
+        pendingPalettes[url]?.task.cancel()
+        let id = UUID()
+        #if DEBUG
+        let extractor = paletteExtractor
+        #endif
+        let task = Task { [weak self, decoder] in
+            let result: ArtworkPalette?
             #if DEBUG
-            let extractor = paletteExtractor
+            if let extractor { result = await extractor(cgImage) }
+            else { result = await decoder.palette(cgImage) }
+            #else
+            result = await decoder.palette(cgImage)
             #endif
-            let task = Task { [decoder] in
-                #if DEBUG
-                if let extractor { return await extractor(image) }
-                #endif
-                return await decoder.palette(image)
-            }
-            request = (UUID(), task)
-            pendingPalettes[url] = request
+            guard let self, pendingPalettes[url]?.id == id else { return }
+            pendingPalettes[url] = nil
+            guard !Task.isCancelled, pipeline === self.pipeline,
+                  var container = container(for: url), container.image === image else { return }
+            // Extraction failure is stable for this image; retain the neutral appearance with it.
+            container.userInfo["bopify.palette"] = result ?? ArtworkPalette.neutral
+            pipeline.cache[request(url)] = container
+            cacheRevision += 1
+            BopifyLog.playback.debug("artwork palette resolved")
         }
-        let result = await request.task.value
-        guard !Task.isCancelled, !request.task.isCancelled, generation == version, images[url] != nil,
-              pendingPalettes[url]?.id == request.id else { return }
-        pendingPalettes[url] = nil
-        if let result {
-            palettes[url] = result
-            failedPalettes[url] = nil
-            BopifyLog.playback.debug("artwork palette computed")
-        } else {
-            failedPalettes[url] = .now.advanced(by: .seconds(600))
-            BopifyLog.playback.debug("artwork palette failed; retry cooldown recorded")
-        }
+        pendingPalettes[url] = (id, image, task)
+        await task.value
     }
 
     func retryFailedLoads(connectivityRestored: Bool = false) {
-        let now = ContinuousClock.now
+        let now = now()
         let eligible = failures.filter { $0.value.retryAt <= now || connectivityRestored && $0.value.transport }.map(\.key)
-        let paletteURLs = failedPalettes.filter { $0.value <= now }.map(\.key)
-        guard !eligible.isEmpty || !paletteURLs.isEmpty else { return }
+        guard !eligible.isEmpty else { return }
         eligible.forEach(removeFailure)
-        paletteURLs.forEach { failedPalettes[$0] = nil }
         retryRevision += 1
+        scheduleRetry()
         BopifyLog.playback.debug("artwork recovery requested")
-    }
-
-    private func touch(_ url: URL) {
-        recent.removeAll { $0 == url }
-        recent.append(url)
-    }
-
-    private func cache(_ image: NSImage, for url: URL) {
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
-        images[url] = image
-        costs[url] = cgImage.bytesPerRow * cgImage.height
-        totalCost += costs[url]!
-        touch(url)
-        while recent.count > 112 || totalCost > 32 * 1024 * 1024 {
-            let old = recent.removeFirst()
-            totalCost -= costs.removeValue(forKey: old) ?? 0
-            images[old] = nil
-            palettes[old] = nil
-            pendingPalettes.removeValue(forKey: old)?.task.cancel()
-            failedPalettes[old] = nil
-        }
-    }
-
-    private func recordFailure(_ url: URL, transient: Bool, transport: Bool, serverDelay: TimeInterval) {
-        let cooldown = max(transient ? 30 : 600, serverDelay)
-        failures[url] = Failure(retryAt: .now.advanced(by: .seconds(cooldown)), transport: transport)
-        failedURLs.removeAll { $0 == url }
-        failedURLs.append(url)
-        while failedURLs.count > 112 { failures[failedURLs.removeFirst()] = nil }
     }
 
     private func removeFailure(_ url: URL) {
@@ -238,25 +171,34 @@ final class ArtworkStore {
         failedURLs.removeAll { $0 == url }
     }
 
-    func clear() {
-        generation += 1
-        pending.values.forEach {
-            $0.task.cancel()
-            $0.consumers.values.forEach { $0.resume() }
+    private func scheduleRetry() {
+        retryTask?.cancel()
+        retryTask = nil
+        guard let deadline = failures.values.filter(\.transient).map(\.retryAt).min() else { return }
+        retryTask = Task { [weak self] in
+            do { try await Task.sleep(until: deadline, clock: .continuous) }
+            catch { return }
+            guard !Task.isCancelled else { return }
+            self?.retryFailedLoads()
         }
-        pending.removeAll()
+    }
+
+    func clear() {
+        retryTask?.cancel()
+        retryTask = nil
         pipeline.invalidate()
-        pipeline = ImagePipeline(configuration: configuration)
+        imageCache.removeAll()
         pendingPalettes.values.forEach { $0.task.cancel() }
         pendingPalettes.removeAll()
-        failedPalettes.removeAll()
         failures.removeAll()
         failedURLs.removeAll()
-        palettes.removeAll()
-        images.removeAll()
-        costs.removeAll()
-        totalCost = 0
-        recent.removeAll()
+        let cache = ImageCache(costLimit: 32 * 1024 * 1024, countLimit: 112)
+        cache.entryCostLimit = 1
+        imageCache = cache
+        var settings = configuration
+        settings.imageCache = cache
+        pipeline = ImagePipeline(configuration: settings)
+        cacheRevision += 1
     }
 }
 
