@@ -101,6 +101,20 @@ hdiutil create \
 codesign --sign - --timestamp=none "$staged_dmg"
 codesign --verify --strict "$staged_dmg"
 
+echo "Verifying the mounted DMG and copied installation."
+hdiutil verify -quiet "$staged_dmg"
+mount_dir="$work_dir/mounted"
+installed_app="$work_dir/installed/Bopify.app"
+mkdir "$mount_dir"
+trap 'hdiutil detach -quiet "$mount_dir" >/dev/null 2>&1 || true' EXIT
+hdiutil attach -quiet -readonly -nobrowse -mountpoint "$mount_dir" "$staged_dmg"
+ditto "$mount_dir/Bopify.app" "$installed_app"
+codesign --verify --deep --strict "$installed_app"
+cmp "$mount_dir/LICENSE.txt" "$installed_app/Contents/Resources/LICENSE.txt"
+cmp "$mount_dir/Third-Party Licenses.html" "$installed_app/Contents/Resources/Third-Party Licenses.html"
+hdiutil detach -quiet "$mount_dir"
+trap - EXIT
+
 echo "Ad-hoc distribution: not notarized; users may need a Gatekeeper override."
 
 # Linking fails atomically if another run has already promoted this version.
