@@ -258,6 +258,16 @@ impl Engine {
             .spawn(async move { sink(crate::radio::resolve(&source, seed, request_id).await) });
         Ok(())
     }
+
+    /// Queues a lyric lookup on this engine's runtime and callback sink.
+    pub fn request_lyrics(&self, track_uri: &str, request_id: u64) -> Result<(), BopifyError> {
+        let track = crate::lyrics::parse_track(track_uri).ok_or(BopifyError::InvalidArgument)?;
+        let source = crate::lyrics::SessionLyrics(self.session.clone());
+        let sink = self.sink.clone();
+        self.runtime
+            .spawn(async move { sink(crate::lyrics::resolve(&source, track, request_id).await) });
+        Ok(())
+    }
 }
 
 // Report forwarder panics so the UI cannot remain on stale playback state.
@@ -420,10 +430,14 @@ mod tests {
             let reporter = EngineReporter::new(Arc::new(move |event| {
                 output.send(event).unwrap();
             }));
-            if already_invalid { session.shutdown(); }
+            if already_invalid {
+                session.shutdown();
+            }
             supervise_spirc(std::future::pending(), session.clone(), reporter);
             tokio::task::yield_now().await;
-            if !already_invalid { session.shutdown(); }
+            if !already_invalid {
+                session.shutdown();
+            }
             let event = tokio::time::timeout(std::time::Duration::from_secs(1), received.recv())
                 .await
                 .expect("session invalidation must report without waiting for Spirc HTTP cleanup")
@@ -561,7 +575,6 @@ mod tests {
         assert!(received.try_recv().is_err());
     }
 
-
     #[tokio::test(start_paused = true)]
     async fn early_output_fault_reports_after_supervisor_starts() {
         let (output, mut received) = tokio::sync::mpsc::unbounded_channel();
@@ -577,7 +590,9 @@ mod tests {
             .unwrap();
         assert!(matches!(
             event,
-            WireEvent::SessionLost { reason: SessionLossReason::AudioOutputFailed }
+            WireEvent::SessionLost {
+                reason: SessionLossReason::AudioOutputFailed
+            }
         ));
     }
 
