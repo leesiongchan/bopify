@@ -1,6 +1,6 @@
 # Lyric ribbon research
 
-Research date: October 17, 2026. Status: exploration and proposed behavior, before design approval.
+Research date: October 17, 2026. Status: direction A selected; clean retro visual refinement under review. Native implementation design remains unapproved.
 
 The lyric ribbon would let a listener glance at the words and reread a passage while music continues. The value to test is whether it fits working on a Mac without taking keyboard focus or demanding attention. The primary use remains a choice between persistent background display, a brief shortcut peek and deliberate close reading.
 
@@ -64,6 +64,8 @@ The [interactive visual study](mockups/lyric-ribbon-directions.html) compares th
 
 These sizes are exploration choices, not platform requirements or final geometry. A is the current recommendation for persistent use. Carry Bopify's rounded shapes, system typography and semantic text hierarchy into the design. Keep album identity small so the lyric text remains the focus.
 
+The user selected A and requested a clean retro appearance that matches the app. The [refined quiet ribbon study](mockups/lyric-ribbon-retro.html) uses warm charcoal, ivory lyric text, a small grooved record mark and a muted paper-label accent for the held-reading action. The shape follows Bopify's soft surfaces and capsule controls; lyrics retain system typography and an undecorated background. These choices draw on [PlayerSurface](../Bopify/Bopify/Views/PlayerSurface.swift), [VinylPressingView](../Bopify/Bopify/Views/VinylPressingView.swift) and [PlayerControlButtonStyle](../Bopify/Bopify/Views/PlayerControlButtonStyle.swift). The browser study starts with controls visible for review; its toggle demonstrates the quieter hover/focus reveal. Selecting this visual direction does not settle panel behavior, source access or the native implementation design.
+
 Apple's current material guidance distinguishes standard materials for content from Liquid Glass for controls and navigation. The proposed lyric surface should use a sufficiently opaque standard material; any glass treatment belongs sparingly on its functional controls. Thicker materials can improve contrast for text. A browser blur or a glass-heavy appearance alone would not establish conformity with that guidance. [Apple Human Interface Guidelines Materials](https://developer.apple.com/design/human-interface-guidelines/materials).
 
 The study starts A with roughly 23-point primary lyric text and 14-point preceding text, plus smaller track metadata and controls. Those sizes need testing at actual desktop viewing distance and with larger text. Prefer semantic system colors over artwork-derived lyric colors, and provide opaque backgrounds when transparency is reduced. [Apple Human Interface Guidelines Typography](https://developer.apple.com/design/human-interface-guidelines/typography).
@@ -104,7 +106,7 @@ LRCLIB is a technical data candidate; its API accessibility does not establish a
 
 Separately, Spotify's published compliance guidance lists synchronizing its recordings with lyrics as a disallowed use case. A permitted Spotify integration must be established before treating live synchronization as shippable. A third-party lyric license does not settle this playback-platform restriction. [Spotify Compliance Tips](https://developer.spotify.com/compliance-tips).
 
-An interaction study can use original synthetic text and a simulated playback clock without Spotify access or copyrighted lyric excerpts. No prototype has been built; its question, input and behavior would need to be agreed before implementation.
+The browser studies use original synthetic text and a simulated playback clock without Spotify access or copyrighted lyric excerpts. No native playback-connected prototype has been built.
 
 ## What would establish that the idea works
 
@@ -112,4 +114,4 @@ Use a small original timed-text fixture containing long cues, repeated choruses,
 
 Check focus by typing continuously in another app while opening, reading and dismissing the ribbon. Evaluate fullscreen use, display changes, larger text, right-to-left layout and VoiceOver navigation. Verify that hiding the ribbon stops its display work and that a late or failed lyric load never interrupts music.
 
-Product success is that someone can glance, hold a passage and return to live without losing their place in either work or music. The next decision is the primary experience: persistent background ribbon, occasional peek or close reading. This research does not select a provider, approve a design or start implementation.
+Product success is that someone can glance, hold a passage and return to live without losing their place in either work or music. The selected visual direction is the compact quiet ribbon. Its refined appearance and persistent-display behavior still need review before completing the native design. This research does not select a provider or start implementation.
