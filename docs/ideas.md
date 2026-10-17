@@ -4,7 +4,7 @@ Updated October 17, 2026. Direction: explore distinctive features and technical 
 
 These are candidates for exploration. Saved listening spaces are the leading product idea; the first useful experiment is restoring a saved context, track and timestamp across switches and app restarts.
 
-The strongest new AI product candidate is turning independent music writing into a listening trail. A typed playback assistant is the smaller AI experiment. Both should earn their place through a narrow evaluation before becoming product commitments.
+Among smaller AI additions, turning independent music writing into a listening trail is the strongest product candidate, while a typed playback assistant is the smaller experiment. A further direction is an AI DJ that blends songs and adds spoken hosting, matching the requested meaning of AI mix. This requires a separate audio architecture and a viable source of music with permission for the intended processing.
 
 ## Existing capabilities
 
@@ -53,6 +53,31 @@ Apple demonstrates app actions in Shortcuts and Spotlight in [Develop for Shortc
 Basic external controls already exist in the [Spotifast Raycast extension](https://www.raycast.com/Seigiard/spotifast), making Bopify-specific actions the more interesting part of this direction.
 
 ## AI opportunities
+
+### AI DJ with blended transitions and spoken hosting
+
+Create a personal radio experience that blends song endings into the next track and adds occasional spoken hosting. The requested experience includes both overlapping music and an AI voice; a generated playlist alone would not satisfy it.
+
+A candidate interaction is to choose a session theme and hosting frequency, then hear short introductions between groups of songs. Separate controls for transition intensity and host frequency could let the player stay quiet when desired. This is a product hypothesis, with scope still to be agreed.
+
+**Audio architecture:** preload two playback lanes and schedule their gain changes through a native mixer. Generate the host script ahead of time, synthesize it into a separate voice lane and lower the music temporarily while speech plays. Keep text generation away from real-time audio rendering. Musical transition decisions and DSP need their own evaluation; begin with controlled crossfades before taking on beatmatching, pitch changes or stem separation.
+
+Bopify's [Rust engine](../rust/crates/bopify-core/src/engine.rs) currently constructs one librespot player and sends its output to Rodio. The [public playback interface](../Packages/BopifyCore/Sources/BopifyDomain/PlaybackEngine.swift) exposes no second deck, decoded-audio mixer, crossfade, speech renderer or ducking controls. Existing volume control alone cannot deliver this experience.
+
+For a local-audio probe, Apple provides scheduled audio-file and buffer playback through [AVAudioPlayerNode](https://developer.apple.com/documentation/avfaudio/avaudioplayernode), and speech synthesis can deliver buffers for further processing through [AVSpeechSynthesizer write toBufferCallback](https://developer.apple.com/documentation/avfaudio/avspeechsynthesizer/write%28_%3Atobuffercallback%3A%29). These are candidate building blocks, not evidence that the complete transition system or desired voice quality is solved.
+
+**Spotify boundary:** the public Developer Policy prohibits segueing, mixing or overlapping Spotify Content with other audio, including other Spotify Content. It also prohibits ingesting Spotify Content into AI models. Both song-to-song blending and music under a generated host encounter this boundary. [Spotify Developer Policy, section III](https://developer.spotify.com/policy).
+
+Spotify supports catalog mixing in specific products including rekordbox, Serato and djay. That establishes that supported integrations exist, not that Bopify has the same access. [Spotify Premium Integrates With Leading DJ Software in 51 Markets, September 24, 2025](https://newsroom.spotify.com/2025-09-24/dj-software-integration-premium/).
+
+Two paths need a decision before implementation:
+
+- **Keep Spotify as the music source:** investigate permission and integration access that explicitly covers blending and spoken overlays. Ordinary playback through librespot does not establish that permission. This preserves the product's music source but leaves a significant external dependency.
+- **Probe with local audio cleared for this use:** evaluate transitions and generated hosting on music and input metadata permitted for that processing. This offers a self-contained technical question, but local-file playback is a new subsystem outside Bopify's current Spotify scope.
+
+**Validation if a local-audio probe is selected:** use two or three cleared tracks and one generated introduction. Listen for clicks, gaps, clipping, intrusive speech and awkward vocal overlap; verify that pause and skip stop pending speech and transitions. If generation is late or fails, music playback must continue without waiting. Measure timing and resource use before adding adaptive transition analysis.
+
+**Tradeoff:** the highest-ambition audio direction in this list, with source access and mix quality as separate risks. First-party competition already includes Spotify's music-and-commentary DJ, so a Bopify version needs a clear independent benefit such as user control over hosting and transitions. [Your Personalized DJ Experience Is Expanding With 4 New Languages and More Markets, May 7, 2026](https://newsroom.spotify.com/2026-05-07/dj-expansion-4-new-languages/).
 
 ### Music writing into listening trails
 
@@ -134,6 +159,7 @@ These priorities reflect product fit and dependency scope, not measured user dem
 
 | Candidate | Reason to explore | Main uncertainty | Suggested order |
 | --- | --- | --- | --- |
+| AI DJ with blended transitions and spoken hosting | Matches the requested AI mix experience | Music-source permission and a new mixing subsystem | Resolve source path before an audio probe |
 | Saved listening spaces | Strong fit with compact playback and existing recovery state | Reliable resume across context changes | First product probe |
 | Typed playback assistant | Small AI task with a defined action set | Added value over shortcuts and deterministic parsing | First AI feasibility probe |
 | Music writing into listening trails | Turns independent discovery into playable collections | Extraction quality, catalog matching and setup friction | Strongest new AI product bet |
