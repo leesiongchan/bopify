@@ -54,6 +54,46 @@ final class AppEnvironment {
     }
     @ObservationIgnored private var monitorEnabled = true
 
+    #if DEBUG
+    @ObservationIgnored private(set) var liveLyricRibbon: LiveLyricRibbonSession?
+    var isLiveLyricsVisible: Bool { liveLyricRibbon?.isVisible ?? false }
+
+    func showLiveLyrics() {
+        guard authState == .signedIn, let player, let coordinator = recovery else { return }
+        if liveLyricRibbon == nil {
+            liveLyricRibbon = LiveLyricRibbonSession(player: player) { [weak coordinator] uri, epoch in
+                guard let coordinator, coordinator.player.engineEpoch == epoch,
+                      coordinator.player.isEngineReady, let engine = coordinator.currentEngine else {
+                    throw LyricFailure.unavailable
+                }
+                do { return try await engine.requestLyrics(for: uri) }
+                catch {
+                    if error as? PlayerError == .playbackSessionLost {
+                        coordinator.reportSessionLoss(.commandFailed, epoch: epoch)
+                    }
+                    throw error
+                }
+            }
+        }
+        liveLyricRibbon?.show()
+        BopifyLog.playback.debug("live lyric ribbon shown")
+    }
+
+    func hideLiveLyrics() { liveLyricRibbon?.hide() }
+
+    func focusLiveLyrics() {
+        guard authState == .signedIn, player != nil else { return }
+        showLiveLyrics()
+        liveLyricRibbon?.focusForReading()
+    }
+
+    private func stopLiveLyrics() {
+        liveLyricRibbon?.shutdown()
+        liveLyricRibbon = nil
+        BopifyLog.playback.debug("live lyric ribbon stopped")
+    }
+    #endif
+
     // Authorization and final teardown remain serialized; recovery has its own worker.
     @ObservationIgnored private var pending: Task<Void, Never> = Task {}
 
@@ -337,6 +377,9 @@ final class AppEnvironment {
 
     func signOut() async {
         guard !isRemovingCredentials else { return }
+        #if DEBUG
+        stopLiveLyrics()
+        #endif
         isRemovingCredentials = true
         playbackAuthorization?.cancel()
         libraryAuthorization?.cancel()
@@ -383,6 +426,9 @@ final class AppEnvironment {
     }
 
     func prepareForQuit() async {
+        #if DEBUG
+        stopLiveLyrics()
+        #endif
         playbackAuthorization?.cancel()
         libraryAuthorization?.cancel()
         sessionGeneration += 1
