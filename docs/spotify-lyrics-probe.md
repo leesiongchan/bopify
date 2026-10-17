@@ -69,6 +69,7 @@ The C ABI preserves the existing guard contract: null input or handle returns in
 - Full native Rust script: Connect 86, playback 11 and core 21 tests pass, with relevant doctests passing. One existing audio-output test is ignored because it requires usable hardware.
 - Swift package: 383 tests across 40 suites pass, including lyric decoding, callback ordering, equal IDs across channels, malformed replies, cancellation, timer cleanup, timeout and terminal events.
 - Native app: 51 tests across 7 suites pass. Existing AppIntents metadata and system `linkd.autoShortcut` warnings remain.
+- A fresh whole-change review found no critical, important or minor issues.
 - Final Debug and Release app builds pass after removing the temporary diagnostic hook. Rust formatting and Clippy pass. The build script generates the lyric C declaration and XCFramework; the Swift FFI smoke test links and invokes the new symbol.
 
 ## Remaining integration and live coverage
