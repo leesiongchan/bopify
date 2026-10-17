@@ -37,5 +37,59 @@ struct LyricRibbonLayoutTests {
         #expect(layout.panelSize.height <= 480)
         #expect(layout.textViewportHeight >= 50)
     }
+
+    @Test func reusesPassageLayoutAcrossClockUpdatesAndViewportChanges() {
+        let manager = LyricLayoutManagerSpy()
+        let container = NSTextContainer(size: .zero)
+        container.lineFragmentPadding = 0
+        manager.addTextContainer(container)
+        let storage = NSTextStorage()
+        storage.addLayoutManager(manager)
+        let view = NSTextView(frame: .zero, textContainer: container)
+        let coordinator = LyricPassageView.Coordinator()
+        let text = LyricRibbonLayout.passage(previous: nil, current: "A quiet afternoon", scale: 1)
+        coordinator.updateText(view, text: text, width: 408, height: 59)
+        #expect(manager.measurements == 1)
+        view.setSelectedRange(NSRange(location: 2, length: 5))
+        for _ in 0..<10 {
+            coordinator.updateText(view, text: text.copy() as! NSAttributedString, width: 408, height: 59)
+        }
+        coordinator.updateText(view, text: text, width: 408, height: 120)
+        #expect(manager.measurements == 1)
+        #expect(view.frame.height == 120)
+        #expect(view.selectedRange() == NSRange(location: 2, length: 5))
+    }
+
+    @Test func remeasuresPassageWhenWordsStyleOrWidthChange() {
+        let manager = LyricLayoutManagerSpy()
+        let container = NSTextContainer(size: .zero)
+        container.lineFragmentPadding = 0
+        manager.addTextContainer(container)
+        let storage = NSTextStorage()
+        storage.addLayoutManager(manager)
+        let view = NSTextView(frame: .zero, textContainer: container)
+        let coordinator = LyricPassageView.Coordinator()
+        let words = String(repeating: "A quiet afternoon. ", count: 10)
+        let text = LyricRibbonLayout.passage(previous: nil, current: words, scale: 1)
+        coordinator.updateText(view, text: text, width: 408, height: 1)
+        let wideHeight = view.frame.height
+        coordinator.updateText(view, text: text, width: 180, height: 1)
+        #expect(view.frame.height > wideHeight)
+        coordinator.updateText(view, text: LyricRibbonLayout.passage(previous: nil, current: words, scale: 1.5),
+            width: 180, height: 1)
+        coordinator.updateText(view, text: LyricRibbonLayout.passage(previous: nil, current: "New cue", scale: 1.5),
+            width: 180, height: 1)
+        #expect(manager.measurements == 4)
+        #expect(storage.string == "New cue")
+        #expect(view.frame.height == LyricRibbonLayout.textHeight(storage, width: 180))
+    }
+}
+
+nonisolated private final class LyricLayoutManagerSpy: NSLayoutManager {
+    var measurements = 0
+    override func ensureLayout(for container: NSTextContainer) {
+        measurements += 1
+        super.ensureLayout(for: container)
+    }
 }
 #endif
