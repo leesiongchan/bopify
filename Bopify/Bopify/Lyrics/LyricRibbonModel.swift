@@ -17,6 +17,7 @@ nonisolated struct LyricPlaybackSnapshot: Equatable, Sendable {
 
 nonisolated enum LyricContent: Equatable, Sendable {
     case loading, timed(LyricDocument), plain(String), instrumental, noMatch, failure
+    case idle(LyricIdleReason)
 }
 
 nonisolated enum LyricRibbonControl: Hashable { case reading, hide }
@@ -31,6 +32,7 @@ nonisolated struct LyricLoadToken: Equatable, Sendable {
 final class LyricRibbonModel {
     private(set) var snapshot: LyricPlaybackSnapshot
     private(set) var content: LyricContent = .loading
+    private(set) var source: LyricSourceMetadata?
     private(set) var projection: LyricProjection?
     private(set) var isVisible = false
     var isKeyboardInteracting = false
@@ -50,6 +52,7 @@ final class LyricRibbonModel {
             generation &+= 1
             heldProjection = nil
             content = .loading
+            source = nil
             BopifyLog.playback.debug("lyric input replaced generation=\(self.generation, privacy: .public)")
         } else if seeked {
             heldProjection = nil
@@ -91,16 +94,26 @@ final class LyricRibbonModel {
         generation &+= 1
         heldProjection = nil
         content = .loading
+        source = nil
         reproject(resetScroll: true)
         return LyricLoadToken(generation: generation, sessionID: snapshot.sessionID, occurrenceID: snapshot.occurrenceID)
     }
 
-    func completeLoad(_ content: LyricContent, token: LyricLoadToken) {
+    func completeLoad(_ content: LyricContent, token: LyricLoadToken, source: LyricSourceMetadata? = nil) {
         guard token.generation == generation, token.sessionID == snapshot.sessionID,
               token.occurrenceID == snapshot.occurrenceID else { return }
         generation &+= 1
         self.content = content
+        self.source = source
         heldProjection = nil
+        reproject(resetScroll: true)
+    }
+
+    func setIdle(_ reason: LyricIdleReason) {
+        generation &+= 1
+        heldProjection = nil
+        source = nil
+        content = .idle(reason)
         reproject(resetScroll: true)
     }
 

@@ -26,17 +26,19 @@ struct LyricRibbonView: View {
     }
     private var words: NSAttributedString {
         if case let .plain(text) = model.content {
-            return LyricRibbonLayout.passage(previous: nil, current: text, scale: layout.textScale)
+            return LyricRibbonLayout.passage(previous: nil, current: text, scale: layout.textScale,
+                isRightToLeft: model.source?.isRightToLeft ?? false)
         }
         if let current = model.projection?.current {
             return LyricRibbonLayout.passage(previous: model.projection?.previous?.text,
-                current: current.text, scale: layout.textScale)
+                current: current.text, scale: layout.textScale, isRightToLeft: model.source?.isRightToLeft ?? false)
         }
         let message: String = switch model.content {
         case .loading: "Loading lyrics…"
         case .instrumental: "Instrumental"
         case .noMatch: "No lyrics found"
         case .failure: "Lyrics unavailable"
+        case let .idle(reason): reason.message
         case .plain: ""
         case .timed:
             switch model.projection?.interval {
@@ -54,7 +56,7 @@ struct LyricRibbonView: View {
         VStack(spacing: 10) {
             HStack(spacing: 8) {
                 vinylMark
-                Text("\(model.snapshot.title) · \(model.snapshot.artist)")
+                Text(model.snapshot.artist.isEmpty ? model.snapshot.title : "\(model.snapshot.title) · \(model.snapshot.artist)")
                     .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                 Spacer(minLength: 8)
                 Text(elapsed).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
@@ -64,6 +66,12 @@ struct LyricRibbonView: View {
             LyricPassageView(text: words, width: layout.panelSize.width - 40,
                 height: layout.textViewportHeight, resetRevision: model.scrollResetRevision)
                 .frame(height: layout.textViewportHeight)
+            if let attribution = model.source?.attribution, layout.attributionHeight > 0 {
+                Text(attribution).font(.system(size: 10 * layout.textScale)).foregroundStyle(.secondary)
+                    .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: layout.attributionHeight, alignment: .topLeading)
+                    .help(attribution).accessibilityLabel(attribution)
+            }
             HStack(spacing: 8) {
                 Text(status).font(.system(size: 10))
                     .foregroundStyle(model.isHeld ? Color(red: 0.86, green: 0.77, blue: 0.59) : .secondary)

@@ -85,7 +85,7 @@ final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
         let screens = NSScreen.screens.map(\.visibleFrame)
         let preferred = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1024, height: 768)
         let placement = Self.placement(content: model.content, saved: anchor, textScale: textScale,
-            screens: screens, preferred: preferred)
+            screens: screens, preferred: preferred, source: model.source)
         let layout = placement.layout
         let root = LyricRibbonView(model: model, layout: layout, onHide: onHide,
             onDragHeader: { [weak self] event in self?.panel.performDrag(with: event) })
@@ -104,10 +104,10 @@ final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
     }
 
     static func placement(content: LyricContent, saved: CGRect?, textScale: CGFloat,
-                          screens: [CGRect], preferred: CGRect) -> (layout: LyricRibbonLayout, frame: CGRect) {
+                          screens: [CGRect], preferred: CGRect, source: LyricSourceMetadata? = nil) -> (layout: LyricRibbonLayout, frame: CGRect) {
         let visible = screen(for: saved, screens: screens, preferred: preferred)
         let layout = LyricRibbonLayout.measure(content: content, width: min(448, visible.width),
-            textScale: textScale, availableHeight: max(100, visible.height - 40))
+            textScale: textScale, availableHeight: max(100, visible.height - 40), source: source)
         return (layout, reachableFrame(saved: saved, size: layout.panelSize, screens: screens, preferred: preferred))
     }
 
