@@ -6,6 +6,57 @@ import BopifyDomain
 @MainActor
 @Suite("PlayerModel")
 struct PlayerModelTests {
+    @Test func sameURITrackChangedAdvancesPlaybackRevisionWithoutLoading() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        let track = makeTrack()
+        let entry = QueueEntry(id: "same-entry", uri: track.uri, target: nil, track: track, metadataFailed: false)
+        await settle(model, engine, [.queueChanged(PlaybackQueue(generation: 1, previous: [], current: entry, next: [])),
+            .trackChanged(track), .playing(positionMs: 0), .endOfTrack, .trackChanged(track)])
+        #expect(model.playbackRevision == 2)
+        #expect(model.seekRevision == 0)
+        #expect(model.state.queue?.current?.id == "same-entry")
+    }
+
+    @Test func onlyConfirmedSeekAdvancesSeekRevision() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        await settle(model, engine, [.trackChanged(makeTrack()), .playing(positionMs: 0),
+            .positionCorrection(positionMs: 5000), .paused(positionMs: 5000), .playing(positionMs: 5000)])
+        #expect(model.playbackRevision == 1)
+        #expect(model.seekRevision == 0)
+        await settle(model, engine, [.seeked(positionMs: 30_000)])
+        #expect(model.seekRevision == 1)
+        #expect(model.playbackRevision == 1)
+        #expect(model.displayPositionMs(at: model.positionUpdatedAt.addingTimeInterval(1)) == 31_000)
+    }
+
+    @Test func metadataAndCommandsDoNotInventPlaythroughs() async throws {
+        let engine = RecoveryStubEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        let track = makeTrack()
+        let entry = QueueEntry(id: "entry", uri: track.uri, target: nil, track: nil, metadataFailed: false)
+        engine.emit(.trackChanged(track))
+        engine.emit(.queueChanged(PlaybackQueue(generation: 1, previous: [], current: entry, next: [])))
+        engine.emit(.paused(positionMs: 1000))
+        for _ in 0..<10_000 { if model.state.phase == .paused { break }; await Task.yield() }
+        try #require(model.state.phase == .paused)
+        engine.commandError = .unknown
+        engine.emit(.queueMetadata(generation: 1, entryID: "entry", track: track))
+        model.seek(to: 2000)
+        for _ in 0..<10_000 { if model.commandNotice != nil { break }; await Task.yield() }
+        try #require(model.commandNotice != nil)
+        #expect(model.playbackRevision == 1)
+        #expect(model.seekRevision == 0)
+        #expect(model.state.positionMs == 1000)
+    }
+
     @Test func muteRestoresOnlyConfirmedSessionVolume() async {
         let engine = StubPlaybackEngine()
         let model = PlayerModel(engine: engine)
