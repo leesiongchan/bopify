@@ -1,6 +1,6 @@
 # Spotify lyric retrieval bridge
 
-Status: proposed for review. This extends the completed native ribbon study with a typed lyric retrieval API. Implementation has not started.
+Status: approved by the user on October 17, 2026. This extends the completed native ribbon study with a typed lyric retrieval API. Implementation has not started.
 
 ## Purpose and verified starting point
 
