@@ -244,6 +244,7 @@ private actor ControlledVolumeEngine: PlaybackEngine {
     func setShuffle(_ enabled: Bool) async throws { try await stub.setShuffle(enabled) }
     func setRepeat(_ mode: RepeatMode) async throws { try await stub.setRepeat(mode) }
     func requestRadio(seed: SpotifyURI) async throws -> RadioMix { throw RadioFailure.unavailable }
+    func requestLyrics(for track: SpotifyURI) async throws -> TrackLyrics { throw LyricFailure.unavailable }
 }
 
 @MainActor private final class VolumeClock {

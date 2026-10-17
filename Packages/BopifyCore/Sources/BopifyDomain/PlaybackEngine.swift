@@ -30,4 +30,6 @@ public protocol PlaybackEngine: Sendable {
     func setRepeat(_ mode: RepeatMode) async throws
     /// Spotify's radio for a track or artist seed. Throws `RadioFailure` when Spotify has none.
     func requestRadio(seed: SpotifyURI) async throws -> RadioMix
+    /// Spotify lyrics for one track. Throws `LyricFailure` for lyric-service failures.
+    func requestLyrics(for track: SpotifyURI) async throws -> TrackLyrics
 }

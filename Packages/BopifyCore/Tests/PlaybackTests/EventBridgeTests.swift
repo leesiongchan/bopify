@@ -108,6 +108,11 @@ struct EventBridgeTests {
 
 @Suite("FFI smoke test")
 struct FFISmokeTests {
+    @Test func lyricSymbolLinksAndRejectsNullInputs() {
+        #expect(bopify_request_lyrics(nil, nil, 42) == -1)
+        #expect(bopify_request_lyrics(nil, "spotify:track:11dFghVXANMlKmJXsNCbNl", 42) == -1)
+    }
+
     /// Proves the xcframework links, the generated header imports, and the
     /// Swift and Rust views of the ABI agree — including that the trampoline
     /// really converts to the C callback type. A null token is rejected
