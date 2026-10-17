@@ -411,6 +411,27 @@ pub unsafe extern "C" fn bopify_request_radio(
     unsafe { with_engine(handle, |engine| engine.request_radio(seed, request_id)) }
 }
 
+/// Queues a lyric lookup for a canonical track URI. The callback carries
+/// `lyrics` or `lyricsFailed` with the same `request_id`.
+///
+/// # Safety
+/// `handle` must be null or a live handle from `bopify_engine_create`, and
+/// `track_uri` must satisfy `str_from`'s contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn bopify_request_lyrics(
+    handle: *mut BopifyEngine,
+    track_uri: *const c_char,
+    request_id: u64,
+) -> i32 {
+    log::debug!("ffi: bopify_request_lyrics request_id={request_id}");
+    // SAFETY: the URI pointer satisfies the caller contract and is borrowed only during this call.
+    let Some(track) = (unsafe { str_from(track_uri) }) else {
+        return BopifyError::InvalidArgument.code();
+    };
+    // SAFETY: forwards this function's own handle contract to `with_engine`.
+    unsafe { with_engine(handle, |engine| engine.request_lyrics(track, request_id)) }
+}
+
 /// Valid calls return `SessionLost`: librespot cannot swap credentials in place.
 ///
 /// # Safety
@@ -457,6 +478,35 @@ mod tests {
     unsafe fn release(ptr: *mut BopifyEngine) {
         // SAFETY: guaranteed by this function's contract.
         drop(unsafe { Box::from_raw(ptr) });
+    }
+
+    #[test]
+    fn lyric_requests_validate_null_input_and_guard_lost_handles() {
+        let ptr = handle_without_an_engine(false);
+        // SAFETY: the test owns this handle and the URI is a valid C literal.
+        unsafe {
+            assert_eq!(
+                bopify_request_lyrics(ptr, std::ptr::null(), 1),
+                BopifyError::InvalidArgument.code()
+            );
+            assert_eq!(
+                bopify_request_lyrics(std::ptr::null_mut(), std::ptr::null(), 1),
+                BopifyError::InvalidArgument.code()
+            );
+            assert_eq!(
+                bopify_request_lyrics(ptr, c"spotify:track:11dFghVXANMlKmJXsNCbNl".as_ptr(), 1),
+                BopifyError::SessionLost.code()
+            );
+            assert_eq!(
+                bopify_request_lyrics(
+                    std::ptr::null_mut(),
+                    c"spotify:track:11dFghVXANMlKmJXsNCbNl".as_ptr(),
+                    1
+                ),
+                BopifyError::InvalidArgument.code()
+            );
+            release(ptr);
+        }
     }
 
     #[test]

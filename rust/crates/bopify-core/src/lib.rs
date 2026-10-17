@@ -7,6 +7,7 @@ pub mod ffi;
 /// cbindgen:ignore
 // Imports C symbols without exporting ABI types.
 mod logging;
+mod lyrics;
 mod queue;
 mod radio;
 mod recovery;

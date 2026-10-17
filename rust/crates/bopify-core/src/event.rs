@@ -147,6 +147,19 @@ pub enum WireEvent {
         seed_uri: String,
         reason: RadioFailure,
     },
+    Lyrics {
+        #[serde(rename = "requestID")]
+        request_id: u64,
+        #[serde(flatten)]
+        lyrics: crate::lyrics::WireLyrics,
+    },
+    LyricsFailed {
+        #[serde(rename = "requestID")]
+        request_id: u64,
+        #[serde(rename = "trackURI")]
+        track_uri: String,
+        reason: crate::lyrics::LyricFailure,
+    },
 }
 
 /// Translates player events, explicitly dropping signals not used by Swift.
