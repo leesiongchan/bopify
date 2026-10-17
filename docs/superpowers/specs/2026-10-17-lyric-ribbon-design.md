@@ -1,6 +1,6 @@
 # Bopify quiet lyric ribbon design
 
-Status: approved native design. The refined appearance of direction A is approved. The [implementation plan](../plans/2026-10-17-lyric-ribbon.md) is ready for review.
+Status: approved native design and [implementation plan](../plans/2026-10-17-lyric-ribbon.md). The Debug study is implemented; see [native validation](../../lyric-ribbon-native-validation.md) for checks and remaining manual coverage.
 
 ## Purpose and scope
 

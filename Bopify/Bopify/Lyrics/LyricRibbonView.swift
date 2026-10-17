@@ -8,11 +8,11 @@ struct LyricRibbonView: View {
     let onHide: () -> Void
     let onDragHeader: (NSEvent) -> Void
     @State private var hovered = false
-    @FocusState private var controlsFocused: Bool
+    @FocusState private var focusedControl: LyricRibbonControl?
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
 
-    private var showsControls: Bool { hovered || controlsFocused || model.isHeld }
+    private var showsControls: Bool { hovered || focusedControl != nil || model.isHeld || model.isKeyboardInteracting }
     private var isTimed: Bool { if case .timed = model.content { true } else { false } }
     private var elapsed: String {
         let seconds = max(0, model.snapshot.positionMs) / 1000
@@ -75,11 +75,13 @@ struct LyricRibbonView: View {
                         }
                         .accessibilityValue(model.isHeld ? "Text held" : "Following playback")
                         .disabled(!model.isHeld && model.projection?.interval != .cue)
-                        .focused($controlsFocused)
+                        .focusable(interactions: [.edit, .activate])
+                        .focused($focusedControl, equals: .reading)
                         .tint(model.isHeld ? Color(red: 0.88, green: 0.82, blue: 0.70) : .secondary)
                     }
                     Button(action: onHide) { Image(systemName: "xmark").frame(width: 10) }
-                        .accessibilityLabel("Hide Ribbon").help("Hide Ribbon").focused($controlsFocused)
+                        .accessibilityLabel("Hide Ribbon").help("Hide Ribbon")
+                        .focusable(interactions: [.edit, .activate]).focused($focusedControl, equals: .hide)
                 }
                 .font(.system(size: 10)).buttonStyle(.bordered).buttonBorderShape(.capsule)
                 .controlSize(.mini).opacity(showsControls ? 1 : 0)
@@ -101,6 +103,7 @@ struct LyricRibbonView: View {
             .strokeBorder(.primary.opacity(contrast == .increased ? 0.5 : 0.13), lineWidth: 1).allowsHitTesting(false))
         .preferredColorScheme(.dark)
         .onHover { hovered = $0 }
+        .onChange(of: model.keyboardSelection) { _, selection in focusedControl = selection }
     }
 
     private var vinylMark: some View {

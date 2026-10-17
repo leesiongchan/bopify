@@ -12,13 +12,17 @@ struct LyricRibbonWindowTests {
         let controller = LyricRibbonWindowController(model: model, defaults: defaults, onHide: {})
         defer { controller.hide(); controller.panel.close() }
         #expect(!controller.panel.canBecomeKey)
+        let host = try #require(controller.panel.contentView?.subviews.first)
+        #expect(host.acceptsFirstMouse(for: nil))
         controller.focusForReading()
         #expect(controller.panel.canBecomeKey)
+        #expect(model.isKeyboardInteracting)
         model.completeLoad(.timed(try lyricTestDocument()), token: model.beginLoad())
         model.holdText()
         controller.hide()
         #expect(!model.isVisible && !model.isHeld)
         #expect(!controller.panel.canBecomeKey)
+        #expect(!model.isKeyboardInteracting)
     }
 
     @Test func missingDisplayAndSmallFrameKeepPanelReachable() {
@@ -38,6 +42,35 @@ struct LyricRibbonWindowTests {
         let frame = LyricRibbonWindowController.reachableFrame(saved: saved, size: saved.size,
             screens: [left, right], preferred: right)
         #expect(frame == saved)
+    }
+
+    @Test func explicitKeyboardLoopReachesReadingAndHide() throws {
+        let suite = "lyric-keyboard-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = LyricRibbonModel(snapshot: lyricTestSnapshot())
+        var hideRequested = false
+        let controller = LyricRibbonWindowController(model: model, defaults: defaults, onHide: { hideRequested = true })
+        defer { controller.hide(); controller.panel.close() }
+        controller.show()
+        model.completeLoad(.timed(try lyricTestDocument()), token: model.beginLoad())
+        controller.focusForReading()
+        #expect(model.keyboardSelection == .reading)
+        func key(_ code: UInt16) throws {
+            let event = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: controller.panel.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "",
+                isARepeat: false, keyCode: code))
+            controller.panel.keyDown(with: event)
+        }
+        try key(48)
+        #expect(model.keyboardSelection == .hide)
+        try key(48)
+        #expect(model.keyboardSelection == .reading)
+        try key(49)
+        #expect(model.isHeld)
+        try key(48)
+        try key(36)
+        #expect(hideRequested)
     }
 }
 #endif

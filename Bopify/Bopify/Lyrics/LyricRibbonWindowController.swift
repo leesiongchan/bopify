@@ -35,6 +35,20 @@ final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
         panel.isReleasedWhenClosed = false
         panel.appearance = NSAppearance(named: .darkAqua)
         (panel as? LyricRibbonPanel)?.onDismiss = onHide
+        (panel as? LyricRibbonPanel)?.onKeyboardInteraction = { [weak model] active in
+            model?.isKeyboardInteracting = active
+            if !active { model?.keyboardSelection = nil }
+        }
+        (panel as? LyricRibbonPanel)?.onTab = { [weak self] in
+            guard let self else { return }
+            self.model.keyboardSelection = self.canRead && self.model.keyboardSelection != .reading ? .reading : .hide
+        }
+        (panel as? LyricRibbonPanel)?.onActivate = { [weak self] in
+            guard let self else { return }
+            if self.model.keyboardSelection == .hide { self.onHide() }
+            else if self.model.isHeld { self.model.backToLive() }
+            else { self.model.holdText() }
+        }
         refreshLayout(textScale: 1)
         NotificationCenter.default.addObserver(self, selector: #selector(screensChanged),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
@@ -58,12 +72,16 @@ final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
     func focusForReading() {
         if !model.isVisible { show() }
         (panel as? LyricRibbonPanel)?.allowsKeyboardFocus = true
+        model.keyboardSelection = canRead ? .reading : .hide
         panel.makeKeyAndOrderFront(nil)
-        panel.selectNextKeyView(nil)
+        panel.makeFirstResponder(panel)
     }
+
+    private var canRead: Bool { model.isHeld || model.projection?.interval == .cue }
 
     func refreshLayout(textScale: CGFloat) {
         self.textScale = textScale
+        if model.isKeyboardInteracting, !canRead { model.keyboardSelection = .hide }
         let screens = NSScreen.screens.map(\.visibleFrame)
         let preferred = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1024, height: 768)
         let visible = Self.screen(for: anchor, screens: screens, preferred: preferred)
@@ -73,7 +91,7 @@ final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
             onDragHeader: { [weak self] event in self?.panel.performDrag(with: event) })
         if let host { host.rootView = root }
         else {
-            let host = NSHostingView(rootView: root)
+            let host = LyricRibbonHostingView(rootView: root)
             host.sizingOptions = []
             host.autoresizingMask = [.width, .height]
             let container = NSView(frame: CGRect(origin: .zero, size: layout.panelSize))
@@ -111,10 +129,28 @@ final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
 }
 
 private final class LyricRibbonPanel: NSPanel {
-    var allowsKeyboardFocus = false
+    var allowsKeyboardFocus = false { didSet { onKeyboardInteraction?(allowsKeyboardFocus) } }
+    var onKeyboardInteraction: ((Bool) -> Void)?
     var onDismiss: (() -> Void)?
+    var onTab: (() -> Void)?
+    var onActivate: (() -> Void)?
     override var canBecomeKey: Bool { allowsKeyboardFocus }
     override func resignKey() { super.resignKey(); allowsKeyboardFocus = false }
     override func cancelOperation(_ sender: Any?) { onDismiss?() }
+    override func keyDown(with event: NSEvent) {
+        let modifiers = event.modifierFlags.intersection([.command, .option, .control])
+        if allowsKeyboardFocus, modifiers.isEmpty {
+            if event.keyCode == 48 { onTab?(); return }
+            if event.keyCode == 49 || event.keyCode == 36 {
+                if !event.isARepeat { onActivate?() }
+                return
+            }
+        }
+        super.keyDown(with: event)
+    }
+}
+
+private final class LyricRibbonHostingView: NSHostingView<LyricRibbonView> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 #endif
