@@ -11,9 +11,12 @@ let package = Package(
         .library(name: "BopifyAuth", targets: ["BopifyAuth"]),
         .library(name: "BopifyPlayback", targets: ["BopifyPlayback"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/openid/AppAuth-iOS.git", exact: "3.0.0"),
+    ],
     targets: [
         .target(name: "BopifyDomain", swiftSettings: [.swiftLanguageMode(.v6)]),
-        .target(name: "BopifyAuth", dependencies: ["BopifyDomain"], swiftSettings: [.swiftLanguageMode(.v6)]),
+        .target(name: "BopifyAuth", dependencies: ["BopifyDomain", .product(name: "AppAuthCore", package: "AppAuth-iOS")], swiftSettings: [.swiftLanguageMode(.v6)]),
         // Built by scripts/build-rust.sh, which must run before this package
         // will even configure: artifacts/ is gitignored build output.
         .binaryTarget(name: "BopifyCoreFFI", path: "../../artifacts/BopifyCoreFFI.xcframework"),
