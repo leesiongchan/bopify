@@ -54,16 +54,16 @@ xcodebuild -project Bopify/Bopify.xcodeproj -scheme BopifyAppTests \
 
 The Debug app test scheme runs without an app host. Authentication and artwork
 tests use injected services and local network fixtures.
-Pull requests build the app and run these checks. Releases also verify the mounted
-DMG and a copied installation before uploading it for publication. These checks
-do not exercise live Spotify sign-in, audio hardware, or Gatekeeper acceptance.
+Every push to `main` runs these checks and verifies the mounted DMG and a copied
+installation before uploading it for publication. These checks do not exercise
+live Spotify sign-in, audio hardware, or Gatekeeper acceptance.
 
 ## Release
 
-Every push to `main` builds a DMG and publishes a GitHub Release. Squash-merge PRs
-with Conventional Commit titles: `feat:` bumps minor, a breaking-change header
-such as `feat!:` or a `BREAKING CHANGE:` footer bumps major, and other commits bump
-patch. Tags and release notes are automatic.
+This is a solo project: commit and push directly to `main`. Every push builds a
+DMG and publishes a GitHub Release. Use Conventional Commit messages: `feat:`
+bumps minor, `feat!:` or a `BREAKING CHANGE:` footer bumps major, and other commits
+bump patch. Tags and release notes are automatic.
 
 To package locally from a clean, committed checkout:
 
