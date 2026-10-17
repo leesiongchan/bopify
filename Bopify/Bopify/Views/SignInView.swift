@@ -12,6 +12,7 @@ enum SignInStatus {
 struct SignInView: View {
     let status: SignInStatus
     let onSignIn: () -> Void
+    var onCancel: () -> Void = {}
     var onRetryCredentials: () -> Void = {}
     var onRetryCleanup: () -> Void = {}
 
@@ -47,6 +48,8 @@ struct SignInView: View {
                 Text("signIn.browser")
                     .font(.caption)
                     .foregroundStyle(.primary.opacity(0.7))
+                Button("signIn.cancel", action: onCancel)
+                    .buttonStyle(.link)
             case .removingCredentials:
                 ProgressView { Text("signIn.removingCredentials") }
                     .controlSize(.small)

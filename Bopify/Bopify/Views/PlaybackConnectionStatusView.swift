@@ -7,11 +7,14 @@ struct PlaybackConnectionStatusView: View {
     let restorationUnavailable: Bool
     let onRetry: () -> Void
     let onReconnect: () -> Void
+    var isAuthorizing = false
+    var onCancel: () -> Void = {}
 
     var isVisible: Bool { status != .ready && status != .stopped || restorationUnavailable }
 
     var messageKey: String {
-        switch status {
+        if isAuthorizing { return "signIn.authenticating" }
+        return switch status {
         case .offline: "connection.offline"
         case .needsReauthentication: "connection.reconnect"
         case .ready: "connection.restoreUnavailable"
@@ -37,7 +40,8 @@ struct PlaybackConnectionStatusView: View {
     var messageString: String { String(localized: String.LocalizationValue(messageKey)) }
     var message: Text { Text(LocalizedStringKey(messageKey)) }
     var actionKey: String? {
-        switch status {
+        if isAuthorizing { return "signIn.cancel" }
+        return switch status {
         case .needsReauthentication, .failed(.credentialCorrupt): "connection.reconnect"
         case let .failed(error) where error.canRetryCredentials: "connection.retryCredentials"
         case .ready where restorationUnavailable: "connection.retryRestoration"
@@ -46,7 +50,9 @@ struct PlaybackConnectionStatusView: View {
         }
     }
     func performAction() {
-        if status == .needsReauthentication || status == .failed(.credentialCorrupt) { onReconnect() } else { onRetry() }
+        if isAuthorizing { onCancel() }
+        else if status == .needsReauthentication || status == .failed(.credentialCorrupt) { onReconnect() }
+        else { onRetry() }
     }
     @ViewBuilder var actions: some View {
         if let actionKey { Button(LocalizedStringKey(actionKey), action: performAction) }

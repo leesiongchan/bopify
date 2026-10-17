@@ -78,7 +78,8 @@ struct RecordPlayerView: View {
     private var connectionStatus: PlaybackConnectionStatusView? {
         guard let environment else { return nil }
         return PlaybackConnectionStatusView(status: environment.connectionStatus, restorationUnavailable: player.restorationUnavailable,
-            onRetry: environment.retryPlaybackConnection, onReconnect: { Task { await environment.reconnectSpotify() } })
+            onRetry: environment.retryPlaybackConnection, onReconnect: { Task { await environment.reconnectSpotify() } },
+            isAuthorizing: environment.isAuthorizingPlayback, onCancel: environment.cancelPlaybackAuthorization)
     }
     private var needsAttention: Bool {
         if let connectionStatus, connectionStatus.isVisible { return false }

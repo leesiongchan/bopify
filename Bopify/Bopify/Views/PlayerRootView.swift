@@ -20,7 +20,7 @@ struct PlayerRootView: View {
                         case .signedOut, .needsReauthentication:
                             SignInView(status: environment.isRemovingCredentials ? .removingCredentials : .idle, onSignIn: requestSignIn)
                         case .authenticating:
-                            SignInView(status: .authenticating, onSignIn: requestSignIn)
+                            SignInView(status: .authenticating, onSignIn: requestSignIn, onCancel: environment.cancelPlaybackAuthorization)
                         case .refreshing:
                             SignInView(status: .restoring, onSignIn: requestSignIn)
                         case let .error(error):
@@ -29,7 +29,7 @@ struct PlayerRootView: View {
                         case .signedIn:
                             if let player = environment.player {
                                 if environment.connectionStatus != .ready || player.restorationUnavailable {
-                                    PlaybackConnectionStatusView(status: environment.connectionStatus, restorationUnavailable: player.restorationUnavailable, onRetry: environment.retryPlaybackConnection, onReconnect: { Task { await environment.reconnectSpotify() } })
+                                    PlaybackConnectionStatusView(status: environment.connectionStatus, restorationUnavailable: player.restorationUnavailable, onRetry: environment.retryPlaybackConnection, onReconnect: { Task { await environment.reconnectSpotify() } }, isAuthorizing: environment.isAuthorizingPlayback, onCancel: environment.cancelPlaybackAuthorization)
                                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                                 } else {
                                     StartupPlayerContent(player: player)

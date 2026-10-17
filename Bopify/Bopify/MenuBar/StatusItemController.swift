@@ -209,6 +209,16 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                                      action: #selector(showLibraryAccess(_:)), keyEquivalent: "")
         libraryItem.target = self
         menu.addItem(libraryItem)
+        if environment.isAuthorizingPlayback {
+            let cancel = NSMenuItem(title: String(localized: "signIn.cancel"), action: #selector(cancelPlaybackAuthorization(_:)), keyEquivalent: "")
+            cancel.target = self
+            menu.addItem(cancel)
+        }
+        if environment.isEnablingLibrary {
+            let cancel = NSMenuItem(title: String(localized: "library.cancelAuthorization"), action: #selector(cancelLibraryAuthorization(_:)), keyEquivalent: "")
+            cancel.target = self
+            menu.addItem(cancel)
+        }
         menu.addItem(.separator())
 
         let signOutItem = NSMenuItem(title: String(localized: "menu.signOut"),
@@ -227,6 +237,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     @objc private func signOut(_ sender: Any?) {
         Task { await environment.signOut() }
     }
+    @objc private func cancelPlaybackAuthorization(_ sender: Any?) { environment.cancelPlaybackAuthorization() }
+    @objc private func cancelLibraryAuthorization(_ sender: Any?) { environment.cancelLibraryAuthorization() }
     @objc private func showLibraryAccess(_ sender: Any?) { environment.librarySetupWindow.show(environment: environment) }
     @objc private func toggleKeepOnTop(_ sender: Any?) { environment.presentation.keepOnTop.toggle() }
 

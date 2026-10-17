@@ -30,7 +30,14 @@ struct LibraryShelf: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            LibraryTabBar(tab: $tab)
+            Group {
+                if environment.isEnablingLibrary {
+                    Button("library.cancelAuthorization", action: environment.cancelLibraryAuthorization)
+                        .buttonStyle(.link).font(.caption)
+                } else {
+                    LibraryTabBar(tab: $tab)
+                }
+            }
                 .frame(maxWidth: .infinity)
                 .padding(.leading, tabsInset)
             shelf.padding(.horizontal, -coverBleed).clipped()
