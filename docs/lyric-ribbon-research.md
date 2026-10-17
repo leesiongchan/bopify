@@ -78,6 +78,8 @@ Apple's Live Captions provides a related native precedent for movable, resizable
 
 The browser study verifies the held-text/catch-up interaction and preserves workspace-theme choices when switching directions. Native focus, system materials, true larger-text behavior, screen placement and playback integration still require separate validation after a direction is chosen.
 
+The subsequent [Spotify lyric probe](spotify-lyrics-probe.md) confirms that the pinned librespot dependency already provides a lyric request. Its disposable executable compiled, but Keychain denied the credential helper, so live endpoint access and payload compatibility remain unverified. The document records the existing Rust–Swift request/reply pattern and the remaining consent requirement.
+
 ## Timing and matching determine trust
 
 Bopify already exposes interpolated local or mirrored playback position through [PlayerModel](../Packages/BopifyCore/Sources/BopifyPlayback/PlayerModel.swift). A lyric projection can read that position without changing the playback engine. Reading state must stay separate from playback state.
