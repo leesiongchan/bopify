@@ -8,15 +8,17 @@ final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
     private let defaults: UserDefaults
     private let artworkStore: ArtworkStore?
     private let onHide: () -> Void
+    private let onSeek: (Int64, LyricPlaybackSnapshot) -> Void
     private var host: NSHostingView<LyricRibbonView>?
     private var anchor: CGRect?
     private var textScale: CGFloat = 1
 
-    init(model: LyricRibbonModel, defaults: UserDefaults, artworkStore: ArtworkStore? = nil, onHide: @escaping () -> Void) {
+    init(model: LyricRibbonModel, defaults: UserDefaults, artworkStore: ArtworkStore? = nil, onSeek: @escaping (Int64, LyricPlaybackSnapshot) -> Void = { _, _ in }, onHide: @escaping () -> Void) {
         self.model = model
         self.defaults = defaults
         self.artworkStore = artworkStore
         self.onHide = onHide
+        self.onSeek = onSeek
         panel = LyricRibbonPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered, defer: false)
         if let value = defaults.string(forKey: "lyrics.preview.frame") {
@@ -97,7 +99,7 @@ final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
             screens: screens, preferred: preferred, source: model.source)
         let layout = placement.layout
         let root = LyricRibbonView(model: model, layout: layout, artworkStore: artworkStore,
-            onFocusReader: { [weak self] in self?.focusReader() }, onDragHeader: { [weak self] event in self?.panel.performDrag(with: event) })
+            onFocusReader: { [weak self] in self?.focusReader() }, onSeek: onSeek, onDragHeader: { [weak self] event in self?.panel.performDrag(with: event) })
         if let host { host.rootView = root }
         else {
             let host = LyricRibbonHostingView(rootView: root)

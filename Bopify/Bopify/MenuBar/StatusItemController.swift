@@ -209,19 +209,6 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                                      action: #selector(showLibraryAccess(_:)), keyEquivalent: "")
         libraryItem.target = self
         menu.addItem(libraryItem)
-        let lyrics = NSMenuItem(title: environment.isLiveLyricsVisible
-            ? String(localized: "menu.hide", table: "LyricRibbon")
-            : String(localized: "menu.show", table: "LyricRibbon"),
-            action: #selector(toggleLiveLyrics(_:)), keyEquivalent: "l")
-        lyrics.keyEquivalentModifierMask = [.control, .option]
-        lyrics.target = self
-        menu.addItem(lyrics)
-        if environment.isLiveLyricsVisible {
-            let focus = NSMenuItem(title: String(localized: "menu.focus", table: "LyricRibbon"),
-                action: #selector(focusLiveLyrics(_:)), keyEquivalent: "")
-            focus.target = self
-            menu.addItem(focus)
-        }
         if environment.isAuthorizingPlayback {
             let cancel = NSMenuItem(title: String(localized: "signIn.cancel"), action: #selector(cancelPlaybackAuthorization(_:)), keyEquivalent: "")
             cancel.target = self
@@ -250,10 +237,6 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     @objc private func signOut(_ sender: Any?) {
         Task { await environment.signOut() }
     }
-    @objc private func toggleLiveLyrics(_ sender: Any?) {
-        environment.toggleLiveLyrics()
-    }
-    @objc private func focusLiveLyrics(_ sender: Any?) { environment.focusLiveLyrics() }
     @objc private func cancelPlaybackAuthorization(_ sender: Any?) { environment.cancelPlaybackAuthorization() }
     @objc private func cancelLibraryAuthorization(_ sender: Any?) { environment.cancelLibraryAuthorization() }
     @objc private func showLibraryAccess(_ sender: Any?) { environment.librarySetupWindow.show(environment: environment) }
@@ -269,14 +252,5 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             await environment.prepareForQuit()
             NSApp.terminate(nil)
         }
-    }
-}
-
-extension StatusItemController: NSMenuItemValidation {
-    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        if menuItem.action == #selector(toggleLiveLyrics(_:)) || menuItem.action == #selector(focusLiveLyrics(_:)) {
-            return !environment.isPreparingForQuit && environment.authState == .signedIn && environment.player != nil
-        }
-        return true
     }
 }

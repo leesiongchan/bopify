@@ -9,6 +9,7 @@ struct LyricRibbonView: View {
     let layout: LyricRibbonLayout
     var artworkStore: ArtworkStore? = nil
     var onFocusReader: () -> Void = {}
+    var onSeek: (Int64, LyricPlaybackSnapshot) -> Void = { _, _ in }
     let onDragHeader: (NSEvent) -> Void
     @FocusState private var syncFocused: Bool
     @State private var rotation = RecordRotation()
@@ -27,17 +28,6 @@ struct LyricRibbonView: View {
     private var motorRequest: RecordMotorRequest {
         .resolve(phase: model.snapshot.isPlaying ? .playing : .paused, ready: true, active: true,
                  visible: model.isVisible, reduced: reduceMotion, pressed: false)
-    }
-    private var status: String {
-        if model.isReading { return String(localized: "status.reading", defaultValue: "Reading", table: "LyricRibbon") }
-        switch model.projection?.interval {
-        case .beforeFirst: return "Lyrics start soon"
-        case .gap: return "Music"
-        case .ended: return "End of lyrics"
-        default: break
-        }
-        if case .timed = model.content { return model.snapshot.isPlaying ? "Live" : "Paused" }
-        return "Lyrics"
     }
     private var message: NSAttributedString {
         let value: String = switch model.content {
@@ -60,16 +50,14 @@ struct LyricRibbonView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            sleeve
-                .padding(.leading, LyricRibbonLayout.sleeveInset)
             VinylRecordView(image: model.snapshot.artworkURL.flatMap { artworkStore?.image(for: $0) }.map { Image(nsImage: $0) },
-                occurrenceID: model.snapshot.occurrenceID, direction: model.snapshot.direction, diameter: 72,
+                occurrenceID: model.snapshot.occurrenceID, direction: model.snapshot.direction, diameter: 96,
                 isMoving: motorRequest == .drive || isCoasting, isVisible: model.isVisible, rotation: rotation,
                 pressingSeed: PressingSeed.offset(model.snapshot.recordingID), palette: palette,
                 reduceMotionOverride: reduceMotion)
-                .mask(alignment: .leading) { Rectangle().frame(width: 40) }
-                .offset(y: 8)
+                .offset(y: max(0, (layout.panelSize.height - 96) / 2))
                 .allowsHitTesting(false).accessibilityHidden(true)
+            sleeve.padding(.leading, LyricRibbonLayout.sleeveInset)
         }
         .frame(width: layout.panelSize.width, height: layout.panelSize.height)
         .preferredColorScheme(.dark)
@@ -97,27 +85,36 @@ struct LyricRibbonView: View {
     private var sleeve: some View {
         ZStack {
             VStack(spacing: LyricRibbonLayout.sectionSpacing) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(model.snapshot.title).font(.system(size: 12, weight: .medium))
-                    if !model.snapshot.artist.isEmpty {
-                        Text(model.snapshot.artist).font(.system(size: 11)).foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(model.snapshot.title).font(.system(size: 12, weight: .medium))
+                        HStack(spacing: 5) {
+                            if !model.snapshot.artist.isEmpty {
+                                Text(model.snapshot.artist).lineLimit(1)
+                            }
+                            if let attribution = model.source?.attribution {
+                                if !model.snapshot.artist.isEmpty { Text(verbatim: "·").accessibilityHidden(true) }
+                                Text(attribution).lineLimit(1).layoutPriority(1).help(attribution)
+                            }
+                        }
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
                     }
+                    .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                    .help("\(model.snapshot.title) · \(model.snapshot.artist)")
+                    .overlay { LyricHeaderDrag(onDrag: onDragHeader) }
+                    .id(model.snapshot.occurrenceID).transition(trackTransition)
+                    if model.isReading { syncControl.fixedSize() }
                 }
-                .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 32)
                 .frame(height: LyricRibbonLayout.headerHeight, alignment: .leading)
-                .help("\(model.snapshot.title) · \(model.snapshot.artist)")
-                .overlay { LyricHeaderDrag(onDrag: onDragHeader) }
-                .id(model.snapshot.occurrenceID).transition(trackTransition)
                 LyricPassageView(text: message, content: model.content, projection: model.projection,
                     isReading: model.isReading, textScale: layout.textScale, isRightToLeft: model.source?.isRightToLeft ?? false,
                     width: max(1, layout.panelSize.width - LyricRibbonLayout.sleeveInset - 2 * LyricRibbonLayout.horizontalInset),
                     height: layout.textViewportHeight, resetRevision: model.scrollResetRevision,
                     animate: !reduceMotion, onBeginReading: model.beginReading,
                     shouldFocusReader: { model.isKeyboardInteracting && model.keyboardSelection == .reader },
-                    occurrenceID: model.snapshot.occurrenceID, direction: model.snapshot.direction)
+                    occurrenceID: model.snapshot.occurrenceID, direction: model.snapshot.direction,
+                    onSeek: { [snapshot = model.snapshot] time in onSeek(time, snapshot) })
                     .frame(height: layout.textViewportHeight)
-                footer
             }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.24), value: model.snapshot.occurrenceID)
@@ -128,41 +125,25 @@ struct LyricRibbonView: View {
             let shape = UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10,
                                                 bottomTrailingRadius: 20, topTrailingRadius: 20)
             if reduceTransparency || contrast == .increased { shape.fill(Color(nsColor: .windowBackgroundColor)) }
-            else { shape.fill(.regularMaterial).overlay { shape.fill(Color(red: 0.075, green: 0.09, blue: 0.08).opacity(0.9)) } }
+            else {
+                shape.fill(LinearGradient(colors: [Color(red: 0.19, green: 0.22, blue: 0.16),
+                    Color(red: 0.12, green: 0.15, blue: 0.115), Color(red: 0.10, green: 0.13, blue: 0.10)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing))
+            }
         }
         .overlay(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 2).fill(accent.opacity(0.6)).frame(width: 2).padding(.vertical, 5)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(LinearGradient(colors: [accent.opacity(0.65), Color.black.opacity(0.45), accent.opacity(0.25)],
+                    startPoint: .leading, endPoint: .trailing))
+                .frame(width: 3).padding(.vertical, 5)
+                .shadow(color: .black.opacity(0.35), radius: 2, x: -1)
                 .allowsHitTesting(false)
         }
         .overlay {
             UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10,
                                    bottomTrailingRadius: 20, topTrailingRadius: 20)
-                .strokeBorder(.primary.opacity(contrast == .increased ? 0.5 : 0.1), lineWidth: 1).allowsHitTesting(false)
+                .strokeBorder(.white.opacity(contrast == .increased ? 0.5 : 0.12), lineWidth: 1).allowsHitTesting(false)
         }
-    }
-
-    private var footer: some View {
-        GlassEffectContainer(spacing: 8) {
-            HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 5) {
-                        Circle().fill(model.isReading ? Color(red: 0.86, green: 0.77, blue: 0.59) : .secondary)
-                            .frame(width: 4, height: 4).accessibilityHidden(true)
-                        Text(status).font(.system(size: 10 * layout.textScale)).lineLimit(1)
-                    }
-                    .help(model.isReading ? "Reading · playback continues independently" : status)
-                    if let attribution = model.source?.attribution {
-                        Text(attribution).font(.system(size: 10 * layout.textScale)).lineLimit(1)
-                            .help(attribution).accessibilityLabel(attribution)
-                    }
-                }
-                .foregroundStyle(.secondary)
-                Spacer(minLength: 4)
-                if model.isReading { syncControl.fixedSize().layoutPriority(1) }
-            }
-            .frame(height: LyricRibbonLayout.footerHeight * layout.textScale)
-        }
-        .controlSize(.small)
     }
 
     @ViewBuilder private var syncControl: some View {
@@ -171,9 +152,11 @@ struct LyricRibbonView: View {
     }
     private var syncButton: some View {
         Button(action: model.backToLive) {
-            Label(String(localized: "action.sync", defaultValue: "Sync lyrics", table: "LyricRibbon"), systemImage: "arrow.up.to.line.compact")
+            Text(String(localized: "action.sync", defaultValue: "Sync", table: "LyricRibbon"))
                 .font(.system(size: 12, weight: .medium)).foregroundStyle(.primary).frame(minHeight: 22)
         }
+        .controlSize(.small)
+        .accessibilityLabel(String(localized: "action.sync", defaultValue: "Sync", table: "LyricRibbon"))
         .buttonBorderShape(.capsule)
         .help(String(localized: "action.sync.help", defaultValue: "Return to the current lyric without changing playback", table: "LyricRibbon"))
         .focusable(interactions: [.edit, .activate])

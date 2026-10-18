@@ -1,7 +1,6 @@
 #if DEBUG
 import Foundation
-import AppKit
-import SwiftUI
+import Observation
 import Testing
 import BopifyAuth
 import BopifyDomain
@@ -10,6 +9,20 @@ import BopifyPlayback
 @MainActor
 @Suite("App live lyrics", .serialized, .timeLimit(.minutes(1)))
 struct AppEnvironmentLyricsTests {
+    @Test func playerToggleObservesFirstShowAndDirectSessionHide() async throws {
+        try await withLyricsApp { f in
+            try await f.ready()
+            let first = LyricVisibilityFlag()
+            withObservationTracking { _ = f.environment.isLiveLyricsVisible } onChange: { first.set() }
+            f.environment.showLiveLyrics()
+            #expect(first.value && f.environment.isLiveLyricsVisible)
+            let hidden = LyricVisibilityFlag()
+            withObservationTracking { _ = f.environment.isLiveLyricsVisible } onChange: { hidden.set() }
+            f.environment.liveLyricRibbon?.hide()
+            #expect(hidden.value && !f.environment.isLiveLyricsVisible)
+        }
+    }
+
     @Test func quittingDisablesLyricsWhileEngineShutdownIsPending() async throws {
         try await withLyricsApp { f in
             try await f.ready()
@@ -20,14 +33,6 @@ struct AppEnvironmentLyricsTests {
             let quitting = Task { await f.environment.prepareForQuit() }
             try await liveLyricEventually { f.first.shutdowns == 1 }
 
-            let controller = StatusItemController(content: EmptyView(), environment: f.environment)
-            defer { withExtendedLifetime(controller) {} }
-            let menu = NSMenu()
-            let show = NSMenuItem(title: "Show", action: NSSelectorFromString("toggleLiveLyrics:"), keyEquivalent: "")
-            let focus = NSMenuItem(title: "Focus", action: NSSelectorFromString("focusLiveLyrics:"), keyEquivalent: "")
-            for item in [show, focus] { item.target = controller; menu.addItem(item) }
-            menu.update()
-            #expect(!show.isEnabled && !focus.isEnabled)
             f.environment.showLiveLyrics()
             f.environment.toggleLiveLyrics()
             f.environment.focusLiveLyrics()
@@ -38,30 +43,7 @@ struct AppEnvironmentLyricsTests {
         }
     }
 
-    @Test(arguments: ["signOut", "quit"])
-    func nativeMenuDisablesLyricsAfterTeardown(action: String) async throws {
-        try await withLyricsApp { f in
-            try await f.ready()
-            let controller = StatusItemController(content: EmptyView(), environment: f.environment)
-            defer { withExtendedLifetime(controller) {} }
-            let menu = NSMenu()
-            let show = NSMenuItem(title: "Show", action: NSSelectorFromString("toggleLiveLyrics:"), keyEquivalent: "")
-            let focus = NSMenuItem(title: "Focus", action: NSSelectorFromString("focusLiveLyrics:"), keyEquivalent: "")
-            let quit = NSMenuItem(title: "Quit", action: NSSelectorFromString("quit:"), keyEquivalent: "")
-            for item in [show, focus, quit] { item.target = controller; menu.addItem(item) }
-            menu.update()
-            #expect(show.isEnabled && focus.isEnabled && quit.isEnabled)
-
-            if action == "signOut" { await f.environment.signOut() }
-            else { await f.environment.prepareForQuit() }
-            show.isEnabled = false; focus.isEnabled = false
-            menu.update()
-            #expect(!show.isEnabled && !focus.isEnabled)
-            #expect(quit.isEnabled)
-        }
-    }
-
-    @Test func sharedShortcutAndMenuActionToggleWithoutPlaybackCommands() async throws {
+    @Test func sharedShortcutAndPlayerActionToggleWithoutPlaybackCommands() async throws {
         try await withLyricsApp { f in
             try await f.ready()
             f.environment.toggleLiveLyrics()
@@ -221,5 +203,11 @@ private struct LyricsLibrary: LibraryService {
     func savedState(for uri: SpotifyURI) async throws -> Bool { false }
     func save(_ uri: SpotifyURI) async throws {}
     func remove(_ uri: SpotifyURI) async throws {}
+}
+private nonisolated final class LyricVisibilityFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var changed = false
+    func set() { lock.withLock { changed = true } }
+    var value: Bool { lock.withLock { changed } }
 }
 #endif

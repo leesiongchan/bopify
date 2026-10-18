@@ -66,7 +66,7 @@ struct LyricPresentationTests {
         #expect(model.isVisible)
     }
 
-    @Test func attributionSharesFooterWithoutChangingCueGeometry() throws {
+    @Test func attributionSharesHeaderWithoutChangingCueGeometry() throws {
         let source = LyricSourceMetadata(lyrics: presentationLyrics(displayName: String(repeating: "Fixture provider ", count: 30)))
         let content = LyricContent.timed(try lyricTestDocument())
         let layout = LyricRibbonLayout.measure(content: content, width: 250, textScale: 1.5,
@@ -83,7 +83,7 @@ struct LyricPresentationTests {
             #expect(measured.panelSize == layout.panelSize)
         }
         let original = LyricRibbonLayout.measure(content: .plain("Short"), width: 448, textScale: 1, availableHeight: 480)
-        #expect(original.panelSize.height == 226)
+        #expect(original.panelSize.height == 156)
         #expect(original.panelSize == LyricRibbonLayout.measure(content: .plain("Short"), width: 448,
             textScale: 1, availableHeight: 480, source: source).panelSize)
     }

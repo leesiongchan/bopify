@@ -98,9 +98,9 @@ struct RecordPlayerView: View {
                 // Appears instantly hidden behind the record; on collapse it fades only once mostly folded back into it.
                 .animation(isEngaged || reduceMotion ? nil : .easeIn(duration: 0.12).delay(0.3), value: isEngaged)
                 .allowsHitTesting(isEngaged)
-            ScrollView(layout.controlsFrame.width < 144 ? [.horizontal, .vertical] : .vertical) {
+            ScrollView(layout.controlsFrame.width < 156 ? [.horizontal, .vertical] : .vertical) {
                 // The scroll view swallows clicks on blank space, so the drag region must live inside it.
-                controls.frame(minWidth: 144)
+                controls.frame(minWidth: 156)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { controlsContentHeight = $0 }
                     .frame(minHeight: layout.controlsFrame.height, alignment: .top)
                     .background(PlayerBackgroundDragRegion())
@@ -290,6 +290,18 @@ struct RecordPlayerView: View {
                     .disabled(!player.isEngineReady || !player.state.isActiveDevice)
                 Spacer(minLength: 0)
                 VolumeControl(player: player, presentation: presentation)
+                if let environment {
+                    Button { environment.toggleLiveLyrics() } label: {
+                        Image(systemName: "quote.bubble").frame(width: 28, height: 28)
+                    }.buttonStyle(.playerToggle(isOn: environment.isLiveLyricsVisible))
+                        .accessibilityLabel(String(localized: "control.title", defaultValue: "Lyrics", table: "LyricRibbon"))
+                        .accessibilityValue(Text(environment.isLiveLyricsVisible ? "control.on" : "control.off"))
+                        .help(String(localized: "control.help", defaultValue: "Show or hide lyrics (⌃⌥L)", table: "LyricRibbon"))
+                        .contextMenu {
+                            Button(String(localized: "menu.focus", table: "LyricRibbon")) { environment.focusLiveLyrics() }
+                        }
+                        .disabled(environment.isPreparingForQuit || environment.authState != .signedIn)
+                }
                 Button { presentation.requestQueue(presentation.mode != .queue) } label: {
                     Image(systemName: "music.note.list").frame(width: 28, height: 28)
                 }.buttonStyle(.playerToggle(isOn: presentation.mode == .queue))
