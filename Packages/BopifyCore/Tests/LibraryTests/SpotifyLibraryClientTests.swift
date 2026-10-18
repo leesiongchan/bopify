@@ -225,10 +225,52 @@ struct SpotifyLibraryClientTests {
         #expect(LibraryProtocol.fixture.requests.count == 1)
     }
 
+    @Test func followedArtistsAreLibraryCollections() async throws {
+        let kind = try #require(LibraryCollectionKind(rawValue: "artists"))
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [LibraryProtocol.self]
+        let client = SpotifyLibraryClient(session: URLSession(configuration: configuration)) { scopes in
+            #expect(scopes == ["user-follow-read"])
+            return "ARTISTS"
+        }
+        let entity: [String: Any] = ["uri": "spotify:artist:artistA", "name": "Artist A",
+            "images": [["url": "https://i.scdn.co/image/artist"]]]
+        let data = try JSONSerialization.data(withJSONObject: ["artists": ["items": [entity, NSNull(), ["uri": "spotify:album:wrong", "name": "Wrong"]],
+            "cursors": ["after": "artistA"], "next": "https://untrusted.invalid/next"]])
+        LibraryProtocol.fixture.reset(.init(data: data))
+        let page = try await client.savedCollections(kind, cursor: .after(nil), limit: 50)
+        #expect(page.items.count == 1 && page.nextCursor == .after("artistA"))
+        #expect(page.items.first?.uri == SpotifyURI("spotify:artist:artistA"))
+        #expect(page.items.first?.artwork?.url.absoluteString == "https://i.scdn.co/image/artist")
+        #expect(LibraryProtocol.fixture.requests.first?.url?.path == "/v1/me/following")
+        let firstURL = try #require(LibraryProtocol.fixture.requests.first?.url)
+        let initialQuery = URLComponents(url: firstURL, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        #expect(initialQuery.contains(URLQueryItem(name: "type", value: "artist")))
+        #expect(!initialQuery.contains { $0.name == "offset" || $0.name == "after" })
+        let last = try JSONSerialization.data(withJSONObject: ["artists": ["items": [], "cursors": ["after": "artistA"], "next": NSNull()]])
+        LibraryProtocol.fixture.reset(.init(data: last))
+        let final = try await client.savedCollections(kind, cursor: .after("artistA"), limit: 50)
+        #expect(final.items.isEmpty && final.nextCursor == nil)
+        let nextURL = try #require(LibraryProtocol.fixture.requests.first?.url)
+        #expect(nextURL.host == "api.spotify.com")
+        #expect(URLComponents(url: nextURL, resolvingAgainstBaseURL: false)?.queryItems?.contains(URLQueryItem(name: "after", value: "artistA")) == true)
+    }
+
+    @Test(arguments: ["missing", "repeated", "empty"])
+    func artistContinuationMustProvideANewCursor(failure: String) async throws {
+        let cursor: Any = failure == "missing" ? NSNull() : failure == "empty" ? "" : "same"
+        let data = try JSONSerialization.data(withJSONObject: ["artists": ["items": [["uri": "spotify:artist:a", "name": "A"]],
+            "cursors": ["after": cursor], "next": "https://api.spotify.com/v1/me/following"]])
+        LibraryProtocol.fixture.reset(.init(data: data))
+        await #expect(throws: LibraryError.invalidResponse) {
+            try await client().savedCollections(.artists, cursor: .after("same"), limit: 50)
+        }
+    }
+
     @Test func collectionPagesUseExactEndpointsScopesAndRealContextURIs() async throws {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [LibraryProtocol.self]
-        for kind in LibraryCollectionKind.allCases {
+        for kind in [LibraryCollectionKind.playlists, .albums] {
             let expectedScopes: Set<String> = kind == .albums ? ["user-library-read"] : ["playlist-read-private", "playlist-read-collaborative"]
             let client = SpotifyLibraryClient(session: URLSession(configuration: configuration)) { scopes in
                 #expect(scopes == expectedScopes)
@@ -242,8 +284,8 @@ struct SpotifyLibraryClientTests {
             let data = try JSONSerialization.data(withJSONObject: ["items": items, "offset": 0, "limit": 50,
                 "total": 51, "next": "https://untrusted.invalid/next"])
             LibraryProtocol.fixture.reset(.init(data: data))
-            let page = try await client.savedCollections(kind, offset: 0, limit: 50)
-            #expect(page.items.count == 1 && page.nextOffset == 3)
+            let page = try await client.savedCollections(kind, cursor: .offset(0), limit: 50)
+            #expect(page.items.count == 1 && page.nextCursor == .offset(3))
             #expect(page.items.first?.uri.kind == (kind == .albums ? .album : .playlist))
             #expect(page.items.first?.subtitle == (kind == .albums ? "Artist" : "Owner"))
             let request = try #require(LibraryProtocol.fixture.requests.first)
@@ -255,10 +297,10 @@ struct SpotifyLibraryClientTests {
     @Test func missingCollectionArtworkIsAllowedAndWrongIdentifiersAreSkipped() async throws {
         let body = #"{"items":[{"uri":"spotify:playlist:a","name":"No artwork","owner":{"display_name":null},"images":[]},{"uri":"spotify:playlist:bad,id","name":"Bad"},{"uri":"spotify:album:wrong","name":"Wrong"}],"offset":0,"limit":50,"total":3,"next":null}"#
         LibraryProtocol.fixture.reset(.init(data: Data(body.utf8)))
-        let page = try await client().savedCollections(.playlists, offset: 0, limit: 50)
+        let page = try await client().savedCollections(.playlists, cursor: .offset(0), limit: 50)
         #expect(page.items.count == 1)
         #expect(page.items.first?.artwork == nil)
-        #expect(page.nextOffset == nil)
+        #expect(page.nextCursor == nil)
     }
 
     private func savedTrack(_ id: String, image: Bool = true) -> [String: Any] {

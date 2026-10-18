@@ -23,7 +23,7 @@ final class AppEnvironment {
     let explore: ExploreModel
     let search: SearchModel
     let collections: SavedCollectionsModel
-    let searchWindow = SearchWindowController()
+    let searchPopover = SearchPopoverController()
     @ObservationIgnored private let stations: StationRoute
     private(set) var isEnablingLibrary = false
     private(set) var libraryAuthorizationNotice: String?
@@ -222,7 +222,7 @@ final class AppEnvironment {
 
     func showSearch() {
         guard !isPreparingForQuit, authState == .signedIn else { return }
-        searchWindow.show(environment: self)
+        searchPopover.show(environment: self)
         BopifyLog.library.debug("catalog search opened")
     }
 
@@ -230,13 +230,14 @@ final class AppEnvironment {
         guard !isPreparingForQuit, authState == .signedIn, let player, player.isEngineReady,
               let request = search.playRequest(for: track) else { return }
         player.load(request)
+        searchPopover.close()
         BopifyLog.library.debug("catalog search result played")
     }
 
     func enableSearch() async { await enableLibrary(scopes: []) }
 
     func enableCollections() async {
-        await enableLibrary(scopes: ["user-library-read", "playlist-read-private", "playlist-read-collaborative"])
+        await enableLibrary(scopes: ["user-library-read", "playlist-read-private", "playlist-read-collaborative", "user-follow-read"])
     }
 
     private func enableLibrary(scopes: Set<String>) async {
@@ -250,7 +251,11 @@ final class AppEnvironment {
         let generation = libraryGeneration
         let task = Task { [self] in
             defer {
-                if generation == libraryGeneration { isEnablingLibrary = false; libraryAuthorization = nil }
+                if generation == libraryGeneration {
+                    isEnablingLibrary = false
+                    libraryAuthorization = nil
+                    searchPopover.authorizationFinished(environment: self)
+                }
             }
             do {
                 try await authorizeLibraryScopes(scopes)
@@ -266,7 +271,7 @@ final class AppEnvironment {
                 guard generation == libraryGeneration, !Task.isCancelled else { return }
                 await collections.refresh()
                 guard generation == libraryGeneration, !Task.isCancelled else { return }
-                await search.search()
+                if search.error == .authorizationRequired { await search.retry(at: Date()) }
             } catch is CancellationError {
                 BopifyLog.library.info("library authorization cancelled")
             } catch {
@@ -335,7 +340,7 @@ final class AppEnvironment {
         recents.clear()
         explore.clear()
         collections.clear()
-        searchWindow.close()
+        searchPopover.close()
         search.clear()
     }
 
@@ -438,7 +443,7 @@ final class AppEnvironment {
     func signOut() async {
         guard !isRemovingCredentials else { return }
         stopLiveLyrics()
-        searchWindow.close()
+        searchPopover.close()
         search.clear()
         isRemovingCredentials = true
         playbackAuthorization?.cancel()
@@ -489,7 +494,7 @@ final class AppEnvironment {
         isPreparingForQuit = true
         BopifyLog.playback.info("prepare for quit starting")
         stopLiveLyrics()
-        searchWindow.close()
+        searchPopover.close()
         search.clear()
         playbackAuthorization?.cancel()
         libraryAuthorization?.cancel()
@@ -578,6 +583,6 @@ private struct UnavailableSavedTracks: SavedTracksService {
 
 private struct UnavailableMusicBrowser: TrackSearchService, LibraryCollectionsService {
     func searchTracks(query: String, offset: Int, limit: Int) async throws -> TrackSearchPage { throw LibraryError.unavailable }
-    func savedCollections(_ kind: LibraryCollectionKind, offset: Int, limit: Int) async throws -> LibraryCollectionsPage { throw LibraryError.unavailable }
+    func savedCollections(_ kind: LibraryCollectionKind, cursor: LibraryCollectionCursor, limit: Int) async throws -> LibraryCollectionsPage { throw LibraryError.unavailable }
 }
 #endif

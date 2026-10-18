@@ -286,12 +286,7 @@ struct RecordPlayerView: View {
                 Spacer(minLength: 0)
                 VolumeControl(player: player, presentation: presentation)
                 if let environment {
-                    Button { environment.showSearch() } label: {
-                        Image(systemName: "magnifyingglass").frame(width: 28, height: 28)
-                    }.buttonStyle(.playerControl)
-                        .accessibilityLabel(Text("search.title"))
-                        .help(Text("search.help"))
-                        .disabled(environment.isPreparingForQuit || environment.authState != .signedIn)
+                    SearchButton(environment: environment)
                     Button { environment.toggleLiveLyrics() } label: {
                         Image(systemName: "quote.bubble").frame(width: 28, height: 28)
                     }.buttonStyle(.playerToggle(isOn: environment.isLiveLyricsVisible))

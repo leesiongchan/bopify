@@ -16,47 +16,75 @@ struct SearchView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").font(.system(size: 13)).foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
                 CatalogSearchField(text: Binding(get: { text }, set: {
                     text = $0
                     model.updateQuery($0)
-                }), focusRevision: environment.searchWindow.focusRevision,
+                }), focusRevision: environment.searchPopover.focusRevision,
                 onNavigate: model.moveSelection(by:), onPlay: playSelection,
-                onDismiss: { environment.searchWindow.close() })
-                .frame(height: 30)
+                onDismiss: { environment.searchPopover.close() })
+                .frame(height: 24)
                 if model.isLoading { ProgressView().controlSize(.small).accessibilityLabel(Text("search.loading")) }
-            }
-            .padding(14)
-            Divider()
-            ScrollViewReader { scroll in
-                ScrollView {
-                    LazyVStack(spacing: 2) {
-                        ForEach(model.tracks, id: \.uri) { song in row(song).id(song.uri) }
-                        if model.error != nil { errorState.padding(12) }
-                        else if model.hasMore {
-                            Button("search.more") { Task { await model.loadMore() } }
-                                .disabled(model.isLoading).padding(12)
-                        } else if model.tracks.isEmpty {
-                            Text(model.query.isEmpty ? "search.prompt" : model.isLoading ? "search.loading" : "search.empty")
-                                .foregroundStyle(.secondary).padding(.vertical, 60)
-                                .frame(maxWidth: .infinity)
-                        }
-                    }.padding(8)
+                if !text.isEmpty {
+                    Button {
+                        text = ""
+                        model.updateQuery("")
+                        environment.showSearch()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary).frame(width: 20, height: 24)
+                    }
+                    .buttonStyle(.plain).accessibilityLabel(Text("search.clear"))
                 }
-                .onChange(of: model.selectedURI) { _, uri in if let uri { scroll.scrollTo(uri) } }
+            }
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            if !model.query.isEmpty {
+                Divider().padding(.horizontal, 4)
+                if !model.tracks.isEmpty {
+                    ScrollViewReader { scroll in
+                        List(selection: Binding(get: { model.selectedURI }, set: { uri in
+                            if let uri { model.select(uri) }
+                        })) {
+                            ForEach(model.tracks, id: \.uri) { song in
+                                row(song).tag(song.uri).id(song.uri)
+                                    .listRowInsets(EdgeInsets())
+                                    .listRowSeparator(.hidden)
+                            }
+                        }
+                        .listStyle(.plain)
+                        .environment(\.defaultMinListRowHeight, 32)
+                        .scrollContentBackground(.hidden)
+                        .frame(height: CGFloat(min(5, model.tracks.count)) * 32)
+                        .onAppear { if let uri = model.selectedURI { scroll.scrollTo(uri) } }
+                        .onChange(of: model.selectedURI) { _, uri in if let uri { scroll.scrollTo(uri) } }
+                    }
+                }
+                if model.error != nil { errorState.font(.caption).padding(6) }
+                else if model.hasMore {
+                    Button("search.more") { Task { await model.loadMore() } }
+                        .buttonStyle(.plain).font(.caption).foregroundStyle(.secondary)
+                        .disabled(model.isLoading).frame(height: 24)
+                } else if model.tracks.isEmpty {
+                    Text(model.isLoading ? "search.loading" : "search.empty")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity).padding(6)
+                }
             }
         }
-        .frame(minWidth: 340, minHeight: 260)
-        .task(id: model.query) { await model.search() }
-        .onExitCommand { environment.searchWindow.close() }
+        .frame(width: 300)
+        .task(id: model.query) {
+            if model.tracks.isEmpty && model.error == nil { await model.search() }
+        }
+        .onExitCommand { environment.searchPopover.close() }
     }
 
     private func row(_ song: Track) -> some View {
         Button {
             model.select(song.uri)
-            environment.playSearchResult(song)
+            play(song)
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: 6) {
                 Group {
                     if let url = song.artwork?.url, let image = environment.artworkStore.image(for: url) {
                         Image(nsImage: image).resizable().scaledToFill()
@@ -64,18 +92,19 @@ struct SearchView: View {
                         ZStack { Color.primary.opacity(0.06); Image(systemName: "music.note").foregroundStyle(.secondary) }
                     }
                 }
-                .frame(width: 32, height: 32)
-                .clipShape(RoundedRectangle(cornerRadius: 5)).accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(song.title).font(.system(size: 12, weight: .medium)).lineLimit(1)
-                    Text(song.subtitle).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
-                }.frame(maxWidth: .infinity, alignment: .leading)
-                Text(playbackTime(song.durationMs)).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                .frame(width: 22, height: 22)
+                .clipShape(RoundedRectangle(cornerRadius: 4)).accessibilityHidden(true)
+                HStack(spacing: 4) {
+                    Text(song.title).fontWeight(.medium).lineLimit(1).layoutPriority(1)
+                    Text("·").foregroundStyle(.secondary)
+                    Text(song.subtitle).foregroundStyle(.secondary).lineLimit(1)
+                }
+                .font(.system(size: 12)).frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(6).contentShape(Rectangle())
-            .background(Color.accentColor.opacity(model.selectedURI == song.uri ? 0.14 : 0), in: RoundedRectangle(cornerRadius: 6))
+            .padding(.horizontal, 4)
+            .frame(height: 32).contentShape(Rectangle())
         }
-        .buttonStyle(.songRow).disabled(!canPlay)
+        .buttonStyle(.plain).modifier(SearchResultHover()).disabled(!canPlay)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(model.selectedURI == song.uri ? .isSelected : [])
         .help([song.title, song.subtitle].joined(separator: " · "))
@@ -117,7 +146,24 @@ struct SearchView: View {
     }
     private func playSelection() {
         guard let song = model.tracks.first(where: { $0.uri == model.selectedURI }) else { return }
+        play(song)
+    }
+
+    private func play(_ song: Track) {
+        guard canPlay else { return }
         environment.playSearchResult(song)
+    }
+}
+
+private struct SearchResultHover: ViewModifier {
+    @State private var isHovered = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    func body(content: Content) -> some View {
+        content
+            .listRowBackground(Color.primary.opacity(isEnabled && isHovered ? 0.1 : 0))
+            .onHover { isHovered = $0 }
+            .onDisappear { isHovered = false }
     }
 }
 

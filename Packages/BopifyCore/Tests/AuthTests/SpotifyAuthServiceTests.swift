@@ -80,19 +80,20 @@ struct SpotifyAuthServiceTests {
         #expect(try await service.validAccessToken() == "SAVED_FAKE")
     }
 
-    @Test func libraryConsentStartsWithoutPlaybackGrant() async throws {
-        AuthFlowStubProtocol.handler = { _ in (200, Data(self.librarySuccess.utf8)) }
+    @Test(arguments: ["user-library-read", "user-follow-read"])
+    func libraryConsentStartsWithoutPlaybackGrant(scope: String) async throws {
+        AuthFlowStubProtocol.handler = { _ in (200, Data(self.librarySuccess.replacingOccurrences(of: "user-library-read", with: scope).utf8)) }
         let store = InMemoryTokenStore()
         let service = SpotifyAuthService(clientID: "25bbd3bacca4412b80f17b892072af71", client: makeClient(), store: store, openURL: { url in
             let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
             #expect(query["client_id"] == "25bbd3bacca4412b80f17b892072af71")
-            #expect(query["scope"] == "user-library-read")
+            #expect(query["scope"] == scope)
             #expect(URL(string: query["redirect_uri"]!)?.path == "/login")
             let callback = URL(string: "\(query["redirect_uri"]!)?code=TESTCODE&state=\(query["state"]!)")!
             Task { _ = try? await URLSession.shared.data(from: callback) }
         })
-        let token = try await service.authorizeLibraryScopes(["user-library-read"])
-        #expect(token.grantedScopes == ["user-library-read"])
+        let token = try await service.authorizeLibraryScopes([scope])
+        #expect(token.grantedScopes == [scope])
         #expect(store.load()?.accessToken == "LIBRARY")
     }
 

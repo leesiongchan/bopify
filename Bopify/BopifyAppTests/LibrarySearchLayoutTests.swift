@@ -1,10 +1,41 @@
 import AppKit
 import SwiftUI
 import Testing
+import BopifyDomain
+import BopifyLibrary
 import BopifyPlayback
 
 @MainActor @Suite("Library and search layout", .serialized)
 struct LibrarySearchLayoutTests {
+    @Test func librarySideCoverCentersBeforePlaying() async throws {
+        let environment = makePreviewEnvironment(.paused)
+        defer { environment.player?.stop() }
+        let suite = "\(NSTemporaryDirectory())bopify-library-click-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set("library", forKey: "library.tab")
+        var requests: [PlayRequest] = []
+        let content = LibraryShelf(environment: environment, artworkStore: environment.artworkStore,
+            tabsInset: 0, coverBleed: 0, onPlay: { requests.append($0) })
+            .defaultAppStorage(defaults)
+            .frame(width: 332, height: 160)
+        let panel = StatusPanel(content: content)
+        panel.isReleasedWhenClosed = false
+        defer { panel.close() }
+        panel.makeKeyAndOrderFront(nil)
+        try await waitUntil { coverInput(in: panel.contentView)?.input != nil && environment.collections.items.count > 1 }
+        let input = try #require(coverInput(in: panel.contentView))
+        let next = environment.collections.items[1].uri
+        try click(input, x: input.bounds.midX + 44)
+        #expect(environment.collections.selectedURI == next)
+        #expect(requests.isEmpty)
+        try await waitUntil { input.input?.isAnimating == true }
+        try await waitUntil { input.input?.isAnimating == false }
+        try click(input, x: input.bounds.midX)
+        #expect(requests.count == 1)
+        #expect(requests.first?.contextURI == next)
+    }
+
     @Test func narrowPlayerCanScrollToEveryControl() async throws {
         let environment = makePreviewEnvironment(.paused)
         defer { environment.player?.stop() }
@@ -30,6 +61,27 @@ struct LibrarySearchLayoutTests {
         #expect((scroll.documentView?.frame.width ?? 0) >= 192)
     }
 
+    private func waitUntil(_ condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while !condition(), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        try #require(condition())
+    }
+
+    private func click(_ input: CoverFlowInput.InputView, x: CGFloat) throws {
+        let window = try #require(input.window)
+        let point = input.convert(CGPoint(x: x, y: input.bounds.midY), to: nil)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            let event = try #require(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                context: nil, eventNumber: 1, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0))
+            window.sendEvent(event)
+        }
+    }
+}
+
+@MainActor private func coverInput(in view: NSView?) -> CoverFlowInput.InputView? {
+    if let input = view as? CoverFlowInput.InputView { return input }
+    return view?.subviews.lazy.compactMap { coverInput(in: $0) }.first
 }
 
 @MainActor private func scrollViews(in view: NSView?) -> [NSScrollView] {

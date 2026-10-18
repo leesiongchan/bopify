@@ -61,8 +61,8 @@ public final class SearchModel {
     }
 
     public func moveSelection(by delta: Int) {
-        guard !tracks.isEmpty else { return }
-        let index = tracks.firstIndex { $0.uri == selectedURI } ?? 0
+        guard !tracks.isEmpty, delta != 0 else { return }
+        let index = tracks.firstIndex { $0.uri == selectedURI } ?? (delta > 0 ? -1 : tracks.count)
         selectedURI = tracks[min(tracks.count - 1, max(0, index + delta))].uri
     }
 
@@ -71,10 +71,16 @@ public final class SearchModel {
         return PlayRequest(contextURI: track.uri)
     }
 
-    public func clear() {
+    public func cancel() {
         generation += 1
         request?.cancel()
         request = nil
+        isLoading = false
+        BopifyLog.library.debug("catalog search pending work cancelled")
+    }
+
+    public func clear() {
+        cancel()
         query = ""
         tracks = []
         selectedURI = nil
@@ -82,7 +88,6 @@ public final class SearchModel {
         failedOffset = 0
         error = nil
         retryAfter = nil
-        isLoading = false
     }
 
     private func load(offset: Int, generation current: Int) async {
@@ -107,7 +112,7 @@ public final class SearchModel {
             replacement.append(contentsOf: page.tracks.filter { seen.insert($0.uri).inserted })
             tracks = replacement
             nextOffset = page.nextOffset
-            if !tracks.contains(where: { $0.uri == selectedURI }) { selectedURI = tracks.first?.uri }
+            if !tracks.contains(where: { $0.uri == selectedURI }) { selectedURI = nil }
             BopifyLog.library.debug("catalog search ready count=\(self.tracks.count, privacy: .public)")
         } catch is CancellationError {
         } catch {
