@@ -215,13 +215,11 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             : String(localized: "menu.show", table: "LyricRibbon"),
             action: #selector(toggleLiveLyrics(_:)), keyEquivalent: "")
         lyrics.target = self
-        lyrics.isEnabled = environment.authState == .signedIn && environment.player != nil
         menu.addItem(lyrics)
         if environment.isLiveLyricsVisible {
             let focus = NSMenuItem(title: String(localized: "menu.focus", table: "LyricRibbon"),
                 action: #selector(focusLiveLyrics(_:)), keyEquivalent: "")
             focus.target = self
-            focus.isEnabled = environment.authState == .signedIn && environment.player != nil
             menu.addItem(focus)
         }
         #endif
@@ -277,3 +275,14 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         }
     }
 }
+
+#if DEBUG
+extension StatusItemController: NSMenuItemValidation {
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(toggleLiveLyrics(_:)) || menuItem.action == #selector(focusLiveLyrics(_:)) {
+            return environment.authState == .signedIn && environment.player != nil
+        }
+        return true
+    }
+}
+#endif

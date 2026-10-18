@@ -5,7 +5,7 @@ Validated October 18, 2026 on macOS with Xcode 27, arm64. The implementation is 
 ## Automated checks
 
 - `swift test --package-path Packages/BopifyCore`: 386 tests passed across the four package test executables (193, 60, 32 and 101). Confirmed playback and seek revisions are covered without adding another engine-event consumer.
-- Full `BopifyAppTests` Debug run: 74 tests in 10 suites passed. New tests cover typed lyric conversion, source metadata, RTL, bounded attribution layout, same-URI repeat without Loading, queue/metadata ordering, request cancellation and late completion, visible-only 100 ms sampling, hold/seek/end behavior, current-engine routing, recovery, sign-out and quit.
+- Full `BopifyAppTests` Debug run after the final menu fix: 75 tests in 10 suites passed. New tests cover typed lyric conversion, source metadata, RTL, bounded attribution layout, same-URI repeat without Loading, queue/metadata ordering, request cancellation and late completion, visible-only 100 ms sampling, hold/seek/end behavior, current-engine routing, recovery, sign-out and quit.
 - Debug and Release app builds passed with `CODE_SIGNING_ALLOWED=NO SWIFT_EMIT_LOC_STRINGS=NO`, using `build/lyric-ribbon-study` as DerivedData.
 - Release symbols inspected with `xcrun nm -j` and `xcrun swift-demangle`: no `LiveLyricRibbonSession`, `LyricRibbon` UI types or live-menu action symbols. Release menu construction excludes the actions with `#if DEBUG`; a second normal playback engine was not launched for menu inspection.
 - `git diff --check` passed. The existing main localization catalog was preserved byte-for-byte, SHA-256 `71c74a02edb45dfd615de06551204c6fced3f6f85ffb25da32d6125243238cd3`, and excluded from staging.
@@ -43,4 +43,16 @@ Remaining manual gaps: a completed same-track repeat boundary while holding text
 
 ## Review
 
-One fresh whole-change code review is required before pushing. Its outcome and any fixes are recorded here after review.
+A fresh, read-only review of `9ec3a24..ecf70dd` found no Critical or Important issues. One minor coverage gap is deferred: a dedicated test for different consecutive queue entries with the same recording URI in both metadata/queue arrival orders. The implementation includes both occurrence components; the review found no current defect in that behavior.
+
+A separate final check reproduced AppKit overriding the lyric menu items' disabled state after sign-out and quit. The regression test failed for both paths before the fix and passed after adding native `NSMenuItemValidation`. Unrelated actions such as Quit stay enabled. [Apple NSMenuItem.isEnabled](https://developer.apple.com/documentation/appkit/nsmenuitem/isenabled) documents why direct enabled-state assignment is insufficient with automatic menu validation.
+
+Review scope decisions:
+
+| Decision | Reason | Cost if wrong |
+| --- | --- | --- |
+| Commit/push directly to main | Standing project instruction and approved plan | Rollback requires a revert. |
+| Public-release suitability and Spotify synchronization permissions remain separate | This increment is Debug-only and makes no release-readiness claim | Public shipping would lack a separate suitability/permissions review. |
+| Remote lyric following/repeat identity remain excluded | Local eligibility rejects remote playback | Remote listening has no ribbon and needs separate identity work. |
+| Audible continuity is not measured | No audio-pipeline changes; separate acceptance scope | Existing audio artifacts could remain undetected. |
+| Broader VoiceOver, Spaces/full-screen and physical display/accessibility-setting checks remain unverified | Native focus and fixture geometry were checked; broader environments were not | Accessibility/window edge cases may remain undiscovered. |
