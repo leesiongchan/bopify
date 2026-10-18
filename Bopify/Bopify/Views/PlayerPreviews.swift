@@ -131,14 +131,15 @@ private nonisolated struct PreviewLibraryServices: LibraryService, SavedTracksSe
                           empty: TrackSearchPage(tracks: [], nextOffset: nil))
     }
 
-    func savedCollections(_ kind: LibraryCollectionKind, offset: Int, limit: Int) async throws -> LibraryCollectionsPage {
+    func savedCollections(_ kind: LibraryCollectionKind, cursor: LibraryCollectionCursor, limit: Int) async throws -> LibraryCollectionsPage {
+        let offset: Int = switch cursor { case .offset(let value): value; case .after: 0 }
         let samples = previewTracks.prefix(3).enumerated().map { index, track in
-            LibraryCollection(uri: SpotifyURI("spotify:\(kind == .albums ? "album" : "playlist"):preview\(index)")!,
-                title: kind == .albums ? track.title : ["Late Night", "Quiet Mornings", "On Repeat"][index],
-                subtitle: kind == .albums ? track.artists[0].name : "Your playlist", artwork: track.artwork)
+            LibraryCollection(uri: SpotifyURI("spotify:\(kind == .albums ? "album" : kind == .artists ? "artist" : "playlist"):preview\(index)")!,
+                title: kind == .artists ? track.artists[0].name : kind == .albums ? track.title : ["Late Night", "Quiet Mornings", "On Repeat"][index],
+                subtitle: kind == .artists ? "Artist" : kind == .albums ? track.artists[0].name : "Your playlist", artwork: track.artwork)
         }
-        return try answer(LibraryCollectionsPage(items: Array(samples.dropFirst(offset).prefix(limit)), nextOffset: nil),
-                          empty: LibraryCollectionsPage(items: [], nextOffset: nil))
+        return try answer(LibraryCollectionsPage(items: Array(samples.dropFirst(offset).prefix(limit)), nextCursor: nil),
+                          empty: LibraryCollectionsPage(items: [], nextCursor: nil))
     }
 
     func topItems(_ kind: TopItemKind) async throws -> [StationSeed] {

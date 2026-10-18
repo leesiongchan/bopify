@@ -6,39 +6,67 @@ import BopifyDomain
 @MainActor @Suite("Saved collection covers")
 struct SavedCollectionsModelTests {
     private func collection(_ id: String, kind: LibraryCollectionKind = .playlists) -> LibraryCollection {
-        LibraryCollection(uri: SpotifyURI("spotify:\(kind == .albums ? "album" : "playlist"):\(id)")!,
+        LibraryCollection(uri: SpotifyURI("spotify:\(kind == .albums ? "album" : kind == .artists ? "artist" : "playlist"):\(id)")!,
                           title: id, subtitle: "Owner", artwork: nil)
     }
 
     @Test func coversPlayCollectionContextsAndPagingKeepsSelection() async {
-        let first = collection("first"), second = collection("second")
-        let service = CollectionFixture(page: .init(items: [first], nextOffset: 50))
+        let first = collection("first"), second = collection("second"), album = collection("album", kind: .albums)
+        let service = CollectionFixture(page: .init(items: [first], nextCursor: .offset(50)), albums: .init(items: [album], nextCursor: nil))
         let model = SavedCollectionsModel(service: service)
         await model.reveal(at: Date())
-        #expect(model.items == [first])
+        #expect(model.items == [first, album])
         #expect(model.playRequest(for: first) == PlayRequest(contextURI: first.uri))
-        await service.setPage(.init(items: [first, second], nextOffset: nil))
+        #expect(model.playRequest(for: album) == PlayRequest(contextURI: album.uri))
+        model.select(album.uri)
+        await service.setPage(.init(items: [first, second], nextCursor: nil))
         await model.loadMore()
-        #expect(model.items == [first, second] && model.selectedURI == first.uri)
-        #expect(await service.requests == ["playlists:0:50", "playlists:50:50"])
+        #expect(model.items == [first, album, second] && model.selectedURI == album.uri)
+        #expect(!model.hasMore)
+        #expect(await service.requests == ["playlists:0:50", "albums:0:50", "artists:start:50", "playlists:50:50"])
     }
 
-    @Test func kindChangeRejectsLatePlaylistAndAlbumPlaysItsOwnContext() async {
+    @Test func albumsContinueAfterAnEmptyPlaylistPage() async {
         let album = collection("album", kind: .albums)
-        let service = CollectionFixture(page: .init(items: [album], nextOffset: nil))
-        await service.holdNext()
+        let service = CollectionFixture(page: .init(items: [], nextCursor: nil), albums: .init(items: [], nextCursor: .offset(50)))
         let model = SavedCollectionsModel(service: service)
-        let playlists = Task { await model.reveal(at: Date()) }
-        await service.waitUntilHeld()
-        await model.selectKind(.albums)
-        await service.finishHeld(.init(items: [collection("late")], nextOffset: nil))
-        await playlists.value
-        #expect(model.kind == .albums && model.items == [album])
-        #expect(model.playRequest(for: album) == PlayRequest(contextURI: album.uri))
+        await model.reveal(at: Date())
+        await service.setAlbums(.success(.init(items: [album], nextCursor: nil)))
+        await model.loadMore()
+        #expect(model.items == [album] && !model.hasMore)
+        #expect(await service.requests == ["playlists:0:50", "albums:0:50", "artists:start:50", "albums:50:50"])
+    }
+
+    @Test(arguments: [nil, 50] as [Int?])
+    func retryKeepsSuccessfulCoversAndOnlyRetriesTheFailedSource(playlistNextOffset: Int?) async {
+        let playlist = collection("playlist"), album = collection("album", kind: .albums)
+        let service = CollectionFixture(page: .init(items: [playlist], nextCursor: playlistNextOffset.map(LibraryCollectionCursor.offset)))
+        await service.setAlbums(.failure(.unavailable))
+        let model = SavedCollectionsModel(service: service)
+        await model.reveal(at: Date())
+        #expect(model.items == [playlist] && model.error == .unavailable)
+        await service.setAlbums(.success(.init(items: [album], nextCursor: nil)))
+        await model.retry(at: Date())
+        #expect(model.items == [playlist, album] && model.error == nil)
+        #expect(model.hasMore == (playlistNextOffset != nil))
+        #expect(await service.requests == ["playlists:0:50", "albums:0:50", "artists:start:50", "albums:0:50"])
+    }
+
+    @Test func playlistFailureStillShowsAlbumsAndRetryDoesNotReloadThem() async {
+        let album = collection("album", kind: .albums)
+        let service = CollectionFixture(page: .init(items: [], nextCursor: nil), albums: .init(items: [album], nextCursor: nil))
+        await service.setPlaylistError(.forbidden)
+        let model = SavedCollectionsModel(service: service)
+        await model.reveal(at: Date())
+        #expect(model.items == [album] && model.error == .forbidden)
+        await service.setPlaylistError(nil)
+        await model.retry(at: Date())
+        #expect(model.items == [album] && model.error == nil && !model.hasMore)
+        #expect(await service.requests == ["playlists:0:50", "albums:0:50", "artists:start:50", "playlists:0:50"])
     }
 
     @Test func clearRejectsLateResponseAndHiddenRefreshWaitsForReveal() async {
-        let service = CollectionFixture(page: .init(items: [collection("first")], nextOffset: nil))
+        let service = CollectionFixture(page: .init(items: [collection("first")], nextCursor: nil))
         let model = SavedCollectionsModel(service: service)
         await model.refresh()
         #expect(await service.requests.isEmpty)
@@ -46,32 +74,64 @@ struct SavedCollectionsModelTests {
         let loading = Task { await model.reveal(at: Date()) }
         await service.waitUntilHeld()
         model.clear()
-        await service.finishHeld(.init(items: [collection("late")], nextOffset: nil))
+        await service.finishHeld(.init(items: [collection("late")], nextCursor: nil))
         await loading.value
         #expect(model.items.isEmpty && model.selectedURI == nil && !model.isLoading)
+    }
+
+    @Test func artistConsentRetainsExistingCoversAndArtistPagingKeepsSelection() async {
+        let playlist = collection("playlist"), album = collection("album", kind: .albums)
+        let artist = collection("artistA", kind: .artists), nextArtist = collection("artistB", kind: .artists)
+        let service = CollectionFixture(page: .init(items: [playlist], nextCursor: nil), albums: .init(items: [album], nextCursor: nil))
+        await service.setArtists(.failure(.authorizationRequired))
+        let model = SavedCollectionsModel(service: service)
+        await model.reveal(at: Date())
+        #expect(model.items == [playlist, album] && model.error == .authorizationRequired)
+        await service.setArtists(.success(.init(items: [artist], nextCursor: .after("artistA"))))
+        await model.retry(at: Date())
+        model.select(artist.uri)
+        #expect(model.items == [playlist, album, artist] && model.error == nil)
+        #expect(model.playRequest(for: artist) == PlayRequest(contextURI: artist.uri))
+        await service.setArtists(.success(.init(items: [artist, nextArtist], nextCursor: nil)))
+        await model.loadMore()
+        #expect(model.items == [playlist, album, artist, nextArtist] && model.selectedURI == artist.uri && !model.hasMore)
+        #expect(await service.requests == ["playlists:0:50", "albums:0:50", "artists:start:50", "artists:start:50", "artists:artistA:50"])
     }
 }
 
 private actor CollectionFixture: LibraryCollectionsService {
     var requests: [String] = []
     private var page: LibraryCollectionsPage
+    private var playlistError: LibraryError?
+    private var albums: Result<LibraryCollectionsPage, LibraryError>
+    private var artists: Result<LibraryCollectionsPage, LibraryError> = .success(.init(items: [], nextCursor: nil))
     private var shouldHold = false
     private var held: CheckedContinuation<LibraryCollectionsPage, Never>?
     private var started: CheckedContinuation<Void, Never>?
-    init(page: LibraryCollectionsPage) { self.page = page }
+    init(page: LibraryCollectionsPage, albums: LibraryCollectionsPage = .init(items: [], nextCursor: nil)) {
+        self.page = page
+        self.albums = .success(albums)
+    }
     func setPage(_ page: LibraryCollectionsPage) { self.page = page }
+    func setPlaylistError(_ error: LibraryError?) { playlistError = error }
+    func setAlbums(_ result: Result<LibraryCollectionsPage, LibraryError>) { albums = result }
+    func setArtists(_ result: Result<LibraryCollectionsPage, LibraryError>) { artists = result }
     func holdNext() { shouldHold = true }
     func waitUntilHeld() async {
         if held != nil { return }
         await withCheckedContinuation { started = $0 }
     }
     func finishHeld(_ page: LibraryCollectionsPage) { held?.resume(returning: page); held = nil }
-    func savedCollections(_ kind: LibraryCollectionKind, offset: Int, limit: Int) async throws -> LibraryCollectionsPage {
-        requests.append("\(kind.rawValue):\(offset):\(limit)")
+    func savedCollections(_ kind: LibraryCollectionKind, cursor: LibraryCollectionCursor, limit: Int) async throws -> LibraryCollectionsPage {
+        let position: String = switch cursor { case .offset(let offset): String(offset); case .after(let id): id ?? "start" }
+        requests.append("\(kind.rawValue):\(position):\(limit)")
         if shouldHold {
             shouldHold = false
             return await withCheckedContinuation { held = $0; started?.resume(); started = nil }
         }
+        if kind == .artists { return try artists.get() }
+        if kind == .albums { return try albums.get() }
+        if let playlistError { throw playlistError }
         return page
     }
 }

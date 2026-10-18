@@ -68,7 +68,7 @@ public actor SpotifyAuthService {
     public func authorizeLibraryScopes(_ scopes: Set<String>) async throws -> TokenSet {
         try Task.checkCancellation()
         let libraryScopes: Set<String> = ["user-library-read", "user-library-modify", "user-read-recently-played", "user-top-read",
-                                          "playlist-read-private", "playlist-read-collaborative"]
+                                          "playlist-read-private", "playlist-read-collaborative", "user-follow-read"]
         guard scopes.isSubset(of: libraryScopes) else { throw LibraryError.authorizationRequired }
         try await prepareForConsent()
         let existing: Set<String>

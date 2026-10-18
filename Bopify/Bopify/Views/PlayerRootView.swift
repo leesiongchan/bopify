@@ -60,6 +60,7 @@ struct PlayerRootView: View {
             Label("app.name", systemImage: "waveform")
                 .font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
             WindowDragRegion().frame(maxWidth: .infinity)
+            if environment.authState == .signedIn { SearchButton(environment: environment) }
             FavoriteButton()
             Menu {
                 if let player = environment.player {

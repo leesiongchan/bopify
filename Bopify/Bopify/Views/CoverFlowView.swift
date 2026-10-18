@@ -42,8 +42,8 @@ struct RevealWhileShown<Source: CoverFlowSource>: ViewModifier {
 
 extension CoverFlowView where Accessory == EmptyView {
     init(model: Source, copy: CoverFlowCopy, artworkStore: ArtworkStore, onPlay: @escaping (Source.Item) -> Void,
-         onEnable: @escaping @MainActor () async -> Void, playsOnClick: Bool = false) {
-        self.init(model: model, copy: copy, artworkStore: artworkStore, onPlay: onPlay, onEnable: onEnable, playsOnClick: playsOnClick) { EmptyView() }
+         onEnable: @escaping @MainActor () async -> Void) {
+        self.init(model: model, copy: copy, artworkStore: artworkStore, onPlay: onPlay, onEnable: onEnable) { EmptyView() }
     }
 }
 
@@ -53,7 +53,6 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
     let artworkStore: ArtworkStore
     let onPlay: (Source.Item) -> Void
     let onEnable: @MainActor () async -> Void
-    var playsOnClick = false
     /// Follows the artist line, or sits under an empty shelf's message, such as Explore's station menu.
     @ViewBuilder let accessory: () -> Accessory
     @Environment(AppEnvironment.self) private var environment: AppEnvironment?
@@ -158,7 +157,6 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
     }
     private func activate(_ index: Int) {
         guard model.items.indices.contains(index) else { return }
-        if playsOnClick { settle(on: index); onPlay(model.items[index]); return }
         if index == selectedIndex && !isAnimating { onPlay(model.items[index]) }
         else { settle(on: index) }
     }
@@ -258,7 +256,10 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
     private var status: some View {
         HStack(spacing: 4) {
             if model.isLoading { ProgressView().controlSize(.mini) }
-            if model.error != nil {
+            if model.error == .authorizationRequired {
+                Button(copy.enable) { Task { await onEnable() } }
+                    .disabled(environment?.isEnablingLibrary == true)
+            } else if model.error != nil {
                 TimelineView(.periodic(from: .now, by: 1)) { context in retryButton(at: context.date) }
             }
         }

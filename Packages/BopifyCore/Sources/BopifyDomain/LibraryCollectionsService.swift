@@ -1,5 +1,10 @@
 public enum LibraryCollectionKind: String, CaseIterable, Sendable {
-    case playlists, albums
+    case playlists, albums, artists
+}
+
+public enum LibraryCollectionCursor: Equatable, Sendable {
+    case offset(Int)
+    case after(String?)
 }
 
 public struct LibraryCollection: Equatable, Sendable {
@@ -15,14 +20,14 @@ public struct LibraryCollection: Equatable, Sendable {
 
 public struct LibraryCollectionsPage: Equatable, Sendable {
     public let items: [LibraryCollection]
-    public let nextOffset: Int?
+    public let nextCursor: LibraryCollectionCursor?
 
-    public init(items: [LibraryCollection], nextOffset: Int?) {
+    public init(items: [LibraryCollection], nextCursor: LibraryCollectionCursor?) {
         self.items = items
-        self.nextOffset = nextOffset
+        self.nextCursor = nextCursor
     }
 }
 
 public protocol LibraryCollectionsService: Sendable {
-    func savedCollections(_ kind: LibraryCollectionKind, offset: Int, limit: Int) async throws -> LibraryCollectionsPage
+    func savedCollections(_ kind: LibraryCollectionKind, cursor: LibraryCollectionCursor, limit: Int) async throws -> LibraryCollectionsPage
 }

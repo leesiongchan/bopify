@@ -11,10 +11,11 @@ Download `Bopify-<version>.dmg` from [GitHub Releases](https://github.com/leesio
 drag Bopify to Applications, then open it and sign in. Right-click the menu bar
 icon for settings or to quit.
 
-Use the magnifying glass or **Command-F** to search Spotify songs. Choose a
+Use the magnifying glass or **Command-F** to search Spotify songs in a compact popover. Choose a
 result or use the arrow keys and Return to play it; Escape closes search.
-The **Library** tab shows your saved playlist and album covers. Choose
-**Playlists** or **Albums**, then click a cover to play that collection.
+Your query and results remain when search closes. Use the clear button to reset them.
+The **Library** tab shows your saved playlists, albums, and followed artists together.
+Click a cover to play that collection.
 
 Builds are ad-hoc signed and not notarized. If macOS blocks the app and you trust
 the download, use **System Settings → Privacy & Security → Open Anyway** after

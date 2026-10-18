@@ -86,22 +86,8 @@ struct LibraryShelf: View {
         case .library:
             CoverFlowView(model: environment.collections, copy: .collections, artworkStore: artworkStore,
                           onPlay: { onPlay(environment.collections.playRequest(for: $0)) },
-                          onEnable: { await environment.enableCollections() }, playsOnClick: true) {
-                Menu {
-                    Picker("collections.kind", selection: Binding(get: { environment.collections.kind }, set: { kind in
-                        Task { await environment.collections.selectKind(kind) }
-                    })) {
-                        Text("collections.playlists").tag(LibraryCollectionKind.playlists)
-                        Text("collections.albums").tag(LibraryCollectionKind.albums)
-                    }
-                } label: {
-                    Text(environment.collections.kind == .playlists ? "collections.playlists" : "collections.albums")
-                        .font(.system(size: 10, weight: .medium))
-                }
-                .menuStyle(.borderlessButton).fixedSize()
-                .accessibilityLabel(Text("collections.kind"))
-            }
-            .id(environment.collections.kind)
+                          onEnable: { await environment.enableCollections() })
+                .id(LibraryTab.library)
         }
     }
 }
