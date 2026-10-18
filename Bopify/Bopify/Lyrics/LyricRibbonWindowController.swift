@@ -42,6 +42,8 @@ final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
         panel.isMovableByWindowBackground = false
         panel.isOpaque = false
         panel.backgroundColor = .clear
+        // The default leaves transparent-backed glass and native subviews outside the mouse target.
+        panel.ignoresMouseEvents = false
         panel.hasShadow = false
         panel.isReleasedWhenClosed = false
         panel.appearance = NSAppearance(named: .darkAqua)

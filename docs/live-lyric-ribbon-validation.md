@@ -2,6 +2,16 @@
 
 Validated October 18, 2026 on macOS with Xcode 27, arm64. The implementation follows local playback and is available from the player Lyrics control or Control–Option–L in Debug and Release. Historical evaluations remain below. Manual limits remain listed explicitly.
 
+## WindowServer input correction
+
+The user's Xcode-run report reproduced a gap in the earlier verification: `NSWindow.sendEvent` and view `hitTest` bypass macOS's selection of the receiving window. Native WindowServer lookup targeted text but skipped the glass surface, record and blank reader, allowing input to reach another app. The panel now explicitly sets `ignoresMouseEvents = false`; its floating level, transparent appearance and passive keyboard behavior remain intact.
+
+A new regression shows the panel before loading lyrics, replaces its content after loading, then queries `NSWindow.windowNumber(at:belowWindowWithWindowNumber:)` at the record, sleeve edge, blank reader and border. All four assertions fail before the setting and pass afterward. Ordering is reasserted after the test's suspension so other visible-window suites cannot cover the panel during these synchronous checks.
+
+Actual HID verification used an owned opaque underlay and an isolated offline ribbon. Before every injected gesture, native window lookup required the target and underlying window to belong to those two processes. Sleeve edge, record, blank reader and border drags each moved the ribbon 20 points, for 80 points total. Blank-area scrolling entered manual reading both after delayed loading/layout replacement and with the playback clock advancing. The underlay recorded **zero clicks and zero scroll events**; the ribbon remained non-key. These checks replace the earlier inconclusive external-input replay as evidence of OS-level delivery. All temporary instrumentation was removed afterward.
+
+Final verification without the diagnostic hooks: **114 Debug app tests** and **83 Release app tests** pass. Both final app builds succeed with `CODE_SIGNING_ALLOWED=NO SWIFT_EMIT_LOC_STRINGS=NO`. Independent review has no remaining actionable findings. The core package was unchanged; its earlier test results are historical rather than a fresh run for this fix.
+
 ## Compact type, album color and drag coverage
 
 The current ribbon is **448 × 146 points**, with a fixed **84-point three-row viewport**, **19/14/15-point current/context/manual type**, and the existing 96-point record. Provider credit is a smaller muted trailing label on the artist row. The regular native glass and charcoal-olive reading field remain; a gradient uses the existing dominant album color and fades to transparent by 30% of the surface width.
