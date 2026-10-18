@@ -64,6 +64,47 @@ struct LiveLyricRibbonSessionTests {
         #expect(f.session.model.snapshot.recordingID == otherLiveLyricURI.rawValue)
     }
 
+    @Test(arguments: [true, false], [true, false])
+    func consecutiveSameRecordingEntriesReplaceReading(queueFirst: Bool, completeIntermediate: Bool) async throws {
+        let f = LiveLyricFixture(); defer { f.stop() }
+        try await f.load()
+        f.session.model.holdText()
+        #expect(f.session.model.isHeld)
+        let original = f.session.model.snapshot.occurrenceID
+        let queue = PlaybackEvent.queueChanged(liveLyricQueue(id: "two"))
+        let track = PlaybackEvent.trackChanged(liveLyricTrack())
+        f.engine.emit(queueFirst ? queue : track)
+        f.engine.emit(.paused(positionMs: 1000))
+        try await liveLyricEventually { f.gate.requests.count == 2 }
+        let intermediate = f.session.model.snapshot.occurrenceID
+        #expect(intermediate != original)
+        #expect(!f.session.model.isHeld && f.session.model.source == nil)
+        if completeIntermediate {
+            f.gate.succeed(1, with: liveLyrics(displayName: "Intermediate provider"))
+            try await liveLyricEventually { f.session.model.source?.attribution == "Intermediate provider" }
+            f.session.model.holdText()
+            #expect(f.session.model.isHeld)
+        }
+
+        f.engine.emit(queueFirst ? track : queue)
+        f.engine.emit(.paused(positionMs: 1000))
+        try await liveLyricEventually { f.gate.requests.count == 3 }
+        let finalOccurrence = f.session.model.snapshot.occurrenceID
+        #expect(finalOccurrence != intermediate && finalOccurrence != original)
+        #expect(!f.session.model.isHeld && f.session.model.source == nil)
+        f.gate.succeed(2, with: liveLyrics(displayName: "Current provider"))
+        try await liveLyricEventually { f.session.model.source?.attribution == "Current provider" }
+        if !completeIntermediate {
+            f.gate.succeed(1, with: liveLyrics(displayName: "Stale provider"))
+            for _ in 0..<30 { await Task.yield() }
+        }
+        #expect(f.session.model.source?.attribution == "Current provider")
+        #expect(f.session.model.snapshot.occurrenceID == finalOccurrence)
+        #expect(f.session.model.snapshot.recordingID == liveLyricURI.rawValue)
+        #expect(f.session.model.projection?.current?.startMs == 1000)
+        #expect(f.engine.commands.isEmpty)
+    }
+
     @Test func sameURIRepeatWithoutLoadingReplacesHeldPassage() async throws {
         let f = LiveLyricFixture(); defer { f.stop() }
         try await f.load()

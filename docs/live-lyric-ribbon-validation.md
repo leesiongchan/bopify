@@ -5,7 +5,7 @@ Validated October 18, 2026 on macOS with Xcode 27, arm64. The implementation is 
 ## Automated checks
 
 - `swift test --package-path Packages/BopifyCore`: 386 tests passed across the four package test executables (193, 60, 32 and 101). Confirmed playback and seek revisions are covered without adding another engine-event consumer.
-- Full `BopifyAppTests` Debug run after the final menu fix: 75 tests in 10 suites passed. New tests cover typed lyric conversion, source metadata, RTL, bounded attribution layout, same-URI repeat without Loading, queue/metadata ordering, request cancellation and late completion, visible-only 100 ms sampling, hold/seek/end behavior, current-engine routing, recovery, sign-out and quit.
+- Full `BopifyAppTests` Debug run after the queue-occurrence regression follow-up: 76 tests in 10 suites passed. New tests cover typed lyric conversion, source metadata, RTL, bounded attribution layout, same-URI repeat without Loading, queue/metadata ordering, request cancellation and late completion, visible-only 100 ms sampling, hold/seek/end behavior, current-engine routing, recovery, sign-out and quit.
 - Debug and Release app builds passed with `CODE_SIGNING_ALLOWED=NO SWIFT_EMIT_LOC_STRINGS=NO`, using `build/lyric-ribbon-study` as DerivedData.
 - Release symbols inspected with `xcrun nm -j` and `xcrun swift-demangle`: no `LiveLyricRibbonSession`, `LyricRibbon` UI types or live-menu action symbols. Release menu construction excludes the actions with `#if DEBUG`; a second normal playback engine was not launched for menu inspection.
 - `git diff --check` passed. The existing main localization catalog was preserved byte-for-byte, SHA-256 `71c74a02edb45dfd615de06551204c6fced3f6f85ffb25da32d6125243238cd3`, and excluded from staging.
@@ -26,6 +26,10 @@ Temporary fixture-only settings supplied source metadata, a 250-point width, a p
 
 An owned TextEdit scratch document retained activation and received typing after a passive click in the fixture passage. The explicit Focus action followed by Space entered held reading; Tab/Space and Escape each hid the ribbon. The document and preview were closed afterward. Existing native window tests also cover passive focus, keyboard routing, screen changes and reachable geometry. The standalone preview remains fixture-only.
 
+Follow-up checks on October 18 confirmed the native accessibility roles and labels `Lyrics` (read-only text area), `Hold text` (toggle) and `Hide Ribbon` (button). This is structural AX inspection, not verification of VoiceOver speech/navigation.
+
+The unmodified fixture ribbon also remained visible and reachable above an owned 1920 × 1080 full-screen TextEdit window, then followed the return to the desktop Space. Its original full-screen state was restored and the scratch document closed. The [full-screen fixture capture](mockups/live-lyric-ribbon-full-screen.png) contains only original sample words. The off-Space preview control window could not be used to invoke Focus, so keyboard focus within full-screen remains unverified; this capture does not establish that behavior.
+
 ## Normal Debug app with Spotify playback
 
 Used the normal app, its existing saved session and the native status-item menu. No credential export or alternate authentication runner was used. Only header, clock, attribution and status fields were inspected; no real lyric words, raw responses or live screenshots were saved.
@@ -37,13 +41,15 @@ Observed:
 - Hold changed status to Reading while music continued. Pausing preserved held reading and showed Reading · music paused.
 - A confirmed five-second seek released held reading and adopted the new position.
 - Resume returned to advancing playback; skip replaced the recording metadata and loaded attribution for the next track.
-- The repeat setting was changed from Off through Repeat All to Repeat Track during an attempted boundary check, then restored to Off. Paused playback and restored Off were confirmed before quitting.
+- A follow-up hide/reopen check held text at 3:04, hid during advancing playback, and reopened at 3:18 with current attribution and Live status instead of the held passage.
+- A completed repeat-one check held text at 3:27 of a 3:47 track with Repeat Track confirmed. The same recording naturally restarted; the ribbon returned to its opening time (0:05 observed) and Live status, clearing held reading.
+- The starting settings were paused playback and repeat Off. Both were restored and confirmed after the follow-up checks, then the normal app was quit.
 
-Remaining manual gaps: a completed same-track repeat boundary while holding text, live hide/reopen freshness, and a normal recovery/reconnect during playback. Their deterministic session/app tests pass, but those results do not replace live verification. Broader VoiceOver, Spaces/full-screen and physical display/accessibility-setting coverage also remain outside this validation. The feature is implemented for Debug evaluation; full live acceptance and public release are not claimed.
+Remaining manual gaps: normal recovery/reconnect during playback, spoken VoiceOver navigation, keyboard focus within full-screen, and broader physical display/accessibility-setting/Spaces configurations. Healthy playback has no UI action that forces session recovery; Retry now is a no-op while ready. No machine-wide connectivity or credential disruption was introduced to force a failure. Deterministic recovery tests pass, but they do not replace live verification. The feature remains implemented for Debug evaluation; full live acceptance and public release are not claimed.
 
 ## Review
 
-A fresh, read-only review of `9ec3a24..ecf70dd` found no Critical or Important issues. One minor coverage gap is deferred: a dedicated test for different consecutive queue entries with the same recording URI in both metadata/queue arrival orders. The implementation includes both occurrence components; the review found no current defect in that behavior.
+A fresh, read-only review of `9ec3a24..ecf70dd` found no Critical or Important issues. The minor coverage gap from that review is now closed: `consecutiveSameRecordingEntriesReplaceReading` exercises different consecutive queue entries with the same recording URI in both metadata/queue arrival orders, with either a completed or pending intermediate lyric request (four cases). It verifies hold/source invalidation, final occurrence identity, and rejection of a stale intermediate response. Deliberately dropping either queue identity or playback revision made the new cases fail; the original product source was restored exactly, then all 76 native tests passed. No runtime behavior changed for this follow-up.
 
 A separate final check reproduced AppKit overriding the lyric menu items' disabled state after sign-out and quit. The regression test failed for both paths before the fix and passed after adding native `NSMenuItemValidation`. Unrelated actions such as Quit stay enabled. [Apple NSMenuItem.isEnabled](https://developer.apple.com/documentation/appkit/nsmenuitem/isenabled) documents why direct enabled-state assignment is insufficient with automatic menu validation.
 
@@ -55,4 +61,4 @@ Review scope decisions:
 | Public-release suitability and Spotify synchronization permissions remain separate | This increment is Debug-only and makes no release-readiness claim | Public shipping would lack a separate suitability/permissions review. |
 | Remote lyric following/repeat identity remain excluded | Local eligibility rejects remote playback | Remote listening has no ribbon and needs separate identity work. |
 | Audible continuity is not measured | No audio-pipeline changes; separate acceptance scope | Existing audio artifacts could remain undetected. |
-| Broader VoiceOver, Spaces/full-screen and physical display/accessibility-setting checks remain unverified | Native focus and fixture geometry were checked; broader environments were not | Accessibility/window edge cases may remain undiscovered. |
+| Broader accessibility/display coverage remains partial | Native labels and an owned full-screen/desktop transition were checked; spoken VoiceOver, full-screen keyboard focus and broader configurations were not | Accessibility/window edge cases may remain undiscovered. |
