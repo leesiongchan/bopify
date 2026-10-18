@@ -5,7 +5,7 @@ import BopifyDomain
 
 /// librespot's first-party Spotify client ID, and the only one that can
 /// reach the streaming endpoint -- a Developer Dashboard ID is rejected
-/// by login5 with HTTP 400 (see docs/superpowers/specs/2026-09-21-spike-findings.md).
+/// by login5 with HTTP 400.
 /// Spotify may revoke it at any time, which is the realistic failure
 /// mode for this app; keeping it in one place makes that a one-line fix.
 public let librespotClientID = "65b708073fc0480ea92a077233ca87bd"

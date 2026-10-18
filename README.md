@@ -69,8 +69,7 @@ open -n build/lyric-ribbon-study/Build/Products/Debug/Bopify.app \
 Use the study window to change samples, advance or pause the clock and enter
 explicit keyboard interaction with **Focus Ribbon**. Scroll to browse the full
 sample, then use **Sync** to follow again. Previous/next sample controls
-exercise the record and song transitions. [Native validation notes](docs/live-lyric-ribbon-validation.md)
-record checks and remaining manual coverage.
+exercise the record and song transitions.
 
 ### Test suites
 
