@@ -32,7 +32,7 @@ The unmodified fixture ribbon also remained visible and reachable above an owned
 
 A later normal-app check used the actual Debug status-item menu over an owned full-screen TextEdit window. Focus Lyrics followed by Space entered held reading while the full-screen editor remained visible; Tab followed by Space hid the ribbon without leaving that Space. Recording and paused playback position stayed unchanged. The editor's starting non-full-screen state was restored after every pass.
 
-Full-screen Escape and reopen remain unverified. Subsequent automation could not reliably reach the auto-hidden status-item menu: native hit-testing identified the underlying TextEdit text area instead. No product code was changed for this probe, and the successful partial checks are not evidence that the remaining paths pass. [Apple's full-screen guidance](https://support.apple.com/guide/mac-help/use-apps-in-full-screen-mchl9c21d2be/mac) describes revealing the menu bar from the top of the screen; the probe attempted that but did not reliably recover menu access.
+Automated full-screen Escape/reopen attempts could not reliably reach the auto-hidden status-item menu; no product code was changed for that probe. The user subsequently completed the guided check through the normal Debug menu and confirmed that Escape hid the focused ribbon and Show Lyrics reopened it while TextEdit stayed in full-screen. These outcomes are user-confirmed, rather than automated observations. [Apple's full-screen guidance](https://support.apple.com/guide/mac-help/use-apps-in-full-screen-mchl9c21d2be/mac) describes revealing the menu bar from the top of the screen.
 
 ## Normal Debug app with Spotify playback
 
@@ -49,7 +49,7 @@ Observed:
 - A completed repeat-one check held text at 3:27 of a 3:47 track with Repeat Track confirmed. The same recording naturally restarted; the ribbon returned to its opening time (0:05 observed) and Live status, clearing held reading.
 - The starting settings were paused playback and repeat Off. Both were restored and confirmed after the follow-up checks, then the normal app was quit.
 
-Remaining manual gaps: normal recovery/reconnect during playback, spoken VoiceOver navigation, full-screen Escape/reopen, and broader physical display/accessibility-setting/Spaces configurations. Healthy playback has no UI action that forces session recovery; Retry now is a no-op while ready. No machine-wide connectivity or credential disruption was introduced to force a failure. Deterministic recovery tests pass, but they do not replace live verification. The feature remains implemented for Debug evaluation; full live acceptance and public release are not claimed.
+Remaining manual gaps: normal recovery/reconnect during playback, spoken VoiceOver navigation, and broader physical display/accessibility-setting/Spaces configurations. Healthy playback has no UI action that forces session recovery; Retry now is a no-op while ready. No machine-wide connectivity or credential disruption was introduced to force a failure. Deterministic recovery tests pass, but they do not replace live verification. The feature remains implemented for Debug evaluation; full live acceptance and public release are not claimed.
 
 ## Review
 
@@ -65,4 +65,4 @@ Review scope decisions:
 | Public-release suitability and Spotify synchronization permissions remain separate | This increment is Debug-only and makes no release-readiness claim | Public shipping would lack a separate suitability/permissions review. |
 | Remote lyric following/repeat identity remain excluded | Local eligibility rejects remote playback | Remote listening has no ribbon and needs separate identity work. |
 | Audible continuity is not measured | No audio-pipeline changes; separate acceptance scope | Existing audio artifacts could remain undetected. |
-| Broader accessibility/display coverage remains partial | Native labels, the full-screen/desktop transition and full-screen Focus/Space/Tab were checked; spoken VoiceOver, full-screen Escape/reopen and broader configurations were not | Accessibility/window edge cases may remain undiscovered. |
+| Broader accessibility/display coverage remains partial | Native labels, the full-screen transition and Focus/Space/Tab were checked; the user confirmed full-screen Escape/reopen. Spoken VoiceOver and broader configurations remain unverified | Accessibility/window edge cases may remain undiscovered. |
