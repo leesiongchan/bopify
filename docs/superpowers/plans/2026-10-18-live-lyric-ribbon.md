@@ -1,5 +1,7 @@
 # Live Lyric Ribbon Implementation Plan
 
+Historical plan for the initial Debug implementation. The user subsequently requested Release availability and plain menu labels; the follow-up is recorded in the [current design](../specs/2026-10-18-live-lyric-ribbon-design.md) and [validation record](../../live-lyric-ribbon-validation.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the existing native lyric ribbon follow local Bopify playback correctly in Debug builds, including reading hold, repeat-one, seeks and engine replacement.

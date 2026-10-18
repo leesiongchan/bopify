@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 import BopifyDomain
 
@@ -54,4 +53,3 @@ nonisolated struct LyricPresentation: Equatable, Sendable {
         }
     }
 }
-#endif

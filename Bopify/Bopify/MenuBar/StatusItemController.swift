@@ -209,7 +209,6 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                                      action: #selector(showLibraryAccess(_:)), keyEquivalent: "")
         libraryItem.target = self
         menu.addItem(libraryItem)
-        #if DEBUG
         let lyrics = NSMenuItem(title: environment.isLiveLyricsVisible
             ? String(localized: "menu.hide", table: "LyricRibbon")
             : String(localized: "menu.show", table: "LyricRibbon"),
@@ -222,7 +221,6 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             focus.target = self
             menu.addItem(focus)
         }
-        #endif
         if environment.isAuthorizingPlayback {
             let cancel = NSMenuItem(title: String(localized: "signIn.cancel"), action: #selector(cancelPlaybackAuthorization(_:)), keyEquivalent: "")
             cancel.target = self
@@ -251,13 +249,11 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     @objc private func signOut(_ sender: Any?) {
         Task { await environment.signOut() }
     }
-    #if DEBUG
     @objc private func toggleLiveLyrics(_ sender: Any?) {
         if environment.isLiveLyricsVisible { environment.hideLiveLyrics() }
         else { environment.showLiveLyrics() }
     }
     @objc private func focusLiveLyrics(_ sender: Any?) { environment.focusLiveLyrics() }
-    #endif
     @objc private func cancelPlaybackAuthorization(_ sender: Any?) { environment.cancelPlaybackAuthorization() }
     @objc private func cancelLibraryAuthorization(_ sender: Any?) { environment.cancelLibraryAuthorization() }
     @objc private func showLibraryAccess(_ sender: Any?) { environment.librarySetupWindow.show(environment: environment) }
@@ -276,13 +272,11 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 }
 
-#if DEBUG
 extension StatusItemController: NSMenuItemValidation {
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if menuItem.action == #selector(toggleLiveLyrics(_:)) || menuItem.action == #selector(focusLiveLyrics(_:)) {
-            return environment.authState == .signedIn && environment.player != nil
+            return !environment.isPreparingForQuit && environment.authState == .signedIn && environment.player != nil
         }
         return true
     }
 }
-#endif

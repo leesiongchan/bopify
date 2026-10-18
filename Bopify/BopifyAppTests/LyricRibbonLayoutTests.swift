@@ -1,4 +1,3 @@
-#if DEBUG
 import AppKit
 import Testing
 
@@ -92,4 +91,3 @@ nonisolated private final class LyricLayoutManagerSpy: NSLayoutManager {
         super.ensureLayout(for: container)
     }
 }
-#endif

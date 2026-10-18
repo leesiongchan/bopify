@@ -1,4 +1,3 @@
-#if DEBUG
 import AppKit
 import SwiftUI
 import BopifyPlayback
@@ -170,4 +169,3 @@ private final class LyricRibbonPanel: NSPanel {
 private final class LyricRibbonHostingView: NSHostingView<LyricRibbonView> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
-#endif

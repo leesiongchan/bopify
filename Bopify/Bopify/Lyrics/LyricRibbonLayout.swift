@@ -1,4 +1,3 @@
-#if DEBUG
 import AppKit
 
 struct LyricRibbonLayout {
@@ -70,4 +69,3 @@ struct LyricRibbonLayout {
                     textScale: scale, attributionHeight: attributionHeight)
     }
 }
-#endif

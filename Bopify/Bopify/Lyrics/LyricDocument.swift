@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 
 nonisolated struct LyricCue: Equatable, Sendable {
@@ -62,4 +61,3 @@ nonisolated struct LyricDocument: Equatable, Sendable {
         return LyricProjection(interval: .cue, current: group, previous: previous)
     }
 }
-#endif

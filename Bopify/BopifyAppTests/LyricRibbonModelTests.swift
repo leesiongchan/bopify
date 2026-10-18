@@ -1,4 +1,3 @@
-#if DEBUG
 import Testing
 
 @MainActor @Suite("Lyric ribbon reading")
@@ -141,4 +140,3 @@ nonisolated func lyricTestSnapshot(position: Int64 = 72_000) -> LyricPlaybackSna
         title: "Window Seat", artist: "Soft Weather", positionMs: position, durationMs: 100_000,
         isPlaying: true, seekRevision: 0)
 }
-#endif

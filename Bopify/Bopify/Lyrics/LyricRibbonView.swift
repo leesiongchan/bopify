@@ -1,4 +1,3 @@
-#if DEBUG
 import AppKit
 import SwiftUI
 
@@ -207,6 +206,7 @@ private struct LyricHeaderDrag: NSViewRepresentable {
     func updateNSView(_ view: DragView, context: Context) { view.onDrag = onDrag }
 }
 
+#if DEBUG
 private func previewLyricRibbon(_ kind: String) -> some View {
     let model = LyricRibbonModel(snapshot: LyricPlaybackSnapshot(sessionID: "preview", occurrenceID: "one",
         recordingID: "original", title: "Window Seat", artist: "Soft Weather", positionMs: 72_000,

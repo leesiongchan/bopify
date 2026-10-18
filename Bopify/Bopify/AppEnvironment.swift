@@ -12,6 +12,7 @@ import BopifyLibrary
 final class AppEnvironment {
     private(set) var authState: AuthState = .signedOut
     private(set) var isRemovingCredentials = false
+    private(set) var isPreparingForQuit = false
     @ObservationIgnored private let logoutIntent: LogoutIntentStore?
     private(set) var player: PlayerModel?
     @ObservationIgnored private var nowPlaying: NowPlayingController?
@@ -54,12 +55,11 @@ final class AppEnvironment {
     }
     @ObservationIgnored private var monitorEnabled = true
 
-    #if DEBUG
     @ObservationIgnored private(set) var liveLyricRibbon: LiveLyricRibbonSession?
     var isLiveLyricsVisible: Bool { liveLyricRibbon?.isVisible ?? false }
 
     func showLiveLyrics() {
-        guard authState == .signedIn, let player, let coordinator = recovery else { return }
+        guard !isPreparingForQuit, authState == .signedIn, let player, let coordinator = recovery else { return }
         if liveLyricRibbon == nil {
             liveLyricRibbon = LiveLyricRibbonSession(player: player) { [weak coordinator] uri, epoch in
                 guard let coordinator, coordinator.player.engineEpoch == epoch,
@@ -82,7 +82,7 @@ final class AppEnvironment {
     func hideLiveLyrics() { liveLyricRibbon?.hide() }
 
     func focusLiveLyrics() {
-        guard authState == .signedIn, player != nil else { return }
+        guard !isPreparingForQuit, authState == .signedIn, player != nil else { return }
         showLiveLyrics()
         liveLyricRibbon?.focusForReading()
     }
@@ -92,7 +92,6 @@ final class AppEnvironment {
         liveLyricRibbon = nil
         BopifyLog.playback.debug("live lyric ribbon stopped")
     }
-    #endif
 
     // Authorization and final teardown remain serialized; recovery has its own worker.
     @ObservationIgnored private var pending: Task<Void, Never> = Task {}
@@ -377,9 +376,7 @@ final class AppEnvironment {
 
     func signOut() async {
         guard !isRemovingCredentials else { return }
-        #if DEBUG
         stopLiveLyrics()
-        #endif
         isRemovingCredentials = true
         playbackAuthorization?.cancel()
         libraryAuthorization?.cancel()
@@ -426,9 +423,9 @@ final class AppEnvironment {
     }
 
     func prepareForQuit() async {
-        #if DEBUG
+        isPreparingForQuit = true
+        BopifyLog.playback.info("prepare for quit starting")
         stopLiveLyrics()
-        #endif
         playbackAuthorization?.cancel()
         libraryAuthorization?.cancel()
         sessionGeneration += 1

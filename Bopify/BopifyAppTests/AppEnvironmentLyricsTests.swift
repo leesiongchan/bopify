@@ -10,6 +10,33 @@ import BopifyPlayback
 @MainActor
 @Suite("App live lyrics", .serialized, .timeLimit(.minutes(1)))
 struct AppEnvironmentLyricsTests {
+    @Test func quittingDisablesLyricsWhileEngineShutdownIsPending() async throws {
+        try await withLyricsApp { f in
+            try await f.ready()
+            f.environment.showLiveLyrics()
+            let (resume, continuation) = AsyncStream<Void>.makeStream()
+            defer { continuation.finish() }
+            f.first.shutdownGate = { for await _ in resume { break } }
+            let quitting = Task { await f.environment.prepareForQuit() }
+            try await liveLyricEventually { f.first.shutdowns == 1 }
+
+            let controller = StatusItemController(content: EmptyView(), environment: f.environment)
+            defer { withExtendedLifetime(controller) {} }
+            let menu = NSMenu()
+            let show = NSMenuItem(title: "Show", action: NSSelectorFromString("toggleLiveLyrics:"), keyEquivalent: "")
+            let focus = NSMenuItem(title: "Focus", action: NSSelectorFromString("focusLiveLyrics:"), keyEquivalent: "")
+            for item in [show, focus] { item.target = controller; menu.addItem(item) }
+            menu.update()
+            #expect(!show.isEnabled && !focus.isEnabled)
+            f.environment.showLiveLyrics()
+            f.environment.focusLiveLyrics()
+            #expect(f.environment.liveLyricRibbon == nil && !f.environment.isLiveLyricsVisible)
+
+            continuation.finish()
+            await quitting.value
+        }
+    }
+
     @Test(arguments: ["signOut", "quit"])
     func nativeMenuDisablesLyricsAfterTeardown(action: String) async throws {
         try await withLyricsApp { f in
