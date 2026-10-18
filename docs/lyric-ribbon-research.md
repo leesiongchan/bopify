@@ -4,6 +4,23 @@ Research date: October 17, 2026. Status: the clean retro refinement of direction
 
 The lyric ribbon would let a listener glance at the words and reread a passage while music continues. The value to test is whether it fits working on a Mac without taking keyboard focus or demanding attention. The primary use remains a choice between persistent background display, a brief shortcut peek and deliberate close reading.
 
+## October 18 refinement for the released ribbon
+
+The user requested a modern UI/UX refinement while retaining Bopify's clean retro identity, and selected a charcoal reading surface with Liquid Glass controls. The alternative was to keep the previous full glass shell and refine only typography and controls. The selected direction gives the words a steadier backdrop while preserving native material on the interactive layer.
+
+Research informed these choices:
+
+- Keep the reading surface on a standard material with a restrained charcoal fill; reserve Liquid Glass for the native reading toggle and dismiss button. Apple's current guidance places glass on controls/navigation and standard materials behind content. [Apple HIG: Materials](https://developer.apple.com/design/human-interface-guidelines/materials) (Liquid Glass guidance updated September 9, 2025; checked October 18, 2026).
+- Use system typography with a clearer hierarchy: 25-point current lyrics, 15-point preceding lyrics, distinct title and artist, and 11–12-point secondary information and controls. These are Bopify's design choices, informed by Apple's legibility and hierarchy guidance; they are not platform-mandated lyric sizes. [Apple HIG: Typography](https://developer.apple.com/design/human-interface-guidelines/typography) (checked October 18, 2026).
+- Use the platform's glass button style and group its effects with `GlassEffectContainer`; keep native bordered controls and an opaque surface in the existing transparency/contrast fallback. No shader, glass simulation or new package is needed. [Apple: Applying Liquid Glass to custom views](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views) (checked October 18, 2026).
+- Preserve a clear distinction between timed lyrics and ordinary full-text reading. The action holds the words without changing audio; unsynced text has no invented live highlight. [Apple Music: See lyrics on Mac or PC](https://support.apple.com/en-us/108960) (checked October 18, 2026).
+
+Local inspection supplied the remaining UX decisions. Hold text and Back to live stay visible, with a persistent header close control outside the drag region. A short Reading status and its explanatory help distinguish frozen words from continuing playback. Metadata has a full-identity tooltip. Long cues use a viewport capped at 180 points at normal lyric scale, subject to the available display height; the cap scales with lyric text size. Panel geometry stays constant through ordinary cue and hold changes.
+
+An overflow regression showed that resetting to the start of a long preceding cue could hide the active lyric. The refined passage marks the current range and uses native TextKit line geometry to place it below one line of context on a cue reset. Trailing document space permits that placement even for a short current cue. Ordinary clock updates preserve manual scrolling and selection. [Apple NSLayoutManager lineFragmentRect](https://developer.apple.com/documentation/appkit/nslayoutmanager/linefragmentrect(forglyphat:effectiverange:)) (checked October 18, 2026).
+
+Native screenshots and final verification are recorded in the [live validation record](live-lyric-ribbon-validation.md). Fixtures contain original sample words and use no live audio. Existing playback, source attribution and Release availability remain in scope; no provider or playback behavior changes are part of this refinement.
+
 ## Three possible experiences
 
 | Approach | Useful when | Main tradeoff |

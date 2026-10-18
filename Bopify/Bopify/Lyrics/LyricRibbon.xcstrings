@@ -90,6 +90,26 @@
           }
         }
       }
+    },
+    "status.reading": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading"
+          }
+        }
+      }
+    },
+    "action.hold.help": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hold the words while music continues. Return to live to follow the current line."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

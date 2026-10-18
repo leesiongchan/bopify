@@ -83,7 +83,7 @@ struct LyricRibbonWindowTests {
 
     @Test func draggingLongPassageToShortDisplayRemeasuresTheViewport() throws {
         let tall = CGRect(x: -1000, y: 0, width: 1000, height: 1200)
-        let short = CGRect(x: 0, y: 0, width: 1000, height: 480)
+        let short = CGRect(x: 0, y: 0, width: 1000, height: 260)
         let content = LyricContent.timed(try LyricDocument(cues: [
             LyricCue(id: "long", startMs: 0, text: String(repeating: "A little room for the rain.\n", count: 100)),
         ]))
@@ -92,8 +92,8 @@ struct LyricRibbonWindowTests {
         let destination = LyricRibbonWindowController.placement(content: content,
             saved: CGRect(x: 50, y: 20, width: 448, height: original.layout.panelSize.height),
             textScale: 1, screens: [tall, short], preferred: tall)
-        #expect(original.layout.panelSize.height > 480)
-        #expect(destination.layout.panelSize.height <= 440)
+        #expect(original.layout.panelSize.height < 350)
+        #expect(destination.layout.panelSize.height <= 220)
         #expect(destination.layout.textViewportHeight < original.layout.textViewportHeight)
         #expect(short.contains(destination.frame))
     }

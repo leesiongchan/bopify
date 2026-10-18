@@ -6,19 +6,17 @@ struct LyricRibbonView: View {
     let layout: LyricRibbonLayout
     let onHide: () -> Void
     let onDragHeader: (NSEvent) -> Void
-    @State private var hovered = false
     @FocusState private var focusedControl: LyricRibbonControl?
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
 
-    private var showsControls: Bool { hovered || focusedControl != nil || model.isHeld || model.isKeyboardInteracting }
     private var isTimed: Bool { if case .timed = model.content { true } else { false } }
     private var elapsed: String {
         let seconds = max(0, model.snapshot.positionMs) / 1000
         return "\(seconds / 60):\(String(format: "%02lld", seconds % 60))"
     }
     private var status: String {
-        if model.isHeld { return model.snapshot.isPlaying ? "Reading · music continues" : "Reading · music paused" }
+        if model.isHeld { return String(localized: "status.reading", defaultValue: "Reading", table: "LyricRibbon") }
         if model.projection?.interval == .ended { return "End of lyrics" }
         if isTimed { return model.snapshot.isPlaying ? "Live" : "Paused" }
         return "Lyrics"
@@ -52,72 +50,109 @@ struct LyricRibbonView: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 8) {
-                vinylMark
-                Text(model.snapshot.artist.isEmpty ? model.snapshot.title : "\(model.snapshot.title) · \(model.snapshot.artist)")
-                    .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
-                Spacer(minLength: 8)
-                Text(elapsed).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
-            }
-            .frame(height: 22)
-            .overlay { LyricHeaderDrag(onDrag: onDragHeader) }
-            LyricPassageView(text: words, width: layout.panelSize.width - 40,
-                height: layout.textViewportHeight, resetRevision: model.scrollResetRevision)
-                .frame(height: layout.textViewportHeight)
-            if let attribution = model.source?.attribution, layout.attributionHeight > 0 {
-                Text(attribution).font(.system(size: 10 * layout.textScale)).foregroundStyle(.secondary)
-                    .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(height: layout.attributionHeight, alignment: .topLeading)
-                    .help(attribution).accessibilityLabel(attribution)
-            }
-            HStack(spacing: 8) {
-                Text(status).font(.system(size: 10))
-                    .foregroundStyle(model.isHeld ? Color(red: 0.86, green: 0.77, blue: 0.59) : .secondary)
-                Spacer(minLength: 4)
-                HStack(spacing: 5) {
-                    if isTimed {
-                        Toggle(model.isHeld ? "Back to live" : "Hold text", isOn: Binding(
-                            get: { model.isHeld },
-                            set: { if $0 { model.holdText() } else { model.backToLive() } }
-                        ))
-                        .toggleStyle(.button)
-                        .accessibilityLabel("Hold text")
-                        .disabled(!model.isHeld && model.projection?.interval != .cue)
-                        .focusable(interactions: [.edit, .activate])
-                        .focused($focusedControl, equals: .reading)
-                        .tint(model.isHeld ? Color(red: 0.88, green: 0.82, blue: 0.70) : .secondary)
+        GlassEffectContainer(spacing: 8) {
+            VStack(spacing: LyricRibbonLayout.sectionSpacing) {
+                HStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        vinylMark
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(model.snapshot.title).font(.system(size: 12, weight: .medium))
+                            if !model.snapshot.artist.isEmpty {
+                                Text(model.snapshot.artist).font(.system(size: 11)).foregroundStyle(.secondary)
+                            }
+                        }
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    Button(action: onHide) { Image(systemName: "xmark").frame(width: 10) }
-                        .accessibilityLabel("Hide Ribbon").help("Hide Ribbon")
-                        .focusable(interactions: [.edit, .activate]).focused($focusedControl, equals: .hide)
+                    .help(model.snapshot.artist.isEmpty ? model.snapshot.title : "\(model.snapshot.title) · \(model.snapshot.artist)")
+                    .overlay { LyricHeaderDrag(onDrag: onDragHeader) }
+                    Text(elapsed).font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.secondary).fixedSize()
+                    dismissControl
                 }
-                .font(.system(size: 10)).buttonStyle(.bordered).buttonBorderShape(.capsule)
-                .controlSize(.mini).opacity(showsControls ? 1 : 0)
+                .frame(height: LyricRibbonLayout.headerHeight)
+                LyricPassageView(text: words, width: layout.panelSize.width - 2 * LyricRibbonLayout.horizontalInset,
+                    height: layout.textViewportHeight, resetRevision: model.scrollResetRevision)
+                    .frame(height: layout.textViewportHeight)
+                if let attribution = model.source?.attribution, layout.attributionHeight > 0 {
+                    Text(attribution).font(.system(size: 11 * layout.textScale)).foregroundStyle(.secondary)
+                        .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(height: layout.attributionHeight, alignment: .topLeading)
+                        .help(attribution).accessibilityLabel(attribution)
+                }
+                HStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        Circle().fill(model.isHeld ? Color(red: 0.86, green: 0.77, blue: 0.59) : .secondary)
+                            .frame(width: 5, height: 5).accessibilityHidden(true)
+                        Text(status).font(.system(size: 11, weight: .medium)).lineLimit(1)
+                    }
+                    .foregroundStyle(model.isHeld ? Color(red: 0.86, green: 0.77, blue: 0.59) : .secondary)
+                    .help(model.isHeld ? (model.snapshot.isPlaying ? "Reading · music continues" : "Reading · music paused") : status)
+                    Spacer(minLength: 0)
+                    if isTimed { readingControl.fixedSize().layoutPriority(1) }
+                }
+                .frame(height: LyricRibbonLayout.footerHeight)
             }
-            .frame(height: 26)
-        }
-        .padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 14)
-        .frame(width: layout.panelSize.width, height: layout.panelSize.height)
-        .background {
-            let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
-            if reduceTransparency || contrast == .increased {
-                shape.fill(Color(nsColor: .windowBackgroundColor))
-            } else {
-                shape.fill(Color(red: 0.08, green: 0.10, blue: 0.085).opacity(0.75))
-                    .glassEffect(.regular, in: shape)
+            .padding(.horizontal, LyricRibbonLayout.horizontalInset)
+            .padding(.vertical, LyricRibbonLayout.verticalInset)
+            .frame(width: layout.panelSize.width, height: layout.panelSize.height)
+            .background {
+                let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
+                if reduceTransparency || contrast == .increased {
+                    shape.fill(Color(nsColor: .windowBackgroundColor))
+                } else {
+                    shape.fill(.regularMaterial)
+                        .overlay { shape.fill(Color(red: 0.075, green: 0.09, blue: 0.08).opacity(0.86)) }
+                }
             }
-        }
-        .overlay {
-            if reduceTransparency || contrast == .increased {
+            .overlay {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .strokeBorder(.primary.opacity(contrast == .increased ? 0.5 : 0.13), lineWidth: 1)
+                    .strokeBorder(.primary.opacity(contrast == .increased ? 0.5 : 0.1), lineWidth: 1)
                     .allowsHitTesting(false)
             }
         }
+        .controlSize(.small)
         .preferredColorScheme(.dark)
-        .onHover { hovered = $0 }
         .onChange(of: model.keyboardSelection) { _, selection in focusedControl = selection }
+    }
+
+    @ViewBuilder private var readingControl: some View {
+        if reduceTransparency || contrast == .increased { readingToggle.buttonStyle(.bordered) }
+        else { readingToggle.buttonStyle(.glass) }
+    }
+
+    private var readingToggle: some View {
+        Toggle(isOn: Binding(
+            get: { model.isHeld },
+            set: { if $0 { model.holdText() } else { model.backToLive() } }
+        )) {
+            Text(model.isHeld ? "Back to live" : "Hold text")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.primary).frame(minHeight: 22)
+        }
+        .toggleStyle(.button)
+        .buttonBorderShape(.capsule)
+        .accessibilityLabel("Hold text")
+        .help(String(localized: "action.hold.help", defaultValue: "Hold the words while music continues. Return to live to follow the current line.", table: "LyricRibbon"))
+        .disabled(!model.isHeld && model.projection?.interval != .cue)
+        .focusable(interactions: [.edit, .activate])
+        .focused($focusedControl, equals: .reading)
+        .tint(model.isHeld ? Color(red: 0.86, green: 0.77, blue: 0.59) : nil)
+    }
+
+    @ViewBuilder private var dismissControl: some View {
+        if reduceTransparency || contrast == .increased { dismissButton.buttonStyle(.bordered) }
+        else { dismissButton.buttonStyle(.glass) }
+    }
+
+    private var dismissButton: some View {
+        Button(action: onHide) {
+            Image(systemName: "xmark").font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.primary).frame(width: 16, height: 20)
+        }
+        .buttonBorderShape(.circle)
+        .accessibilityLabel("Hide Ribbon").help("Hide Ribbon")
+        .focusable(interactions: [.edit, .activate]).focused($focusedControl, equals: .hide)
     }
 
     private var vinylMark: some View {
@@ -142,6 +177,7 @@ struct LyricPassageView: NSViewRepresentable {
         var resetRevision: UInt64?
         private var layoutWidth: CGFloat?
         private var textHeight: CGFloat = 0
+        private var currentCueOffset: CGFloat = 0
 
         func updateText(_ view: NSTextView, text: NSAttributedString, width: CGFloat, height: CGFloat) {
             guard let storage = view.textStorage, let container = view.textContainer,
@@ -153,10 +189,30 @@ struct LyricPassageView: NSViewRepresentable {
                 container.containerSize = CGSize(width: width, height: .greatestFiniteMagnitude)
                 manager.ensureLayout(for: container)
                 textHeight = ceil(manager.usedRect(for: container).height)
+                currentCueOffset = 0
+                storage.enumerateAttribute(LyricRibbonLayout.currentCueAttribute,
+                    in: NSRange(location: 0, length: storage.length)) { value, range, stop in
+                    guard value as? Bool == true else { return }
+                    let glyph = manager.glyphIndexForCharacter(at: range.location)
+                    guard glyph < manager.numberOfGlyphs else { return }
+                    let line = manager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+                    let font = storage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
+                    let context = font.map { ceil($0.ascender - $0.descender + $0.leading) + 8 } ?? 0
+                    currentCueOffset = max(0, line.minY - context)
+                    stop.pointee = true
+                }
                 layoutWidth = width
             }
-            let size = CGSize(width: width, height: max(height, textHeight))
+            // Trailing room lets even a short current cue sit below one line of preceding context.
+            let size = CGSize(width: width, height: max(height, textHeight, currentCueOffset + height))
             if view.frame.size != size { view.setFrameSize(size) }
+        }
+
+        func updateScroll(_ scroll: NSScrollView, resetRevision: UInt64) {
+            guard self.resetRevision != resetRevision else { return }
+            scroll.contentView.scroll(to: CGPoint(x: 0, y: currentCueOffset))
+            scroll.reflectScrolledClipView(scroll.contentView)
+            self.resetRevision = resetRevision
         }
     }
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -173,7 +229,8 @@ struct LyricPassageView: NSViewRepresentable {
         view.isSelectable = true
         view.drawsBackground = false
         view.textContainerInset = .zero
-        view.isVerticallyResizable = true
+        // The coordinator owns document height, including room below the current-cue anchor.
+        view.isVerticallyResizable = false
         view.isHorizontallyResizable = false
         view.setAccessibilityLabel("Lyrics")
         let scroll = NSScrollView()
@@ -188,11 +245,7 @@ struct LyricPassageView: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         guard let view = scroll.documentView as? NSTextView else { return }
         context.coordinator.updateText(view, text: text, width: width, height: height)
-        if context.coordinator.resetRevision != resetRevision {
-            scroll.contentView.scroll(to: .zero)
-            scroll.reflectScrolledClipView(scroll.contentView)
-            context.coordinator.resetRevision = resetRevision
-        }
+        context.coordinator.updateScroll(scroll, resetRevision: resetRevision)
     }
 }
 
