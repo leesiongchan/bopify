@@ -4,7 +4,21 @@ Research dates: October 17–18, 2026. The live native ribbon is implemented; se
 
 The lyric ribbon would let a listener glance at the words and reread a passage while music continues. The value to test is whether it fits working on a Mac without taking keyboard focus or demanding attention. The primary use remains a choice between persistent background display, a brief shortcut peek and deliberate close reading.
 
-## Glass and record overlap refinement
+## Compact type, album color and drag coverage
+
+The approved refinement reduces normal geometry to **448 × 146 points** with an **84-point three-row viewport**. Current/context/manual type changes to **19/14/15 points**. The record stays at 96 points. Provider credit becomes a smaller, trailing label on the artist row, without a dot, badge or extra footer. These are Bopify's design choices, rather than platform-mandated lyric sizes.
+
+The native regular glass and warm charcoal field remain. A SwiftUI gradient reuses the artwork store's existing dominant color, with restrained opacity, fading completely by 30% of the surface width. Album color adds a sense of reflected light beside the record; the remaining reading field stays charcoal. No extraction library or rendering dependency is added.
+
+- Apple recommends system label colors to express relative importance while keeping text legible. [Labels](https://developer.apple.com/design/human-interface-guidelines/labels) (checked October 18, 2026).
+- Apple recommends introducing expressive color in the content layer and avoiding tint on every glass element. [Meet Liquid Glass, WWDC25](https://developer.apple.com/videos/play/wwdc2025/219/) (checked October 18, 2026).
+- Sleeve's current native music UI offers a reference for keeping album artwork prominent while adapting glass to the desktop. [Sleeve 3 for macOS Tahoe](https://replay.software/updates/sleeve-3-for-macos-tahoe) (January 30, 2026; checked October 18, 2026).
+
+The drag regression came from the native reader receiving input across its full rectangle, including blank space above the drag layer. A front native routing view now reuses the shared drag handler for the surrounding surface and blank text space, passing visible words, Sync and the active native scrollbar through. Wheel events received by that view continue to the reader. Native `hitTest` uses superview coordinates; AppKit conversions map them to text and control coordinates. [NSView.hitTest(_:)](https://developer.apple.com/documentation/appkit/nsview/hittest(_:)) (checked October 18, 2026).
+
+Automatic following has no vertical scroller. Manual timed reading and untimed/plain reading retain the native overlay indicator. `autohidesScrollers` alone cannot prevent overlay indicators appearing during programmatic following because AppKit ignores that property for overlay-style scrollers. [autohidesScrollers](https://developer.apple.com/documentation/appkit/nsscrollview/autohidesscrollers), [verticalScroller](https://developer.apple.com/documentation/appkit/nsscrollview/verticalscroller) (checked October 18, 2026).
+
+## Previous glass and record overlap refinement
 
 The latest approved revision retains the **448 × 156-point** footprint and **94-point three-row viewport**. The full **96-point record sits in front of the glass**, with a shared natural shadow instead of a rectangular concealment, artificial spine or extra panel shadow. The lyric field starts beyond the record's edge. This replaces the half-concealed sleeve described below.
 
@@ -17,7 +31,7 @@ The surface uses SwiftUI's native **regular Liquid Glass**, an olive tint and a 
 
 Dragging reuses the main player's native region with a passive-focus option. Exposed borders, background, metadata and record can drag; the reader and Sync retain their interactions. Drop positioning reuses the existing screen clamp and SwiftUI spring parameters (0.50 seconds, bounce 0.18), with immediate positioning under Reduce Motion. `performDrag` was removed from this path because it returns immediately and does not guarantee a matching mouse-up. [Apple: performDrag(with:)](https://developer.apple.com/documentation/appkit/nswindow/performdrag(with:)) (checked October 18, 2026).
 
-See [native captures and validation](live-lyric-ribbon-validation.md#glass-and-record-overlap-refinement).
+See [native captures and validation](live-lyric-ribbon-validation.md#previous-glass-and-record-overlap-refinement).
 
 ## Previous three-row native sleeve revision
 
@@ -27,7 +41,7 @@ The footer and Live/Reading labels are removed. Provider credit shares the artis
 
 In manual mode only the playback-current cue is highlighted. Native temporary foreground attributes update without replacing text, changing metrics, moving the viewport or discarding selection. Timestamp links use NSTextView's own mouse tracking, with custom link colors/tooltips suppressed. Actual testing found a separate click recognizer did not complete alongside the text view's tracking loop, so it was removed. Native short and long selection drags were checked separately from clicks. [Apple: clicked(onLink:at:)](https://developer.apple.com/documentation/appkit/nstextview/clicked(onlink:at:)), [TN3212: AppKit gesture tracking compatibility](https://developer.apple.com/documentation/technotes/tn3212-adopting-gesture-recognizers-for-sidecar-touch-support) (checked October 18, 2026).
 
-Clicks reuse PlayerModel.seek(to:) and preserve playback's paused/playing state. The live session rejects stale rendered occurrences and unknown/untimed cues; seek dispatch now also rejects occurrence changes while waiting behind another command. The public playback API is unchanged. See the [current native validation and captures](live-lyric-ribbon-validation.md#three-row-sleeve-refinement).
+Clicks reuse PlayerModel.seek(to:) and preserve playback's paused/playing state. The live session rejects stale rendered occurrences and unknown/untimed cues; seek dispatch now also rejects occurrence changes while waiting behind another command. The public playback API is unchanged. See the [native validation and captures for this revision](live-lyric-ribbon-validation.md#previous-three-row-sleeve-refinement).
 
 ## Initial compact native sleeve
 

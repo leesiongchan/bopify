@@ -12,7 +12,7 @@ struct PlayerBackgroundDragRegion: NSViewRepresentable {
         nsView.onDragChanged = onDragChanged
     }
 
-    final class DragView: NSView {
+    class DragView: NSView {
         var takesKeyboardFocus = true
         var onPrepareDrag: () -> Void = {}
         var onDragChanged: ((Bool) -> Void)?

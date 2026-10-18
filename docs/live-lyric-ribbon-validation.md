@@ -2,7 +2,31 @@
 
 Validated October 18, 2026 on macOS with Xcode 27, arm64. The implementation follows local playback and is available from the player Lyrics control or Control–Option–L in Debug and Release. Historical evaluations remain below. Manual limits remain listed explicitly.
 
-## Glass and record overlap refinement
+## Compact type, album color and drag coverage
+
+The current ribbon is **448 × 146 points**, with a fixed **84-point three-row viewport**, **19/14/15-point current/context/manual type**, and the existing 96-point record. Provider credit is a smaller muted trailing label on the artist row. The regular native glass and charcoal-olive reading field remain; a gradient uses the existing dominant album color and fades to transparent by 30% of the surface width.
+
+Loaded-content regressions reproduced drag failure in the blank part of the native reader. Earlier border tests used idle content and missed that case. The front native drag view now explicitly passes visible words, Sync and native scroller targets through, and handles the remaining surface with the existing passive drag implementation. AppKit's own text tracking still handles selection and lyric links. Wheel input received by the surface is forwarded to the reader.
+
+Scroller regressions reproduce the permanently enabled indicator during following. It is now disabled before programmatic follow updates, enabled for manual timed reading, and preserved for plain lyrics, which have no automatic-follow state. Hidden-indicator gutter routing and native wheel movement/focus are checked separately. Existing click-to-seek and 10/120-point selection drag cases remain in the window suite.
+
+Native captures use original offline lyrics/artwork and owned backdrops. Cool and warm artwork demonstrate the restrained album-color wash; bright and patterned backdrops check readability. The enlarged-text capture requires a larger backdrop so transparent margins cannot expose other windows. Final capture guards require full backdrop coverage and reject overlapping foreign windows. All temporary capture hooks are removed before final builds.
+
+| Native capture | Observation |
+| --- | --- |
+| [Before](mockups/lyric-glass-dark.png) | Previous 23-point current type, inline credit and taller geometry. |
+| [Cool album](mockups/lyric-compact-v4-dark.png) | Smaller type, three lines and a cool color spill beside the record. |
+| [Warm album](mockups/lyric-compact-v4-warm.png) | Warm album color stays concentrated near the record. |
+| [Light desktop](mockups/lyric-compact-v4-light.png) | Stable charcoal reading field over the owned bright background. |
+| [Patterned desktop](mockups/lyric-compact-v4-busy.png) | Native glass remains visible under the restrained reading tint. |
+| [Manual reading](mockups/lyric-compact-v4-reading.png) | Smaller reading type, conditional Sync and compact provider credit. |
+| [Arabic](mockups/lyric-compact-v4-rtl.png) | Native shaping and three-row wrapping. |
+| [Larger text](mockups/lyric-compact-v4-large.png) | Scaled reading viewport stays bounded. |
+| [Plain lyrics](mockups/lyric-compact-v4-plain.png) | Untimed text remains readable and scrollable. |
+
+With temporary hooks removed, the full app suites pass **113 Debug tests** and **82 Release tests**; the core package passes **387 tests**. This includes loaded drag coverage in seven areas, native wheel movement through the surface, passive Sync activation, click-to-seek, short/long selection drags, manual/plain scrollbar eligibility and hidden-gutter routing. Final Debug and Release app builds both succeed with `CODE_SIGNING_ALLOWED=NO SWIFT_EMIT_LOC_STRINGS=NO`. Independent review reports no remaining actionable findings. The user's VoiceOver skip remains unchanged.
+
+## Previous glass and record overlap refinement
 
 The current ribbon uses one native regular Liquid Glass surface with olive tint and a translucent charcoal reading overlay. The full 96-point record overlaps in front. The artificial spine, custom outline and extra native panel shadow are removed. Normal geometry remains **448 × 156 points**, including a **94-point three-row viewport**. Sync is a bordered capsule on the glass, avoiding a second glass layer.
 

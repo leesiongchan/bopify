@@ -83,7 +83,7 @@ struct LyricPresentationTests {
             #expect(measured.panelSize == layout.panelSize)
         }
         let original = LyricRibbonLayout.measure(content: .plain("Short"), width: 448, textScale: 1, availableHeight: 480)
-        #expect(original.panelSize.height == 156)
+        #expect(original.panelSize.height == 146)
         #expect(original.panelSize == LyricRibbonLayout.measure(content: .plain("Short"), width: 448,
             textScale: 1, availableHeight: 480, source: source).panelSize)
     }

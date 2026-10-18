@@ -8,6 +8,7 @@ struct LyricRibbonLayout {
     static let verticalInset: CGFloat = 8
     static let sectionSpacing: CGFloat = 8
     static let headerHeight: CGFloat = 26
+    static let rowHeight: CGFloat = 28
     static let cueTimeAttribute = NSAttributedString.Key("BopifyLyricTime")
     static let currentCueAttribute = NSAttributedString.Key("BopifyCurrentLyric")
 
@@ -19,19 +20,22 @@ struct LyricRibbonLayout {
         let result = NSMutableAttributedString()
         if let previous, !previous.isEmpty {
             let paragraph = NSMutableParagraphStyle()
-            paragraph.paragraphSpacing = 8
+            paragraph.minimumLineHeight = rowHeight * scale
+            paragraph.maximumLineHeight = rowHeight * scale
             paragraph.alignment = .natural
             paragraph.baseWritingDirection = isRightToLeft ? .rightToLeft : .natural
             result.append(NSAttributedString(string: previous + "\n", attributes: [
-                .font: NSFont.systemFont(ofSize: 15 * scale), .foregroundColor: NSColor.secondaryLabelColor,
+                .font: NSFont.systemFont(ofSize: 14 * scale), .foregroundColor: NSColor.secondaryLabelColor,
                 .paragraphStyle: paragraph,
             ]))
         }
         let currentParagraph = NSMutableParagraphStyle()
+        currentParagraph.minimumLineHeight = rowHeight * scale
+        currentParagraph.maximumLineHeight = rowHeight * scale
         currentParagraph.alignment = .natural
         currentParagraph.baseWritingDirection = isRightToLeft ? .rightToLeft : .natural
         result.append(NSAttributedString(string: current, attributes: [
-            .font: NSFont.systemFont(ofSize: 25 * scale, weight: .medium), .foregroundColor: NSColor.labelColor,
+            .font: NSFont.systemFont(ofSize: 19 * scale, weight: .medium), .foregroundColor: NSColor.labelColor,
             .paragraphStyle: currentParagraph, currentCueAttribute: true,
         ]))
         return result
@@ -60,12 +64,12 @@ struct LyricRibbonLayout {
         let metrics = NSLayoutManager()
         for (index, group) in document.groups.enumerated() {
             let paragraph = NSMutableParagraphStyle()
-            paragraph.minimumLineHeight = 94 / 3 * scale
-            paragraph.maximumLineHeight = 94 / 3 * scale
+            paragraph.minimumLineHeight = rowHeight * scale
+            paragraph.maximumLineHeight = rowHeight * scale
             paragraph.alignment = .natural
             paragraph.baseWritingDirection = isRightToLeft ? .rightToLeft : .natural
             let current = group.startMs == projection?.current?.startMs
-            let font = NSFont.systemFont(ofSize: (isReading ? 17 : current ? 23 : 15) * scale,
+            let font = NSFont.systemFont(ofSize: (isReading ? 15 : current ? 19 : 14) * scale,
                                          weight: current && !isReading ? .medium : .regular)
             var attributes: [NSAttributedString.Key: Any] = [
                 .font: font,
@@ -88,7 +92,7 @@ struct LyricRibbonLayout {
         let scale = max(1, textScale)
         let chromeHeight = 2 * (verticalInset + surfaceInset) + headerHeight + sectionSpacing
         // The document scrolls; its length never controls the companion's footprint.
-        let viewport = min(94 * scale, max(1, availableHeight - chromeHeight))
+        let viewport = min(3 * rowHeight * scale, max(1, availableHeight - chromeHeight))
         return Self(panelSize: CGSize(width: max(1, width), height: viewport + chromeHeight),
                     textViewportHeight: viewport, textScale: scale)
     }
