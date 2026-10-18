@@ -28,6 +28,8 @@ An owned TextEdit scratch document retained activation and received typing after
 
 Follow-up checks on October 18 confirmed the native accessibility roles and labels `Lyrics` (read-only text area), `Hold text` (toggle) and `Hide Ribbon` (button). This is structural AX inspection, not verification of VoiceOver speech/navigation.
 
+Spoken VoiceOver navigation was skipped at the user's request and is removed from the remaining checklist.
+
 The unmodified fixture ribbon also remained visible and reachable above an owned 1920 × 1080 full-screen TextEdit window, then followed the return to the desktop Space. Its original full-screen state was restored and the scratch document closed. The [full-screen fixture capture](mockups/live-lyric-ribbon-full-screen.png) contains only original sample words. The off-Space preview control window could not be used to invoke Focus; this fixture capture alone does not establish keyboard behavior.
 
 A later normal-app check used the actual Debug status-item menu over an owned full-screen TextEdit window. Focus Lyrics followed by Space entered held reading while the full-screen editor remained visible; Tab followed by Space hid the ribbon without leaving that Space. Recording and paused playback position stayed unchanged. The editor's starting non-full-screen state was restored after every pass.
@@ -49,7 +51,7 @@ Observed:
 - A completed repeat-one check held text at 3:27 of a 3:47 track with Repeat Track confirmed. The same recording naturally restarted; the ribbon returned to its opening time (0:05 observed) and Live status, clearing held reading.
 - The starting settings were paused playback and repeat Off. Both were restored and confirmed after the follow-up checks, then the normal app was quit.
 
-Remaining manual gaps: normal recovery/reconnect during playback, spoken VoiceOver navigation, and broader physical display/accessibility-setting/Spaces configurations. Healthy playback has no UI action that forces session recovery; Retry now is a no-op while ready. No machine-wide connectivity or credential disruption was introduced to force a failure. Deterministic recovery tests pass, but they do not replace live verification. The feature remains implemented for Debug evaluation; full live acceptance and public release are not claimed.
+Remaining manual gaps: normal recovery/reconnect during playback and broader physical display/accessibility-setting/Spaces configurations. Healthy playback has no UI action that forces session recovery; Retry now is a no-op while ready. No machine-wide connectivity or credential disruption was introduced to force a failure. Deterministic recovery tests pass, but they do not replace live verification. The feature remains implemented for Debug evaluation; full live acceptance and public release are not claimed.
 
 ## Review
 
@@ -65,4 +67,4 @@ Review scope decisions:
 | Public-release suitability and Spotify synchronization permissions remain separate | This increment is Debug-only and makes no release-readiness claim | Public shipping would lack a separate suitability/permissions review. |
 | Remote lyric following/repeat identity remain excluded | Local eligibility rejects remote playback | Remote listening has no ribbon and needs separate identity work. |
 | Audible continuity is not measured | No audio-pipeline changes; separate acceptance scope | Existing audio artifacts could remain undetected. |
-| Broader accessibility/display coverage remains partial | Native labels, the full-screen transition and Focus/Space/Tab were checked; the user confirmed full-screen Escape/reopen. Spoken VoiceOver and broader configurations remain unverified | Accessibility/window edge cases may remain undiscovered. |
+| Broader accessibility/display coverage remains partial | Native labels, the full-screen transition and Focus/Space/Tab were checked; the user confirmed full-screen Escape/reopen. Spoken VoiceOver was skipped at the user's request; broader configurations remain unverified | Accessibility/window edge cases may remain undiscovered. |
