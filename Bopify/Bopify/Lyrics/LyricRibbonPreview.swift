@@ -2,6 +2,8 @@
 import AppKit
 import Observation
 import SwiftUI
+import BopifyDomain
+import BopifyPlayback
 
 enum LyricPreviewFixture: String, CaseIterable {
     case timed, long, rtl, plain, instrumental, noMatch, failure, loading
@@ -34,6 +36,8 @@ enum LyricPreviewFixture: String, CaseIterable {
 @MainActor @Observable
 final class LyricRibbonPreviewSession {
     let model: LyricRibbonModel
+    let artworkStore = makePreviewArtworkStore()
+    private var songIndex = 0
     private(set) var fixture: LyricPreviewFixture = .timed
     private(set) var isClockRunning = false
     @ObservationIgnored private let now: () -> TimeInterval
@@ -44,7 +48,7 @@ final class LyricRibbonPreviewSession {
     @ObservationIgnored private var basePosition: Int64 = 72_000
     @ObservationIgnored private var baseTime: TimeInterval
     @ObservationIgnored private var controlWindow: NSWindow?
-    @ObservationIgnored private(set) lazy var controller = LyricRibbonWindowController(model: model, defaults: defaults,
+    @ObservationIgnored private(set) lazy var controller = LyricRibbonWindowController(model: model, defaults: defaults, artworkStore: artworkStore,
         onHide: { [weak self] in self?.hide() })
 
     init(now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
@@ -56,8 +60,8 @@ final class LyricRibbonPreviewSession {
         baseTime = now()
         model = LyricRibbonModel(snapshot: LyricPlaybackSnapshot(sessionID: UUID().uuidString,
             occurrenceID: UUID().uuidString, recordingID: "original-timed", title: "Window Seat", artist: "Soft Weather",
-            positionMs: 72_000, durationMs: 100_000, isPlaying: true, seekRevision: 0))
-        model.completeLoad(fixture.content, token: model.beginLoad())
+            positionMs: 72_000, durationMs: 100_000, isPlaying: true, seekRevision: 0, artworkURL: previewArtworkURL(0)))
+        model.completeLoad(fixture.content, token: model.beginLoad(), source: fixtureSource)
     }
 
     func show() {
@@ -96,7 +100,34 @@ final class LyricRibbonPreviewSession {
         input.recordingID = "original-\(fixture.rawValue)"
         input.positionMs = 72_000
         model.update(input)
-        model.completeLoad(fixture.content, token: model.beginLoad())
+        model.completeLoad(fixture.content, token: model.beginLoad(), source: fixtureSource)
+        anchorTime()
+        controller.refreshLayout(textScale: 1)
+    }
+
+    private var fixtureSource: LyricSourceMetadata? {
+        switch fixture.content {
+        case .timed, .plain:
+            return LyricSourceMetadata(lyrics: TrackLyrics(trackURI: previewTracks[0].uri, synchronization: .lineSynced,
+                lines: [], provider: "fixture", providerDisplayName: "Fixture provider", language: fixture == .rtl ? "ar" : "en",
+                isRightToLeft: fixture == .rtl))
+        default: return nil
+        }
+    }
+
+    func changeSong(_ direction: CarouselDirection) {
+        synchronize()
+        songIndex = (songIndex + (direction == .previous ? 2 : 1)) % 3
+        var input = model.snapshot
+        input.occurrenceID = UUID().uuidString
+        input.recordingID = "original-song-\(songIndex)"
+        input.title = ["Window Seat", "After the Last Train", "Blue Hour Walk"][songIndex]
+        input.artist = ["Soft Weather", "Sunday Radio", "Paper Lanterns"][songIndex]
+        input.artworkURL = previewArtworkURL(songIndex)
+        input.direction = direction
+        input.positionMs = 72_000
+        model.update(input)
+        model.completeLoad(fixture.content, token: model.beginLoad(), source: fixtureSource)
         anchorTime()
         controller.refreshLayout(textScale: 1)
     }
@@ -109,7 +140,7 @@ final class LyricRibbonPreviewSession {
 
     func showControls() {
         if controlWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 330),
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 370),
                 styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
             window.title = "Bopify · Lyric ribbon study"
             window.isReleasedWhenClosed = false
@@ -160,7 +191,7 @@ private struct LyricRibbonPreviewControls: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Quiet ribbon").font(.title2.weight(.medium))
+            Text("Sleeve ribbon").font(.title2.weight(.medium))
             Text("Original sample words · simulated playback · no live audio")
                 .font(.caption).foregroundStyle(.secondary)
             Picker("Sample", selection: Binding(get: { session.fixture }, set: { session.selectFixture($0); textScale = 1 })) {
@@ -176,6 +207,10 @@ private struct LyricRibbonPreviewControls: View {
             HStack {
                 Button("Correction −5s") { session.advance(by: -5_000, explicitSeek: false) }
                 Button("New occurrence") { session.selectFixture(session.fixture) }
+            }
+            HStack {
+                Button("Previous sample") { session.changeSong(.previous) }
+                Button("Next sample") { session.changeSong(.next) }
             }
             HStack {
                 Text("Text size")

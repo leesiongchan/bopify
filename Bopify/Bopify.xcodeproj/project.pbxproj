@@ -12,6 +12,7 @@
 		BF0F170000000000000000C3 /* BopifyPlayback in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B3 /* BopifyPlayback */; };
 		BF0F170000000000000000C4 /* BopifyLibrary in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B4 /* BopifyLibrary */; };
 		BF0F170000000000000000C5 /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B5 /* Nuke */; };
+		BF0F170000000000000000C6 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B6 /* KeyboardShortcuts */; };
 		BF0F180000000000000000D1 /* BopifyDomain in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B1 /* BopifyDomain */; };
 		BF0F180000000000000000D2 /* BopifyAuth in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B2 /* BopifyAuth */; };
 		BF0F180000000000000000D3 /* BopifyPlayback in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B3 /* BopifyPlayback */; };
@@ -59,6 +60,7 @@
 				BF0F170000000000000000C3 /* BopifyPlayback in Frameworks */,
 				BF0F170000000000000000C4 /* BopifyLibrary in Frameworks */,
 				BF0F170000000000000000C5 /* Nuke in Frameworks */,
+				BF0F170000000000000000C6 /* KeyboardShortcuts in Frameworks */,
 			);
 		};
 		BF0F18000000000000000005 /* Frameworks */ = {
@@ -115,6 +117,7 @@
 				BF0F170000000000000000B3 /* BopifyPlayback */,
 				BF0F170000000000000000B4 /* BopifyLibrary */,
 				BF0F170000000000000000B5 /* Nuke */,
+				BF0F170000000000000000B6 /* KeyboardShortcuts */,
 			);
 			productName = Bopify;
 			productReference = 19D0CF2A3061E194001CC3E1 /* Bopify.app */;
@@ -173,6 +176,7 @@
 			packageReferences = (
 				BF0F170000000000000000A1 /* XCLocalSwiftPackageReference "../Packages/BopifyCore" */,
 				BF0F170000000000000000A2 /* XCRemoteSwiftPackageReference "Nuke" */,
+				BF0F170000000000000000A3 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 19D0CF2B3061E194001CC3E1 /* Products */;
@@ -504,6 +508,14 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		BF0F170000000000000000A3 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sindresorhus/KeyboardShortcuts";
+			requirement = {
+				kind = exactVersion;
+				version = 3.1.0;
+			};
+		};
 		BF0F170000000000000000A2 /* XCRemoteSwiftPackageReference "Nuke" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/kean/Nuke.git";
@@ -515,6 +527,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		BF0F170000000000000000B6 /* KeyboardShortcuts */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BF0F170000000000000000A3 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
+			productName = KeyboardShortcuts;
+		};
 		BF0F170000000000000000B1 /* BopifyDomain */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = BopifyDomain;

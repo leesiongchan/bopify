@@ -9,6 +9,7 @@ final class LiveLyricRibbonSession {
     let model: LyricRibbonModel
     var isVisible: Bool { model.isVisible }
     @ObservationIgnored private let player: PlayerModel
+    @ObservationIgnored private let artworkStore: ArtworkStore?
     @ObservationIgnored private let requestLyrics: @MainActor (SpotifyURI, UInt64) async throws -> TrackLyrics
     @ObservationIgnored private let now: @MainActor () -> Date
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
@@ -20,7 +21,7 @@ final class LiveLyricRibbonSession {
     @ObservationIgnored private var observationGeneration: UInt64 = 0
     @ObservationIgnored private var clockGeneration: UInt64 = 0
     @ObservationIgnored private var stopped = false
-    @ObservationIgnored private lazy var controller = LyricRibbonWindowController(model: model, defaults: defaults,
+    @ObservationIgnored private lazy var controller = LyricRibbonWindowController(model: model, defaults: defaults, artworkStore: artworkStore,
         onHide: { [weak self] in self?.hide() })
 
     private struct Input: Equatable {
@@ -35,11 +36,12 @@ final class LiveLyricRibbonSession {
         case idle(LyricIdleReason, LyricPlaybackSnapshot)
     }
 
-    init(player: PlayerModel,
+    init(player: PlayerModel, artworkStore: ArtworkStore? = nil,
          requestLyrics: @escaping @MainActor (SpotifyURI, UInt64) async throws -> TrackLyrics,
          defaults: UserDefaults = .standard, now: @escaping @MainActor () -> Date = { .now },
          sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }) {
         self.player = player
+        self.artworkStore = artworkStore
         self.requestLyrics = requestLyrics
         self.defaults = defaults
         self.now = now
@@ -112,13 +114,15 @@ final class LiveLyricRibbonSession {
         case .error: return idle(.playbackUnavailable)
         case .playing, .paused, .ended: break
         }
+        let displayedTrack = state.queue?.current?.track ?? track
         let input = Input(epoch: player.engineEpoch, playbackRevision: player.playbackRevision,
                           queueEntryID: state.queue?.current?.id, trackURI: track.uri)
         let snapshot = LyricPlaybackSnapshot(sessionID: String(input.epoch),
             occurrenceID: "\(input.playbackRevision):\(input.queueEntryID ?? "")", recordingID: track.uri.rawValue,
-            title: track.title, artist: track.artists.map(\.name).joined(separator: ", "),
+            title: displayedTrack.title, artist: displayedTrack.artists.map(\.name).joined(separator: ", "),
             positionMs: player.displayPositionMs(at: now()), durationMs: player.displayDurationMs,
-            isPlaying: player.isPositionAdvancing, seekRevision: player.seekRevision)
+            isPlaying: player.isPositionAdvancing, seekRevision: player.seekRevision,
+            artworkURL: displayedTrack.artwork?.url, direction: player.queueDirection)
         return .local(input, snapshot)
     }
 

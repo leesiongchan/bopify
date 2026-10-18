@@ -61,7 +61,7 @@ final class AppEnvironment {
     func showLiveLyrics() {
         guard !isPreparingForQuit, authState == .signedIn, let player, let coordinator = recovery else { return }
         if liveLyricRibbon == nil {
-            liveLyricRibbon = LiveLyricRibbonSession(player: player) { [weak coordinator] uri, epoch in
+            liveLyricRibbon = LiveLyricRibbonSession(player: player, artworkStore: artworkStore) { [weak coordinator] uri, epoch in
                 guard let coordinator, coordinator.player.engineEpoch == epoch,
                       coordinator.player.isEngineReady, let engine = coordinator.currentEngine else {
                     throw LyricFailure.unavailable
@@ -77,6 +77,11 @@ final class AppEnvironment {
         }
         liveLyricRibbon?.show()
         BopifyLog.playback.debug("live lyric ribbon shown")
+    }
+
+    func toggleLiveLyrics() {
+        guard !isPreparingForQuit, authState == .signedIn, player != nil else { return }
+        if isLiveLyricsVisible { hideLiveLyrics() } else { showLiveLyrics() }
     }
 
     func hideLiveLyrics() { liveLyricRibbon?.hide() }

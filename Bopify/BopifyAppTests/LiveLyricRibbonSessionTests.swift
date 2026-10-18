@@ -15,6 +15,22 @@ struct LiveLyricRibbonSessionTests {
         #expect(f.engine.commands.isEmpty)
     }
 
+    @Test func artworkMetadataUpdatesPresentationWithoutRefetchingOrLeavingReading() async throws {
+        let f = LiveLyricFixture(); defer { f.stop() }
+        try await f.load()
+        f.session.model.beginReading()
+        let revision = f.session.model.scrollResetRevision
+        let url = URL(string: "https://fixture.invalid/original-cover")!
+        let track = Track(uri: liveLyricURI, title: "Window Seat", artists: [ArtistSummary(name: "Soft Weather")],
+                          albumTitle: nil, artwork: Artwork(url: url), durationMs: 240_000)
+        f.engine.emit(.queueMetadata(generation: 1, entryID: "one", track: track))
+        try await liveLyricEventually { f.session.model.snapshot.artworkURL == url }
+        #expect(f.gate.requests.count == 1)
+        #expect(f.session.model.isReading && f.session.model.scrollResetRevision == revision)
+        #expect(f.session.model.source?.attribution == "Fixture provider")
+        #expect(f.engine.commands.isEmpty)
+    }
+
     @Test(arguments: ["hidden", "notReady", "remote", "unsupported", "loading", "mismatch", "noTrack"])
     func ineligibleInputsNeverRequest(kind: String) async throws {
         let f = LiveLyricFixture(); defer { f.stop() }
@@ -50,12 +66,12 @@ struct LiveLyricRibbonSessionTests {
     func queueAndMetadataArrivalOrderCannotMislabelLyrics(queueFirst: Bool) async throws {
         let f = LiveLyricFixture(); defer { f.stop() }
         try await f.load()
-        f.session.model.holdText()
+        f.session.model.beginReading()
         let first: PlaybackEvent = queueFirst ? .queueChanged(liveLyricQueue(otherLiveLyricURI, id: "two")) : .trackChanged(liveLyricTrack(otherLiveLyricURI))
         let second: PlaybackEvent = queueFirst ? .trackChanged(liveLyricTrack(otherLiveLyricURI)) : .queueChanged(liveLyricQueue(otherLiveLyricURI, id: "two"))
         f.engine.emit(first)
         try await liveLyricEventually { f.session.model.content == .idle(.loadingTrack) }
-        #expect(!f.session.model.isHeld && f.session.model.source == nil)
+        #expect(!f.session.model.isReading && f.session.model.source == nil)
         f.engine.emit(second)
         try await liveLyricEventually { f.gate.requests.count == 2 }
         f.gate.succeed(1, with: liveLyrics(otherLiveLyricURI))
@@ -67,8 +83,8 @@ struct LiveLyricRibbonSessionTests {
     func consecutiveSameRecordingEntriesReplaceReading(queueFirst: Bool, completeIntermediate: Bool) async throws {
         let f = LiveLyricFixture(); defer { f.stop() }
         try await f.load()
-        f.session.model.holdText()
-        #expect(f.session.model.isHeld)
+        f.session.model.beginReading()
+        #expect(f.session.model.isReading)
         let original = f.session.model.snapshot.occurrenceID
         let queue = PlaybackEvent.queueChanged(liveLyricQueue(id: "two"))
         let track = PlaybackEvent.trackChanged(liveLyricTrack())
@@ -77,12 +93,12 @@ struct LiveLyricRibbonSessionTests {
         try await liveLyricEventually { f.gate.requests.count == 2 }
         let intermediate = f.session.model.snapshot.occurrenceID
         #expect(intermediate != original)
-        #expect(!f.session.model.isHeld && f.session.model.source == nil)
+        #expect(!f.session.model.isReading && f.session.model.source == nil)
         if completeIntermediate {
             f.gate.succeed(1, with: liveLyrics(displayName: "Intermediate provider"))
             try await liveLyricEventually { f.session.model.source?.attribution == "Intermediate provider" }
-            f.session.model.holdText()
-            #expect(f.session.model.isHeld)
+            f.session.model.beginReading()
+            #expect(f.session.model.isReading)
         }
 
         f.engine.emit(queueFirst ? track : queue)
@@ -90,7 +106,7 @@ struct LiveLyricRibbonSessionTests {
         try await liveLyricEventually { f.gate.requests.count == 3 }
         let finalOccurrence = f.session.model.snapshot.occurrenceID
         #expect(finalOccurrence != intermediate && finalOccurrence != original)
-        #expect(!f.session.model.isHeld && f.session.model.source == nil)
+        #expect(!f.session.model.isReading && f.session.model.source == nil)
         f.gate.succeed(2, with: liveLyrics(displayName: "Current provider"))
         try await liveLyricEventually { f.session.model.source?.attribution == "Current provider" }
         if !completeIntermediate {
@@ -108,13 +124,13 @@ struct LiveLyricRibbonSessionTests {
         let f = LiveLyricFixture(); defer { f.stop() }
         try await f.load()
         let occurrence = f.session.model.snapshot.occurrenceID
-        f.session.model.holdText()
+        f.session.model.beginReading()
         f.engine.emit(.endOfTrack)
         try await liveLyricEventually { f.player.state.phase == .ended }
-        #expect(f.session.model.isHeld)
+        #expect(f.session.model.isReading)
         f.engine.emit(.trackChanged(liveLyricTrack())); f.engine.emit(.playing(positionMs: 0))
         try await liveLyricEventually { f.gate.requests.count == 2 }
-        #expect(!f.session.model.isHeld && f.session.model.source == nil)
+        #expect(!f.session.model.isReading && f.session.model.source == nil)
         #expect(f.session.model.snapshot.occurrenceID != occurrence)
         f.gate.succeed(1, with: liveLyrics())
         try await liveLyricEventually { f.session.model.source != nil }
@@ -184,24 +200,24 @@ struct LiveLyricRibbonSessionTests {
     @Test func pauseAndCorrectionsKeepHoldButSeekClearsIt() async throws {
         let f = LiveLyricFixture(); defer { f.stop() }
         try await f.load()
-        f.session.model.holdText()
+        f.session.model.beginReading()
         let scroll = f.session.model.scrollResetRevision
         f.engine.emit(.playing(positionMs: 1000)); f.engine.emit(.positionCorrection(positionMs: 3000))
         f.engine.emit(.paused(positionMs: 3000))
         try await liveLyricEventually { f.session.model.snapshot.positionMs == 3000 }
-        #expect(f.session.model.isHeld && f.session.model.scrollResetRevision == scroll)
+        #expect(f.session.model.isReading && f.session.model.scrollResetRevision == scroll)
         f.engine.emit(.seeked(positionMs: 2000))
-        try await liveLyricEventually { !f.session.model.isHeld }
+        try await liveLyricEventually { !f.session.model.isReading }
         #expect(f.session.model.projection?.current?.startMs == 2000)
         #expect(f.gate.requests.count == 1 && f.engine.commands.isEmpty)
     }
 
     @Test func loadingSeekRestartClearsHold() async throws {
         let f = LiveLyricFixture(); defer { f.stop() }
-        try await f.load(); f.session.model.holdText()
+        try await f.load(); f.session.model.beginReading()
         f.engine.emit(.loading)
         try await liveLyricEventually { f.session.model.content == .idle(.loadingTrack) }
-        #expect(!f.session.model.isHeld && f.session.model.source == nil)
+        #expect(!f.session.model.isReading && f.session.model.source == nil)
         f.engine.emit(.trackChanged(liveLyricTrack())); f.engine.emit(.paused(positionMs: 2000))
         try await liveLyricEventually { f.gate.requests.count == 2 }
         #expect(f.player.seekRevision == 0)
@@ -242,14 +258,14 @@ struct LiveLyricRibbonSessionTests {
 
     @Test func heldEndAndFocusPreserveReading() async throws {
         let f = LiveLyricFixture(); defer { f.stop() }
-        try await f.load(); f.session.model.holdText()
+        try await f.load(); f.session.model.beginReading()
         let scroll = f.session.model.scrollResetRevision
         f.session.show(); f.session.focusForReading()
-        #expect(f.session.model.isHeld && f.session.model.scrollResetRevision == scroll)
+        #expect(f.session.model.isReading && f.session.model.scrollResetRevision == scroll)
         #expect(f.gate.requests.count == 1 && f.engine.commands.isEmpty)
         f.engine.emit(.endOfTrack)
         try await liveLyricEventually { f.session.model.snapshot.positionMs == 240_000 && !f.session.model.snapshot.isPlaying }
-        #expect(f.session.model.isHeld)
+        #expect(f.session.model.isReading)
         f.session.model.backToLive()
         #expect(f.session.model.projection?.interval == .ended)
     }

@@ -45,11 +45,11 @@ struct LyricPresentationTests {
         let fresh = model.beginLoad()
         let source = LyricSourceMetadata(lyrics: presentationLyrics())
         model.completeLoad(.timed(try lyricTestDocument()), token: fresh, source: source)
-        model.holdText()
+        model.beginReading()
         model.completeLoad(.plain("Old words"), token: old,
                            source: LyricSourceMetadata(lyrics: presentationLyrics(displayName: "Old provider")))
         #expect(model.source == source)
-        #expect(model.isHeld)
+        #expect(model.isReading)
         _ = model.beginLoad()
         #expect(model.source == nil)
         model.completeLoad(.plain("New words"), token: model.beginLoad(), source: source)
@@ -58,21 +58,21 @@ struct LyricPresentationTests {
         model.update(next)
         #expect(model.source == nil)
         model.completeLoad(.timed(try lyricTestDocument()), token: model.beginLoad(), source: source)
-        model.holdText()
+        model.beginReading()
         model.setIdle(.otherDevice)
-        model.holdText()
+        model.beginReading()
         #expect(model.content == .idle(.otherDevice))
-        #expect(model.source == nil && !model.isHeld && model.projection == nil)
+        #expect(model.source == nil && !model.isReading && model.projection == nil)
         #expect(model.isVisible)
     }
 
-    @Test func attributionReservesBoundedSpaceWithoutChangingCueGeometry() throws {
+    @Test func attributionSharesFooterWithoutChangingCueGeometry() throws {
         let source = LyricSourceMetadata(lyrics: presentationLyrics(displayName: String(repeating: "Fixture provider ", count: 30)))
         let content = LyricContent.timed(try lyricTestDocument())
         let layout = LyricRibbonLayout.measure(content: content, width: 250, textScale: 1.5,
                                                availableHeight: 240, source: source)
         #expect(layout.panelSize.height <= 240)
-        #expect(layout.attributionHeight > 0 && layout.textViewportHeight > 0)
+        #expect(layout.textViewportHeight > 0)
         let model = LyricRibbonModel(snapshot: lyricTestSnapshot())
         model.show()
         model.completeLoad(content, token: model.beginLoad(), source: source)
@@ -83,8 +83,9 @@ struct LyricPresentationTests {
             #expect(measured.panelSize == layout.panelSize)
         }
         let original = LyricRibbonLayout.measure(content: .plain("Short"), width: 448, textScale: 1, availableHeight: 480)
-        #expect(original.panelSize.height == 186)
-        #expect(original.attributionHeight == 0)
+        #expect(original.panelSize.height == 226)
+        #expect(original.panelSize == LyricRibbonLayout.measure(content: .plain("Short"), width: 448,
+            textScale: 1, availableHeight: 480, source: source).panelSize)
     }
 
     @Test func rightToLeftMetadataControlsParagraphDirection() throws {

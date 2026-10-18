@@ -43,6 +43,11 @@ xcodebuild -project Bopify/Bopify.xcodeproj -scheme Bopify \
 
 ## Test
 
+Show or hide lyrics with **Control–Option–L** or the status-item menu. Scroll the
+words to read manually; **Sync lyrics** returns to the current cue without
+changing playback. **Focus Lyrics** enables keyboard reading; Escape hides the
+focused ribbon.
+
 ### Lyric ribbon development preview
 
 The native lyric ribbon study is available only in Debug builds. It uses
@@ -57,9 +62,9 @@ open -n build/lyric-ribbon-study/Build/Products/Debug/Bopify.app \
 ```
 
 Use the study window to change samples, advance or pause the clock and enter
-explicit keyboard interaction with **Focus Ribbon**. The ribbon's **Hold text**
-action preserves a passage while the simulated song advances; **Back to live**
-catches up immediately. [Native validation notes](docs/lyric-ribbon-native-validation.md)
+explicit keyboard interaction with **Focus Ribbon**. Scroll to browse the full
+sample, then use **Sync lyrics** to follow again. Previous/next sample controls
+exercise the record and song transitions. [Native validation notes](docs/live-lyric-ribbon-validation.md)
 record checks and remaining manual coverage.
 
 ### Test suites

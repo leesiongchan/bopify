@@ -1,17 +1,17 @@
 import AppKit
 
 struct LyricRibbonLayout {
-    static let horizontalInset: CGFloat = 20
-    static let verticalInset: CGFloat = 16
-    static let sectionSpacing: CGFloat = 12
-    static let headerHeight: CGFloat = 28
-    static let footerHeight: CGFloat = 30
+    static let horizontalInset: CGFloat = 22
+    static let sleeveInset: CGFloat = 20
+    static let verticalInset: CGFloat = 12
+    static let sectionSpacing: CGFloat = 8
+    static let headerHeight: CGFloat = 26
+    static let footerHeight: CGFloat = 28
     static let currentCueAttribute = NSAttributedString.Key("BopifyCurrentLyric")
 
     let panelSize: CGSize
     let textViewportHeight: CGFloat
     let textScale: CGFloat
-    let attributionHeight: CGFloat
 
     static func passage(previous: String?, current: String, scale: CGFloat, isRightToLeft: Bool = false) -> NSAttributedString {
         let result = NSMutableAttributedString()
@@ -46,36 +46,42 @@ struct LyricRibbonLayout {
         return ceil(manager.usedRect(for: container).height)
     }
 
+    static func reader(content: LyricContent, projection: LyricProjection?, isReading: Bool,
+                       scale: CGFloat, isRightToLeft: Bool = false) -> NSAttributedString {
+        guard case let .timed(document) = content else {
+            if case let .plain(text) = content { return passage(previous: nil, current: text, scale: scale, isRightToLeft: isRightToLeft) }
+            return NSAttributedString()
+        }
+        let result = NSMutableAttributedString()
+        let anchor = projection?.current ?? projection?.next ?? projection?.previous
+        let visible = [projection?.previous?.startMs, projection?.current?.startMs, projection?.next?.startMs].compactMap { $0 }
+        for (index, group) in document.groups.enumerated() {
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.paragraphSpacing = 6 * scale
+            paragraph.alignment = .natural
+            paragraph.baseWritingDirection = isRightToLeft ? .rightToLeft : .natural
+            let current = !isReading && group.startMs == projection?.current?.startMs
+            var attributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: (current ? 25 : isReading ? 17 : 15) * scale,
+                                         weight: current ? .medium : .regular),
+                .foregroundColor: !isReading && !visible.contains(group.startMs) ? NSColor.clear
+                    : current || isReading ? NSColor.labelColor : NSColor.secondaryLabelColor,
+                .paragraphStyle: paragraph,
+            ]
+            if group.startMs == anchor?.startMs { attributes[currentCueAttribute] = true }
+            result.append(NSAttributedString(string: group.text + (index + 1 < document.groups.count ? "\n" : ""), attributes: attributes))
+        }
+        return result
+    }
+
     static func measure(content: LyricContent, width: CGFloat, textScale: CGFloat, availableHeight: CGFloat,
                         source: LyricSourceMetadata? = nil) -> Self {
-        let width = max(1, width)
         let scale = max(1, textScale)
-        let chromeHeight = 2 * verticalInset + headerHeight + footerHeight + 2 * sectionSpacing
-        let textWidth = max(1, width - 2 * horizontalInset)
-        var height: CGFloat = 72
-        switch content {
-        case let .timed(document):
-            for (index, group) in document.groups.enumerated() {
-                let previous = index > 0 ? document.groups[index - 1].text : nil
-                height = max(height, textHeight(passage(previous: previous, current: group.text, scale: scale,
-                    isRightToLeft: source?.isRightToLeft ?? false), width: textWidth))
-            }
-        case let .plain(text):
-            height = max(height, textHeight(passage(previous: nil, current: text, scale: scale,
-                isRightToLeft: source?.isRightToLeft ?? false), width: textWidth))
-        default: break
-        }
-        let attributionHeight: CGFloat
-        if let attribution = source?.attribution {
-            let font = NSFont.systemFont(ofSize: 11 * scale)
-            let measured = textHeight(NSAttributedString(string: attribution, attributes: [.font: font]), width: textWidth)
-            attributionHeight = min(measured, ceil(font.ascender - font.descender + font.leading) * 2,
-                                    max(0, availableHeight - chromeHeight - sectionSpacing - 40))
-        } else { attributionHeight = 0 }
-        let reserve = attributionHeight > 0 ? attributionHeight + sectionSpacing : 0
-        // A malformed or unusually long cue should scroll inside the companion, not fill the desktop.
-        let viewport = min(height, 180 * scale, max(1, availableHeight - chromeHeight - reserve))
-        return Self(panelSize: CGSize(width: width, height: viewport + chromeHeight + reserve), textViewportHeight: viewport,
-                    textScale: scale, attributionHeight: attributionHeight)
+        let footer = footerHeight * scale
+        let chromeHeight = 2 * verticalInset + headerHeight + footer + 2 * sectionSpacing
+        // The document scrolls; its length never controls the companion's footprint.
+        let viewport = min(132 * scale, max(1, availableHeight - chromeHeight))
+        return Self(panelSize: CGSize(width: max(1, width), height: viewport + chromeHeight),
+                    textViewportHeight: viewport, textScale: scale)
     }
 }
