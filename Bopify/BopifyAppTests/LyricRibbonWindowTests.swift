@@ -24,6 +24,47 @@ struct LyricRibbonWindowTests {
         #expect(!model.isKeyboardInteracting)
     }
 
+    @Test func nativeTextClickSeeksOnceWithoutTakingKeyboardFocus() async throws {
+        let suite = "lyric-pointer-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = LyricRibbonModel(snapshot: lyricTestSnapshot())
+        var targets: [Int64] = []
+        let controller = LyricRibbonWindowController(model: model, defaults: defaults,
+            onSeek: { time, _ in targets.append(time) }, onHide: {})
+        defer { controller.hide(); controller.panel.close() }
+        controller.show()
+        model.completeLoad(.timed(try LyricDocument(cues: [
+            LyricCue(id: "previous", startMs: 60_000, text: "Previous words"),
+            LyricCue(id: "current", startMs: 70_000, text: "Current words"),
+            LyricCue(id: "next", startMs: 80_000, text: "Upcoming words"),
+        ])), token: model.beginLoad())
+        controller.refreshLayout(textScale: 1)
+        controller.panel.contentView?.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(50))
+        func passage(in view: NSView) -> LyricReadingTextView? {
+            if let text = view as? LyricReadingTextView { return text }
+            return view.subviews.lazy.compactMap { passage(in: $0) }.first
+        }
+        let reader = try #require(controller.panel.contentView.flatMap { passage(in: $0) })
+        let manager = try #require(reader.layoutManager)
+        let container = try #require(reader.textContainer)
+        let range = (reader.string as NSString).range(of: "Current words")
+        let glyph = manager.glyphIndexForCharacter(at: range.location)
+        let box = manager.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: container)
+        let point = reader.convert(CGPoint(x: box.midX, y: box.midY), to: nil)
+        let down = try #require(NSEvent.mouseEvent(with: .leftMouseDown, location: point, modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: controller.panel.windowNumber,
+            context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
+        let up = try #require(NSEvent.mouseEvent(with: .leftMouseUp, location: point, modifierFlags: [],
+            timestamp: down.timestamp + 0.1, windowNumber: controller.panel.windowNumber,
+            context: nil, eventNumber: 1, clickCount: 1, pressure: 0))
+        NSApp.postEvent(up, atStart: true)
+        controller.panel.sendEvent(down)
+        #expect(targets == [70_000])
+        #expect(!controller.panel.canBecomeKey)
+    }
+
     @Test func missingDisplayAndSmallFrameKeepPanelReachable() {
         let screen = CGRect(x: -320, y: 100, width: 320, height: 480)
         let restored = LyricRibbonWindowController.reachableFrame(saved: CGRect(x: 5000, y: -900, width: 448, height: 157),
@@ -119,7 +160,7 @@ struct LyricRibbonWindowTests {
 
     @Test func draggingLongPassageToShortDisplayRemeasuresTheViewport() throws {
         let tall = CGRect(x: -1000, y: 0, width: 1000, height: 1200)
-        let short = CGRect(x: 0, y: 0, width: 1000, height: 260)
+        let short = CGRect(x: 0, y: 0, width: 1000, height: 180)
         let content = LyricContent.timed(try LyricDocument(cues: [
             LyricCue(id: "long", startMs: 0, text: String(repeating: "A little room for the rain.\n", count: 100)),
         ]))
@@ -129,7 +170,7 @@ struct LyricRibbonWindowTests {
             saved: CGRect(x: 50, y: 20, width: 448, height: original.layout.panelSize.height),
             textScale: 1, screens: [tall, short], preferred: tall)
         #expect(original.layout.panelSize.height < 350)
-        #expect(destination.layout.panelSize.height <= 220)
+        #expect(destination.layout.panelSize.height <= 140)
         #expect(destination.layout.textViewportHeight < original.layout.textViewportHeight)
         #expect(short.contains(destination.frame))
     }

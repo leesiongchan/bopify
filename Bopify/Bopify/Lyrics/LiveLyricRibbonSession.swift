@@ -22,6 +22,7 @@ final class LiveLyricRibbonSession {
     @ObservationIgnored private var clockGeneration: UInt64 = 0
     @ObservationIgnored private var stopped = false
     @ObservationIgnored private lazy var controller = LyricRibbonWindowController(model: model, defaults: defaults, artworkStore: artworkStore,
+        onSeek: { [weak self] time, snapshot in self?.seek(to: time, from: snapshot) },
         onHide: { [weak self] in self?.hide() })
 
     private struct Input: Equatable {
@@ -72,6 +73,20 @@ final class LiveLyricRibbonSession {
         guard !stopped else { return }
         if !isVisible { show() }
         controller.focusForReading()
+    }
+
+    func seek(to time: Int64, from rendered: LyricPlaybackSnapshot) {
+        guard !stopped, isVisible, case let .local(current, snapshot) = readState(), input == current,
+              snapshot.sessionID == rendered.sessionID, snapshot.occurrenceID == rendered.occurrenceID,
+              snapshot.recordingID == rendered.recordingID, player.state.canSeek,
+              time >= 0, time < snapshot.durationMs, case let .timed(document) = model.content,
+              document.groups.contains(where: { $0.startMs == time && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
+            BopifyLog.playback.debug("lyric seek ignored for unavailable or replaced cue")
+            return
+        }
+        player.seek(to: time)
+        model.backToLive()
+        BopifyLog.playback.debug("lyric cue seek requested")
     }
 
     func shutdown() {

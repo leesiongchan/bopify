@@ -49,7 +49,11 @@ final class LyricRibbonPreviewSession {
     @ObservationIgnored private var baseTime: TimeInterval
     @ObservationIgnored private var controlWindow: NSWindow?
     @ObservationIgnored private(set) lazy var controller = LyricRibbonWindowController(model: model, defaults: defaults, artworkStore: artworkStore,
-        onHide: { [weak self] in self?.hide() })
+        onSeek: { [weak self] time, snapshot in
+            guard let self, self.model.snapshot.sessionID == snapshot.sessionID,
+                  self.model.snapshot.occurrenceID == snapshot.occurrenceID else { return }
+            self.advance(by: time - self.model.snapshot.positionMs, explicitSeek: true)
+        }, onHide: { [weak self] in self?.hide() })
 
     init(now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
          sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },

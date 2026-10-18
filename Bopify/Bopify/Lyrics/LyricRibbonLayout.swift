@@ -2,11 +2,11 @@ import AppKit
 
 struct LyricRibbonLayout {
     static let horizontalInset: CGFloat = 22
-    static let sleeveInset: CGFloat = 20
-    static let verticalInset: CGFloat = 12
+    static let sleeveInset: CGFloat = 48
+    static let verticalInset: CGFloat = 14
     static let sectionSpacing: CGFloat = 8
     static let headerHeight: CGFloat = 26
-    static let footerHeight: CGFloat = 28
+    static let cueTimeAttribute = NSAttributedString.Key("BopifyLyricTime")
     static let currentCueAttribute = NSAttributedString.Key("BopifyCurrentLyric")
 
     let panelSize: CGSize
@@ -57,17 +57,19 @@ struct LyricRibbonLayout {
         let visible = [projection?.previous?.startMs, projection?.current?.startMs, projection?.next?.startMs].compactMap { $0 }
         for (index, group) in document.groups.enumerated() {
             let paragraph = NSMutableParagraphStyle()
-            paragraph.paragraphSpacing = 6 * scale
+            paragraph.minimumLineHeight = 94 / 3 * scale
+            paragraph.maximumLineHeight = 94 / 3 * scale
             paragraph.alignment = .natural
             paragraph.baseWritingDirection = isRightToLeft ? .rightToLeft : .natural
-            let current = !isReading && group.startMs == projection?.current?.startMs
+            let current = group.startMs == projection?.current?.startMs
             var attributes: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: (current ? 25 : isReading ? 17 : 15) * scale,
-                                         weight: current ? .medium : .regular),
+                .font: NSFont.systemFont(ofSize: (isReading ? 17 : current ? 23 : 15) * scale,
+                                         weight: current && !isReading ? .medium : .regular),
                 .foregroundColor: !isReading && !visible.contains(group.startMs) ? NSColor.clear
-                    : current || isReading ? NSColor.labelColor : NSColor.secondaryLabelColor,
-                .paragraphStyle: paragraph,
+                    : current ? NSColor.labelColor : NSColor.secondaryLabelColor,
+                .paragraphStyle: paragraph, cueTimeAttribute: group.startMs,
             ]
+            if !group.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { attributes[.link] = String(group.startMs) }
             if group.startMs == anchor?.startMs { attributes[currentCueAttribute] = true }
             result.append(NSAttributedString(string: group.text + (index + 1 < document.groups.count ? "\n" : ""), attributes: attributes))
         }
@@ -77,10 +79,9 @@ struct LyricRibbonLayout {
     static func measure(content: LyricContent, width: CGFloat, textScale: CGFloat, availableHeight: CGFloat,
                         source: LyricSourceMetadata? = nil) -> Self {
         let scale = max(1, textScale)
-        let footer = footerHeight * scale
-        let chromeHeight = 2 * verticalInset + headerHeight + footer + 2 * sectionSpacing
+        let chromeHeight = 2 * verticalInset + headerHeight + sectionSpacing
         // The document scrolls; its length never controls the companion's footprint.
-        let viewport = min(132 * scale, max(1, availableHeight - chromeHeight))
+        let viewport = min(94 * scale, max(1, availableHeight - chromeHeight))
         return Self(panelSize: CGSize(width: max(1, width), height: viewport + chromeHeight),
                     textViewportHeight: viewport, textScale: scale)
     }

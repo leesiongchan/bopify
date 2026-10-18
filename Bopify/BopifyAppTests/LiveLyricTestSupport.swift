@@ -32,6 +32,7 @@ import BopifyPlayback
     nonisolated let events: AsyncStream<PlaybackEvent>
     private let continuation: AsyncStream<PlaybackEvent>.Continuation
     private(set) var commands: [String] = []
+    private(set) var seekTargets: [Int64] = []
     private(set) var shutdowns = 0
     var shutdownGate: (@MainActor () async -> Void)?
     private let lyricRequest: @MainActor (SpotifyURI) async throws -> TrackLyrics
@@ -47,7 +48,7 @@ import BopifyPlayback
     func pause() async throws { commands.append("pause") }
     func next() async throws { commands.append("next") }
     func previous() async throws { commands.append("previous") }
-    func seek(to milliseconds: Int64) async throws { commands.append("seek") }
+    func seek(to milliseconds: Int64) async throws { commands.append("seek"); seekTargets.append(milliseconds) }
     func setVolume(_ value: Double) async throws { commands.append("volume") }
     func selectQueueEntry(_ target: QueueTarget) async throws { commands.append("queue") }
     func setShuffle(_ enabled: Bool) async throws { commands.append("shuffle") }

@@ -5,6 +5,34 @@ import BopifyPlayback
 
 @MainActor @Suite("Live lyric session", .serialized, .timeLimit(.minutes(1)))
 struct LiveLyricRibbonSessionTests {
+    @Test func clickingTimedCueSeeksExactlyAndResumesFollowing() async throws {
+        let f = LiveLyricFixture(); defer { f.stop() }
+        try await f.load()
+        f.session.model.beginReading()
+        f.session.seek(to: 2000, from: f.session.model.snapshot)
+        try await liveLyricEventually { f.engine.seekTargets == [2000] }
+        #expect(!f.session.model.isReading)
+        #expect(f.engine.commands == ["seek"])
+    }
+
+    @Test(arguments: ["newOccurrence", "hidden", "detached", "unknownCue"])
+    func staleOrUnavailableCueClicksCannotSeek(reason: String) async throws {
+        let f = LiveLyricFixture(); defer { f.stop() }
+        try await f.load()
+        let rendered = f.session.model.snapshot
+        switch reason {
+        case "newOccurrence":
+            f.engine.emit(.queueChanged(liveLyricQueue(id: "two")))
+            try await liveLyricEventually { f.player.state.queue?.current?.id == "two" }
+        case "hidden": f.session.hide()
+        case "detached": f.player.detachEngine()
+        default: break
+        }
+        f.session.seek(to: reason == "unknownCue" ? 1234 : 2000, from: rendered)
+        for _ in 0..<20 { await Task.yield() }
+        #expect(f.engine.seekTargets.isEmpty)
+    }
+
     @Test func visibleLocalInputRequestsOnce() async throws {
         let f = LiveLyricFixture(); defer { f.stop() }
         try await f.load()

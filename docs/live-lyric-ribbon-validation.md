@@ -2,7 +2,30 @@
 
 Validated October 18, 2026 on macOS with Xcode 27, arm64. The implementation follows local playback and is available from the status-item menu in Debug and Release. The original Debug evaluation remains recorded below; the Release follow-up supersedes its compilation restrictions. Manual limits remain listed explicitly.
 
-## Compact sleeve refinement
+## Three-row sleeve refinement
+
+The revised native sleeve uses a **448 × 156-point** panel and a **94-point, three-row viewport**. The full 96-point record sits behind the sleeve rather than being rectangularly masked. Warm surface shading, a sleeve lip and the reused vinyl rendering provide depth. The footer and Live/Reading labels are removed; artist/provider metadata share the header. Manual mode reveals a text-only native glass Sync control. The main-player Lyrics toggle sits immediately before Playlist, with Focus Lyrics in its context menu; status-menu lyric entries are removed and Control–Option–L remains global.
+
+Manual playback highlighting uses temporary foreground attributes and retains text metrics, selection and scroll position. Following and manual reading use the same row height, so the smaller manual font does not expose a fourth row. Larger text remains bounded; wrapping can displace a neighbor in the fixed viewport, as approved. The larger-text capture also exposed stale scroll bounds after resizing without a playback tick. A regression reproduced it; following now reanchors when scale, width or writing direction changes, while manual reading preserves its visible anchor.
+
+Pointer seeking uses NSTextView's native link handling and the existing playback seek API. A hosted native event regression verifies exactly one seek callback without making the passive panel eligible for keyboard focus. Exact timestamps, hidden/detached/unknown-cue rejection and stale same-song occurrences are covered separately. Review exposed a queued seek outliving its occurrence; a blocked-command regression reproduced both queue-entry-only and same-URI track-revision changes. Dispatch now checks both identities before invoking the engine, with an unchanged-occurrence positive control.
+
+Actual native checks used original offline fixtures: wheel input entered manual reading, a lyric click resumed following, and both long and ten-point selection drags selected words without seeking. A separate owned TextEdit scratch check asserted foreground application and document identity before five typing markers. Global hide/show, wheel reading and a pointer Sync click preserved all five markers. The scratch document was closed without saving. An initial recognizer implementation failed the actual click path and was replaced; temporary pointer diagnostics were removed.
+
+With temporary capture hooks and pointer diagnostics removed, the full app suites passed **104 Debug tests** and **73 Release tests**. The core suite passed **387 tests** (194, 60, 32 and 101 across its executables). Both final Debug and Release app builds succeeded using `CODE_SIGNING_ALLOWED=NO SWIFT_EMIT_LOC_STRINGS=NO`. Read-only review reported no remaining actionable findings. The final larger-text capture was recaptured through the unmodified offline preview after the scale-anchor fix.
+
+| Native capture | Observation |
+| --- | --- |
+| [Following](mockups/lyric-sleeve-v2-live.png) | Warm compact sleeve, larger naturally concealed record, three rows and inline credit. |
+| [Manual reading](mockups/lyric-sleeve-v2-reading.png) | Current cue alone is highlighted, with text-only native glass Sync in the header. |
+| [Long cue](mockups/lyric-sleeve-v2-long.png) | Wrapping stays inside the fixed reading area. |
+| [RTL](mockups/lyric-sleeve-v2-rtl.png) | Native shaping and direction remain inside the same compact boundary. |
+| [Larger text](mockups/lyric-sleeve-v2-large.png) | Scaled type and viewport remain bounded. |
+| [Player control](mockups/lyric-sleeve-v2-player.png) | Lyrics appears immediately before Playlist with the existing control style. |
+
+Captures instantiate the actual app views with original words/artwork, paused state and fresh text selection. Temporary capture hooks are removed before final tests/builds. No authentication or live audio is used. Earlier sections below are historical revisions; VoiceOver remains skipped at the user's request.
+
+## Compact sleeve refinement (previous revision)
 
 The approved sleeve is now native, at **448 × 226 points** including its vinyl overhang. The 132-point reading viewport is independent of lyric length and reading mode. It presents previous/current/next cues; longer cues wrap or remain scrollable. Original fixtures at 320 points wide retain all three cues when the current line wraps. The 1.5 text-scale fixture is 306 points tall, subject to display bounds. Source credit shares the footer, and Sync appears only during manual reading.
 

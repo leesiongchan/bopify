@@ -48,7 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if KeyboardShortcuts.isEnabled(for: .toggleLiveLyrics) {
             BopifyLog.playback.debug("Live lyrics global shortcut registered")
         } else {
-            BopifyLog.playback.error("Live lyrics global shortcut unavailable; use the menu to show or hide lyrics")
+            BopifyLog.playback.error("Live lyrics global shortcut unavailable; use the player lyrics control")
         }
         lyricShortcutTask = Task {
             for await event in events where event == .keyUp {

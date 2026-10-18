@@ -4,7 +4,17 @@ Research dates: October 17–18, 2026. The live native ribbon is implemented; se
 
 The lyric ribbon would let a listener glance at the words and reread a passage while music continues. The value to test is whether it fits working on a Mac without taking keyboard focus or demanding attention. The primary use remains a choice between persistent background display, a brief shortcut peek and deliberate close reading.
 
-## Compact native sleeve
+## Three-row native sleeve revision
+
+The user approved a fixed three-row viewport after the initial native version diverged from the concept and retained too much space. The revised panel is **448 × 156 points**, with a 94-point reading viewport. A consistent line height makes three physical rows fit in both following and manual modes; long cues wrap inside this boundary and can displace an adjacent cue. Larger text scales the reading viewport, bounded by the display. The 96-point record is rendered as a complete circle behind the sleeve, with half naturally concealed by its opaque warm olive-charcoal surface and a subtle sleeve lip. The existing pressing, artwork and rotation components are reused.
+
+The footer and Live/Reading labels are removed. Provider credit shares the artist metadata line. Only manual reading shows the text-only native glass **Sync** capsule in the header; contrast/transparency settings retain the bordered fallback. The main player gets a matching lyric toggle immediately before Playlist, and the status-menu lyric entries are removed. Control–Option–L remains global; the icon's context menu retains deliberate Focus Lyrics access.
+
+In manual mode only the playback-current cue is highlighted. Native temporary foreground attributes update without replacing text, changing metrics, moving the viewport or discarding selection. Timestamp links use NSTextView's own mouse tracking, with custom link colors/tooltips suppressed. Actual testing found a separate click recognizer did not complete alongside the text view's tracking loop, so it was removed. Native short and long selection drags were checked separately from clicks. [Apple: clicked(onLink:at:)](https://developer.apple.com/documentation/appkit/nstextview/clicked(onlink:at:)), [TN3212: AppKit gesture tracking compatibility](https://developer.apple.com/documentation/technotes/tn3212-adopting-gesture-recognizers-for-sidecar-touch-support) (checked October 18, 2026).
+
+Clicks reuse PlayerModel.seek(to:) and preserve playback's paused/playing state. The live session rejects stale rendered occurrences and unknown/untimed cues; seek dispatch now also rejects occurrence changes while waiting behind another command. The public playback API is unchanged. See the [current native validation and captures](live-lyric-ribbon-validation.md#three-row-sleeve-refinement).
+
+## Initial compact native sleeve
 
 The user approved the sleeve interactions and emphasized compact, comfortable sizing. The native version uses a **448 × 226-point** panel including the 20-point record overhang. Its reading viewport stays at 132 points at normal scale, regardless of document length, playback tick, reading mode or source-credit presence. Current words use 25-point medium system text; previous/next cues use 15 points. Manual reading uses 17-point text throughout the full document. At 320 points wide, the same viewport fits the original sample's wrapped current cue and both neighbors. Larger preview text scales the viewport subject to display bounds; long or simultaneous cues remain scrollable instead of enlarging the panel indefinitely.
 

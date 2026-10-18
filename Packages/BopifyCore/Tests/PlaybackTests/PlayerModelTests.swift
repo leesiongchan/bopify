@@ -6,6 +6,42 @@ import BopifyDomain
 @MainActor
 @Suite("PlayerModel")
 struct PlayerModelTests {
+    @Test(arguments: ["unchanged", "queueOnly", "sameURITrack"])
+    func queuedSeekCannotOutliveItsSongOccurrence(change: String) async throws {
+        let engine = RecoveryStubEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        let (release, continuation) = AsyncStream<Void>.makeStream()
+        defer { continuation.finish(); model.stop() }
+        let track = makeTrack()
+        let entry = QueueEntry(id: "one", uri: track.uri, target: nil, track: track, metadataFailed: false)
+        engine.emit(.trackChanged(track))
+        engine.emit(.queueChanged(PlaybackQueue(generation: 1, previous: [], current: entry, next: [])))
+        engine.emit(.paused(positionMs: 1000))
+        for _ in 0..<10_000 { if model.state.phase == .paused { break }; await Task.yield() }
+        try #require(model.state.phase == .paused)
+        engine.commandGate = { for await _ in release { break } }
+        model.next()
+        for _ in 0..<10_000 { if engine.recordedCommands == ["next"] { break }; await Task.yield() }
+        try #require(engine.recordedCommands == ["next"])
+        model.seek(to: 2000)
+        model.previous()
+        let revision = model.playbackRevision
+        if change == "queueOnly" {
+            let replacement = QueueEntry(id: "two", uri: track.uri, target: nil, track: track, metadataFailed: false)
+            engine.emit(.queueChanged(PlaybackQueue(generation: 1, previous: [], current: replacement, next: [])))
+            for _ in 0..<10_000 { if model.state.queue?.current?.id == "two" { break }; await Task.yield() }
+            try #require(model.state.queue?.current?.id == "two")
+        } else if change == "sameURITrack" {
+            engine.emit(.trackChanged(track))
+            for _ in 0..<10_000 { if model.playbackRevision != revision { break }; await Task.yield() }
+            try #require(model.playbackRevision != revision)
+        }
+        continuation.finish()
+        for _ in 0..<10_000 { if engine.recordedCommands.last == "previous" { break }; await Task.yield() }
+        #expect(engine.recordedCommands == (change == "unchanged" ? ["next", "seek", "previous"] : ["next", "previous"]))
+    }
+
     @Test func sameURITrackChangedAdvancesPlaybackRevisionWithoutLoading() async {
         let engine = StubPlaybackEngine()
         let model = PlayerModel(engine: engine)

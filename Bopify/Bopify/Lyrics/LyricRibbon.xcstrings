@@ -61,42 +61,12 @@
         }
       }
     },
-    "menu.show": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show Lyrics"
-          }
-        }
-      }
-    },
-    "menu.hide": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hide Lyrics"
-          }
-        }
-      }
-    },
     "menu.focus": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Focus Lyrics"
-          }
-        }
-      }
-    },
-    "status.reading": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reading"
           }
         }
       }
@@ -116,7 +86,27 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sync lyrics"
+            "value": "Sync"
+          }
+        }
+      }
+    },
+    "control.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lyrics"
+          }
+        }
+      }
+    },
+    "control.help": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show or hide lyrics (⌃⌥L)"
           }
         }
       }

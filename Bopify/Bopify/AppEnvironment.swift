@@ -55,7 +55,7 @@ final class AppEnvironment {
     }
     @ObservationIgnored private var monitorEnabled = true
 
-    @ObservationIgnored private(set) var liveLyricRibbon: LiveLyricRibbonSession?
+    private(set) var liveLyricRibbon: LiveLyricRibbonSession?
     var isLiveLyricsVisible: Bool { liveLyricRibbon?.isVisible ?? false }
 
     func showLiveLyrics() {

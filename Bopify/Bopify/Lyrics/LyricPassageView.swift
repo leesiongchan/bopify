@@ -18,6 +18,7 @@ struct LyricPassageView: NSViewRepresentable {
     var shouldFocusReader: () -> Bool = { false }
     var occurrenceID = ""
     var direction: CarouselDirection = .fade
+    var onSeek: (Int64) -> Void = { _ in }
 
     final class Coordinator {
         var resetRevision: UInt64?
@@ -26,6 +27,7 @@ struct LyricPassageView: NSViewRepresentable {
         private var currentCueOffset: CGFloat = 0
         private var rendered: Input?
         private var occurrenceID: String?
+        private var highlightedStart: Int64?
 
         private struct Input: Equatable {
             let content: LyricContent
@@ -41,7 +43,9 @@ struct LyricPassageView: NSViewRepresentable {
             guard let view = scroll.documentView as? NSTextView else { return }
             let input = Input(content: content, projection: reading ? nil : projection,
                               reading: reading, scale: scale, rtl: rtl)
-            let changesMetrics = input != rendered || layoutWidth != max(1, width)
+            let geometryChanged = layoutWidth != max(1, width) || rendered?.scale != scale || rendered?.rtl != rtl
+            let changesMetrics = input != rendered || geometryChanged
+            if !reading && geometryChanged { resetRevision = nil }
             let anchor = reading && changesMetrics ? visibleAnchor(in: scroll) : nil
             if input != rendered {
                 let words = LyricRibbonLayout.reader(content: content, projection: projection,
@@ -50,6 +54,20 @@ struct LyricPassageView: NSViewRepresentable {
                 rendered = input
             } else if layoutWidth != max(1, width) || view.frame.height < height {
                 updateText(view, text: view.attributedString(), width: width, height: height)
+            }
+            if reading, changesMetrics || highlightedStart != projection?.current?.startMs,
+               let storage = view.textStorage, let manager = view.layoutManager {
+                let range = NSRange(location: 0, length: storage.length)
+                manager.addTemporaryAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, forCharacterRange: range)
+                storage.enumerateAttribute(LyricRibbonLayout.cueTimeAttribute, in: range) { value, range, _ in
+                    if let time = value as? Int64, time == projection?.current?.startMs {
+                        manager.addTemporaryAttribute(.foregroundColor, value: NSColor.labelColor, forCharacterRange: range)
+                    }
+                }
+                highlightedStart = projection?.current?.startMs
+            } else if !reading {
+                view.layoutManager?.removeTemporaryAttribute(.foregroundColor, forCharacterRange: NSRange(location: 0, length: view.string.utf16.count))
+                highlightedStart = nil
             }
             if let anchor, let manager = view.layoutManager, anchor.character < view.string.utf16.count {
                 let glyph = manager.glyphIndexForCharacter(at: anchor.character)
@@ -91,7 +109,8 @@ struct LyricPassageView: NSViewRepresentable {
                     guard glyph < manager.numberOfGlyphs else { return }
                     let line = manager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
                     let font = storage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
-                    let context = font.map { ceil($0.ascender - $0.descender + $0.leading) + 6 } ?? 0
+                    let style = storage.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle
+                    let context = max(style?.minimumLineHeight ?? 0, font.map { ceil($0.ascender - $0.descender + $0.leading) + 6 } ?? 0)
                     currentCueOffset = max(0, line.minY - context)
                     stop.pointee = true
                 }
@@ -161,6 +180,8 @@ struct LyricPassageView: NSViewRepresentable {
         let view = LyricReadingTextView(frame: .zero, textContainer: container)
         view.isEditable = false
         view.isSelectable = true
+        view.linkTextAttributes = [:]
+        view.displaysLinkToolTips = false
         view.drawsBackground = false
         view.textContainerInset = .zero
         view.isVerticallyResizable = false
@@ -187,6 +208,7 @@ struct LyricPassageView: NSViewRepresentable {
         (scroll as? LyricReadingScrollView)?.onBeginReading = begin
         (scroll.verticalScroller as? LyricReadingScroller)?.onBeginReading = begin
         view.onBeginReading = begin
+        view.onSeek = onSeek
         if let content {
             coordinator.updateContent(scroll, content: content, projection: projection, reading: isReading,
                 scale: textScale, rtl: isRightToLeft, fallback: text, width: width, height: height)
@@ -209,6 +231,7 @@ struct LyricPassageView: NSViewRepresentable {
         (scroll as? LyricReadingScrollView)?.onBeginReading = nil
         (scroll.verticalScroller as? LyricReadingScroller)?.onBeginReading = nil
         (scroll.documentView as? LyricReadingTextView)?.onBeginReading = nil
+        (scroll.documentView as? LyricReadingTextView)?.onSeek = nil
     }
 }
 
@@ -227,10 +250,40 @@ private final class LyricReadingScroller: NSScroller {
 }
 
 final class LyricReadingTextView: NSTextView {
+    var onSeek: ((Int64) -> Void)?
+    private var pendingSeek: (time: Int64, action: (Int64) -> Void)?
+
+    func seekTimestamp(at point: CGPoint) -> Int64? {
+        guard let manager = layoutManager, let container = textContainer, let storage = textStorage else { return nil }
+        let point = CGPoint(x: point.x - textContainerOrigin.x, y: point.y - textContainerOrigin.y)
+        let glyph = manager.glyphIndex(for: point, in: container)
+        guard glyph < manager.numberOfGlyphs,
+              manager.lineFragmentUsedRect(forGlyphAt: glyph, effectiveRange: nil).contains(point) else { return nil }
+        let character = manager.characterIndexForGlyph(at: glyph)
+        guard character < storage.length else { return nil }
+        let color = (manager.temporaryAttribute(.foregroundColor, atCharacterIndex: character, effectiveRange: nil)
+            ?? storage.attribute(.foregroundColor, at: character, effectiveRange: nil)) as? NSColor
+        guard color?.alphaComponent != 0 else { return nil }
+        return storage.attribute(LyricRibbonLayout.cueTimeAttribute, at: character, effectiveRange: nil) as? Int64
+    }
+
+    override func clicked(onLink link: Any, at charIndex: Int) {
+        guard let time = (link as? String).flatMap(Int64.init), let pendingSeek, pendingSeek.time == time else { return }
+        pendingSeek.action(time)
+    }
     var onBeginReading: (() -> Void)?
     override var acceptsFirstResponder: Bool { window?.canBecomeKey ?? false }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-    override func mouseDown(with event: NSEvent) { onBeginReading?(); super.mouseDown(with: event) }
+    override func mouseDown(with event: NSEvent) {
+        pendingSeek = nil
+        if event.clickCount == 1, event.modifierFlags.intersection([.shift, .command, .option, .control]).isEmpty,
+           let time = seekTimestamp(at: convert(event.locationInWindow, from: nil)), let onSeek {
+            pendingSeek = (time, onSeek)
+        }
+        onBeginReading?()
+        defer { pendingSeek = nil }
+        super.mouseDown(with: event)
+    }
     override func cancelOperation(_ sender: Any?) { window?.cancelOperation(sender) }
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 53 { cancelOperation(nil); return }

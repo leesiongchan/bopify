@@ -238,7 +238,17 @@ public final class PlayerModel {
         guard isEngineReady, let engine else { return; }
         guard state.isActiveDevice, state.canSeek, state.durationMs > 0 else { return }
         let target = min(max(0, milliseconds), state.durationMs)
-        enqueue("seek", requiresActive: true) { [engine] in try await engine.seek(to: target) }
+        let revision = playbackRevision
+        let entryID = state.queue?.current?.id
+        let trackURI = state.currentTrack?.uri
+        enqueue("seek", requiresActive: true) { @MainActor [weak self, engine] in
+            guard let self, playbackRevision == revision, state.queue?.current?.id == entryID,
+                  state.currentTrack?.uri == trackURI, state.canSeek, state.durationMs > 0 else {
+                BopifyLog.playback.debug("seek discarded after song occurrence changed")
+                return
+            }
+            try await engine.seek(to: target)
+        }
     }
 
     public func seek(by milliseconds: Int64) {
