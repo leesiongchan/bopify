@@ -1,6 +1,6 @@
 # Live lyric ribbon for local playback
 
-Status: Debug implementation completed October 18, 2026, following the approved [implementation plan](../plans/2026-10-18-live-lyric-ribbon.md). Automated checks and native fixture checks pass; live repeat-boundary and hide/reopen checks now pass; full live acceptance still needs reconnect verification, with broader accessibility/full-screen keyboard coverage also open. See the [validation record](../../live-lyric-ribbon-validation.md). Execution remains native, with commits and pushes directly to `main`.
+Status: Debug implementation completed October 18, 2026, following the approved [implementation plan](../plans/2026-10-18-live-lyric-ribbon.md). Automated checks and native fixture checks pass; live repeat-boundary and hide/reopen checks now pass; full live acceptance still needs reconnect verification, with spoken accessibility and full-screen Escape/reopen coverage also open. See the [validation record](../../live-lyric-ribbon-validation.md). Execution remains native, with commits and pushes directly to `main`.
 
 ## Purpose and scope
 
