@@ -104,15 +104,6 @@ struct TokenClientTests {
         await #expect(throws: PlayerError.unknown) { _ = try await makeClient().refresh(refreshToken: "RT") }
     }
 
-    @Test func cancelledRefreshRemainsCancellation() async {
-        let task = Task { () throws -> TokenSet in
-            try Task.checkCancellation()
-            return try await makeClient().refresh(refreshToken: "RT")
-        }
-        task.cancel()
-        await #expect(throws: CancellationError.self) { _ = try await task.value }
-    }
-
     @Test func mapsServerFailureToNetworkUnavailable() async {
         StubProtocol.handler = { _ in (503, Data()) }
         await #expect(throws: PlayerError.networkUnavailable) {

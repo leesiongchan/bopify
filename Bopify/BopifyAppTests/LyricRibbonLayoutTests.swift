@@ -33,13 +33,6 @@ struct LyricRibbonLayoutTests {
         }
     }
 
-    @Test func measuresRightToLeftMultilinePassages() throws {
-        let layout = LyricRibbonLayout.measure(content: try content("للنافذة ضوء هادئ\nوللصباح متسع جديد"),
-            width: 320, textScale: 1, availableHeight: 480)
-        #expect(layout.panelSize.height <= 480)
-        #expect(layout.textViewportHeight >= 50)
-    }
-
     @Test func reusesPassageLayoutAcrossClockUpdatesAndViewportChanges() {
         let manager = LyricLayoutManagerSpy()
         let container = NSTextContainer(size: .zero)

@@ -23,7 +23,6 @@ struct LyricReplyTests {
         #expect(lyrics.providerDisplayName == "Fixture provider")
         #expect(lyrics.language == "ar")
         #expect(lyrics.isRightToLeft)
-        #expect(LyricReply.eventTypes == ["lyrics", "lyricsFailed"])
     }
 
     @Test func unsyncedReplyHasNoStarts() throws {

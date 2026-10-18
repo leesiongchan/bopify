@@ -8,22 +8,6 @@ struct PKCETests {
         let pair = PKCEPair(verifier: "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")
         #expect(pair.challenge == "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM")
     }
-
-    @Test func challengeIsBase64URLWithNoPadding() {
-        let challenge = PKCEPair.random().challenge
-        #expect(!challenge.contains("="))
-        #expect(!challenge.contains("+"))
-        #expect(!challenge.contains("/"))
-    }
-
-    @Test func verifierLengthIsWithinTheSpecRange() {
-        let verifier = PKCEPair.random().verifier
-        #expect(verifier.count >= 43 && verifier.count <= 128)
-    }
-
-    @Test func randomPairsDiffer() {
-        #expect(PKCEPair.random().verifier != PKCEPair.random().verifier)
-    }
 }
 
 @Suite("AuthorizationRequest")

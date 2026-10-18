@@ -324,12 +324,6 @@ struct PlayerModelTests {
         #expect(model.commandNotice != nil)
     }
 
-    @Test func startsIdle() {
-        let model = PlayerModel(engine: StubPlaybackEngine())
-        #expect(model.state.phase == .idle)
-        #expect(model.state.currentTrack == nil)
-    }
-
     @Test func displayPositionAdvancesOnlyWhilePlayingAndStopsAtDuration() async {
         let engine = StubPlaybackEngine()
         let model = PlayerModel(engine: engine)

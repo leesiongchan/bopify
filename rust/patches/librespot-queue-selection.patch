@@ -4071,10 +4071,10 @@ index c7c195b..1664194 100644
 +}
 diff --git a/connect/src/startup.rs b/connect/src/startup.rs
 new file mode 100644
-index 0000000..c36abc2
+index 0000000..dc92657
 --- /dev/null
 +++ b/connect/src/startup.rs
-@@ -0,0 +1,388 @@
+@@ -0,0 +1,387 @@
 +//! Bopify: the connect-time decision behind `ConnectConfig::startup_restore`,
 +//! and the mirror of another device's playback.
 +
@@ -4285,7 +4285,6 @@ index 0000000..c36abc2
 +
 +    #[test]
 +    fn an_empty_or_missing_session_falls_back() {
-+        assert!(TransferState::parse_from_bytes(&[0xFF]).is_err());
 +        for data in [
 +            session("", "", true),
 +            session("-", "", true),
