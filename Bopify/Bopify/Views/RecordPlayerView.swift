@@ -98,9 +98,9 @@ struct RecordPlayerView: View {
                 // Appears instantly hidden behind the record; on collapse it fades only once mostly folded back into it.
                 .animation(isEngaged || reduceMotion ? nil : .easeIn(duration: 0.12).delay(0.3), value: isEngaged)
                 .allowsHitTesting(isEngaged)
-            ScrollView(layout.controlsFrame.width < 156 ? [.horizontal, .vertical] : .vertical) {
+            ScrollView(layout.controlsFrame.width < 192 ? [.horizontal, .vertical] : .vertical) {
                 // The scroll view swallows clicks on blank space, so the drag region must live inside it.
-                controls.frame(minWidth: 156)
+                controls.frame(minWidth: 192)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { controlsContentHeight = $0 }
                     .frame(minHeight: layout.controlsFrame.height, alignment: .top)
                     .background(PlayerBackgroundDragRegion())
@@ -286,6 +286,12 @@ struct RecordPlayerView: View {
                 Spacer(minLength: 0)
                 VolumeControl(player: player, presentation: presentation)
                 if let environment {
+                    Button { environment.showSearch() } label: {
+                        Image(systemName: "magnifyingglass").frame(width: 28, height: 28)
+                    }.buttonStyle(.playerControl)
+                        .accessibilityLabel(Text("search.title"))
+                        .help(Text("search.help"))
+                        .disabled(environment.isPreparingForQuit || environment.authState != .signedIn)
                     Button { environment.toggleLiveLyrics() } label: {
                         Image(systemName: "quote.bubble").frame(width: 28, height: 28)
                     }.buttonStyle(.playerToggle(isOn: environment.isLiveLyricsVisible))

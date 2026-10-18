@@ -75,6 +75,7 @@ func makePreviewEnvironment(_ scenario: PreviewScenario = .playing, library: Pre
     player.start()
     let services = PreviewLibraryServices(library)
     return AppEnvironment(previewPlayer: player, favoriteService: services, savedTracksService: services, historyService: services,
+                          searchService: services, collectionsService: services,
                           artworkStore: makePreviewArtworkStore(), radioEngine: engine)
 }
 
@@ -97,7 +98,7 @@ func previewRecordPlayer(_ scenario: PreviewScenario, mode: PlayerMode = .expand
         .frame(width: controller.layout.contentSize.width, height: controller.layout.contentSize.height)
 }
 
-private nonisolated struct PreviewLibraryServices: LibraryService, SavedTracksService, ListeningHistoryService {
+private nonisolated struct PreviewLibraryServices: LibraryService, SavedTracksService, ListeningHistoryService, TrackSearchService, LibraryCollectionsService {
     let library: PreviewLibrary
     init(_ library: PreviewLibrary) { self.library = library }
 
@@ -121,6 +122,23 @@ private nonisolated struct PreviewLibraryServices: LibraryService, SavedTracksSe
 
     func recentlyPlayed() async throws -> [RecentPlay] {
         try answer(previewTracks.reversed().map { RecentPlay(track: $0, contextURI: SpotifyURI("spotify:playlist:preview-recents")) }, empty: [])
+    }
+
+    func searchTracks(query: String, offset: Int, limit: Int) async throws -> TrackSearchPage {
+        let matches = previewTracks.filter { [$0.title, $0.artists.map(\.name).joined(separator: " ")]
+            .joined(separator: " ").localizedCaseInsensitiveContains(query) }
+        return try answer(TrackSearchPage(tracks: Array(matches.dropFirst(offset).prefix(limit)), nextOffset: nil),
+                          empty: TrackSearchPage(tracks: [], nextOffset: nil))
+    }
+
+    func savedCollections(_ kind: LibraryCollectionKind, offset: Int, limit: Int) async throws -> LibraryCollectionsPage {
+        let samples = previewTracks.prefix(3).enumerated().map { index, track in
+            LibraryCollection(uri: SpotifyURI("spotify:\(kind == .albums ? "album" : "playlist"):preview\(index)")!,
+                title: kind == .albums ? track.title : ["Late Night", "Quiet Mornings", "On Repeat"][index],
+                subtitle: kind == .albums ? track.artists[0].name : "Your playlist", artwork: track.artwork)
+        }
+        return try answer(LibraryCollectionsPage(items: Array(samples.dropFirst(offset).prefix(limit)), nextOffset: nil),
+                          empty: LibraryCollectionsPage(items: [], nextOffset: nil))
     }
 
     func topItems(_ kind: TopItemKind) async throws -> [StationSeed] {
