@@ -4,6 +4,12 @@ Research dates: October 17–18, 2026. The live native ribbon is implemented; se
 
 The lyric ribbon would let a listener glance at the words and reread a passage while music continues. The value to test is whether it fits working on a Mac without taking keyboard focus or demanding attention. The primary use remains a choice between persistent background display, a brief shortcut peek and deliberate close reading.
 
+## WindowServer input coverage
+
+The follow-up reproduced a second input boundary: the clear-backed borderless panel was a WindowServer mouse target over text, but not over the glass, record or blank reader. AppKit view routing could not handle events that never reached the window. Explicitly setting `panel.ignoresMouseEvents = false` makes the full panel eligible, without changing its drawing or floating level. This setter behavior was verified on the native ribbon rather than inferred from its default property value.
+
+Apple's window lookup follows mouse-down targeting and excludes transparent areas and windows that ignore input. The regression now queries that boundary after lyrics load instead of delivering events directly to the panel. [NSWindow.windowNumber(at:belowWindowWithWindowNumber:)](https://developer.apple.com/documentation/appkit/nswindow/windownumber(at:belowwindowwithwindownumber:)) (checked October 18, 2026).
+
 ## Compact type, album color and drag coverage
 
 The approved refinement reduces normal geometry to **448 × 146 points** with an **84-point three-row viewport**. Current/context/manual type changes to **19/14/15 points**. The record stays at 96 points. Provider credit becomes a smaller, trailing label on the artist row, without a dot, badge or extra footer. These are Bopify's design choices, rather than platform-mandated lyric sizes.

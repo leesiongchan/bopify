@@ -4,6 +4,31 @@ import SwiftUI
 
 @MainActor @Suite("Lyric ribbon window", .serialized)
 struct LyricRibbonWindowTests {
+    @Test func windowServerTargetsTheWholeSurfaceAfterLyricsLoad() async throws {
+        let suite = "lyric-window-target-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = LyricRibbonModel(snapshot: lyricTestSnapshot())
+        let controller = LyricRibbonWindowController(model: model, defaults: defaults, onHide: {})
+        defer { controller.hide(); controller.panel.close() }
+        controller.show()
+        model.completeLoad(.timed(try lyricTestDocument()), token: model.beginLoad())
+        controller.refreshLayout(textScale: 1)
+        controller.panel.contentView?.layoutSubtreeIfNeeded()
+        controller.panel.displayIfNeeded()
+        try await Task.sleep(for: .milliseconds(100))
+        controller.panel.orderFront(nil)
+        let content = try #require(controller.panel.contentView)
+        // sendEvent and view hitTest bypass the WindowServer's transparent-window targeting.
+        for point in [CGPoint(x: 56, y: 73), CGPoint(x: 430, y: 72),
+                      CGPoint(x: 412, y: 56), CGPoint(x: 200, y: 7)] {
+            let screenPoint = controller.panel.convertPoint(toScreen: content.convert(point, to: nil))
+            #expect(NSWindow.windowNumber(at: screenPoint, belowWindowWithWindowNumber: 0) == controller.panel.windowNumber)
+        }
+        #expect(controller.panel.level == .floating)
+        #expect(!controller.panel.canBecomeKey)
+    }
+
     @Test(arguments: [CGPoint(x: 200, y: 7), CGPoint(x: 441, y: 70), CGPoint(x: 56, y: 70),
                       CGPoint(x: 200, y: 139), CGPoint(x: 414, y: 70), CGPoint(x: 220, y: 128), CGPoint(x: 435, y: 128)])
     func exposedBorderDragsPassivelyAndReturnsToVisibleScreen(point: CGPoint) async throws {
