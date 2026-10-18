@@ -122,10 +122,7 @@ impl Engine {
                     // device is never active without content (see the startup-restore spec).
                     initial_volume: options
                         .as_ref()
-                        .and_then(|o| o.snapshot.as_ref())
-                        .map_or(u16::MAX / 2, |s| {
-                            (s.volume * f64::from(u16::MAX)).round() as u16
-                        }),
+                        .map_or(u16::MAX / 2, |options| options.initial_volume()),
                     startup_restore: true,
                     startup_mode: options
                         .as_ref()
@@ -266,6 +263,20 @@ impl Engine {
         let sink = self.sink.clone();
         self.runtime
             .spawn(async move { sink(crate::lyrics::resolve(&source, track, request_id).await) });
+        Ok(())
+    }
+
+    /// Queues the current track's main artist and their popular songs.
+    pub fn request_artist_top_tracks(
+        &self,
+        track_uri: &str,
+        request_id: u64,
+    ) -> Result<(), BopifyError> {
+        let track = crate::lyrics::parse_track(track_uri).ok_or(BopifyError::InvalidArgument)?;
+        let source = crate::artist::SessionArtist(self.session.clone());
+        let sink = self.sink.clone();
+        self.runtime
+            .spawn(async move { sink(crate::artist::resolve(&source, track, request_id).await) });
         Ok(())
     }
 }

@@ -32,4 +32,12 @@ public protocol PlaybackEngine: Sendable {
     func requestRadio(seed: SpotifyURI) async throws -> RadioMix
     /// Spotify lyrics for one track. Throws `LyricFailure` for lyric-service failures.
     func requestLyrics(for track: SpotifyURI) async throws -> TrackLyrics
+    /// The main artist's popular songs for one track, ordered by Spotify.
+    func requestArtistTopTracks(for track: SpotifyURI) async throws -> ArtistTopTracks
+}
+
+extension PlaybackEngine {
+    public func requestArtistTopTracks(for track: SpotifyURI) async throws -> ArtistTopTracks {
+        throw ArtistTopTracksFailure.unavailable
+    }
 }

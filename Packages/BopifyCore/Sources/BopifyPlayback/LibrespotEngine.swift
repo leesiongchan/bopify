@@ -194,6 +194,16 @@ public final class LibrespotEngine: ManagedPlaybackEngine, @unchecked Sendable {
         }
     }
 
+    @concurrent
+    public func requestArtistTopTracks(for track: SpotifyURI) async throws -> ArtistTopTracks {
+        let raw = track.rawValue
+        return try await bridge.artistTopTracks(for: track) { id in
+            try perform("requestArtistTopTracks") {
+                raw.withCString { bopify_request_artist_top_tracks(handle, $0, id) }
+            }
+        }
+    }
+
     /// librespot's volume is on the `u16::MAX` scale, and the event decoder
     /// divides by that same constant, so a round trip is stable.
     ///

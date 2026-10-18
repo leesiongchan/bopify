@@ -170,7 +170,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 
     private func toggle() {
         guard let panel, let button = statusItem.button else { return }
-        if panel.isVisible { dismiss(); return }
+        if panel.isVisible && panel.isKeyWindow { dismiss(); return }
 
         if isWindowControllerAttached {
             hasPosition = true
@@ -185,6 +185,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         environment.presentation.sendAttention(.keyboardFocus(true))
         if isWindowControllerAttached { environment.playerWindowController.apply(mode: .expanded, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion) }
         panel.makeKeyAndOrderFront(nil)
+        panel.orderFrontRegardless()
         BopifyLog.playback.debug("player panel opened")
     }
 

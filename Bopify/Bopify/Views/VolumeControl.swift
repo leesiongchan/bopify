@@ -22,21 +22,10 @@ struct VolumeControl: View {
         .accessibilityValue(Text("\(Int((player.displayVolume * 100).rounded()))%"))
         .disabled(!player.isEngineReady || !player.state.isActiveDevice)
         .popover(isPresented: isPopoverPresented, arrowEdge: .bottom) {
-            VStack(spacing: 10) {
-                Text("\(Int((player.displayVolume * 100).rounded()))%")
-                    .font(.system(size: 11, design: .monospaced)).monospacedDigit()
-                VerticalVolumeSlider(value: player.displayVolume, onValueChange: player.setVolume, onEditingBegan: {
-                    player.beginVolumeEditing()
-                    presentation.sendAttention(.interaction(.volume, true))
-                }, onEditingEnded: finishVolumeEditing)
-                    .frame(width: 24, height: 112)
-                Button(action: player.toggleMute) {
-                    Image(systemName: player.displayVolume == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text(player.displayVolume == 0 ? "transport.unmute" : "transport.mute"))
-            }
-            .padding(14)
+            VolumePopoverContent(player: player, onEditingBegan: {
+                player.beginVolumeEditing()
+                presentation.sendAttention(.interaction(.volume, true))
+            }, onEditingEnded: finishVolumeEditing)
             .onExitCommand { presentation.dismissPopover() }
             .onDisappear { finishVolumeEditing() }
         }
@@ -56,13 +45,34 @@ struct VolumeControl: View {
     }
 }
 
-private struct VerticalVolumeSlider: NSViewRepresentable {
+struct VolumePopoverContent: View {
+    let player: PlayerModel
+    let onEditingBegan: () -> Void
+    let onEditingEnded: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button(action: player.toggleMute) {
+                Image(systemName: player.displayVolume == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                    .frame(width: 24, height: 24)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(player.displayVolume == 0 ? "transport.unmute" : "transport.mute"))
+            HorizontalVolumeSlider(value: player.displayVolume, onValueChange: player.setVolume,
+                onEditingBegan: onEditingBegan, onEditingEnded: onEditingEnded)
+                .frame(width: 136, height: 24)
+        }
+        .padding(12)
+    }
+}
+
+private struct HorizontalVolumeSlider: NSViewRepresentable {
     let value: Double
     let onValueChange: (Double) -> Void
     let onEditingBegan: () -> Void
     let onEditingEnded: () -> Void
     func makeNSView(context: Context) -> TrackingSlider {
-        let slider = TrackingSlider(frame: CGRect(x: 0, y: 0, width: 24, height: 112))
+        let slider = TrackingSlider(frame: CGRect(x: 0, y: 0, width: 136, height: 24))
         slider.minValue = 0; slider.maxValue = 1
         slider.isContinuous = true
         slider.target = slider

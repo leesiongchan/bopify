@@ -4,7 +4,7 @@ import Observation
 import BopifyDomain
 import os
 
-public enum PlayerPopover: Sendable { case favorite, volume }
+public enum PlayerPopover: Sendable { case favorite, volume, artist }
 
 public enum PlayerMode: String, Codable, Sendable { case expanded, compact, queue }
 

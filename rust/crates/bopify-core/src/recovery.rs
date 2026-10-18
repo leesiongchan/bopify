@@ -7,6 +7,7 @@ pub struct EngineCreateOptions {
     pub device_id: String,
     pub startup: StartupMode,
     pub snapshot: Option<RecoveryCheckpoint>,
+    pub initial_volume: Option<f64>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -43,6 +44,12 @@ impl EngineCreateOptions {
         Ok(options)
     }
     pub fn validate(&self) -> Result<(), BopifyError> {
+        if self
+            .initial_volume
+            .is_some_and(|volume| !volume.is_finite() || !(0.0..=1.0).contains(&volume))
+        {
+            return Err(BopifyError::InvalidArgument);
+        }
         if self.device_id.trim().is_empty()
             || self.device_id.len() > 256
             || self.device_id.contains('\0')
@@ -73,6 +80,15 @@ impl EngineCreateOptions {
             }
         }
         Ok(())
+    }
+    pub fn initial_volume(&self) -> u16 {
+        self.snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.volume)
+            .or(self.initial_volume)
+            .map_or(u16::MAX / 2, |volume| {
+                (volume * f64::from(u16::MAX)).round() as u16
+            })
     }
     pub fn native_startup(&self) -> librespot_connect::StartupMode {
         match self.startup {
@@ -116,6 +132,43 @@ impl From<RecoveryIdentity> for librespot_connect::RecoveryIdentity {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn cold_launch_accepts_saved_volume_without_a_recovery_snapshot() {
+        for volume in [0.0, 0.23, 1.0] {
+            let json = serde_json::json!({
+                "deviceId": "own", "startup": "coldLaunch", "initialVolume": volume
+            });
+            let options = EngineCreateOptions::parse(&json.to_string()).unwrap();
+            assert_eq!(
+                options.initial_volume(),
+                (volume * f64::from(u16::MAX)).round() as u16
+            );
+        }
+    }
+
+    #[test]
+    fn cold_launch_rejects_invalid_saved_volume() {
+        for volume in [-0.1, 1.1] {
+            let json = serde_json::json!({
+                "deviceId": "own", "startup": "coldLaunch", "initialVolume": volume
+            });
+            assert!(EngineCreateOptions::parse(&json.to_string()).is_err());
+        }
+    }
+
+    #[test]
+    fn recovery_volume_takes_priority_over_saved_volume() {
+        let options = EngineCreateOptions::parse(r#"{"deviceId":"own","startup":"recovery","initialVolume":0.8,"snapshot":{"wasActive":true,"shouldResume":false,"identity":null,"positionMs":0,"volume":0,"shuffleEnabled":false,"repeatMode":"off"}}"#).unwrap();
+        assert_eq!(options.initial_volume(), 0);
+    }
+
+    #[test]
+    fn no_saved_volume_preserves_the_default() {
+        let options =
+            EngineCreateOptions::parse(r#"{"deviceId":"own","startup":"coldLaunch"}"#).unwrap();
+        assert_eq!(options.initial_volume(), u16::MAX / 2);
+    }
+
     #[test]
     fn recovery_options_validate_before_network_work() {
         for json in [

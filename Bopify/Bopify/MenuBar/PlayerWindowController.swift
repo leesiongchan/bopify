@@ -65,12 +65,7 @@ final class PlayerWindowController {
         let desiredAnchor = anchor ?? CGPoint(x: panel.frame.midX, y: panel.frame.midY)
         let screen = NSScreen.screens.first { $0.visibleFrame.contains(desiredAnchor) } ?? panel.screen ?? NSScreen.main
         guard let visible = visibleFrame ?? screen?.visibleFrame else { return }
-        var available = visible.size
-        // Both lower-panel occupants reserve the same viewport before moving the spindle.
-        if mode != .compact {
-            available.height = min(available.height, max(300, desiredAnchor.y + 132 - visible.minY))
-        }
-        let next = recordLayout(mode: mode, availableSize: available)
+        let next = recordLayout(mode: mode, availableSize: visible.size)
         let target = playerWindowFrame(recordCenter: desiredAnchor, layout: next, visibleFrame: visible)
         guard next != layout || target != targetFrame || (!isTransitioning && panel.frame != target) else { return }
         lastRequest = (mode, reduceMotion)

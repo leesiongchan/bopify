@@ -160,6 +160,24 @@ pub enum WireEvent {
         track_uri: String,
         reason: crate::lyrics::LyricFailure,
     },
+    ArtistTopTracks {
+        #[serde(rename = "requestID")]
+        request_id: u64,
+        #[serde(rename = "trackURI")]
+        track_uri: String,
+        #[serde(rename = "artistURI")]
+        artist_uri: String,
+        #[serde(rename = "artistName")]
+        artist_name: String,
+        tracks: Vec<WireTrack>,
+    },
+    ArtistTopTracksFailed {
+        #[serde(rename = "requestID")]
+        request_id: u64,
+        #[serde(rename = "trackURI")]
+        track_uri: String,
+        reason: crate::artist::ArtistTopTracksFailure,
+    },
 }
 
 /// Translates player events, explicitly dropping signals not used by Swift.

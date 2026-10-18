@@ -249,9 +249,9 @@ struct RecordPlayerView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(track?.title ?? String(localized: "player.unknownTrack"))
                         .font(.system(size: 17, weight: .medium)).lineLimit(1).help(track?.title ?? "")
-                    Text(track?.artists.map(\.name).joined(separator: ", ") ?? "")
-                        .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
-                        .help(track?.artists.map(\.name).joined(separator: ", ") ?? "")
+                    if let track {
+                        ArtistSongsButton(track: track, player: player, artworkStore: artworkStore, presentation: presentation)
+                    }
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 // Hidden while mirroring: Bopify still has its own track, and the heart would show that track's saved state.
                 if player.state.mirror == nil {

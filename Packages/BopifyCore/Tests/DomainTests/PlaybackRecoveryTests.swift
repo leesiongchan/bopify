@@ -4,6 +4,17 @@ import BopifyDomain
 
 @Suite("Playback recovery contract")
 struct PlaybackRecoveryTests {
+    @Test func coldLaunchEncodesSavedVolumeIncludingMute() throws {
+        for volume in [0.0, 0.23, 1.0] {
+            let config = PlaybackEngineConfiguration(deviceID: "stable", startup: .coldLaunch, initialVolume: volume)
+            let data = try JSONEncoder().encode(config)
+            let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            #expect(json["initialVolume"] as? Double == volume)
+            #expect(json["snapshot"] == nil)
+            #expect(try JSONDecoder().decode(PlaybackEngineConfiguration.self, from: data) == config)
+        }
+    }
+
     @Test func identityAndReadinessDecodeWithNativeOccurrence() throws {
         let json = #"{"type":"connectionReady","outcome":"local","identity":{"trackUri":"spotify:track:x","trackUid":"second","contextUri":"spotify:playlist:p"}}"#
         let identity = PlaybackIdentity(trackURI: SpotifyURI("spotify:track:x")!, trackUID: "second", contextURI: "spotify:playlist:p")
