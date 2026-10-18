@@ -1,116 +1,116 @@
 {
-  "sourceLanguage": "en",
-  "strings": {
-    "idle.noTrack": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Play music on this Mac"
+  "sourceLanguage" : "en",
+  "strings" : {
+    "idle.connecting" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connecting to playback…"
           }
         }
       }
     },
-    "idle.loadingTrack": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Loading track…"
+    "idle.loadingTrack" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading track…"
           }
         }
       }
     },
-    "idle.otherDevice": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This ribbon follows playback on this Mac"
+    "idle.noTrack" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play music on this Mac"
           }
         }
       }
     },
-    "idle.connecting": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connecting to playback…"
+    "idle.otherDevice" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This ribbon follows playback on this Mac"
           }
         }
       }
     },
-    "idle.unsupported": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lyrics unavailable for this item"
+    "idle.playbackUnavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playback unavailable"
           }
         }
       }
     },
-    "idle.playbackUnavailable": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Playback unavailable"
+    "idle.unsupported" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrics unavailable for this item"
           }
         }
       }
     },
-    "menu.focus": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Focus Lyrics"
+    "menu.focus" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Focus Lyrics"
           }
         }
       }
     },
-    "action.sync.help": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Return to the current lyric without changing playback"
+    "control.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrics"
           }
         }
       }
     },
-    "action.sync": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sync"
+    "control.help" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show or hide lyrics (⌃⌥L)"
           }
         }
       }
     },
-    "control.title": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lyrics"
+    "action.sync" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync"
           }
         }
       }
     },
-    "control.help": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show or hide lyrics (⌃⌥L)"
+    "action.sync.help" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Return to the current lyric without changing playback"
           }
         }
       }
     }
   },
-  "version": "1.0"
+  "version" : "1.0"
 }
