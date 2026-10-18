@@ -178,6 +178,26 @@ final class AppEnvironment {
         await favorite.select(player?.state.currentTrack?.uri)
     }
 
+    func requestArtistTopTracks(for track: SpotifyURI) async throws -> ArtistTopTracks {
+        guard !isPreparingForQuit, authState == .signedIn, let coordinator = recovery,
+              coordinator.player.isEngineReady, let engine = coordinator.currentEngine else {
+            throw ArtistTopTracksFailure.unavailable
+        }
+        let epoch = coordinator.player.engineEpoch
+        do {
+            let result = try await engine.requestArtistTopTracks(for: track)
+            guard coordinator.player.engineEpoch == epoch, coordinator.player.isEngineReady else {
+                throw ArtistTopTracksFailure.unavailable
+            }
+            return result
+        } catch {
+            if error as? PlayerError == .playbackSessionLost {
+                coordinator.reportSessionLoss(.commandFailed, epoch: epoch)
+            }
+            throw error
+        }
+    }
+
     func enableFavorites() async {
         await enableLibrary(scopes: ["user-library-read", "user-library-modify"])
     }
@@ -458,7 +478,7 @@ final class AppEnvironment {
     // Called only inside serialize; the retry loop returns immediately and owns its lifetime.
     private func connect() {
         if recovery != nil { recovery?.start(); authState = .signedIn; return }
-        let model = player ?? PlayerModel()
+        let model = player ?? PlayerModel(volumeDefaults: .standard)
         player = model
         let auth = self.auth
         let coordinator = PlaybackRecoveryCoordinator(player: model, tokenProvider: { rejected in

@@ -41,6 +41,7 @@ public final class PlayerModel {
     private var volumeDraft: Double?
     private var isEditingVolume = false
     public var displayVolume: Double { volumeDraft ?? state.volume }
+    public private(set) var preferredVolume: Double?
     private(set) var positionUpdatedAt = Date.now
     private(set) var remoteUpdatedAt = Date.now
     private var frozenDisplayPositionMs: Int64?
@@ -57,22 +58,31 @@ public final class PlayerModel {
     @ObservationIgnored private var volumeDispatchedAt: TimeInterval?
     @ObservationIgnored private let volumeNow: @MainActor () -> TimeInterval
     @ObservationIgnored private let volumeSleep: @Sendable (Duration) async throws -> Void
+    @ObservationIgnored private let volumeDefaults: UserDefaults?
 
-    public convenience init() {
-        self.init(engine: nil, volumeNow: { ProcessInfo.processInfo.systemUptime }, volumeSleep: { try await Task.sleep(for: $0) })
+    public convenience init(volumeDefaults: UserDefaults? = nil) {
+        self.init(engine: nil, volumeNow: { ProcessInfo.processInfo.systemUptime }, volumeSleep: { try await Task.sleep(for: $0) },
+                  volumeDefaults: volumeDefaults)
     }
 
-    public convenience init(engine: any PlaybackEngine) {
+    public convenience init(engine: any PlaybackEngine, volumeDefaults: UserDefaults? = nil) {
         self.init(engine: engine, volumeNow: { ProcessInfo.processInfo.systemUptime },
-                  volumeSleep: { try await Task.sleep(for: $0) })
+                  volumeSleep: { try await Task.sleep(for: $0) }, volumeDefaults: volumeDefaults)
     }
 
     init(engine: (any PlaybackEngine)?, volumeNow: @escaping @MainActor () -> TimeInterval,
-         volumeSleep: @escaping @Sendable (Duration) async throws -> Void) {
+         volumeSleep: @escaping @Sendable (Duration) async throws -> Void, volumeDefaults: UserDefaults? = nil) {
         self.engine = engine
         self.isEngineReady = engine != nil
         self.volumeNow = volumeNow
         self.volumeSleep = volumeSleep
+        self.volumeDefaults = volumeDefaults
+        if let volume = volumeDefaults?.object(forKey: "player.volume") as? Double,
+           volume.isFinite, (0...1).contains(volume) {
+            preferredVolume = volume
+            state.volume = volume
+            if volume > 0 { lastPositiveVolume = volume }
+        }
     }
 
     /// Interpolate for display without replacing the engine's authoritative position.
@@ -502,6 +512,11 @@ public final class PlayerModel {
             state.positionMs = position
         case let .volumeChanged(volume):
             state.volume = volume
+            if volume.isFinite, (0...1).contains(volume), preferredVolume != volume {
+                preferredVolume = volume
+                volumeDefaults?.set(volume, forKey: "player.volume")
+                BopifyLog.playback.debug("confirmed volume remembered")
+            }
             lastVolumeSent = volume
             if !isEditingVolume, volumeRequest == nil, volumeTask == nil || volumeDraft == volume { volumeDraft = nil }
             if volume.isFinite, volume > 0 { lastPositiveVolume = min(1, volume) }

@@ -178,10 +178,15 @@ pub(crate) fn mix_uri(body: &[u8]) -> Option<String> {
 
 /// Top tracks are listed per country: the session's own first, else whichever list Spotify sent.
 pub(crate) fn pick_top_track(top: &CountryTopTracks, country: &str) -> Option<SpotifyUri> {
+    pick_top_tracks(top, country).into_iter().next()
+}
+
+pub(crate) fn pick_top_tracks(top: &CountryTopTracks, country: &str) -> Vec<SpotifyUri> {
     top.iter()
         .find(|list| list.country == country && !list.tracks.is_empty())
         .or_else(|| top.iter().find(|list| !list.tracks.is_empty()))
-        .and_then(|list| list.tracks.first().cloned())
+        .map(|list| list.tracks.iter().take(10).cloned().collect())
+        .unwrap_or_default()
 }
 
 /// Looks up to four tracks at once and keeps the mix's order; unresolvable tracks are dropped.
@@ -244,6 +249,39 @@ fn log_failure(kind: &str, reason: RadioFailure) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn artist_songs_use_the_sessions_country_list() {
+        let first = SpotifyUri::from_uri("spotify:track:11dFghVXANMlKmJXsNCbNl").unwrap();
+        let local = SpotifyUri::from_uri("spotify:track:4uLU6hMCjMI75M1A2tKUQC").unwrap();
+        let top = CountryTopTracks(vec![
+            TopTracks {
+                country: "US".into(),
+                tracks: librespot_metadata::track::Tracks(vec![first]),
+            },
+            TopTracks {
+                country: "MY".into(),
+                tracks: librespot_metadata::track::Tracks(vec![local.clone()]),
+            },
+        ]);
+        assert_eq!(pick_top_tracks(&top, "MY"), vec![local]);
+    }
+
+    #[test]
+    fn artist_songs_fall_back_when_the_local_list_is_empty() {
+        let fallback = SpotifyUri::from_uri("spotify:track:11dFghVXANMlKmJXsNCbNl").unwrap();
+        let top = CountryTopTracks(vec![
+            TopTracks {
+                country: "MY".into(),
+                tracks: librespot_metadata::track::Tracks(vec![]),
+            },
+            TopTracks {
+                country: "US".into(),
+                tracks: librespot_metadata::track::Tracks(vec![fallback.clone(); 15]),
+            },
+        ]);
+        assert_eq!(pick_top_tracks(&top, "MY"), vec![fallback; 10]);
+    }
     use librespot_metadata::artist::{CountryTopTracks, TopTracks};
     use librespot_metadata::track::Tracks;
     use std::sync::{Arc, Mutex};

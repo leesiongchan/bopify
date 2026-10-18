@@ -1,5 +1,6 @@
 //! C-ABI wrapper around librespot's Spirc for the Bopify macOS app.
 
+mod artist;
 pub mod engine;
 pub mod error;
 pub mod event;

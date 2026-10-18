@@ -5,6 +5,25 @@ import BopifyDomain
 
 @MainActor @Suite("PlaybackRecoveryCoordinator")
 struct PlaybackRecoveryCoordinatorTests {
+    @Test(arguments: [0.0, 0.23])
+    func coldLaunchPassesSavedVolumeBeforeCreatingEngine(volume: Double) async throws {
+        let suite = "recovery-volume-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(volume, forKey: "player.volume")
+        let gate = RecoveryFactoryGate()
+        let recovery = PlaybackRecoveryCoordinator(player: PlayerModel(volumeDefaults: defaults),
+            tokenProvider: { _ in "TOKEN_FAKE" },
+            makeEngine: { token, options in try await gate.create(token: token, configuration: options) })
+        recovery.start()
+        await gate.waitForCreationCount(1)
+        #expect(gate.configurations[0].startup == .coldLaunch)
+        #expect(gate.configurations[0].snapshot == nil)
+        #expect(gate.configurations[0].initialVolume == volume)
+        gate.failNext(with: .networkUnavailable)
+        await recovery.stop()
+    }
+
     var identity: PlaybackIdentity { PlaybackIdentity(trackURI: SpotifyURI("spotify:track:6rqhFgbbKwnb9MLmUQDhG6")!) }
     func settle() async { for _ in 0..<100 { await Task.yield() } }
     func coordinator(_ gate: RecoveryFactoryGate, _ clock: RecoveryTestClock) -> PlaybackRecoveryCoordinator {

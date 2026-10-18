@@ -15,7 +15,21 @@ public final class EventBridge: Sendable {
     private let continuation: AsyncStream<PlaybackEvent>.Continuation
     private let radioWaiters = OSAllocatedUnfairLock(initialState: RadioWaiters())
     private let lyricWaiters = OSAllocatedUnfairLock(initialState: LyricWaiters())
+    private let artistWaiters = OSAllocatedUnfairLock(initialState: ArtistWaiters())
     private let lyricSleep: @Sendable (Duration) async throws -> Void
+    private let artistSleep: @Sendable (Duration) async throws -> Void
+
+    private struct ArtistWaiter: Sendable {
+        let track: SpotifyURI
+        let continuation: CheckedContinuation<ArtistTopTracks, any Error>
+        let watchdog: Task<Void, Never>
+    }
+
+    private struct ArtistWaiters: Sendable {
+        var lastID: UInt64 = 0
+        var waiting: [UInt64: ArtistWaiter] = [:]
+        var finished = false
+    }
 
     private struct LyricWaiter: Sendable {
         let track: SpotifyURI
@@ -40,8 +54,8 @@ public final class EventBridge: Sendable {
         let requestID: UInt64?
     }
 
-    // A damaged ID must still route a lyric message away from playback's payload logging.
-    private struct LyricEnvelope: Decodable {
+    // A damaged ID must still route replies away from playback's payload logging.
+    private struct ReplyEnvelope: Decodable {
         let type: String
         let requestID: UInt64?
         private enum CodingKeys: String, CodingKey { case type, requestID }
@@ -56,8 +70,10 @@ public final class EventBridge: Sendable {
         self.init(lyricSleep: { try await Task.sleep(for: $0) })
     }
 
-    init(lyricSleep: @escaping @Sendable (Duration) async throws -> Void) {
+    init(lyricSleep: @escaping @Sendable (Duration) async throws -> Void,
+         artistSleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }) {
         self.lyricSleep = lyricSleep
+        self.artistSleep = artistSleep
         var escaped: AsyncStream<PlaybackEvent>.Continuation!
         // Queue metadata bursts must not evict readiness or playback transitions.
         self.events = AsyncStream(bufferingPolicy: .unbounded) { escaped = $0 }
@@ -173,6 +189,49 @@ public final class EventBridge: Sendable {
         }
     }
 
+    func artistTopTracks(for track: SpotifyURI, _ send: (UInt64) throws -> Void) async throws -> ArtistTopTracks {
+        let id = artistWaiters.withLock { state in state.lastID += 1; return state.lastID }
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let registered = artistWaiters.withLock { state in
+                    guard !state.finished else { return false }
+                    let sleep = artistSleep
+                    let watchdog = Task { [weak self] in
+                        do { try await sleep(.seconds(35)) } catch { return }
+                        guard !Task.isCancelled else { return }
+                        self?.resolveArtist(id, with: .failure(ArtistTopTracksFailure.network))
+                    }
+                    state.waiting[id] = ArtistWaiter(track: track, continuation: continuation, watchdog: watchdog)
+                    return true
+                }
+                guard registered else { return continuation.resume(throwing: PlayerError.playbackSessionLost) }
+                if Task.isCancelled { return resolveArtist(id, with: .failure(CancellationError())) }
+                do { try send(id) } catch { resolveArtist(id, with: .failure(error)) }
+            }
+        } onCancel: {
+            resolveArtist(id, with: .failure(CancellationError()))
+        }
+    }
+
+    private func resolveArtist(_ id: UInt64, track: SpotifyURI? = nil, with result: Result<ArtistTopTracks, any Error>) {
+        guard let waiter = artistWaiters.withLock({ $0.waiting.removeValue(forKey: id) }) else { return }
+        waiter.watchdog.cancel()
+        waiter.continuation.resume(with: track.map { $0 != waiter.track } == true
+            ? .failure(ArtistTopTracksFailure.unavailable) : result)
+    }
+
+    private func deliverArtist(_ data: Data, requestID: UInt64?) {
+        guard let reply = try? JSONDecoder().decode(ArtistTopTracksReply.self, from: data) else {
+            BopifyLog.playback.error("artist songs reply decode failed")
+            if let requestID { resolveArtist(requestID, with: .failure(ArtistTopTracksFailure.unavailable)) }
+            return
+        }
+        switch reply {
+        case let .tracks(id, songs): resolveArtist(id, track: songs.trackURI, with: .success(songs))
+        case let .failed(id, track, reason): resolveArtist(id, track: track, with: .failure(reason))
+        }
+    }
+
     /// Balances exactly one `retainedContext()`, and takes that same pointer
     /// so the pairing is visible at the call site.
     ///
@@ -188,10 +247,15 @@ public final class EventBridge: Sendable {
     func yield(rawJSON: UnsafeRawBufferPointer) {
         guard let base = rawJSON.baseAddress, !rawJSON.isEmpty else { return }
         let data = Data(bytes: base, count: rawJSON.count)
-        if let envelope = try? JSONDecoder().decode(LyricEnvelope.self, from: data),
-           LyricReply.eventTypes.contains(envelope.type) {
-            deliverLyrics(data, requestID: envelope.requestID)
-            return
+        if let envelope = try? JSONDecoder().decode(ReplyEnvelope.self, from: data) {
+            if ArtistTopTracksReply.eventTypes.contains(envelope.type) {
+                deliverArtist(data, requestID: envelope.requestID)
+                return
+            }
+            if LyricReply.eventTypes.contains(envelope.type) {
+                deliverLyrics(data, requestID: envelope.requestID)
+                return
+            }
         }
         // Radio replies answer one caller; the playback stream never sees them.
         if let envelope = try? JSONDecoder().decode(Envelope.self, from: data),
@@ -208,18 +272,19 @@ public final class EventBridge: Sendable {
             BopifyLog.playback.error("event decode failed payload=\(payload, privacy: .private)")
             return
         }
-        if case .sessionLost = event { failRadioWaiters(); failLyricWaiters() }
-        if case .failed(.playbackSessionLost) = event { failRadioWaiters(); failLyricWaiters() }
+        if case .sessionLost = event { failRadioWaiters(); failLyricWaiters(); failArtistWaiters() }
+        if case .failed(.playbackSessionLost) = event { failRadioWaiters(); failLyricWaiters(); failArtistWaiters() }
         continuation.yield(event)
     }
 
-    /// Ends the stream for its consumer and fails any radio or lyric request still
+    /// Ends the stream for its consumer and fails any metadata request still
     /// waiting. Idempotent, and independent of the engine: events yielded
     /// after it are dropped, not delivered.
     public func finish() {
         continuation.finish()
         failRadioWaiters()
         failLyricWaiters()
+        failArtistWaiters()
     }
 
     private func failRadioWaiters() {
@@ -233,6 +298,18 @@ public final class EventBridge: Sendable {
 
     private func failLyricWaiters() {
         let waiting = lyricWaiters.withLock { state in
+            state.finished = true
+            defer { state.waiting = [:] }
+            return Array(state.waiting.values)
+        }
+        for waiter in waiting {
+            waiter.watchdog.cancel()
+            waiter.continuation.resume(throwing: PlayerError.playbackSessionLost)
+        }
+    }
+
+    private func failArtistWaiters() {
+        let waiting = artistWaiters.withLock { state in
             state.finished = true
             defer { state.waiting = [:] }
             return Array(state.waiting.values)

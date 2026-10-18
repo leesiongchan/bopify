@@ -432,6 +432,29 @@ pub unsafe extern "C" fn bopify_request_lyrics(
     unsafe { with_engine(handle, |engine| engine.request_lyrics(track, request_id)) }
 }
 
+/// Queues the main artist's popular songs for a canonical track URI.
+///
+/// # Safety
+/// `handle` must be null or live, and `track_uri` must satisfy `str_from`'s contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn bopify_request_artist_top_tracks(
+    handle: *mut BopifyEngine,
+    track_uri: *const c_char,
+    request_id: u64,
+) -> i32 {
+    log::debug!("ffi: bopify_request_artist_top_tracks request_id={request_id}");
+    // SAFETY: the URI is borrowed only for this call, under the caller's contract.
+    let Some(track) = (unsafe { str_from(track_uri) }) else {
+        return BopifyError::InvalidArgument.code();
+    };
+    // SAFETY: forwards this function's own handle contract.
+    unsafe {
+        with_engine(handle, |engine| {
+            engine.request_artist_top_tracks(track, request_id)
+        })
+    }
+}
+
 /// Valid calls return `SessionLost`: librespot cannot swap credentials in place.
 ///
 /// # Safety

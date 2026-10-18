@@ -58,12 +58,14 @@ public struct PlaybackEngineConfiguration: Codable, Equatable, Sendable {
     public let deviceID: String
     public let startup: PlaybackStartupMode
     public let snapshot: PlaybackRecoverySnapshot?
-    public init(deviceID: String, startup: PlaybackStartupMode, snapshot: PlaybackRecoverySnapshot? = nil) {
+    public let initialVolume: Double?
+    public init(deviceID: String, startup: PlaybackStartupMode, snapshot: PlaybackRecoverySnapshot? = nil, initialVolume: Double? = nil) {
         self.deviceID = deviceID
         self.startup = startup
         self.snapshot = snapshot
+        self.initialVolume = initialVolume
     }
-    private enum CodingKeys: String, CodingKey { case deviceID = "deviceId", startup, snapshot }
+    private enum CodingKeys: String, CodingKey { case deviceID = "deviceId", startup, snapshot, initialVolume }
 }
 
 public enum PlaybackBootstrapOutcome: Hashable, Sendable {

@@ -215,7 +215,8 @@ public final class PlaybackRecoveryCoordinator {
                 token = try await tokenProvider(rejectedToken)
                 guard live(mine) else { return }
                 rejectedToken = nil
-                let options = PlaybackEngineConfiguration(deviceID: deviceID, startup: hasBeenReady ? .recovery : .coldLaunch, snapshot: hasBeenReady ? snapshot : nil)
+                let options = PlaybackEngineConfiguration(deviceID: deviceID, startup: hasBeenReady ? .recovery : .coldLaunch,
+                    snapshot: hasBeenReady ? snapshot : nil, initialVolume: player.preferredVolume)
                 let engine = try await makeEngine(token!, options)
                 guard live(mine), networkAvailable, !sleeping else { await engine.shutdown(); continue }
                 BopifyLog.playback.info("recovery engine created elapsed=\(self.now() - started, privacy: .public)")

@@ -5,6 +5,58 @@ import BopifyDomain
 
 @MainActor @Suite("Player volume")
 struct PlayerVolumeTests {
+    @Test(arguments: [0.0, 0.23, 1.0])
+    func confirmedVolumeSurvivesRelaunch(volume: Double) async throws {
+        let suite = "player-volume-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine, volumeDefaults: defaults)
+        model.start()
+        defer { model.stop() }
+        engine.emit(.volumeChanged(volume: volume))
+        await waitUntil { model.preferredVolume == volume }
+        let relaunched = PlayerModel(volumeDefaults: defaults)
+        #expect(relaunched.preferredVolume == volume)
+        #expect(relaunched.displayVolume == volume)
+    }
+
+    @Test func noSavedVolumeKeepsEngineDefault() throws {
+        let suite = "player-volume-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        #expect(PlayerModel(volumeDefaults: defaults).preferredVolume == nil)
+    }
+
+    @Test func failedVolumeCommandDoesNotReplaceTheSavedVolume() async throws {
+        let suite = "player-volume-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(0.65, forKey: "player.volume")
+        let engine = ControlledVolumeEngine()
+        let model = PlayerModel(engine: engine, volumeDefaults: defaults)
+        model.start()
+        defer { model.stop() }
+        engine.stub.emit(.playing(positionMs: 0))
+        await waitUntil { model.state.isActiveDevice }
+        model.setVolume(0.3)
+        model.endVolumeEditing()
+        await waitUntil { engine.stub.recordedCommands.count == 1 }
+        #expect(PlayerModel(volumeDefaults: defaults).preferredVolume == 0.65)
+        await engine.resolve(error: .networkUnavailable)
+        await waitUntil { model.commandNotice != nil }
+        #expect(PlayerModel(volumeDefaults: defaults).preferredVolume == 0.65)
+    }
+
+    @Test(arguments: [-0.1, 1.1, Double.nan, Double.infinity])
+    func invalidSavedVolumeIsIgnored(volume: Double) throws {
+        let suite = "player-volume-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(volume, forKey: "player.volume")
+        #expect(PlayerModel(volumeDefaults: defaults).preferredVolume == nil)
+    }
+
     @Test func rapidVolumeKeepsOnlyLatest() async {
         let engine = StubPlaybackEngine()
         let model = PlayerModel(engine: engine)
