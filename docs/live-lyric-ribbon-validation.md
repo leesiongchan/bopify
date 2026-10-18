@@ -2,6 +2,34 @@
 
 Validated October 18, 2026 on macOS with Xcode 27, arm64. The implementation follows local playback and is available from the status-item menu in Debug and Release. The original Debug evaluation remains recorded below; the Release follow-up supersedes its compilation restrictions. Manual limits remain listed explicitly.
 
+## UI/UX refinement
+
+The user selected a charcoal reading surface with native Liquid Glass controls. The [research notes](lyric-ribbon-research.md#october-18-refinement-for-the-released-ribbon) record the current Apple guidance and the design tradeoff. The refined view retains the vinyl mark, system typography and warm Reading accent, separates title and artist, keeps the close action outside header dragging, and makes Hold text/Back to live persistent. Native glass button styles share a `GlassEffectContainer`; the existing transparency/contrast fallback uses native bordered controls on an opaque surface.
+
+Long passages now scroll inside a viewport capped at 180 points at normal lyric scale, bounded by display space and scaled with lyric text size. The current range is marked in the attributed passage and positioned using native TextKit line geometry. Extra document space allows a short current cue to remain near its reading position even after a very long previous cue. Ordinary clock ticks preserve scroll and selection.
+
+The regressions reproduced excessive panel height and the hidden-current-cue behavior before the changes. Native screenshots then exposed `NSTextView` resizing away the extra document space after attachment. A hosted `NSHostingView`/`NSPanel` regression failed for that sequence and passed after the coordinator became the sole owner of document height. Existing measurement-cache, reading-state and native keyboard/window tests remain in place.
+
+Native captures inspected, all with original sample words:
+
+| Capture | Observation |
+| --- | --- |
+| [Before](mockups/lyric-ribbon-refinement-before.png) | Original offline preview with hidden controls and a single metadata line; this older fixture has no source credit. |
+| [Live](mockups/lyric-ribbon-refinement-live.png) | Clear current/previous hierarchy, title/artist, source credit and visible native actions on charcoal. |
+| [Reading](mockups/lyric-ribbon-refinement-reading.png) | Warm Reading marker and a readable Back to live action. |
+| [250-point Reading](mockups/lyric-ribbon-refinement-narrow.png) | Wrapped current cue, bounded metadata and credit, with both actions inside the panel. |
+| [Large text](mockups/lyric-ribbon-refinement-large.png) | Lyric scale 1.5 wraps and reserves space without cutting words or losing controls. |
+| [RTL](mockups/lyric-ribbon-refinement-rtl.png) | Native Arabic shaping, paragraph direction and wrapping. |
+| [Long previous cue](mockups/lyric-ribbon-refinement-long-previous.png) | Current cue remains below one line of context instead of disappearing below the viewport. |
+| [Opaque fallback](mockups/lyric-ribbon-refinement-opaque.png) | Opaque reading surface and bordered actions remain readable in narrow Reading mode. |
+| [Bright backdrop](mockups/lyric-ribbon-refinement-light.png) | Charcoal reading content and native controls remain legible over an owned white backdrop. |
+
+The capture harness instantiated the actual view/layout with fixed fixture state, width and lyric scale. Its opaque case selected the existing rendering branch locally; it did not change system accessibility settings. The temporary harness, launch hook, opaque override and geometry instrumentation were removed afterward. No real lyrics, credentials or audio were used. The user's VoiceOver skip remains unchanged.
+
+After removing the temporary code, the complete Debug suite passed **80 tests / 98 cases**, and Release passed **50 tests / 65 cases**, with no failures. Both app configurations built successfully with `CODE_SIGNING_ALLOWED=NO SWIFT_EMIT_LOC_STRINGS=NO`. Final review found no Critical, Important or actionable Minor issues. No playback engine, API or dependency changes were needed.
+
+A final pointer check used the normal offline preview and an owned TextEdit scratch document. The first attempt lacked a verified foreground app and is discarded. In the completed check, TextEdit was activated and its foreground identity and document name were asserted before each typing marker. Actual pointer clicks on Hold text, Back to live and the header close button left all four markers in the scratch document. The native checkbox reported held value 1 after Hold text. The owned document was closed without saving and the preview quit afterward.
+
 ## Release follow-up
 
 At the user's request, removed the development suffix from Show Lyrics, Hide Lyrics and Focus Lyrics and enabled the runtime, menu actions, native menu validation and teardown in Release. Standalone fixture launches and SwiftUI previews remain Debug-only. Existing window-frame preferences are retained.

@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import Testing
 
 @MainActor @Suite("Lyric ribbon layout")
@@ -81,6 +82,80 @@ struct LyricRibbonLayoutTests {
         #expect(manager.measurements == 4)
         #expect(storage.string == "New cue")
         #expect(view.frame.height == LyricRibbonLayout.textHeight(storage, width: 180))
+    }
+
+    @Test func longPassagesKeepACompactScrollableViewport() throws {
+        let layout = LyricRibbonLayout.measure(content: try content(String(repeating: "A little room for the rain. ", count: 100)),
+            width: 448, textScale: 1, availableHeight: 1000)
+        #expect(layout.textViewportHeight <= 180)
+        #expect(layout.panelSize.height < 350)
+    }
+
+    @Test func longPreviousCueCannotObscureTheCurrentLine() throws {
+        let container = NSTextContainer(size: .zero)
+        container.lineFragmentPadding = 0
+        let manager = NSLayoutManager()
+        manager.addTextContainer(container)
+        let storage = NSTextStorage()
+        storage.addLayoutManager(manager)
+        let view = NSTextView(frame: .zero, textContainer: container)
+        view.textContainerInset = .zero
+        view.isVerticallyResizable = true
+        let scroll = NSScrollView(frame: CGRect(x: 0, y: 0, width: 250, height: 120))
+        scroll.documentView = view
+        let coordinator = LyricPassageView.Coordinator()
+        let previous = String(repeating: "A quiet street with room to read.\n", count: 20)
+        let current = "The lamps return"
+        let text = LyricRibbonLayout.passage(previous: previous, current: current, scale: 1)
+        coordinator.updateText(view, text: text, width: 250, height: 120)
+        coordinator.updateScroll(scroll, resetRevision: 1)
+
+        let currentRange = (text.string as NSString).range(of: current)
+        let glyphs = manager.glyphRange(forCharacterRange: currentRange, actualCharacterRange: nil)
+        let currentRect = manager.boundingRect(forGlyphRange: glyphs, in: container)
+        #expect(scroll.documentVisibleRect.intersects(currentRect))
+        #expect(scroll.documentVisibleRect.minY > 0)
+        #expect(currentRect.minY - scroll.documentVisibleRect.minY < 40)
+
+        scroll.contentView.scroll(to: .zero)
+        view.setSelectedRange(NSRange(location: 0, length: 5))
+        coordinator.updateText(view, text: text, width: 250, height: 120)
+        coordinator.updateScroll(scroll, resetRevision: 1)
+        #expect(scroll.documentVisibleRect.minY == 0)
+        #expect(view.selectedRange() == NSRange(location: 0, length: 5))
+
+        coordinator.updateScroll(scroll, resetRevision: 2)
+        #expect(scroll.documentVisibleRect.intersects(currentRect))
+    }
+
+    @Test func hostedPassageRetainsCurrentCuePositionAfterNativeLayout() async throws {
+        let current = "The lamps return"
+        let text = LyricRibbonLayout.passage(previous: String(repeating: "A quiet street.\n", count: 24),
+            current: current, scale: 1)
+        let panel = NSPanel(contentRect: CGRect(x: 0, y: 0, width: 250, height: 120),
+            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.isReleasedWhenClosed = false
+        let host = NSHostingView(rootView: LyricPassageView(text: text, width: 250, height: 120, resetRevision: 1))
+        host.sizingOptions = []
+        panel.contentView = host
+        panel.orderFront(nil)
+        defer { panel.orderOut(nil); panel.close() }
+        host.layoutSubtreeIfNeeded()
+        // NSTextView can resize itself after SwiftUI attaches and lays out the scroll view.
+        try await Task.sleep(for: .milliseconds(50))
+        func passage(in view: NSView) -> NSScrollView? {
+            if let scroll = view as? NSScrollView, scroll.documentView is NSTextView { return scroll }
+            return view.subviews.lazy.compactMap { passage(in: $0) }.first
+        }
+        let scroll = try #require(passage(in: host))
+        let view = try #require(scroll.documentView as? NSTextView)
+        let manager = try #require(view.layoutManager)
+        let container = try #require(view.textContainer)
+        let range = (text.string as NSString).range(of: current)
+        let rect = manager.boundingRect(forGlyphRange: manager.glyphRange(forCharacterRange: range,
+            actualCharacterRange: nil), in: container)
+        #expect(scroll.documentVisibleRect.intersects(rect))
+        #expect(rect.minY - scroll.documentVisibleRect.minY < 40)
     }
 }
 
