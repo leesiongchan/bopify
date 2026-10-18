@@ -195,11 +195,12 @@ public final class LibrespotEngine: ManagedPlaybackEngine, @unchecked Sendable {
     }
 
     @concurrent
-    public func requestArtistTopTracks(for track: SpotifyURI) async throws -> ArtistTopTracks {
+    public func requestArtistTopTracks(for track: SpotifyURI, artistIndex: Int) async throws -> ArtistTopTracks {
+        guard let index = UInt32(exactly: artistIndex) else { throw ArtistTopTracksFailure.unavailable }
         let raw = track.rawValue
         return try await bridge.artistTopTracks(for: track) { id in
             try perform("requestArtistTopTracks") {
-                raw.withCString { bopify_request_artist_top_tracks(handle, $0, id) }
+                raw.withCString { bopify_request_artist_top_tracks(handle, $0, index, id) }
             }
         }
     }

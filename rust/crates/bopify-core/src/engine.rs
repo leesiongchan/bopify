@@ -266,17 +266,19 @@ impl Engine {
         Ok(())
     }
 
-    /// Queues the current track's main artist and their popular songs.
+    /// Queues a displayed track artist's popular songs.
     pub fn request_artist_top_tracks(
         &self,
         track_uri: &str,
+        artist_index: u32,
         request_id: u64,
     ) -> Result<(), BopifyError> {
         let track = crate::lyrics::parse_track(track_uri).ok_or(BopifyError::InvalidArgument)?;
         let source = crate::artist::SessionArtist(self.session.clone());
         let sink = self.sink.clone();
-        self.runtime
-            .spawn(async move { sink(crate::artist::resolve(&source, track, request_id).await) });
+        self.runtime.spawn(async move {
+            sink(crate::artist::resolve(&source, track, artist_index, request_id).await)
+        });
         Ok(())
     }
 }

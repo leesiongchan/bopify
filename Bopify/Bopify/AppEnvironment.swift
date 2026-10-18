@@ -178,14 +178,14 @@ final class AppEnvironment {
         await favorite.select(player?.state.currentTrack?.uri)
     }
 
-    func requestArtistTopTracks(for track: SpotifyURI) async throws -> ArtistTopTracks {
+    func requestArtistTopTracks(for track: SpotifyURI, artistIndex: Int) async throws -> ArtistTopTracks {
         guard !isPreparingForQuit, authState == .signedIn, let coordinator = recovery,
               coordinator.player.isEngineReady, let engine = coordinator.currentEngine else {
             throw ArtistTopTracksFailure.unavailable
         }
         let epoch = coordinator.player.engineEpoch
         do {
-            let result = try await engine.requestArtistTopTracks(for: track)
+            let result = try await engine.requestArtistTopTracks(for: track, artistIndex: artistIndex)
             guard coordinator.player.engineEpoch == epoch, coordinator.player.isEngineReady else {
                 throw ArtistTopTracksFailure.unavailable
             }
