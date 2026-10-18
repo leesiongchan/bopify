@@ -14,6 +14,7 @@ final class StatusPanel: NSPanel {
     var onSeek: ((Int64) -> Void)?
     var onPrevious: (() -> Void)?
     var onNext: (() -> Void)?
+    var onSearch: (() -> Void)?
     var onKeyChanged: ((Bool) -> Void)?
     var onPointerChanged: ((Bool) -> Void)?
     var onWindowDragChanged: ((Bool) -> Void)?
@@ -60,6 +61,16 @@ final class StatusPanel: NSPanel {
             if containsPlayerPoint?(point) == true { makeKey() }
         }
         super.sendEvent(event)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.keyCode == kVK_ANSI_F,
+           event.modifierFlags.intersection([.command, .option, .control, .shift]) == .command,
+           let onSearch {
+            if !event.isARepeat { onSearch() }
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
     }
 
     override func keyDown(with event: NSEvent) {

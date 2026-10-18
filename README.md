@@ -11,20 +11,25 @@ Download `Bopify-<version>.dmg` from [GitHub Releases](https://github.com/leesio
 drag Bopify to Applications, then open it and sign in. Right-click the menu bar
 icon for settings or to quit.
 
+Use the magnifying glass or **Command-F** to search Spotify songs. Choose a
+result or use the arrow keys and Return to play it; Escape closes search.
+The **Library** tab shows your saved playlist and album covers. Choose
+**Playlists** or **Albums**, then click a cover to play that collection.
+
 Builds are ad-hoc signed and not notarized. If macOS blocks the app and you trust
 the download, use **System Settings → Privacy & Security → Open Anyway** after
 trying to open it. See [Apple’s instructions](https://support.apple.com/en-us/102445).
 
 ## Library setup
 
-Playback needs no developer setup. Favorites, Liked Songs and listening history
-require your own Spotify Web API app:
+Playback needs no developer setup. Favorites, Liked Songs, listening history,
+Library and search require your own Spotify Web API app:
 
 1. Create an app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
 2. Select **Web API** and add the redirect URI `http://127.0.0.1:8898/callback`.
 3. Save, then add your Spotify account under **User Management** ([Spotify’s allowlist instructions](https://developer.spotify.com/documentation/web-api/concepts/quota-modes#adding-a-user-to-your-apps-allowlist)).
 4. In Bopify, right-click the menu bar icon → **Library Access…**. Paste the
-   **Client ID**, save, then click **Enable** on a library feature to authorize it.
+   **Client ID**, save, then click **Enable** on a library feature or search to authorize it.
 
 If Spotify reports `INVALID_CLIENT`, check the Client ID and redirect URI. Bopify
 does not need your Client secret. Sign-in credentials are stored in macOS Keychain.

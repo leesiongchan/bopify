@@ -34,6 +34,32 @@ struct LibraryAuthorizationTests {
         }
     }
 
+    @Test(arguments: [Set<String>(), ["playlist-read-private", "playlist-read-collaborative"]])
+    func catalogAndCollectionConsentCanOpenWithoutPlaybackScopes(_ scopes: Set<String>) async throws {
+        let opened = AsyncStream<URL>.makeStream()
+        let service = SpotifyAuthService(clientID: "test", store: InMemoryTokenStore(),
+            openURL: { opened.continuation.yield($0) })
+        let consent = Task {
+            defer { opened.continuation.finish() }
+            return try await service.authorizeLibraryScopes(scopes)
+        }
+        let timeout = Task {
+            try? await Task.sleep(for: .seconds(2))
+            opened.continuation.finish()
+            await service.cancelPendingWork()
+        }
+        defer { timeout.cancel() }
+        var iterator = opened.stream.makeAsyncIterator()
+        let url = await iterator.next()
+        consent.cancel()
+        _ = try? await consent.value
+        let query = url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems }
+        let requested = Set((query?.first { $0.name == "scope" }?.value ?? "").split(separator: " ").map(String.init))
+        #expect(url != nil)
+        #expect(requested == scopes)
+        #expect(!requested.contains("streaming"))
+    }
+
     @Test func normalizesPastedInput() {
         #expect(LibraryAuthorization.normalized("  25BBD3BACCA4412B80F17B892072AF71\n") == id)
     }

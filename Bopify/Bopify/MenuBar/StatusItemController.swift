@@ -39,6 +39,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         panel?.onSeek = { [weak self] in self?.environment.player?.seek(by: $0) }
         panel?.onPrevious = { [weak self] in self?.environment.player?.previous() }
         panel?.onNext = { [weak self] in self?.environment.player?.next() }
+        panel?.onSearch = { [weak self] in self?.environment.showSearch() }
         panel?.onDismissPopover = { [weak self] in self?.environment.presentation.dismissPopover() ?? false }
         panel?.onDismissQueue = { [weak self] in self?.environment.presentation.dismissQueue() ?? false }
         panel?.onKeyChanged = { [weak self] in self?.environment.presentation.sendAttention(.keyboardFocus($0)) }

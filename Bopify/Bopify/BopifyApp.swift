@@ -19,10 +19,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var lyricShortcutTask: Task<Void, Never>?
     #if DEBUG
     private var lyricPreview: LyricRibbonPreviewSession?
+    private var browserPreview: MusicBrowserPreviewSession?
     #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--music-browser-preview") {
+            let preview = MusicBrowserPreviewSession()
+            browserPreview = preview
+            preview.show()
+            return
+        }
         if ProcessInfo.processInfo.arguments.contains("--lyric-ribbon-preview") {
             let preview = LyricRibbonPreviewSession()
             lyricPreview = preview

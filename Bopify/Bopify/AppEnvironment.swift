@@ -21,6 +21,9 @@ final class AppEnvironment {
     let likedSongs: LikedSongsModel
     let recents: RecentsModel
     let explore: ExploreModel
+    let search: SearchModel
+    let collections: SavedCollectionsModel
+    let searchWindow = SearchWindowController()
     @ObservationIgnored private let stations: StationRoute
     private(set) var isEnablingLibrary = false
     private(set) var libraryAuthorizationNotice: String?
@@ -45,7 +48,7 @@ final class AppEnvironment {
     let librarySetupWindow = LibrarySetupWindowController()
     private(set) var librarySetupError: PlayerError?
     // The scopes an Enable action asked for before any client ID existed; consent resumes after setup.
-    @ObservationIgnored private var pendingLibraryScopes: Set<String> = []
+    @ObservationIgnored private var pendingLibraryScopes: Set<String>?
     private(set) var recovery: PlaybackRecoveryCoordinator?
     var connectionStatus: PlaybackConnectionStatus { recovery?.status ?? .ready }
     @ObservationIgnored private var connectionMonitor: PlaybackConnectionMonitor?
@@ -124,6 +127,8 @@ final class AppEnvironment {
         }
         favorite = FavoriteModel(service: library)
         likedSongs = LikedSongsModel(service: library)
+        search = SearchModel(service: library)
+        collections = SavedCollectionsModel(service: library)
         let stations = StationRoute()
         self.stations = stations
         recents = RecentsModel(service: library)
@@ -135,9 +140,12 @@ final class AppEnvironment {
     init(previewPlayer: PlayerModel, favoriteService: any LibraryService,
          savedTracksService: (any SavedTracksService)? = nil,
          historyService: (any ListeningHistoryService)? = nil,
+         searchService: (any TrackSearchService)? = nil,
+         collectionsService: (any LibraryCollectionsService)? = nil,
          authorizeLibraryScopes: (@Sendable (Set<String>) async throws -> Void)? = nil,
          playbackAuth: SpotifyAuthService? = nil,
          libraryAuth: SpotifyAuthService? = nil,
+         previewLibraryClientID: String? = String(repeating: "0", count: 32),
          logoutIntent: LogoutIntentStore? = nil,
          artworkStore: ArtworkStore = ArtworkStore(),
          radioEngine: (any PlaybackEngine)? = nil,
@@ -150,15 +158,17 @@ final class AppEnvironment {
         let previewSuite = FileManager.default.temporaryDirectory
             .appendingPathComponent("com.leesiongchan.bopify.preview.\(UUID().uuidString)").path
         let previewDefaults = UserDefaults(suiteName: previewSuite)!
-        previewDefaults.set(String(repeating: "0", count: 32), forKey: LibraryAuthorization.defaultsKey)
+        previewDefaults.set(previewLibraryClientID, forKey: LibraryAuthorization.defaultsKey)
         let previewLibraryAuth = libraryAuth ?? SpotifyAuthService(clientID: String(repeating: "0", count: 32),
             store: KeychainTokenStore(service: "com.leesiongchan.bopify.preview.library.\(UUID().uuidString)"))
         self.libraryAuth = LibraryAuthorization(suiteName: previewSuite) { _ in previewLibraryAuth }
         previewDefaults.removePersistentDomain(forName: previewSuite)
-        libraryClientID = String(repeating: "0", count: 32)
+        libraryClientID = previewLibraryClientID
         self.artworkStore = artworkStore
         favorite = FavoriteModel(service: favoriteService)
         likedSongs = LikedSongsModel(service: savedTracksService ?? UnavailableSavedTracks())
+        search = SearchModel(service: searchService ?? UnavailableMusicBrowser())
+        collections = SavedCollectionsModel(service: collectionsService ?? UnavailableMusicBrowser())
         let stations = StationRoute()
         stations.engine = radioEngine
         self.stations = stations
@@ -210,10 +220,29 @@ final class AppEnvironment {
         await enableLibrary(scopes: ["user-read-recently-played", "user-top-read"])
     }
 
+    func showSearch() {
+        guard !isPreparingForQuit, authState == .signedIn else { return }
+        searchWindow.show(environment: self)
+        BopifyLog.library.debug("catalog search opened")
+    }
+
+    func playSearchResult(_ track: Track) {
+        guard !isPreparingForQuit, authState == .signedIn, let player, player.isEngineReady,
+              let request = search.playRequest(for: track) else { return }
+        player.load(request)
+        BopifyLog.library.debug("catalog search result played")
+    }
+
+    func enableSearch() async { await enableLibrary(scopes: []) }
+
+    func enableCollections() async {
+        await enableLibrary(scopes: ["user-library-read", "playlist-read-private", "playlist-read-collaborative"])
+    }
+
     private func enableLibrary(scopes: Set<String>) async {
         guard authState == .signedIn, !isEnablingLibrary else { return }
         guard libraryClientID != nil else {
-            pendingLibraryScopes.formUnion(scopes)
+            pendingLibraryScopes = (pendingLibraryScopes ?? []).union(scopes)
             librarySetupWindow.show(environment: self)
             BopifyLog.library.info("library setup requested")
             return
@@ -234,6 +263,10 @@ final class AppEnvironment {
                 await recents.refresh()
                 guard generation == libraryGeneration, !Task.isCancelled else { return }
                 await explore.refresh()
+                guard generation == libraryGeneration, !Task.isCancelled else { return }
+                await collections.refresh()
+                guard generation == libraryGeneration, !Task.isCancelled else { return }
+                await search.search()
             } catch is CancellationError {
                 BopifyLog.library.info("library authorization cancelled")
             } catch {
@@ -286,9 +319,9 @@ final class AppEnvironment {
         librarySetupWindow.close()
         if let previous, id != previous { clearLibrary() }
         let scopes = pendingLibraryScopes
-        pendingLibraryScopes = []
+        pendingLibraryScopes = nil
         // Unstructured so Save returns once the ID is stored rather than when consent ends.
-        if !scopes.isEmpty { Task { await enableLibrary(scopes: scopes) } }
+        if let scopes { Task { await enableLibrary(scopes: scopes) } }
     }
 
     private func clearLibrary() {
@@ -301,6 +334,9 @@ final class AppEnvironment {
         likedSongs.clear()
         recents.clear()
         explore.clear()
+        collections.clear()
+        searchWindow.close()
+        search.clear()
     }
 
     private func serialize(_ operation: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
@@ -402,6 +438,8 @@ final class AppEnvironment {
     func signOut() async {
         guard !isRemovingCredentials else { return }
         stopLiveLyrics()
+        searchWindow.close()
+        search.clear()
         isRemovingCredentials = true
         playbackAuthorization?.cancel()
         libraryAuthorization?.cancel()
@@ -410,7 +448,7 @@ final class AppEnvironment {
         connectionMonitor?.stop()
         recovery?.invalidate()
         authState = .signedOut
-        pendingLibraryScopes = []
+        pendingLibraryScopes = nil
         do { try logoutIntent?.begin([.playback, .library]) }
         catch { BopifyLog.auth.error("logout intent could not be persisted; retrying intent for both stores") }
         let clearingAuth = Task { [auth] in
@@ -451,6 +489,8 @@ final class AppEnvironment {
         isPreparingForQuit = true
         BopifyLog.playback.info("prepare for quit starting")
         stopLiveLyrics()
+        searchWindow.close()
+        search.clear()
         playbackAuthorization?.cancel()
         libraryAuthorization?.cancel()
         sessionGeneration += 1
@@ -534,5 +574,10 @@ private struct UnavailableHistory: ListeningHistoryService {
 
 private struct UnavailableSavedTracks: SavedTracksService {
     func savedTracks(offset: Int, limit: Int) async throws -> SavedTracksPage { throw LibraryError.unavailable }
+}
+
+private struct UnavailableMusicBrowser: TrackSearchService, LibraryCollectionsService {
+    func searchTracks(query: String, offset: Int, limit: Int) async throws -> TrackSearchPage { throw LibraryError.unavailable }
+    func savedCollections(_ kind: LibraryCollectionKind, offset: Int, limit: Int) async throws -> LibraryCollectionsPage { throw LibraryError.unavailable }
 }
 #endif

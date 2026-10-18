@@ -2,7 +2,7 @@ import Foundation
 import os
 import BopifyDomain
 
-public struct SpotifyLibraryClient: LibraryService, SavedTracksService, ListeningHistoryService {
+public struct SpotifyLibraryClient: LibraryService, SavedTracksService, ListeningHistoryService, TrackSearchService, LibraryCollectionsService {
     private let session: URLSession
     private let tokenProvider: @Sendable (Set<String>) async throws -> String
     private let redirects = LibraryRedirectPolicy()
@@ -33,7 +33,7 @@ public struct SpotifyLibraryClient: LibraryService, SavedTracksService, Listenin
         guard offset >= 0, (1...50).contains(limit) else { throw LibraryError.invalidResponse }
         let data = try await request(method: "GET", path: "/v1/me/tracks", query: [
             URLQueryItem(name: "offset", value: String(offset)), URLQueryItem(name: "limit", value: String(limit))
-        ], scope: "user-library-read")
+        ], scopes: ["user-library-read"])
         guard let page = try? JSONDecoder().decode(SavedPage.self, from: data),
               page.offset == offset, page.limit == limit, page.total >= 0,
               page.items.count <= limit else { throw LibraryError.invalidResponse }
@@ -46,7 +46,7 @@ public struct SpotifyLibraryClient: LibraryService, SavedTracksService, Listenin
 
     public func recentlyPlayed() async throws -> [RecentPlay] {
         let data = try await request(method: "GET", path: "/v1/me/player/recently-played",
-                                     query: [URLQueryItem(name: "limit", value: "50")], scope: "user-read-recently-played")
+                                     query: [URLQueryItem(name: "limit", value: "50")], scopes: ["user-read-recently-played"])
         guard let page = try? JSONDecoder().decode(RecentPage.self, from: data) else { throw LibraryError.invalidResponse }
         return page.items.compactMap { item in
             item.track?.domain.map { RecentPlay(track: $0, contextURI: item.loadableContext) }
@@ -56,7 +56,7 @@ public struct SpotifyLibraryClient: LibraryService, SavedTracksService, Listenin
     public func topItems(_ kind: TopItemKind) async throws -> [StationSeed] {
         let data = try await request(method: "GET", path: "/v1/me/top/\(kind.rawValue)", query: [
             URLQueryItem(name: "time_range", value: "medium_term"), URLQueryItem(name: "limit", value: "5")
-        ], scope: "user-top-read")
+        ], scopes: ["user-top-read"])
         switch kind {
         case .tracks:
             guard let page = try? JSONDecoder().decode(TopPage<SavedTrack>.self, from: data) else { throw LibraryError.invalidResponse }
@@ -67,18 +67,50 @@ public struct SpotifyLibraryClient: LibraryService, SavedTracksService, Listenin
         }
     }
 
+    public func searchTracks(query: String, offset: Int, limit: Int) async throws -> TrackSearchPage {
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty, (0...1000).contains(offset), (1...10).contains(limit) else { throw LibraryError.invalidResponse }
+        let data = try await request(method: "GET", path: "/v1/search", query: [
+            URLQueryItem(name: "q", value: query), URLQueryItem(name: "type", value: "track"),
+            URLQueryItem(name: "offset", value: String(offset)), URLQueryItem(name: "limit", value: String(limit))
+        ], scopes: [])
+        guard let response = try? JSONDecoder().decode(SearchResponse.self, from: data) else { throw LibraryError.invalidResponse }
+        let next = try response.tracks.nextOffset(offset: offset, limit: limit, maximum: 1000)
+        return TrackSearchPage(tracks: response.tracks.items.compactMap { $0.value?.domain }, nextOffset: next)
+    }
+
+    public func savedCollections(_ kind: LibraryCollectionKind, offset: Int, limit: Int) async throws -> LibraryCollectionsPage {
+        guard offset >= 0, (1...50).contains(limit) else { throw LibraryError.invalidResponse }
+        let scopes: Set<String> = kind == .albums ? ["user-library-read"] : ["playlist-read-private", "playlist-read-collaborative"]
+        let data = try await request(method: "GET", path: "/v1/me/\(kind.rawValue)", query: [
+            URLQueryItem(name: "offset", value: String(offset)), URLQueryItem(name: "limit", value: String(limit))
+        ], scopes: scopes)
+        do {
+            switch kind {
+            case .albums:
+                let page = try JSONDecoder().decode(APIPage<SavedAlbum>.self, from: data)
+                return LibraryCollectionsPage(items: page.items.compactMap { $0.value?.album.domain(kind) },
+                    nextOffset: try page.nextOffset(offset: offset, limit: limit))
+            case .playlists:
+                let page = try JSONDecoder().decode(APIPage<CollectionEntity>.self, from: data)
+                return LibraryCollectionsPage(items: page.items.compactMap { $0.value?.domain(kind) },
+                    nextOffset: try page.nextOffset(offset: offset, limit: limit))
+            }
+        } catch { throw LibraryError.invalidResponse }
+    }
+
     private func request(method: String, uri: SpotifyURI, contains: Bool = false) async throws -> Data {
         guard uri.kind == .track, uri.id.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) }) else {
             throw LibraryError.unavailable
         }
         return try await request(method: method, path: "/v1/me/library" + (contains ? "/contains" : ""),
                                  query: [URLQueryItem(name: "uris", value: uri.rawValue)],
-                                 scope: contains ? "user-library-read" : "user-library-modify")
+                                 scopes: [contains ? "user-library-read" : "user-library-modify"])
     }
 
-    private func request(method: String, path: String, query: [URLQueryItem], scope: String) async throws -> Data {
+    private func request(method: String, path: String, query: [URLQueryItem], scopes: Set<String>) async throws -> Data {
         let token: String
-        do { token = try await tokenProvider([scope]) }
+        do { token = try await tokenProvider(scopes) }
         catch let error as LibraryError { throw error }
         catch is CancellationError { throw CancellationError() }
         catch PlayerError.authExpired { throw LibraryError.authorizationRequired }
@@ -228,5 +260,44 @@ private struct TopArtist: Decodable {
     var seed: StationSeed? {
         guard let uri = SpotifyURI(uri), uri.kind == .artist, !name.isEmpty else { return nil }
         return StationSeed(uri: uri, name: name)
+    }
+}
+
+private struct SearchResponse: Decodable { let tracks: APIPage<SavedTrack> }
+private struct SavedAlbum: Decodable { let album: CollectionEntity }
+
+private struct APIPage<Item: Decodable>: Decodable {
+    let items: [Lenient<Item>]
+    let offset: Int
+    let limit: Int
+    let total: Int
+    let next: String?
+
+    func nextOffset(offset: Int, limit: Int, maximum: Int = .max) throws -> Int? {
+        guard self.offset == offset, self.limit == limit, total >= 0, items.count <= limit else { throw LibraryError.invalidResponse }
+        let (nextOffset, overflow) = offset.addingReportingOverflow(items.count)
+        guard !overflow else { throw LibraryError.invalidResponse }
+        return next != nil && !items.isEmpty && nextOffset < total && nextOffset <= maximum ? nextOffset : nil
+    }
+}
+
+private struct CollectionEntity: Decodable {
+    struct Owner: Decodable { let display_name: String? }
+    let uri: String
+    let name: String
+    let artists: [SavedTrack.Artist]?
+    let owner: Owner?
+    let images: [SavedTrack.Image]?
+
+    func domain(_ kind: LibraryCollectionKind) -> LibraryCollection? {
+        guard let uri = SpotifyURI(uri), uri.kind == (kind == .albums ? .album : .playlist),
+              !name.isEmpty, uri.id.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) }) else { return nil }
+        let artwork = images?.compactMap { image -> Artwork? in
+            guard let url = URL(string: image.url), url.scheme == "https", url.host != nil else { return nil }
+            return Artwork(url: url)
+        }.first
+        return LibraryCollection(uri: uri, title: name,
+            subtitle: kind == .albums ? (artists ?? []).map(\.name).joined(separator: ", ") : owner?.display_name ?? "",
+            artwork: artwork)
     }
 }

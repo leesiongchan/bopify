@@ -5,13 +5,14 @@ import BopifyLibrary
 import BopifyPlayback
 
 enum LibraryTab: String, CaseIterable, Identifiable {
-    case recents, explore, liked
+    case recents, explore, liked, library
     var id: Self { self }
     var title: LocalizedStringKey {
         switch self {
         case .recents: "library.tab.recents"
         case .explore: "library.tab.explore"
         case .liked: "library.tab.liked"
+        case .library: "library.tab.library"
         }
     }
 }
@@ -82,6 +83,25 @@ struct LibraryShelf: View {
                           onPlay: { onPlay(environment.likedSongs.playRequest(for: $0)) },
                           onEnable: { await environment.enableLikedSongs() })
                 .id(LibraryTab.liked)
+        case .library:
+            CoverFlowView(model: environment.collections, copy: .collections, artworkStore: artworkStore,
+                          onPlay: { onPlay(environment.collections.playRequest(for: $0)) },
+                          onEnable: { await environment.enableCollections() }, playsOnClick: true) {
+                Menu {
+                    Picker("collections.kind", selection: Binding(get: { environment.collections.kind }, set: { kind in
+                        Task { await environment.collections.selectKind(kind) }
+                    })) {
+                        Text("collections.playlists").tag(LibraryCollectionKind.playlists)
+                        Text("collections.albums").tag(LibraryCollectionKind.albums)
+                    }
+                } label: {
+                    Text(environment.collections.kind == .playlists ? "collections.playlists" : "collections.albums")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .menuStyle(.borderlessButton).fixedSize()
+                .accessibilityLabel(Text("collections.kind"))
+            }
+            .id(environment.collections.kind)
         }
     }
 }
@@ -98,7 +118,7 @@ private struct LibraryTabBar: View {
                     Text(item.title)
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(item == tab ? .primary : .secondary)
-                        .padding(.horizontal, 10)
+                        .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background {
                             if item == tab {

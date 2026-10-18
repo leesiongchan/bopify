@@ -16,6 +16,7 @@ struct CoverFlowCopy {
     static var liked: Self { .init(permission: "library.permission", enable: "library.enable", empty: "library.empty", unavailable: "library.unavailable", loading: "library.loading") }
     static var recents: Self { .init(permission: "history.permission", enable: "history.enable", empty: "recents.empty", unavailable: "recents.unavailable", loading: "recents.loading") }
     static var explore: Self { .init(permission: "history.permission", enable: "history.enable", empty: "explore.empty", unavailable: "explore.unavailable", loading: "explore.loading") }
+    static var collections: Self { .init(permission: "collections.permission", enable: "collections.enable", empty: "collections.empty", unavailable: "collections.unavailable", loading: "collections.loading") }
 }
 
 /// Counts this view in `source`'s reveals only once its reveal has run, so a task cancelled before it starts
@@ -40,9 +41,9 @@ struct RevealWhileShown<Source: CoverFlowSource>: ViewModifier {
 }
 
 extension CoverFlowView where Accessory == EmptyView {
-    init(model: Source, copy: CoverFlowCopy, artworkStore: ArtworkStore, onPlay: @escaping (Track) -> Void,
-         onEnable: @escaping @MainActor () async -> Void) {
-        self.init(model: model, copy: copy, artworkStore: artworkStore, onPlay: onPlay, onEnable: onEnable) { EmptyView() }
+    init(model: Source, copy: CoverFlowCopy, artworkStore: ArtworkStore, onPlay: @escaping (Source.Item) -> Void,
+         onEnable: @escaping @MainActor () async -> Void, playsOnClick: Bool = false) {
+        self.init(model: model, copy: copy, artworkStore: artworkStore, onPlay: onPlay, onEnable: onEnable, playsOnClick: playsOnClick) { EmptyView() }
     }
 }
 
@@ -50,8 +51,9 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
     let model: Source
     let copy: CoverFlowCopy
     let artworkStore: ArtworkStore
-    let onPlay: (Track) -> Void
+    let onPlay: (Source.Item) -> Void
     let onEnable: @MainActor () async -> Void
+    var playsOnClick = false
     /// Follows the artist line, or sits under an empty shelf's message, such as Explore's station menu.
     @ViewBuilder let accessory: () -> Accessory
     @Environment(AppEnvironment.self) private var environment: AppEnvironment?
@@ -62,13 +64,13 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
     @State private var gestureOrigin: Double?
     @State private var scrollTravel = 0.0
     @State private var velocity = CoverFlowVelocity()
-    private var selectedIndex: Int { model.tracks.firstIndex { $0.uri == model.selectedURI } ?? 0 }
-    private var selectedTrack: Track? { model.tracks.indices.contains(selectedIndex) ? model.tracks[selectedIndex] : nil }
+    private var selectedIndex: Int { model.items.firstIndex { $0.uri == model.selectedURI } ?? 0 }
+    private var selectedItem: Source.Item? { model.items.indices.contains(selectedIndex) ? model.items[selectedIndex] : nil }
 
     var body: some View {
         GeometryReader { available in
         VStack(spacing: 3) {
-            if model.tracks.isEmpty {
+            if model.items.isEmpty {
                 VStack(spacing: 8) { emptyState; accessory() }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 GeometryReader { geometry in
@@ -77,7 +79,7 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
                     let radius = max(1, Int(reach - 0.5))
                     ZStack {
                         ForEach(visibleIndices(reach: reach), id: \.self) { index in
-                            let track = model.tracks[index]
+                            let track = model.items[index]
                             let distance = Double(index) - spring.position
                             let placement = CoverFlowMotion.transform(distance: distance, reduceMotion: reduceMotion, reach: reach)
                             Button { activate(index) } label: { cover(for: track) }
@@ -108,7 +110,7 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
                         onScroll: scroll, onFrame: { dt in
                             spring.step(dt: dt, reduceMotion: reduceMotion)
                             if spring.isSettled { isAnimating = false }
-                        }, onNavigate: { navigate(by: $0) }, onPlay: { if let selectedTrack { onPlay(selectedTrack) } })
+                        }, onNavigate: { navigate(by: $0) }, onPlay: { if let selectedItem { onPlay(selectedItem) } })
                         .frame(width: min(geometry.size.width, Double(radius * 2) * CoverFlowMotion.spacing + 76))
                         .accessibilityHidden(true)
                     }
@@ -116,15 +118,15 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
                 .frame(height: max(44, min(88, available.size.height - 31)))
                 .scaleEffect(min(1, max(0.6, (available.size.height - 31) / 88)))
                 .overlay(alignment: .topTrailing) { status }
-                if let selectedTrack {
+                if let selectedItem {
                     VStack(spacing: 1) {
-                        Text(selectedTrack.title).font(.system(size: 11, weight: .medium)).lineLimit(1)
+                        Text(selectedItem.title).font(.system(size: 11, weight: .medium)).lineLimit(1)
                         HStack(spacing: 4) {
-                            Text(selectedTrack.artists.map(\.name).joined(separator: ", "))
+                            Text(selectedItem.subtitle)
                                 .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
                             accessory()
                         }
-                    }.help(label(for: selectedTrack))
+                    }.help(label(for: selectedItem))
                 }
             }
         }
@@ -136,27 +138,28 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
             if let uri = model.selectedURI { await model.loadMoreIfNeeded(near: uri) }
         }
         .onAppear { jump(to: selectedIndex) }
-        .onChange(of: model.tracks.isEmpty) { _, empty in if !empty { jump(to: selectedIndex) } }
+        .onChange(of: model.items.isEmpty) { _, empty in if !empty { jump(to: selectedIndex) } }
         // Selection changed elsewhere (list refresh, restored selection): follow it.
         .onChange(of: selectedIndex) { _, index in
             guard gestureOrigin == nil, index != Int(spring.target.rounded()) else { return }
-            if model.tracks.count <= 1 { jump(to: index) } else { settle(on: index) }
+            if model.items.count <= 1 { jump(to: index) } else { settle(on: index) }
         }
         }
     }
 
     func visibleIndices(reach: Double) -> [Int] {
-        guard !model.tracks.isEmpty else { return [] }
-        let center = min(model.tracks.count - 1, max(0, Int(spring.position.rounded())))
+        guard !model.items.isEmpty else { return [] }
+        let center = min(model.items.count - 1, max(0, Int(spring.position.rounded())))
         let radius = Int(reach.rounded(.up))
-        return Array(max(0, center - radius)...min(model.tracks.count - 1, center + radius))
+        return Array(max(0, center - radius)...min(model.items.count - 1, center + radius))
     }
-    private func label(for track: Track) -> String {
-        ([track.title] + track.artists.map(\.name)).joined(separator: " · ")
+    private func label(for track: Source.Item) -> String {
+        [track.title, track.subtitle].filter { !$0.isEmpty }.joined(separator: " · ")
     }
     private func activate(_ index: Int) {
-        guard model.tracks.indices.contains(index) else { return }
-        if index == selectedIndex && !isAnimating { onPlay(model.tracks[index]) }
+        guard model.items.indices.contains(index) else { return }
+        if playsOnClick { settle(on: index); onPlay(model.items[index]); return }
+        if index == selectedIndex && !isAnimating { onPlay(model.items[index]) }
         else { settle(on: index) }
     }
     private func navigate(by delta: Int) {
@@ -169,12 +172,12 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
     }
     /// Springs to a cover, keeping the current velocity so a new target redirects motion instead of restarting it.
     private func settle(on index: Int, velocity: Double? = nil) {
-        guard !model.tracks.isEmpty else { return }
-        let index = min(model.tracks.count - 1, max(0, index))
+        guard !model.items.isEmpty else { return }
+        let index = min(model.items.count - 1, max(0, index))
         spring.target = Double(index)
         if let velocity { spring.velocity = reduceMotion ? 0 : velocity }
         isAnimating = !spring.isSettled
-        if model.tracks[index].uri != model.selectedURI { model.select(model.tracks[index].uri) }
+        if model.items[index].uri != model.selectedURI { model.select(model.items[index].uri) }
     }
     /// Stops the covers where they are; returns whether they were moving so a catching tap doesn't also select.
     private func catchMotion() -> Bool {
@@ -190,30 +193,30 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
         velocity.reset()
     }
     private func move(to raw: Double, at time: TimeInterval) {
-        let position = CoverFlowMotion.rubberBanded(raw, count: model.tracks.count)
+        let position = CoverFlowMotion.rubberBanded(raw, count: model.items.count)
         spring = CoverFlowSpring(position: position, velocity: 0, target: position)
         velocity.add(position: position, at: time)
-        let index = min(model.tracks.count - 1, max(0, Int(position.rounded())))
-        if model.tracks.indices.contains(index), model.tracks[index].uri != model.selectedURI { model.select(model.tracks[index].uri) }
+        let index = min(model.items.count - 1, max(0, Int(position.rounded())))
+        if model.items.indices.contains(index), model.items[index].uri != model.selectedURI { model.select(model.items[index].uri) }
     }
     private func release(at time: TimeInterval) {
         velocity.add(position: spring.position, at: time)
         let fling = velocity.velocity
         gestureOrigin = nil
         BopifyLog.library.debug("cover flow released velocity=\(fling, privacy: .public)")
-        settle(on: CoverFlowMotion.restingIndex(position: spring.position, velocity: fling, count: model.tracks.count), velocity: fling)
+        settle(on: CoverFlowMotion.restingIndex(position: spring.position, velocity: fling, count: model.items.count), velocity: fling)
     }
     private func scroll(_ input: CoverFlowScroll) {
-        guard !model.tracks.isEmpty else { return }
+        guard !model.items.isEmpty else { return }
         switch input {
         case let .wheel(delta):
-            settle(on: CoverFlowMotion.wheelTarget(from: Int(spring.target.rounded()), delta: delta, count: model.tracks.count))
+            settle(on: CoverFlowMotion.wheelTarget(from: Int(spring.target.rounded()), delta: delta, count: model.items.count))
         case let .glide(delta):
             guard gestureOrigin == nil else { return }
-            spring.target = CoverFlowMotion.glideTarget(from: spring.target, delta: delta, count: model.tracks.count)
+            spring.target = CoverFlowMotion.glideTarget(from: spring.target, delta: delta, count: model.items.count)
             isAnimating = !spring.isSettled
             let index = Int(spring.target.rounded())
-            if model.tracks[index].uri != model.selectedURI { model.select(model.tracks[index].uri) }
+            if model.items[index].uri != model.selectedURI { model.select(model.items[index].uri) }
         case .glideEnded:
             guard gestureOrigin == nil else { return }
             settle(on: Int(spring.target.rounded()))
@@ -229,7 +232,7 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
             release(at: time)
         }
     }
-    private func cover(for track: Track) -> some View {
+    private func cover(for track: Source.Item) -> some View {
         let face = Group {
             if let url = track.artwork?.url, let image = artworkStore.image(for: url) {
                 Image(nsImage: image).resizable().scaledToFill()
