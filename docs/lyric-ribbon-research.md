@@ -1,8 +1,36 @@
 # Lyric ribbon research
 
-Research date: October 17, 2026. Status: the clean retro refinement of direction A, [native design](superpowers/specs/2026-10-17-lyric-ribbon-design.md) and [implementation plan](superpowers/plans/2026-10-17-lyric-ribbon.md) are approved. The Debug study is implemented; see [native validation](lyric-ribbon-native-validation.md).
+Research dates: October 17–18, 2026. The live native ribbon is implemented; see [live validation](live-lyric-ribbon-validation.md). The latest art-direction comparison below is a proposal awaiting visual selection. Older exploration and the original [native design](superpowers/specs/2026-10-17-lyric-ribbon-design.md) remain as historical context.
 
 The lyric ribbon would let a listener glance at the words and reread a passage while music continues. The value to test is whether it fits working on a Mac without taking keyboard focus or demanding attention. The primary use remains a choice between persistent background display, a brief shortcut peek and deliberate close reading.
+
+## October 18 art-direction reassessment
+
+The user found the released refinement boring. The previous research established a useful platform foundation, but it did not establish a compelling visual identity. Material and typography guidelines cannot identify a universally “best” lyric ribbon. Aesthetic preference and glance reading still require evaluating the actual composition.
+
+Local inspection found a mismatch: Bopify's main player has an asymmetric record-and-sleeve silhouette, artwork-centered vinyl, grooves and restrained colour. The ribbon reduces that identity to a small record mark inside a conventional rounded card. Metadata, lyric context, current lyric, provider and status occupy separate bands. Similar grey tones and unused vertical space make those bands feel like a status panel.
+
+The revised brief is a clean retro companion for background listening, with charcoal behind the words and glass on controls. Make the composition recognizably related to Bopify while retaining the existing focus, hold/catch-up and line-timing behavior. The [interactive visual comparison](mockups/lyric-ribbon-art-directions.html) and [comparison capture](mockups/lyric-ribbon-art-directions.png) show three alternatives using original words and artwork.
+
+Primary-source findings, checked October 18, 2026:
+
+- Lyric Fever explicitly separates fullscreen lyrics from a persistent karaoke popup; its published menu-bar screenshot illustrates a third, very compact presentation. This supports comparing attention levels, not copying a fullscreen karaoke composition into a work companion. [Lyric Fever README and published screenshots](https://github.com/aviwad/LyricFever).
+- AMLL provides lyric rendering and fluid-background components aimed at an Apple Music-like experience. Its official playground exposes separate lyric, audio and artwork inputs. This is a useful reference for separating content from presentation, not evidence that continuous fluid backgrounds suit a peripheral ribbon. [AMLL project](https://github.com/amll-dev/applemusic-like-lyrics), [official playground](https://amll.dev/playground/).
+- Spotify describes its bespoke variable typeface as a combination of classic and contemporary forms. Our interpretation: typography can carry music identity beyond default interface styling. The liner-note study tests a native serif/system-text contrast; it does not use Spotify's proprietary font. [Introducing Spotify Mix](https://newsroom.spotify.com/2024-05-22/introducing-spotify-mix-our-new-and-exclusive-font/) (May 22, 2024).
+- Teenage Engineering's Field System page presents compact physical audio objects with restrained colour, precise controls and strong silhouettes. Our visual interpretation informs the broadcast strip's identity rail and single accent mark; the mockup adds no fake audio meters or knobs. [Field System](https://teenage.engineering/products/field-system).
+- Apple's material guidance remains the constraint for the reading surface and controls. Glass is a material decision, not sufficient art direction. [Apple HIG: Materials](https://developer.apple.com/design/human-interface-guidelines/materials).
+
+| Study | Default browser size | What changes | Tradeoff |
+| --- | --- | --- | --- |
+| Record sleeve — recommended | 476 × 199 CSS pixels, including a 448-pixel surface | Partly exposed artwork-centered record, asymmetric sleeve, muted spine, consolidated credit/status footer | Strongest connection to the existing player; a little extra width |
+| Broadcast strip | 540 × 179 CSS pixels | Compact identity rail, fine cue mark, lyrics in a separate horizontal field | Shorter silhouette, greater desktop width; tight at 320 pixels |
+| Liner note | 420 × 227 CSS pixels | Editorial serif lyric, system metadata, warm spine and fine rules | Stronger typographic contrast; taller and needs native multilingual font-fallback evaluation |
+
+These are visual studies, not production implementations or final native measurements. None requires a new rendering framework. Artwork and colour in the studies are original, fixed fixtures; a native artwork-connected version would need to reuse Bopify's existing artwork store and palette path. A neutral label is the no-artwork fallback. The charcoal lyric background and ivory lyric colour remain stable.
+
+Motion is limited to a manually triggered, short cue-level transition and respects reduced motion. There is no simulated word timing, continuously moving backdrop, or decorative audio animation. Each study independently holds its displayed passage while the simulated song advances, then catches up with Back to live. The small source credit remains visible, including at narrow widths. Long current lyrics scroll in a stable viewport; preceding context is deliberately abbreviated in these composition studies, so production must retain the existing full document/reading behavior.
+
+Browser verification: hold isolation and catch-up, hide/restore, default dimensions, and 320-pixel long-text geometry passed scripted assertions. Narrow lyrics had vertical overflow without horizontal overflow; controls and source credit stayed inside their surfaces. Normal and narrow/dark/no-artwork captures were inspected. This verifies the study's interactions and layout, not native Liquid Glass, focus preservation, or subjective reading comfort. Those remain native validation requirements after a direction is selected. The production UI is unchanged by this study.
 
 ## October 18 refinement for the released ribbon
 
@@ -22,6 +50,8 @@ An overflow regression showed that resetting to the start of a long preceding cu
 Native screenshots and final verification are recorded in the [live validation record](live-lyric-ribbon-validation.md). Fixtures contain original sample words and use no live audio. Existing playback, source attribution and Release availability remain in scope; no provider or playback behavior changes are part of this refinement.
 
 ## Three possible experiences
+
+The sections from here onward record the original exploration. References to fixture-only implementation or unresolved live integration describe that earlier stage; the current implementation status is in the [live validation record](live-lyric-ribbon-validation.md).
 
 | Approach | Useful when | Main tradeoff |
 | --- | --- | --- |
