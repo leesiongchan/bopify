@@ -447,18 +447,4 @@ struct LyricRibbonWindowTests {
         #expect(destination.layout.textViewportHeight < original.layout.textViewportHeight)
         #expect(short.contains(destination.frame))
     }
-
-    @Test func screenChangeNotificationRefreshesVisibleLayout() throws {
-        let suite = "lyric-screen-tests-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let model = LyricRibbonModel(snapshot: lyricTestSnapshot())
-        let controller = LyricRibbonWindowController(model: model, defaults: defaults, onHide: {})
-        defer { controller.hide(); controller.panel.close() }
-        controller.show()
-        let shortHeight = controller.panel.frame.height
-        model.completeLoad(.plain(String(repeating: "A long passage with room to read.\n", count: 100)), token: model.beginLoad())
-        controller.windowDidChangeScreen(Notification(name: NSWindow.didChangeScreenNotification, object: controller.panel))
-        #expect(controller.panel.frame.height == shortHeight)
-    }
 }

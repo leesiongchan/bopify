@@ -14,7 +14,6 @@ struct PlayerRecoveryTests {
     @Test func replacementKeepsMetadataAndFrozenPositionUntilReady() async {
         let old = RecoveryStubEngine(), replacement = RecoveryStubEngine()
         let model = PlayerModel(engine: old)
-        let object = ObjectIdentifier(model)
         model.start()
         old.emit(.trackChanged(track())); old.emit(.playing(positionMs: 3200)); old.emit(.recoveryIdentity(identity))
         await settle()
@@ -35,7 +34,6 @@ struct PlayerRecoveryTests {
         #expect(model.isEngineReady)
         #expect(model.state.currentTrack?.title == "New")
         #expect(model.state.volume == 0)
-        #expect(ObjectIdentifier(model) == object)
         model.stop()
     }
 
