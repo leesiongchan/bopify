@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 import Observation
 import BopifyDomain
@@ -200,4 +199,3 @@ final class LiveLyricRibbonSession {
         clock = nil
     }
 }
-#endif

@@ -1,4 +1,3 @@
-#if DEBUG
 import AppKit
 import Testing
 import BopifyDomain
@@ -104,4 +103,3 @@ nonisolated func presentationLyrics(sync: LyricSynchronization = .lineSynced,
     TrackLyrics(trackURI: SpotifyURI("spotify:track:11dFghVXANMlKmJXsNCbNl")!, synchronization: sync,
                 lines: lines, provider: provider, providerDisplayName: displayName, language: "ar", isRightToLeft: true)
 }
-#endif

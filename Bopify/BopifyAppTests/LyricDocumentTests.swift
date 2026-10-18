@@ -1,4 +1,3 @@
-#if DEBUG
 import Testing
 
 @Suite("Lyric document")
@@ -57,4 +56,3 @@ nonisolated func lyricTestDocument() throws -> LyricDocument {
         LyricCue(id: "next", startMs: 80_000, text: "Let the quiet settle in"),
     ])
 }
-#endif

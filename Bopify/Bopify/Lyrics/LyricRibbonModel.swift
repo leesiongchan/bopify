@@ -1,4 +1,3 @@
-#if DEBUG
 import Observation
 import BopifyDomain
 import os
@@ -128,4 +127,3 @@ final class LyricRibbonModel {
         if next != projection { projection = next }
     }
 }
-#endif

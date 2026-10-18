@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 import Testing
 import BopifyDomain
@@ -34,13 +33,14 @@ import BopifyPlayback
     private let continuation: AsyncStream<PlaybackEvent>.Continuation
     private(set) var commands: [String] = []
     private(set) var shutdowns = 0
+    var shutdownGate: (@MainActor () async -> Void)?
     private let lyricRequest: @MainActor (SpotifyURI) async throws -> TrackLyrics
     init(lyricRequest: @escaping @MainActor (SpotifyURI) async throws -> TrackLyrics = { _ in throw LyricFailure.unavailable }) {
         (events, continuation) = AsyncStream.makeStream()
         self.lyricRequest = lyricRequest
     }
     func emit(_ event: PlaybackEvent) { continuation.yield(event) }
-    func shutdown() async { shutdowns += 1; continuation.finish() }
+    func shutdown() async { shutdowns += 1; continuation.finish(); await shutdownGate?() }
     func load(_ request: PlayRequest) async throws { commands.append("load") }
     func resume() async throws { commands.append("resume") }
     func playHere() async throws { commands.append("playHere") }
@@ -99,4 +99,3 @@ nonisolated func liveLyrics(_ uri: SpotifyURI = liveLyricURI, displayName: Strin
         lines: [TrackLyricLine(text: "A quiet street", startTimeMs: 1000), TrackLyricLine(text: "The lamps return", startTimeMs: 2000)],
         provider: "fixture", providerDisplayName: displayName, language: "en", isRightToLeft: false)
 }
-#endif

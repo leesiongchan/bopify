@@ -1,12 +1,12 @@
 # Live lyric ribbon for local playback
 
-Status: Debug implementation completed October 18, 2026, following the approved [implementation plan](../plans/2026-10-18-live-lyric-ribbon.md). Automated checks and native fixture checks pass; live repeat-boundary and hide/reopen checks now pass; full live acceptance still needs reconnect verification; spoken VoiceOver was skipped at the user's request; the user confirmed full-screen Escape/reopen. See the [validation record](../../live-lyric-ribbon-validation.md). Execution remains native, with commits and pushes directly to `main`.
+Status: The initial Debug implementation was completed October 18, 2026, following the approved [implementation plan](../plans/2026-10-18-live-lyric-ribbon.md). The user subsequently requested normal Release availability and removal of the Debug labels. Runtime types, menu actions and teardown now apply to both configurations; fixture previews remain Debug-only. See the [validation record](../../live-lyric-ribbon-validation.md) for checks and remaining manual limits. Spoken VoiceOver was skipped at the user's request. Execution remains native, with commits and pushes directly to `main`.
 
 ## Purpose and scope
 
 Connect the existing quiet lyric ribbon to music playing through Bopify on this Mac. A listener can follow the current words, hold a passage, and return to the current cue without changing playback. Preserve the clean retro Liquid Glass surface, native panel behavior and original fixture preview.
 
-This increment is a Debug-only live integration. It adds development menu actions to show, hide and explicitly focus the ribbon during normal Bopify playback. It does not open automatically, follow other Spotify devices, expose a Release command, add a provider, cache lyrics to disk, process audio, translate text or add AI features.
+The live integration is available in Debug and Release. Its menu actions show, hide and explicitly focus the ribbon during normal Bopify playback. It does not open automatically, follow other Spotify devices, add a provider, cache lyrics to disk, process audio, translate text or add AI features.
 
 Retrieval uses the completed [Spotify lyric bridge](2026-10-17-spotify-lyrics-bridge-design.md), including its existing session, normalized domain values, limits, deadlines and cancellation contract. The [native ribbon design](2026-10-17-lyric-ribbon-design.md) remains the authority for appearance, focus and reading interaction. The [verification record](../../spotify-lyrics-probe.md) establishes live retrieval, not permission to release synchronized lyrics. Spotify lists lyric synchronization among disallowed uses; Debug compilation does not establish an exception. [Spotify Compliance Tips](https://developer.spotify.com/compliance-tips).
 
@@ -90,9 +90,9 @@ Preserve the native study's reading rules:
 
 ## App and window lifecycle
 
-Create the live session through `AppEnvironment` for its stable player and current recovery coordinator. Keep all live ribbon types, ownership and menu actions behind `#if DEBUG`; retain the existing standalone fixture launch unchanged.
+Create the live session through `AppEnvironment` for its stable player and current recovery coordinator. Compile live ribbon types, ownership and menu actions in both configurations; keep the standalone fixture launch and SwiftUI previews behind `#if DEBUG`. Once quit preparation starts, disable lyric menu actions and reject show/focus calls before awaiting engine teardown.
 
-In the normal app's right-click status menu, add Show or Hide Lyrics and, while visible, Focus Lyrics. Mark the development actions as Debug-only in their labels. Showing the panel preserves the front application's keyboard focus. Focus Lyrics deliberately enters the existing keyboard interaction mode; Tab, Space/Return and Escape keep their existing behavior. The ribbon remains independent of the record player's visibility.
+In the normal app's right-click status menu, add Show or Hide Lyrics and, while visible, Focus Lyrics. Use the labels Show Lyrics, Hide Lyrics and Focus Lyrics without a development suffix. Showing the panel preserves the front application's keyboard focus. Focus Lyrics deliberately enters the existing keyboard interaction mode; Tab, Space/Return and Escape keep their existing behavior. The ribbon remains independent of the record player's visibility.
 
 Sign-out and app quit stop the session, hide its panel and release its observation/request/clock tasks. Engine replacement clears live content while the panel can remain visible in a reconnecting state; readiness starts a request for the new eligible input. A hidden panel remains hidden through reconnect. Keep the existing saved ribbon frame and accessibility fallbacks without a frame-key migration.
 
@@ -108,8 +108,8 @@ Tests exercise app-owned behavior with controlled player events, lyric results a
 4. Pause, seek, correction, repeat, loading, playback end and reconnect produce the specified reading and clock behavior. Hidden/stopped sessions leave no pending display delay, and stale wakes do nothing.
 5. Timed and unsynced conversion preserve line order, blanks, repeats, attribution, language and RTL. No-lyrics and service failures use distinct presentations; neither changes playback or authentication.
 6. Reading and window actions record no transport commands. Existing fixture, focus, geometry and lyric retrieval regression tests continue to pass.
-7. Run full Swift package and app tests, final Debug/Release builds and relevant formatting checks. Verify Release contains no live ribbon entry point and the fixture preview still runs independently.
+7. Run full Swift package and app tests, final Debug/Release builds and relevant formatting checks. Verify Release includes the live ribbon entry point, runs the production lyric tests, and excludes the fixture preview.
 8. Visually compare the native ribbon before and after using deterministic fixtures. Check attribution wrapping, long passages, RTL, plain text, neutral/error states and opaque accessibility fallback; cue transitions must keep the panel geometry stable.
-9. Exercise the normal Debug app with real local playback: show, hold, pause/resume, seek, skip, repeat-one, hide/reopen and reconnect. Use normal authentication and a controlled local test track. This manual protocol operates playback controls; run it as an explicit live verification step, preserve the prior repeat setting, and report cases that were not exercised. Record structural outcomes without saving lyric text or credentials.
+9. Exercise the normal app with real local playback: show, hold, pause/resume, seek, skip, repeat-one, hide/reopen and reconnect. Use normal authentication and a controlled local test track. This manual protocol operates playback controls; run it as an explicit live verification step, preserve the prior repeat setting, and report cases that were not exercised. Record structural outcomes without saving lyric text or credentials.
 
-Acceptance is a live, local-only Debug ribbon with correct reading, identity and task lifetimes. Public release, remote-repeat correctness, audible continuity measurements and broader accessibility/Spaces checks remain separate from that claim.
+Technical acceptance is a live, local-only ribbon in both configurations with correct reading, identity and task lifetimes. Distribution permissions, remote-repeat correctness, audible continuity measurements and broader accessibility/Spaces checks remain separate from that claim.

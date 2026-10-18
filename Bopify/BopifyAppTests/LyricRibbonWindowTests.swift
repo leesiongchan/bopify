@@ -1,4 +1,3 @@
-#if DEBUG
 import AppKit
 import Testing
 
@@ -113,4 +112,3 @@ struct LyricRibbonWindowTests {
         #expect(controller.panel.frame.height > shortHeight)
     }
 }
-#endif

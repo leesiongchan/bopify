@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 import Testing
 import BopifyDomain
@@ -283,4 +282,3 @@ struct LiveLyricRibbonSessionTests {
     }
     func stop() { session.shutdown(); player.stop(); gate.finish(); UserDefaults.standard.removePersistentDomain(forName: suite) }
 }
-#endif
