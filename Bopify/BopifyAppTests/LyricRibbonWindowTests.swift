@@ -1,8 +1,145 @@
 import AppKit
 import Testing
+import SwiftUI
 
 @MainActor @Suite("Lyric ribbon window", .serialized)
 struct LyricRibbonWindowTests {
+    @Test(arguments: [CGPoint(x: 200, y: 7), CGPoint(x: 441, y: 78), CGPoint(x: 56, y: 78), CGPoint(x: 200, y: 149)])
+    func exposedBorderDragsPassivelyAndReturnsToVisibleScreen(point: CGPoint) async throws {
+        let suite = "lyric-border-drag-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let controller = LyricRibbonWindowController(model: LyricRibbonModel(snapshot: lyricTestSnapshot()),
+            defaults: defaults, onHide: {})
+        defer { controller.hide(); controller.panel.close() }
+        controller.show()
+        controller.panel.contentView?.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(50))
+        let content = try #require(controller.panel.contentView)
+        let original = controller.panel.frame
+        let outsideX = try #require(NSScreen.screens.map(\.visibleFrame.minX).min()) - 300
+        let point = content.convert(point, to: nil)
+        func event(_ type: NSEvent.EventType, _ point: CGPoint) throws -> NSEvent {
+            try #require(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: 0,
+                windowNumber: controller.panel.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
+        }
+        controller.panel.sendEvent(try event(.leftMouseDown, point))
+        controller.panel.sendEvent(try event(.leftMouseDragged, CGPoint(x: point.x + outsideX - original.minX, y: point.y)))
+        #expect(abs(controller.panel.frame.minX - outsideX) < 1)
+        controller.panel.sendEvent(try event(.leftMouseUp, point))
+        try await Task.sleep(for: .milliseconds(900))
+        #expect(NSScreen.screens.contains { $0.visibleFrame.insetBy(dx: -1, dy: -1).contains(controller.panel.frame) })
+        #expect(!controller.panel.canBecomeKey)
+        #expect(defaults.string(forKey: "lyrics.preview.frame") == NSStringFromRect(controller.panel.frame))
+    }
+
+    @Test func sharedDragDefaultsKeepMainPlayerFocusAndCallbacks() throws {
+        let panel = StatusPanel(content: EmptyView())
+        panel.isReleasedWhenClosed = false
+        defer { panel.close() }
+        let drag = PlayerBackgroundDragRegion.DragView(frame: panel.contentView!.bounds)
+        panel.contentView = drag
+        panel.orderFront(nil)
+        var changes: [Bool] = []
+        panel.onWindowDragChanged = { changes.append($0) }
+        let origin = panel.frame.origin
+        func event(_ type: NSEvent.EventType, _ x: CGFloat) throws -> NSEvent {
+            try #require(NSEvent.mouseEvent(with: type, location: CGPoint(x: x, y: 30), modifierFlags: [],
+                timestamp: 0, windowNumber: panel.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
+        }
+        drag.mouseDown(with: try event(.leftMouseDown, 30))
+        #expect(panel.isKeyWindow)
+        drag.mouseDragged(with: try event(.leftMouseDragged, 40))
+        #expect(panel.frame.origin.x == origin.x + 10)
+        drag.mouseUp(with: try event(.leftMouseUp, 30))
+        #expect(changes == [true, false])
+    }
+
+    @Test func preparingAnInterruptedDragKeepsTheGlobalPointerOrigin() throws {
+        let panel = NSPanel(contentRect: CGRect(x: 100, y: 100, width: 448, height: 156),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        panel.isReleasedWhenClosed = false
+        defer { panel.close() }
+        let drag = PlayerBackgroundDragRegion.DragView(frame: CGRect(x: 0, y: 0, width: 448, height: 156))
+        drag.takesKeyboardFocus = false
+        panel.contentView = drag
+        var changes: [Bool] = []
+        drag.onDragChanged = { changes.append($0) }
+        drag.onPrepareDrag = { panel.setFrameOrigin(CGPoint(x: 200, y: 100)) }
+        func event(_ type: NSEvent.EventType, _ x: CGFloat) throws -> NSEvent {
+            try #require(NSEvent.mouseEvent(with: type, location: CGPoint(x: x, y: 30), modifierFlags: [],
+                timestamp: 0, windowNumber: panel.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
+        }
+        drag.mouseDown(with: try event(.leftMouseDown, 120))
+        drag.mouseDragged(with: try event(.leftMouseDragged, 23))
+        #expect(panel.frame.minX == 200)
+        #expect(changes.isEmpty)
+        drag.mouseDragged(with: try event(.leftMouseDragged, 25))
+        #expect(panel.frame.minX == 205)
+        drag.mouseUp(with: try event(.leftMouseUp, 20))
+        #expect(changes == [true, false])
+    }
+
+    @Test func hideDuringSpringPersistsTheDestinationAndRejectsStaleCompletion() async throws {
+        let suite = "lyric-spring-hide-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let controller = LyricRibbonWindowController(model: LyricRibbonModel(snapshot: lyricTestSnapshot()),
+            defaults: defaults, onHide: {})
+        defer { controller.hide(); controller.panel.close() }
+        controller.show()
+        let visible = try #require(controller.panel.screen?.visibleFrame)
+        controller.setDragging(true)
+        controller.panel.setFrameOrigin(CGPoint(x: visible.minX - 200, y: visible.minY - 100))
+        controller.refreshLayout(textScale: 1.5)
+        #expect(controller.panel.frame.minX == visible.minX - 200)
+        controller.setDragging(false)
+        controller.hide()
+        let saved = NSRectFromString(try #require(defaults.string(forKey: "lyrics.preview.frame")))
+        #expect(visible.contains(saved))
+        controller.show()
+        let restored = controller.panel.frame
+        try await Task.sleep(for: .milliseconds(900))
+        #expect(controller.panel.frame == restored)
+        #expect(visible.contains(restored))
+        #expect(restored.height > 156)
+    }
+
+    @Test func secondDragDuringSpringKeepsItsPointerDeltaAndDestination() async throws {
+        let suite = "lyric-spring-interrupt-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let controller = LyricRibbonWindowController(model: LyricRibbonModel(snapshot: lyricTestSnapshot()),
+            defaults: defaults, onHide: {})
+        defer { controller.hide(); controller.panel.close() }
+        controller.show()
+        let visible = try #require(controller.panel.screen?.visibleFrame)
+        controller.setDragging(true)
+        controller.panel.setFrameOrigin(CGPoint(x: visible.minX - 200, y: visible.minY + 50))
+        controller.setDragging(false)
+        controller.panel.contentView?.layoutSubtreeIfNeeded()
+        func region(in view: NSView) -> PlayerBackgroundDragRegion.DragView? {
+            if let drag = view as? PlayerBackgroundDragRegion.DragView { return drag }
+            return view.subviews.lazy.compactMap { region(in: $0) }.first
+        }
+        let drag = try #require(controller.panel.contentView.flatMap { region(in: $0) })
+        let screenPoint = controller.panel.convertPoint(toScreen: CGPoint(x: 220, y: 7))
+        func event(_ type: NSEvent.EventType, screen: CGPoint) throws -> NSEvent {
+            try #require(NSEvent.mouseEvent(with: type, location: controller.panel.convertPoint(fromScreen: screen),
+                modifierFlags: [], timestamp: 0, windowNumber: controller.panel.windowNumber, context: nil,
+                eventNumber: 1, clickCount: 1, pressure: 1))
+        }
+        drag.mouseDown(with: try event(.leftMouseDown, screen: screenPoint))
+        let settled = controller.panel.frame
+        let moved = CGPoint(x: screenPoint.x + 5, y: screenPoint.y)
+        drag.mouseDragged(with: try event(.leftMouseDragged, screen: moved))
+        #expect(controller.panel.frame.minX == settled.minX + 5)
+        drag.mouseUp(with: try event(.leftMouseUp, screen: moved))
+        try await Task.sleep(for: .milliseconds(900))
+        #expect(controller.panel.frame.minX == settled.minX + 5)
+        #expect(visible.contains(controller.panel.frame))
+    }
+
     @Test func passivePanelOnlyAllowsExplicitKeyboardInteraction() throws {
         let suite = "lyric-window-tests-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
@@ -24,7 +161,8 @@ struct LyricRibbonWindowTests {
         #expect(!model.isKeyboardInteracting)
     }
 
-    @Test func nativeTextClickSeeksOnceWithoutTakingKeyboardFocus() async throws {
+    @Test(arguments: [CGFloat(0), 10, 120])
+    func nativeTextPointerSeeksOnClickAndSelectsOnDragWithoutTakingFocus(dragDistance: CGFloat) async throws {
         let suite = "lyric-pointer-tests-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -56,12 +194,20 @@ struct LyricRibbonWindowTests {
         let down = try #require(NSEvent.mouseEvent(with: .leftMouseDown, location: point, modifierFlags: [],
             timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: controller.panel.windowNumber,
             context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
-        let up = try #require(NSEvent.mouseEvent(with: .leftMouseUp, location: point, modifierFlags: [],
+        let destination = CGPoint(x: point.x + dragDistance, y: point.y)
+        let up = try #require(NSEvent.mouseEvent(with: .leftMouseUp, location: destination, modifierFlags: [],
             timestamp: down.timestamp + 0.1, windowNumber: controller.panel.windowNumber,
             context: nil, eventNumber: 1, clickCount: 1, pressure: 0))
         NSApp.postEvent(up, atStart: true)
+        if dragDistance > 0 {
+            let drag = try #require(NSEvent.mouseEvent(with: .leftMouseDragged, location: destination, modifierFlags: [],
+                timestamp: down.timestamp + 0.05, windowNumber: controller.panel.windowNumber,
+                context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
+            NSApp.postEvent(drag, atStart: true)
+        }
         controller.panel.sendEvent(down)
-        #expect(targets == [70_000])
+        #expect(targets == (dragDistance == 0 ? [70_000] : []))
+        if dragDistance > 0 { #expect(reader.selectedRange().length > 0) }
         #expect(!controller.panel.canBecomeKey)
     }
 

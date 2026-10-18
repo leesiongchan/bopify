@@ -1,6 +1,8 @@
 import AppKit
 import SwiftUI
 import BopifyPlayback
+import BopifyDomain
+import os
 
 final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
     let panel: NSPanel
@@ -12,6 +14,12 @@ final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
     private var host: NSHostingView<LyricRibbonView>?
     private var anchor: CGRect?
     private var textScale: CGFloat = 1
+    private let position = LyricRibbonPosition()
+    private var isDragging = false
+    private var isPositioning = false
+    private var isTransitioning = false
+    private var transitionID: UInt64 = 0
+    private var targetFrame: CGRect = .zero
 
     init(model: LyricRibbonModel, defaults: UserDefaults, artworkStore: ArtworkStore? = nil, onSeek: @escaping (Int64, LyricPlaybackSnapshot) -> Void = { _, _ in }, onHide: @escaping () -> Void) {
         self.model = model
@@ -34,7 +42,7 @@ final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
         panel.isMovableByWindowBackground = false
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        panel.hasShadow = false
         panel.isReleasedWhenClosed = false
         panel.appearance = NSAppearance(named: .darkAqua)
         (panel as? LyricRibbonPanel)?.onDismiss = onHide
@@ -66,6 +74,8 @@ final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
     }
 
     func hide() {
+        finishTransition(transitionID)
+        isDragging = false
         if panel.isVisible { saveFrame() }
         panel.orderOut(nil)
         (panel as? LyricRibbonPanel)?.allowsKeyboardFocus = false
@@ -91,15 +101,21 @@ final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
         return view.subviews.lazy.compactMap { self.reader(in: $0) }.first
     }
 
-    func refreshLayout(textScale: CGFloat) {
+    func refreshLayout(textScale: CGFloat, animate: Bool = false) {
         self.textScale = textScale
+        guard !isDragging else { return }
+        finishTransition(transitionID)
         let screens = NSScreen.screens.map(\.visibleFrame)
         let preferred = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1024, height: 768)
         let placement = Self.placement(content: model.content, saved: anchor, textScale: textScale,
             screens: screens, preferred: preferred, source: model.source)
         let layout = placement.layout
         let root = LyricRibbonView(model: model, layout: layout, artworkStore: artworkStore,
-            onFocusReader: { [weak self] in self?.focusReader() }, onSeek: onSeek, onDragHeader: { [weak self] event in self?.panel.performDrag(with: event) })
+            onFocusReader: { [weak self] in self?.focusReader() }, onSeek: onSeek, position: position,
+            onPrepareDrag: { [weak self] in
+                guard let self else { return }
+                self.finishTransition(self.transitionID)
+            }, onDragChanged: { [weak self] active in self?.setDragging(active) })
         if let host { host.rootView = root }
         else {
             let host = LyricRibbonHostingView(rootView: root)
@@ -111,7 +127,61 @@ final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
             panel.contentView = container
             self.host = host
         }
-        panel.setFrame(placement.frame, display: true)
+        move(to: placement.frame, animated: animate && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+    }
+
+    func setDragging(_ active: Bool) {
+        isDragging = active
+        if active {
+            BopifyLog.playback.debug("Lyric ribbon drag started")
+        } else {
+            anchor = panel.frame
+            refreshLayout(textScale: textScale, animate: true)
+            BopifyLog.playback.debug("Lyric ribbon drag ended")
+        }
+    }
+
+    private func move(to target: CGRect, animated: Bool) {
+        transitionID &+= 1
+        let generation = transitionID
+        targetFrame = target
+        guard animated, panel.isVisible, panel.frame != target else {
+            isPositioning = true
+            panel.setFrame(target, display: true)
+            isPositioning = false
+            if panel.isVisible { saveFrame() }
+            return
+        }
+        let old = panel.frame
+        let envelope = old.union(target)
+        isTransitioning = true
+        withoutAnimation {
+            position.offset = CGPoint(x: old.minX - envelope.minX, y: envelope.maxY - old.maxY)
+            panel.setFrame(envelope, display: true)
+        }
+        BopifyLog.playback.debug("Lyric ribbon clamped to visible screen")
+        withAnimation(.spring(duration: 0.50, bounce: 0.18), completionCriteria: .removed) {
+            position.offset = CGPoint(x: target.minX - envelope.minX, y: envelope.maxY - target.maxY)
+        } completion: { [weak self] in
+            DispatchQueue.main.async { [weak self] in self?.finishTransition(generation) }
+        }
+    }
+
+    private func finishTransition(_ generation: UInt64) {
+        guard generation == transitionID, isTransitioning else { return }
+        transitionID &+= 1
+        withoutAnimation {
+            panel.setFrame(targetFrame, display: true)
+            position.offset = .zero
+        }
+        isTransitioning = false
+        if panel.isVisible { saveFrame() }
+    }
+
+    private func withoutAnimation(_ body: () -> Void) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction, body)
     }
 
     static func placement(content: LyricContent, saved: CGRect?, textScale: CGFloat,
@@ -141,9 +211,11 @@ final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
         return preferred
     }
 
-    func windowDidMove(_ notification: Notification) { if panel.isVisible { saveFrame() } }
+    func windowDidMove(_ notification: Notification) {
+        if panel.isVisible && !isDragging && !isTransitioning && !isPositioning { saveFrame() }
+    }
     func windowDidChangeScreen(_ notification: Notification) {
-        guard panel.isVisible else { return }
+        guard panel.isVisible, !isDragging, !isTransitioning, !isPositioning else { return }
         anchor = panel.frame
         refreshLayout(textScale: textScale)
     }
