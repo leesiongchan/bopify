@@ -189,7 +189,7 @@ struct LyricPassageView: NSViewRepresentable {
         view.setAccessibilityLabel("Lyrics")
         let scroll = LyricReadingScrollView()
         scroll.drawsBackground = false
-        scroll.hasVerticalScroller = true
+        scroll.hasVerticalScroller = false
         scroll.verticalScroller = LyricReadingScroller()
         scroll.autohidesScrollers = true
         scroll.scrollerStyle = .overlay
@@ -201,6 +201,8 @@ struct LyricPassageView: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         guard let view = scroll.documentView as? LyricReadingTextView else { return }
         let coordinator = context.coordinator
+        if case .plain? = content { scroll.hasVerticalScroller = true }
+        else { scroll.hasVerticalScroller = isReading }
         let begin = { [weak scroll] in
             if let scroll { coordinator.cancelFollow(scroll) }
             onBeginReading()
@@ -253,7 +255,7 @@ final class LyricReadingTextView: NSTextView {
     var onSeek: ((Int64) -> Void)?
     private var pendingSeek: (time: Int64, action: (Int64) -> Void)?
 
-    func seekTimestamp(at point: CGPoint) -> Int64? {
+    func visibleCharacter(at point: CGPoint) -> Int? {
         guard let manager = layoutManager, let container = textContainer, let storage = textStorage else { return nil }
         let point = CGPoint(x: point.x - textContainerOrigin.x, y: point.y - textContainerOrigin.y)
         let glyph = manager.glyphIndex(for: point, in: container)
@@ -264,7 +266,12 @@ final class LyricReadingTextView: NSTextView {
         let color = (manager.temporaryAttribute(.foregroundColor, atCharacterIndex: character, effectiveRange: nil)
             ?? storage.attribute(.foregroundColor, at: character, effectiveRange: nil)) as? NSColor
         guard color?.alphaComponent != 0 else { return nil }
-        return storage.attribute(LyricRibbonLayout.cueTimeAttribute, at: character, effectiveRange: nil) as? Int64
+        return character
+    }
+
+    func seekTimestamp(at point: CGPoint) -> Int64? {
+        guard let character = visibleCharacter(at: point) else { return nil }
+        return textStorage?.attribute(LyricRibbonLayout.cueTimeAttribute, at: character, effectiveRange: nil) as? Int64
     }
 
     override func clicked(onLink link: Any, at charIndex: Int) {

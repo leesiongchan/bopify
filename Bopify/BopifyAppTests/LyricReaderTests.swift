@@ -61,7 +61,7 @@ struct LyricReaderTests {
             scale: 1.5, rtl: false, fallback: NSAttributedString(), width: 300, height: 141)
         reader.coordinator.updateScroll(reader.scroll, resetRevision: 1)
         let current = (reader.view.string as NSString).range(of: "Current words")
-        #expect(abs(reader.lineTop(at: current.location) - reader.scroll.contentView.bounds.minY - 47) < 1)
+        #expect(abs(reader.lineTop(at: current.location) - reader.scroll.contentView.bounds.minY - 42) < 1)
     }
 
     @Test func followingRetainsFullDocumentAndShowsOnlyAdjacentCues() throws {

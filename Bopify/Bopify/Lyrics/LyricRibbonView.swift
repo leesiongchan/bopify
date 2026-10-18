@@ -21,12 +21,17 @@ struct LyricRibbonView: View {
     @FocusState private var syncFocused: Bool
     @State private var rotation = RecordRotation()
     @State private var isCoasting = false
+    @State private var syncFrame: CGRect = .zero
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
 
     private var palette: ArtworkPalette {
         model.snapshot.artworkURL.flatMap { artworkStore?.palette(for: $0) } ?? .neutral
+    }
+    private var albumColor: Color {
+        let color: ArtworkColor = switch palette { case let .marble(dominant, _, _): dominant; case let .tinted(dominant): dominant }
+        return Color(.sRGB, red: color.red, green: color.green, blue: color.blue, opacity: 1)
     }
     private var motorRequest: RecordMotorRequest {
         .resolve(phase: model.snapshot.isPlaying ? .playing : .paused, ready: true, active: true,
@@ -42,7 +47,7 @@ struct LyricRibbonView: View {
         default: ""
         }
         return NSAttributedString(string: value, attributes: [
-            .font: NSFont.systemFont(ofSize: 17 * layout.textScale), .foregroundColor: NSColor.secondaryLabelColor,
+            .font: NSFont.systemFont(ofSize: 15 * layout.textScale), .foregroundColor: NSColor.secondaryLabelColor,
         ])
     }
     private var trackTransition: AnyTransition {
@@ -53,7 +58,6 @@ struct LyricRibbonView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            dragRegion.frame(width: layout.panelSize.width, height: layout.panelSize.height)
             sleeve.padding(.leading, LyricRibbonLayout.sleeveInset).padding(.top, LyricRibbonLayout.surfaceInset)
             VinylRecordView(image: model.snapshot.artworkURL.flatMap { artworkStore?.image(for: $0) }.map { Image(nsImage: $0) },
                 occurrenceID: model.snapshot.occurrenceID, direction: model.snapshot.direction, diameter: 96,
@@ -63,7 +67,12 @@ struct LyricRibbonView: View {
                 .offset(x: 8, y: max(0, (layout.panelSize.height - 96) / 2))
                 .allowsHitTesting(false).accessibilityHidden(true)
         }
-        .frame(width: layout.panelSize.width, height: layout.panelSize.height)
+        .frame(width: layout.panelSize.width, height: layout.panelSize.height, alignment: .topLeading)
+        .coordinateSpace(name: "lyricRibbonSurface")
+        .overlay {
+            LyricRibbonDragOverlay(excludedFrame: model.isReading ? syncFrame : .zero,
+                onPrepareDrag: onPrepareDrag, onDragChanged: onDragChanged)
+        }
         .offset(x: position.offset.x, y: position.offset.y)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .preferredColorScheme(.dark)
@@ -93,23 +102,26 @@ struct LyricRibbonView: View {
             VStack(spacing: LyricRibbonLayout.sectionSpacing) {
                 HStack(spacing: 8) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(model.snapshot.title).font(.system(size: 12, weight: .medium))
+                        Text(model.snapshot.title).font(.system(size: 11, weight: .medium))
                         HStack(spacing: 5) {
                             if !model.snapshot.artist.isEmpty {
                                 Text(model.snapshot.artist).lineLimit(1)
                             }
                             if let attribution = model.source?.attribution {
-                                if !model.snapshot.artist.isEmpty { Text(verbatim: "·").accessibilityHidden(true) }
-                                Text(attribution).lineLimit(1).layoutPriority(1).help(attribution)
+                                Spacer(minLength: 8)
+                                Text(attribution).font(.system(size: 9.5)).foregroundStyle(.secondary)
+                                    .lineLimit(1).help(attribution)
                             }
                         }
                         .font(.system(size: 10)).foregroundStyle(.secondary)
                     }
                     .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
                     .help("\(model.snapshot.title) · \(model.snapshot.artist)")
-                    .overlay { dragRegion }
                     .id(model.snapshot.occurrenceID).transition(trackTransition)
-                    if model.isReading { syncControl.fixedSize() }
+                    if model.isReading {
+                        syncControl.fixedSize()
+                            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("lyricRibbonSurface")) } action: { syncFrame = $0 }
+                    }
                 }
                 .frame(height: LyricRibbonLayout.headerHeight, alignment: .leading)
                 LyricPassageView(text: message, content: model.content, projection: model.projection,
@@ -137,19 +149,21 @@ struct LyricRibbonView: View {
                 Color.clear.glassEffect(.regular.tint(Color(red: 0.16, green: 0.20, blue: 0.14).opacity(0.65)), in: shape)
                     // The native text reader needs a stable dark field on bright desktops.
                     .overlay { shape.fill(Color(red: 0.08, green: 0.11, blue: 0.075).opacity(0.75)) }
+                    .overlay {
+                        shape.fill(LinearGradient(stops: [.init(color: albumColor.opacity(0.18), location: 0),
+                            .init(color: albumColor.opacity(0.08), location: 0.12), .init(color: .clear, location: 0.30)],
+                            startPoint: .leading, endPoint: .trailing))
+                    }
                     .allowsHitTesting(false)
             }
         }
     }
 
-    private var dragRegion: some View {
-        PlayerBackgroundDragRegion(takesKeyboardFocus: false, onPrepareDrag: onPrepareDrag, onDragChanged: onDragChanged)
-    }
     private var syncControl: some View { syncButton.buttonStyle(.bordered) }
     private var syncButton: some View {
         Button(action: model.backToLive) {
             Text(String(localized: "action.sync", defaultValue: "Sync", table: "LyricRibbon"))
-                .font(.system(size: 12, weight: .medium)).foregroundStyle(.primary).frame(minHeight: 22)
+                .font(.system(size: 11, weight: .medium)).foregroundStyle(.primary).frame(minHeight: 22)
         }
         .controlSize(.small)
         .accessibilityLabel(String(localized: "action.sync", defaultValue: "Sync", table: "LyricRibbon"))
@@ -157,6 +171,52 @@ struct LyricRibbonView: View {
         .help(String(localized: "action.sync.help", defaultValue: "Return to the current lyric without changing playback", table: "LyricRibbon"))
         .focusable(interactions: [.edit, .activate])
         .focused($syncFocused)
+    }
+}
+
+private struct LyricRibbonDragOverlay: NSViewRepresentable {
+    let excludedFrame: CGRect
+    let onPrepareDrag: () -> Void
+    let onDragChanged: (Bool) -> Void
+
+    func makeNSView(context: Context) -> SurfaceDragView { SurfaceDragView() }
+    func updateNSView(_ view: SurfaceDragView, context: Context) {
+        view.takesKeyboardFocus = false
+        view.onPrepareDrag = onPrepareDrag
+        view.onDragChanged = onDragChanged
+        view.excludedFrame = excludedFrame
+    }
+
+    final class SurfaceDragView: PlayerBackgroundDragRegion.DragView {
+        var excludedFrame: CGRect = .zero
+        override var isFlipped: Bool { true }
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            guard super.hitTest(point) != nil else { return nil }
+            let local = convert(point, from: superview)
+            if excludedFrame.contains(local) { return nil }
+            if let reader = reader(in: window?.contentView), let scroll = reader.enclosingScrollView {
+                let location = scroll.convert(local, from: self)
+                if scroll.bounds.contains(location) {
+                    if scroll.hasVerticalScroller, let scroller = scroll.verticalScroller,
+                       scroller.hitTest(convert(local, to: scroller.superview)) != nil { return nil }
+                    if reader.visibleCharacter(at: reader.convert(local, from: self)) != nil { return nil }
+                }
+            }
+            return self
+        }
+
+        override func scrollWheel(with event: NSEvent) {
+            if let scroll = reader(in: window?.contentView)?.enclosingScrollView {
+                scroll.scrollWheel(with: event)
+            } else { super.scrollWheel(with: event) }
+        }
+
+        private func reader(in view: NSView?) -> LyricReadingTextView? {
+            guard let view else { return nil }
+            if let reader = view as? LyricReadingTextView { return reader }
+            return view.subviews.lazy.compactMap { self.reader(in: $0) }.first
+        }
     }
 }
 

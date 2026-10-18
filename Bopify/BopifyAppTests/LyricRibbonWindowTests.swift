@@ -4,13 +4,19 @@ import SwiftUI
 
 @MainActor @Suite("Lyric ribbon window", .serialized)
 struct LyricRibbonWindowTests {
-    @Test(arguments: [CGPoint(x: 200, y: 7), CGPoint(x: 441, y: 78), CGPoint(x: 56, y: 78), CGPoint(x: 200, y: 149)])
+    @Test(arguments: [CGPoint(x: 200, y: 7), CGPoint(x: 441, y: 70), CGPoint(x: 56, y: 70),
+                      CGPoint(x: 200, y: 139), CGPoint(x: 414, y: 70), CGPoint(x: 220, y: 128), CGPoint(x: 435, y: 128)])
     func exposedBorderDragsPassivelyAndReturnsToVisibleScreen(point: CGPoint) async throws {
         let suite = "lyric-border-drag-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        let controller = LyricRibbonWindowController(model: LyricRibbonModel(snapshot: lyricTestSnapshot()),
-            defaults: defaults, onHide: {})
+        let model = LyricRibbonModel(snapshot: lyricTestSnapshot())
+        model.completeLoad(.timed(try LyricDocument(cues: [
+            LyricCue(id: "previous", startMs: 60_000, text: "Previous"),
+            LyricCue(id: "current", startMs: 70_000, text: "Current"),
+            LyricCue(id: "next", startMs: 80_000, text: "Next"),
+        ])), token: model.beginLoad())
+        let controller = LyricRibbonWindowController(model: model, defaults: defaults, onHide: {})
         defer { controller.hide(); controller.panel.close() }
         controller.show()
         controller.panel.contentView?.layoutSubtreeIfNeeded()
@@ -23,14 +29,110 @@ struct LyricRibbonWindowTests {
             try #require(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: 0,
                 windowNumber: controller.panel.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
         }
+        NSApp.postEvent(try event(.leftMouseUp, point), atStart: true)
+        NSApp.postEvent(try event(.leftMouseDragged, CGPoint(x: point.x + outsideX - original.minX, y: point.y)), atStart: true)
         controller.panel.sendEvent(try event(.leftMouseDown, point))
-        controller.panel.sendEvent(try event(.leftMouseDragged, CGPoint(x: point.x + outsideX - original.minX, y: point.y)))
-        #expect(abs(controller.panel.frame.minX - outsideX) < 1)
-        controller.panel.sendEvent(try event(.leftMouseUp, point))
+        var reachedOutside = abs(controller.panel.frame.minX - outsideX) < 1
+        while let pending = NSApp.nextEvent(matching: [.leftMouseDragged, .leftMouseUp], until: Date(), inMode: .default, dequeue: true) {
+            controller.panel.sendEvent(pending)
+            reachedOutside = reachedOutside || abs(controller.panel.frame.minX - outsideX) < 1
+        }
+        #expect(reachedOutside)
         try await Task.sleep(for: .milliseconds(900))
         #expect(NSScreen.screens.contains { $0.visibleFrame.insetBy(dx: -1, dy: -1).contains(controller.panel.frame) })
         #expect(!controller.panel.canBecomeKey)
         #expect(defaults.string(forKey: "lyrics.preview.frame") == NSStringFromRect(controller.panel.frame))
+    }
+
+    @Test(arguments: [false, true])
+    func scrollbarIsAbsentDuringFollowingAndAvailableForManualOrPlainReading(plain: Bool) async throws {
+        let suite = "lyric-scroller-mode-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = LyricRibbonModel(snapshot: lyricTestSnapshot())
+        let lyrics: LyricContent = plain ? .plain(String(repeating: "A quiet room.\n", count: 30)) : .timed(try lyricTestDocument())
+        model.completeLoad(lyrics, token: model.beginLoad())
+        let controller = LyricRibbonWindowController(model: model, defaults: defaults, onHide: {})
+        defer { controller.hide(); controller.panel.close() }
+        controller.show()
+        controller.panel.contentView?.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(50))
+        func passage(in view: NSView) -> NSScrollView? {
+            if let scroll = view as? LyricReadingScrollView { return scroll }
+            return view.subviews.lazy.compactMap { passage(in: $0) }.first
+        }
+        let scroll = try #require(controller.panel.contentView.flatMap { passage(in: $0) })
+        let width = scroll.contentSize.width
+        #expect(scroll.hasVerticalScroller == plain)
+        model.beginReading()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(scroll.hasVerticalScroller)
+        #expect(scroll.contentSize.width == width)
+        let scroller = try #require(scroll.verticalScroller)
+        scroller.isHidden = true
+        let content = try #require(controller.panel.contentView)
+        let gutter = scroller.convert(CGPoint(x: scroller.bounds.midX, y: scroller.bounds.midY), to: content)
+        #expect(content.hitTest(gutter) is PlayerBackgroundDragRegion.DragView)
+        scroller.isHidden = false
+        model.backToLive()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(scroll.hasVerticalScroller == plain)
+        #expect(scroll.contentSize.width == width)
+    }
+
+    @Test func wheelThroughTheBlankSurfaceScrollsLyricsWithoutTakingFocus() async throws {
+        let suite = "lyric-surface-wheel-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = LyricRibbonModel(snapshot: lyricTestSnapshot())
+        model.completeLoad(.timed(try lyricTestDocument()), token: model.beginLoad())
+        let controller = LyricRibbonWindowController(model: model, defaults: defaults, onHide: {})
+        defer { controller.hide(); controller.panel.close() }
+        controller.show()
+        controller.panel.contentView?.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(50))
+        func descendant<T: NSView>(_ type: T.Type, in view: NSView) -> T? {
+            if let match = view as? T { return match }
+            return view.subviews.lazy.compactMap { descendant(type, in: $0) }.first
+        }
+        let content = try #require(controller.panel.contentView)
+        let scroll = try #require(descendant(LyricReadingScrollView.self, in: content))
+        let overlay = try #require(descendant(PlayerBackgroundDragRegion.DragView.self, in: content))
+        let before = scroll.contentView.bounds.minY
+        let wheel = try #require(CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: 30, wheel2: 0, wheel3: 0))
+        overlay.scrollWheel(with: try #require(NSEvent(cgEvent: wheel)))
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(model.isReading)
+        #expect(scroll.contentView.bounds.minY < before)
+        #expect(scroll.hasVerticalScroller)
+        #expect(!controller.panel.canBecomeKey)
+    }
+
+    @Test func syncRemainsClickableThroughTheSurfaceDragLayer() async throws {
+        let suite = "lyric-sync-pointer-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = LyricRibbonModel(snapshot: lyricTestSnapshot())
+        model.completeLoad(.timed(try lyricTestDocument()), token: model.beginLoad())
+        let controller = LyricRibbonWindowController(model: model, defaults: defaults, onHide: {})
+        defer { controller.hide(); controller.panel.close() }
+        controller.show()
+        model.beginReading()
+        controller.panel.contentView?.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(80))
+        let point = CGPoint(x: controller.panel.frame.width - 48, y: controller.panel.frame.height - 27)
+        func event(_ type: NSEvent.EventType) throws -> NSEvent {
+            try #require(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: 0,
+                windowNumber: controller.panel.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
+        }
+        NSApp.postEvent(try event(.leftMouseUp), atStart: true)
+        controller.panel.sendEvent(try event(.leftMouseDown))
+        while let up = NSApp.nextEvent(matching: .leftMouseUp, until: Date(), inMode: .default, dequeue: true) {
+            controller.panel.sendEvent(up)
+        }
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(!model.isReading)
+        #expect(!controller.panel.canBecomeKey)
     }
 
     @Test func sharedDragDefaultsKeepMainPlayerFocusAndCallbacks() throws {
