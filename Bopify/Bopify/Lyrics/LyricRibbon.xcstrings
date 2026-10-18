@@ -101,12 +101,22 @@
         }
       }
     },
-    "action.hold.help": {
+    "action.sync.help": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hold the words while music continues. Return to live to follow the current line."
+            "value": "Return to the current lyric without changing playback"
+          }
+        }
+      }
+    },
+    "action.sync": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sync lyrics"
           }
         }
       }

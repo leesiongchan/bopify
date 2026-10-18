@@ -212,7 +212,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         let lyrics = NSMenuItem(title: environment.isLiveLyricsVisible
             ? String(localized: "menu.hide", table: "LyricRibbon")
             : String(localized: "menu.show", table: "LyricRibbon"),
-            action: #selector(toggleLiveLyrics(_:)), keyEquivalent: "")
+            action: #selector(toggleLiveLyrics(_:)), keyEquivalent: "l")
+        lyrics.keyEquivalentModifierMask = [.control, .option]
         lyrics.target = self
         menu.addItem(lyrics)
         if environment.isLiveLyricsVisible {
@@ -250,8 +251,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         Task { await environment.signOut() }
     }
     @objc private func toggleLiveLyrics(_ sender: Any?) {
-        if environment.isLiveLyricsVisible { environment.hideLiveLyrics() }
-        else { environment.showLiveLyrics() }
+        environment.toggleLiveLyrics()
     }
     @objc private func focusLiveLyrics(_ sender: Any?) { environment.focusLiveLyrics() }
     @objc private func cancelPlaybackAuthorization(_ sender: Any?) { environment.cancelPlaybackAuthorization() }

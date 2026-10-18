@@ -1,5 +1,5 @@
 {
-  "originHash" : "32af5dba37a3a5e00e101d90441c53a3103d861cc92e1ded78a9c5f480fe035f",
+  "originHash" : "b9f2ba7967cd9699669cc0c489ba0352db690c062574e87ef9614600ffe748fb",
   "pins" : [
     {
       "identity" : "appauth-ios",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "a972daac82d449d58ab119e91c68153e29ddac33",
         "version" : "3.0.0"
+      }
+    },
+    {
+      "identity" : "keyboardshortcuts",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/sindresorhus/KeyboardShortcuts",
+      "state" : {
+        "revision" : "772133d9dbe800fdac0473226822994c5c162c58",
+        "version" : "3.1.0"
       }
     },
     {

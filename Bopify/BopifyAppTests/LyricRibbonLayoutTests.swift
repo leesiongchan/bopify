@@ -15,7 +15,8 @@ struct LyricRibbonLayoutTests {
         let long = LyricRibbonLayout.measure(content: try content(words), width: 448, textScale: 1, availableHeight: 1000)
         let scaled = LyricRibbonLayout.measure(content: try content(words), width: 448, textScale: 1.5, availableHeight: 1000)
         let bounded = LyricRibbonLayout.measure(content: try content(words), width: 448, textScale: 1, availableHeight: 320)
-        #expect(long.textViewportHeight > short.textViewportHeight)
+        #expect(long.textViewportHeight == short.textViewportHeight)
+        #expect(long.panelSize.height <= 230)
         #expect(scaled.textViewportHeight >= long.textViewportHeight)
         #expect(bounded.panelSize.height <= 320)
         #expect(bounded.textViewportHeight > 0)
@@ -126,6 +127,28 @@ struct LyricRibbonLayoutTests {
 
         coordinator.updateScroll(scroll, resetRevision: 2)
         #expect(scroll.documentVisibleRect.intersects(currentRect))
+    }
+
+    @Test func hostedReaderUsesOverlayScrollerWithoutClippingWrappedText() async throws {
+        let text = LyricRibbonLayout.passage(previous: nil, current: String(repeating: "A quiet street with room to read. ", count: 20), scale: 1)
+        let panel = NSPanel(contentRect: CGRect(x: 0, y: 0, width: 250, height: 120),
+            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.isReleasedWhenClosed = false
+        let host = NSHostingView(rootView: LyricPassageView(text: text, width: 250, height: 120, resetRevision: 1))
+        host.sizingOptions = []
+        panel.contentView = host
+        panel.orderFront(nil)
+        defer { panel.orderOut(nil); panel.close() }
+        host.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(50))
+        func passage(in view: NSView) -> NSScrollView? {
+            if let scroll = view as? NSScrollView { return scroll }
+            return view.subviews.lazy.compactMap { passage(in: $0) }.first
+        }
+        let scroll = try #require(passage(in: host))
+        let view = try #require(scroll.documentView as? NSTextView)
+        #expect(scroll.scrollerStyle == .overlay)
+        #expect(view.textContainer?.containerSize.width == scroll.contentSize.width)
     }
 
     @Test func hostedPassageRetainsCurrentCuePositionAfterNativeLayout() async throws {

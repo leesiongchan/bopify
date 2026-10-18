@@ -29,6 +29,7 @@ struct AppEnvironmentLyricsTests {
             menu.update()
             #expect(!show.isEnabled && !focus.isEnabled)
             f.environment.showLiveLyrics()
+            f.environment.toggleLiveLyrics()
             f.environment.focusLiveLyrics()
             #expect(f.environment.liveLyricRibbon == nil && !f.environment.isLiveLyricsVisible)
 
@@ -60,6 +61,23 @@ struct AppEnvironmentLyricsTests {
         }
     }
 
+    @Test func sharedShortcutAndMenuActionToggleWithoutPlaybackCommands() async throws {
+        try await withLyricsApp { f in
+            try await f.ready()
+            f.environment.toggleLiveLyrics()
+            #expect(f.environment.isLiveLyricsVisible)
+            let session = f.environment.liveLyricRibbon
+            f.environment.toggleLiveLyrics()
+            #expect(!f.environment.isLiveLyricsVisible)
+            f.environment.toggleLiveLyrics()
+            #expect(f.environment.isLiveLyricsVisible && f.environment.liveLyricRibbon === session)
+            #expect(f.first.commands.isEmpty)
+            await f.environment.signOut()
+            f.environment.toggleLiveLyrics()
+            #expect(!f.environment.isLiveLyricsVisible)
+        }
+    }
+
     @Test func ownsOneSessionAndRoutesToTheReadyEngine() async throws {
         try await withLyricsApp { f in
             try await f.ready()
@@ -69,11 +87,11 @@ struct AppEnvironmentLyricsTests {
             try await liveLyricEventually { f.firstGate.requests.count == 1 }
             f.firstGate.succeed(0, with: liveLyrics())
             try await liveLyricEventually { session.model.source != nil }
-            session.model.holdText()
+            session.model.beginReading()
             let scroll = session.model.scrollResetRevision
             f.environment.showLiveLyrics(); f.environment.focusLiveLyrics()
             #expect(f.environment.liveLyricRibbon === session)
-            #expect(session.model.isHeld && session.model.scrollResetRevision == scroll)
+            #expect(session.model.isReading && session.model.scrollResetRevision == scroll)
             #expect(f.firstGate.requests.count == 1 && f.first.commands.isEmpty)
             f.environment.hideLiveLyrics()
             #expect(!f.environment.isLiveLyricsVisible && session.model.source == nil)

@@ -1,5 +1,7 @@
 import Observation
+import Foundation
 import BopifyDomain
+import BopifyPlayback
 import os
 
 nonisolated struct LyricPlaybackSnapshot: Equatable, Sendable {
@@ -12,6 +14,8 @@ nonisolated struct LyricPlaybackSnapshot: Equatable, Sendable {
     var durationMs: Int64
     var isPlaying: Bool
     var seekRevision: UInt64
+    var artworkURL: URL? = nil
+    var direction: CarouselDirection = .fade
 }
 
 nonisolated enum LyricContent: Equatable, Sendable {
@@ -19,7 +23,7 @@ nonisolated enum LyricContent: Equatable, Sendable {
     case idle(LyricIdleReason)
 }
 
-nonisolated enum LyricRibbonControl: Hashable { case reading, hide }
+nonisolated enum LyricRibbonControl: Hashable { case reader, sync }
 
 nonisolated struct LyricLoadToken: Equatable, Sendable {
     let generation: UInt64
@@ -37,9 +41,8 @@ final class LyricRibbonModel {
     var isKeyboardInteracting = false
     var keyboardSelection: LyricRibbonControl?
     private(set) var scrollResetRevision: UInt64 = 0
-    private var heldProjection: LyricProjection?
+    private(set) var isReading = false
     private var generation: UInt64 = 0
-    var isHeld: Bool { heldProjection != nil }
 
     init(snapshot: LyricPlaybackSnapshot) { self.snapshot = snapshot }
 
@@ -49,12 +52,12 @@ final class LyricRibbonModel {
         let seeked = next.seekRevision != snapshot.seekRevision
         if changed {
             generation &+= 1
-            heldProjection = nil
+            resumeFollowing()
             content = .loading
             source = nil
             BopifyLog.playback.debug("lyric input replaced generation=\(self.generation, privacy: .public)")
         } else if seeked {
-            heldProjection = nil
+            resumeFollowing()
         }
         snapshot = next
         if isVisible { reproject(resetScroll: changed || seeked) }
@@ -69,7 +72,7 @@ final class LyricRibbonModel {
 
     func hide() {
         generation &+= 1
-        heldProjection = nil
+        resumeFollowing()
         projection = nil
         isVisible = false
         isKeyboardInteracting = false
@@ -77,21 +80,21 @@ final class LyricRibbonModel {
         BopifyLog.playback.debug("lyric ribbon hidden")
     }
 
-    func holdText() {
-        guard isVisible, projection?.interval == .cue else { return }
-        heldProjection = projection
-        BopifyLog.playback.debug("lyric reading held")
+    func beginReading() {
+        guard isVisible, !isReading, case .timed = content else { return }
+        isReading = true
+        BopifyLog.playback.debug("lyric manual reading started")
     }
 
     func backToLive() {
-        heldProjection = nil
+        resumeFollowing()
         reproject(resetScroll: true)
         BopifyLog.playback.debug("lyric reading returned to live")
     }
 
     func beginLoad() -> LyricLoadToken {
         generation &+= 1
-        heldProjection = nil
+        resumeFollowing()
         content = .loading
         source = nil
         reproject(resetScroll: true)
@@ -104,26 +107,30 @@ final class LyricRibbonModel {
         generation &+= 1
         self.content = content
         self.source = source
-        heldProjection = nil
+        resumeFollowing()
         reproject(resetScroll: true)
     }
 
     func setIdle(_ reason: LyricIdleReason) {
         generation &+= 1
-        heldProjection = nil
+        resumeFollowing()
         source = nil
         content = .idle(reason)
         reproject(resetScroll: true)
     }
 
+    private func resumeFollowing() {
+        isReading = false
+        if keyboardSelection == .sync { keyboardSelection = .reader }
+    }
+
     private func reproject(resetScroll: Bool) {
         let next: LyricProjection?
         if !isVisible { next = nil }
-        else if let heldProjection { next = heldProjection }
         else if case let .timed(document) = content {
             next = document.project(positionMs: snapshot.positionMs, durationMs: snapshot.durationMs)
         } else { next = nil }
-        if resetScroll || next != projection { scrollResetRevision &+= 1 }
+        if resetScroll || (!isReading && next != projection) { scrollResetRevision &+= 1 }
         if next != projection { projection = next }
     }
 }

@@ -1,8 +1,20 @@
 # Lyric ribbon research
 
-Research dates: October 17–18, 2026. The live native ribbon is implemented; see [live validation](live-lyric-ribbon-validation.md). The user selected the sleeve composition; the revised interactions below are a browser proposal, not native changes. Older exploration and the original [native design](superpowers/specs/2026-10-17-lyric-ribbon-design.md) remain as historical context.
+Research dates: October 17–18, 2026. The live native ribbon is implemented; see [live validation](live-lyric-ribbon-validation.md). The selected sleeve is implemented natively with compact geometry; browser studies below record the design exploration. See the current [validation record](live-lyric-ribbon-validation.md). Older exploration and the original [native design](superpowers/specs/2026-10-17-lyric-ribbon-design.md) remain as historical context.
 
 The lyric ribbon would let a listener glance at the words and reread a passage while music continues. The value to test is whether it fits working on a Mac without taking keyboard focus or demanding attention. The primary use remains a choice between persistent background display, a brief shortcut peek and deliberate close reading.
+
+## Compact native sleeve
+
+The user approved the sleeve interactions and emphasized compact, comfortable sizing. The native version uses a **448 × 226-point** panel including the 20-point record overhang. Its reading viewport stays at 132 points at normal scale, regardless of document length, playback tick, reading mode or source-credit presence. Current words use 25-point medium system text; previous/next cues use 15 points. Manual reading uses 17-point text throughout the full document. At 320 points wide, the same viewport fits the original sample's wrapped current cue and both neighbors. Larger preview text scales the viewport subject to display bounds; long or simultaneous cues remain scrollable instead of enlarging the panel indefinitely.
+
+The visible design is SwiftUI with a standard charcoal content material and a native glass Sync button. The native text view and nonactivating panel retain full text selection, scrolling, font fallback and deliberate keyboard focus. Vinyl rendering, artwork loading/palette extraction, record rotation and artwork transitions reuse the main player's existing components. Line transitions animate the native clip view's bounds; manual scroll/selection cancels the animation at its visible position. The reader retains its identity through song changes. Sync clears SwiftUI control focus before deferred, guarded native reader focus; it never activates a passive panel.
+
+The shortcut uses the maintained KeyboardShortcuts package rather than a second Carbon hotkey implementation. The app target pins 3.1.0 and registers Control–Option–L independently of ribbon visibility; the existing menu action remains available. The pinned manifest has no external dependencies, plugins or binary targets. Public advisories showed none published when checked, which is a scoped dependency check rather than proof of no vulnerabilities. [KeyboardShortcuts 3.1.0 release](https://github.com/sindresorhus/KeyboardShortcuts/releases/tag/3.1.0), [manifest](https://github.com/sindresorhus/KeyboardShortcuts/blob/3.1.0/Package.swift), [public advisories](https://github.com/sindresorhus/KeyboardShortcuts/security/advisories) (checked October 18, 2026).
+
+Native captures exposed a custom scroller falling back to legacy layout and clipping the right edge of long text. A hosted regression reproduced the lost width; declaring overlay compatibility retained the native overlay scroller and full text-container width. [Apple: isCompatibleWithOverlayScrollers](https://developer.apple.com/documentation/appkit/nsscroller/iscompatiblewithoverlayscrollers), [preferredScrollerStyle](https://developer.apple.com/documentation/appkit/nsscroller/preferredscrollerstyle) (checked October 18, 2026).
+
+The [normal capture](mockups/lyric-sleeve-native-live.png), [narrow capture](mockups/lyric-sleeve-native-narrow.png) and [reading capture](mockups/lyric-sleeve-native-reading.png) use only original words and artwork. The earlier sizes and behavior notes below describe their respective proposal stages.
 
 ## Selected sleeve: revised reading and motion
 

@@ -2,6 +2,38 @@
 
 Validated October 18, 2026 on macOS with Xcode 27, arm64. The implementation follows local playback and is available from the status-item menu in Debug and Release. The original Debug evaluation remains recorded below; the Release follow-up supersedes its compilation restrictions. Manual limits remain listed explicitly.
 
+## Compact sleeve refinement
+
+The approved sleeve is now native, at **448 × 226 points** including its vinyl overhang. The 132-point reading viewport is independent of lyric length and reading mode. It presents previous/current/next cues; longer cues wrap or remain scrollable. Original fixtures at 320 points wide retain all three cues when the current line wraps. The 1.5 text-scale fixture is 306 points tall, subject to display bounds. Source credit shares the footer, and Sync appears only during manual reading.
+
+Wheel/trackpad, scrollbar interaction, selection and reader navigation enter manual reading of the full document. Playback projection continues while scroll position, selection and text metrics stay stable. Sync returns directly to the latest cue without playback commands. Deliberate seek, new occurrence/session, hide and replacement content restore following. The standalone preview supports original sample artwork and previous/next recording actions.
+
+The native implementation reuses the main player's record rotation, artwork cache/palette and vinyl rendering. Cue following uses a brief native clip-layer transition that is cancelled at its presentation position before manual input. Track transitions preserve the native text-view identity and therefore keyboard reading. Control–Option–L toggles the ribbon globally through KeyboardShortcuts 3.1.0; the menu remains a fallback. The ribbon has no X or Hold action. Focus Lyrics enables reading keys, Tab reaches Sync while reading, Return activates it, and Escape hides the focused ribbon.
+
+Regression evidence:
+
+- The compact-layout and manual-projection expectations failed against the previous implementation, then passed after geometry and reading state were separated from content length and playback projection.
+- A native Tab → Sync → Return test reproduced focus falling back to the panel when SwiftUI removed the focused button. Deferred focus restoration checks current keyboard intent and the existing key window; it restores the reader without activating a passive panel. The test also preserves the same reader through a recording change.
+- Actual app captures exposed a legacy scrollbar gutter clipping long lines. A hosted regression reproduced both the legacy style and text-container/content-width mismatch. Overlay compatibility fixed both assertions; wrapping and the clean overlay appearance were recaptured.
+- Late queue artwork metadata initially failed to update the sleeve. The live session now uses the matching queue track for display, following the main player's pattern. Its regression verifies updated artwork, one lyric request, preserved manual reading and no playback commands.
+- Full-document, neighbor visibility, manual anchor/selection preservation, layout caching, stale-result/session resets and native keyboard/window boundaries are covered by the app suites.
+
+Final verification with temporary capture code removed: **97 Debug app tests**, **66 Release app tests**, and **386 core tests** passed. Core counts were 193, 60, 32 and 101 across its four executables. Both Debug and Release app builds succeeded. Commands used `CODE_SIGNING_ALLOWED=NO SWIFT_EMIT_LOC_STRINGS=NO`.
+
+A final native check used the unmodified offline preview and an owned TextEdit scratch document. Global hide/show, actual wheel input entering Reading, and a pointer click at the Sync control’s native bounds all passed while TextEdit remained foreground. Foreground application and owned document identity were asserted before all five typing markers; all markers appeared in the scratch document. The document was closed without saving and the owned preview quit. Earlier automation attempts used an unresolved AX button lookup or unreliable synthetic pointer timing and are discarded; they did not require product changes.
+
+| Native capture | Observation |
+| --- | --- |
+| [Previous version](mockups/lyric-ribbon-refinement-live.png) | Prior rounded card with separate source row, close and Hold controls. |
+| [Following](mockups/lyric-sleeve-native-live.png) | Compact sleeve, existing vinyl styling, previous/current/next hierarchy and quiet footer. The fixture is paused for capture. |
+| [Reading](mockups/lyric-sleeve-native-reading.png) | Full document with a clear native glass Sync action and Reading state. |
+| [320-point width](mockups/lyric-sleeve-native-narrow.png) | Current lyric wraps while both neighbors remain visible at the same panel height. |
+| [Larger text](mockups/lyric-sleeve-native-large.png) | Scaled viewport and type remain bounded and readable. |
+| [RTL](mockups/lyric-sleeve-native-rtl.png) | Native shaping and paragraph direction with both context cues. |
+| [Long cue](mockups/lyric-sleeve-native-long.png) | Long words wrap at the actual content width and scroll within the compact viewport. |
+
+Captures came from the actual Debug app over an owned backdrop, using original words/artwork and no authentication or audio. An app-less test-host capture attempt lacked the app's shader library and is discarded. Temporary capture hooks and harnesses were removed afterward. Earlier refinement and release records below are historical; the user's VoiceOver skip remains unchanged.
+
 ## UI/UX refinement
 
 The user selected a charcoal reading surface with native Liquid Glass controls. The [research notes](lyric-ribbon-research.md#october-18-refinement-for-the-released-ribbon) record the current Apple guidance and the design tradeoff. The refined view retains the vinyl mark, system typography and warm Reading accent, separates title and artist, keeps the close action outside header dragging, and makes Hold text/Back to live persistent. Native glass button styles share a `GlassEffectContainer`; the existing transparency/contrast fallback uses native bordered controls on an opaque surface.

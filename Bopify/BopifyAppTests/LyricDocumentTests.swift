@@ -44,6 +44,39 @@ struct LyricDocumentTests {
         let doc = try LyricDocument(cues: [LyricCue(id: "gap", startMs: 0, text: " \n ")])
         #expect(doc.project(positionMs: 10, durationMs: 100).interval == .gap)
     }
+
+    @Test func upcomingCueUsesAdjacentSourceGroups() throws {
+        let doc = try lyricTestDocument()
+        let opening = doc.project(positionMs: 0, durationMs: 100_000)
+        #expect(opening.current == nil && opening.previous == nil)
+        #expect(opening.next?.occurrenceIDs == ["a"])
+        let first = doc.project(positionMs: 10_000, durationMs: 100_000)
+        #expect(first.next?.occurrenceIDs == ["b", "c"])
+        let beforeGap = doc.project(positionMs: 20_000, durationMs: 100_000)
+        #expect(beforeGap.next?.occurrenceIDs == ["gap"])
+        #expect(beforeGap.next?.text == "")
+        let gap = doc.project(positionMs: 30_000, durationMs: 100_000)
+        #expect(gap.current == nil)
+        #expect(gap.next?.occurrenceIDs == ["repeat"])
+        #expect(doc.project(positionMs: 80_000, durationMs: 100_000).next == nil)
+    }
+
+    @Test func endingKeepsLastGroupAsReaderAnchor() throws {
+        let ended = try lyricTestDocument().project(positionMs: 100_000, durationMs: 100_000)
+        #expect(ended.current == nil && ended.next == nil)
+        #expect(ended.previous?.occurrenceIDs == ["next"])
+    }
+
+    @Test func beforeBlankOpeningDoesNotInventUpcomingWords() throws {
+        let document = try LyricDocument(cues: [
+            LyricCue(id: "gap", startMs: 10, text: " \n "),
+            LyricCue(id: "words", startMs: 20, text: "Opening"),
+        ])
+        #expect(document.project(positionMs: 0, durationMs: 100).next == nil)
+        #expect(document.project(positionMs: 10, durationMs: 100).next?.occurrenceIDs == ["words"])
+        let empty = try LyricDocument(cues: []).project(positionMs: 100, durationMs: 100)
+        #expect(empty.current == nil && empty.previous == nil && empty.next == nil)
+    }
 }
 
 nonisolated func lyricTestDocument() throws -> LyricDocument {

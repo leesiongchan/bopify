@@ -17,9 +17,9 @@ struct LyricRibbonWindowTests {
         #expect(controller.panel.canBecomeKey)
         #expect(model.isKeyboardInteracting)
         model.completeLoad(.timed(try lyricTestDocument()), token: model.beginLoad())
-        model.holdText()
+        model.beginReading()
         controller.hide()
-        #expect(!model.isVisible && !model.isHeld)
+        #expect(!model.isVisible && !model.isReading)
         #expect(!controller.panel.canBecomeKey)
         #expect(!model.isKeyboardInteracting)
     }
@@ -43,7 +43,7 @@ struct LyricRibbonWindowTests {
         #expect(frame == saved)
     }
 
-    @Test func explicitKeyboardLoopReachesReadingAndHide() throws {
+    @Test func explicitKeyboardReadingScrollsWithoutPlaybackCommandsAndEscapeHides() throws {
         let suite = "lyric-keyboard-tests-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -53,23 +53,59 @@ struct LyricRibbonWindowTests {
         defer { controller.hide(); controller.panel.close() }
         controller.show()
         model.completeLoad(.timed(try lyricTestDocument()), token: model.beginLoad())
+        controller.refreshLayout(textScale: 1)
+        controller.panel.contentView?.layoutSubtreeIfNeeded()
         controller.focusForReading()
-        #expect(model.keyboardSelection == .reading)
-        func key(_ code: UInt16) throws {
-            let event = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
-                windowNumber: controller.panel.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "",
-                isARepeat: false, keyCode: code))
-            controller.panel.keyDown(with: event)
-        }
-        try key(48)
-        #expect(model.keyboardSelection == .hide)
-        try key(48)
-        #expect(model.keyboardSelection == .reading)
-        try key(49)
-        #expect(model.isHeld)
-        try key(48)
-        try key(36)
+        let reader = try #require(controller.panel.firstResponder as? LyricReadingTextView)
+        let original = model.snapshot
+        let event = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: controller.panel.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "",
+            isARepeat: false, keyCode: 125))
+        reader.keyDown(with: event)
+        #expect(model.isReading)
+        #expect(model.snapshot == original)
+        reader.cancelOperation(nil)
         #expect(hideRequested)
+    }
+
+    @Test func keyboardReaderSurvivesSongChangesAndTabsToConditionalSync() async throws {
+        let suite = "lyric-keyboard-transition-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = LyricRibbonModel(snapshot: lyricTestSnapshot())
+        let controller = LyricRibbonWindowController(model: model, defaults: defaults, onHide: {})
+        defer { controller.hide(); controller.panel.close() }
+        controller.show()
+        model.completeLoad(.timed(try lyricTestDocument()), token: model.beginLoad())
+        controller.refreshLayout(textScale: 1)
+        controller.panel.contentView?.layoutSubtreeIfNeeded()
+        controller.focusForReading()
+        let reader = try #require(controller.panel.firstResponder as? LyricReadingTextView)
+        model.beginReading()
+        try await Task.sleep(for: .milliseconds(50))
+        let tab = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: controller.panel.windowNumber, context: nil, characters: "\t", charactersIgnoringModifiers: "\t",
+            isARepeat: false, keyCode: 48))
+        reader.keyDown(with: tab)
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(model.keyboardSelection == .sync)
+        #expect(controller.panel.firstResponder !== reader)
+        let enter = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: controller.panel.windowNumber, context: nil, characters: "\r", charactersIgnoringModifiers: "\r",
+            isARepeat: false, keyCode: 36))
+        controller.panel.firstResponder?.keyDown(with: enter)
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(!model.isReading)
+        #expect(controller.panel.firstResponder === reader)
+        var next = model.snapshot
+        next.occurrenceID = "second"
+        next.title = "Another original fixture"
+        model.update(next)
+        model.completeLoad(.timed(try lyricTestDocument()), token: model.beginLoad())
+        controller.refreshLayout(textScale: 1)
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(controller.panel.firstResponder === reader)
+        #expect(model.isKeyboardInteracting)
     }
 
     @Test func greatestOverlapDeterminesTheDestinationDisplay() {
@@ -109,6 +145,6 @@ struct LyricRibbonWindowTests {
         let shortHeight = controller.panel.frame.height
         model.completeLoad(.plain(String(repeating: "A long passage with room to read.\n", count: 100)), token: model.beginLoad())
         controller.windowDidChangeScreen(Notification(name: NSWindow.didChangeScreenNotification, object: controller.panel))
-        #expect(controller.panel.frame.height > shortHeight)
+        #expect(controller.panel.frame.height == shortHeight)
     }
 }

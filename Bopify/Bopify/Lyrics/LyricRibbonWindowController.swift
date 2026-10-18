@@ -6,14 +6,16 @@ final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
     let panel: NSPanel
     private let model: LyricRibbonModel
     private let defaults: UserDefaults
+    private let artworkStore: ArtworkStore?
     private let onHide: () -> Void
     private var host: NSHostingView<LyricRibbonView>?
     private var anchor: CGRect?
     private var textScale: CGFloat = 1
 
-    init(model: LyricRibbonModel, defaults: UserDefaults, onHide: @escaping () -> Void) {
+    init(model: LyricRibbonModel, defaults: UserDefaults, artworkStore: ArtworkStore? = nil, onHide: @escaping () -> Void) {
         self.model = model
         self.defaults = defaults
+        self.artworkStore = artworkStore
         self.onHide = onHide
         panel = LyricRibbonPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered, defer: false)
@@ -40,13 +42,13 @@ final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
         }
         (panel as? LyricRibbonPanel)?.onTab = { [weak self] in
             guard let self else { return }
-            self.model.keyboardSelection = self.canRead && self.model.keyboardSelection != .reading ? .reading : .hide
+            if self.model.isReading, self.model.keyboardSelection == .reader { self.model.keyboardSelection = .sync }
+            else { self.focusReader() }
         }
         (panel as? LyricRibbonPanel)?.onActivate = { [weak self] in
-            guard let self else { return }
-            if self.model.keyboardSelection == .hide { self.onHide() }
-            else if self.model.isHeld { self.model.backToLive() }
-            else { self.model.holdText() }
+            guard let self, self.model.keyboardSelection == .sync else { return }
+            self.model.backToLive()
+            self.focusReader()
         }
         refreshLayout(textScale: 1)
         NotificationCenter.default.addObserver(self, selector: #selector(screensChanged),
@@ -71,23 +73,31 @@ final class LyricRibbonWindowController: NSObject, NSWindowDelegate {
     func focusForReading() {
         if !model.isVisible { show() }
         (panel as? LyricRibbonPanel)?.allowsKeyboardFocus = true
-        model.keyboardSelection = canRead ? .reading : .hide
         panel.makeKeyAndOrderFront(nil)
-        panel.makeFirstResponder(panel)
+        focusReader()
     }
 
-    private var canRead: Bool { model.isHeld || model.projection?.interval == .cue }
+    private func focusReader() {
+        guard model.isKeyboardInteracting else { return }
+        model.keyboardSelection = .reader
+        if let reader = reader(in: panel.contentView) { panel.makeFirstResponder(reader) }
+    }
+
+    private func reader(in view: NSView?) -> NSTextView? {
+        guard let view else { return nil }
+        if let text = view as? NSTextView { return text }
+        return view.subviews.lazy.compactMap { self.reader(in: $0) }.first
+    }
 
     func refreshLayout(textScale: CGFloat) {
         self.textScale = textScale
-        if model.isKeyboardInteracting, !canRead { model.keyboardSelection = .hide }
         let screens = NSScreen.screens.map(\.visibleFrame)
         let preferred = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1024, height: 768)
         let placement = Self.placement(content: model.content, saved: anchor, textScale: textScale,
             screens: screens, preferred: preferred, source: model.source)
         let layout = placement.layout
-        let root = LyricRibbonView(model: model, layout: layout, onHide: onHide,
-            onDragHeader: { [weak self] event in self?.panel.performDrag(with: event) })
+        let root = LyricRibbonView(model: model, layout: layout, artworkStore: artworkStore,
+            onFocusReader: { [weak self] in self?.focusReader() }, onDragHeader: { [weak self] event in self?.panel.performDrag(with: event) })
         if let host { host.rootView = root }
         else {
             let host = LyricRibbonHostingView(rootView: root)
@@ -154,18 +164,17 @@ private final class LyricRibbonPanel: NSPanel {
     override func resignKey() { super.resignKey(); allowsKeyboardFocus = false }
     override func cancelOperation(_ sender: Any?) { onDismiss?() }
     override func keyDown(with event: NSEvent) {
-        let modifiers = event.modifierFlags.intersection([.command, .option, .control])
-        if allowsKeyboardFocus, modifiers.isEmpty {
-            if event.keyCode == 48 { onTab?(); return }
-            if event.keyCode == 49 || event.keyCode == 36 {
-                if !event.isARepeat { onActivate?() }
-                return
-            }
-        }
+        if event.keyCode == 48 { onTab?(); return }
+        if event.keyCode == 49 || event.keyCode == 36 { onActivate?(); return }
         super.keyDown(with: event)
     }
+
 }
 
 private final class LyricRibbonHostingView: NSHostingView<LyricRibbonView> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func keyDown(with event: NSEvent) {
+        if [48, 49, 36].contains(event.keyCode) { window?.keyDown(with: event); return }
+        super.keyDown(with: event)
+    }
 }
