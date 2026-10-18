@@ -6,6 +6,17 @@ import BopifyDomain
 @MainActor
 @Suite("PlayerModel")
 struct PlayerModelTests {
+    @Test func eventSynchronizationWaitsForSlowDelivery() async {
+        let engine = StubPlaybackEngine(eventDelay: .milliseconds(80))
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        await settle(model, engine, [.trackChanged(makeTrack()), .playing(positionMs: 1000), .loading])
+        #expect(model.state.currentTrack?.title == "Title")
+        #expect(model.state.phase == .loading)
+        #expect(await engine.consumedEvents() == 3)
+    }
+
     @Test(arguments: ["unchanged", "queueOnly", "sameURITrack"])
     func queuedSeekCannotOutliveItsSongOccurrence(change: String) async throws {
         let engine = RecoveryStubEngine()
@@ -100,22 +111,22 @@ struct PlayerModelTests {
         defer { model.stop() }
         await settle(model, engine, [.playing(positionMs: 0), .volumeChanged(volume: 0.65)])
         model.toggleMute()
-        await settle(model, engine, [])
+        await waitUntil { engine.recordedCommands.count == 1 }
         #expect(engine.recordedCommands == ["setVolume:0.0"])
         #expect(model.state.volume == 0.65)
         await settle(model, engine, [.volumeChanged(volume: 0)])
         model.toggleMute()
-        await settle(model, engine, [])
+        await waitUntil { engine.recordedCommands.count == 2 }
         #expect(engine.recordedCommands.last == "setVolume:0.65")
         #expect(model.state.volume == 0)
         await settle(model, engine, [.volumeChanged(volume: 0.3), .volumeChanged(volume: 0)])
         model.toggleMute()
-        await settle(model, engine, [])
+        await waitUntil { engine.recordedCommands.count == 3 }
         #expect(engine.recordedCommands.last == "setVolume:0.3")
         await settle(model, engine, [.activeDeviceChanged(isActive: false)])
         let count = engine.recordedCommands.count
         model.toggleMute()
-        await settle(model, engine, [])
+        try? await Task.sleep(for: .milliseconds(50))
         #expect(engine.recordedCommands.count == count)
     }
 
@@ -125,13 +136,13 @@ struct PlayerModelTests {
         model.start()
         await settle(model, engine, [.playing(positionMs: 0), .volumeChanged(volume: 0)])
         model.toggleMute()
-        await settle(model, engine, [])
+        await waitUntil { engine.recordedCommands.count == 1 }
         #expect(engine.recordedCommands == ["setVolume:0.5"])
         await settle(model, engine, [.volumeChanged(volume: 0.9), .volumeChanged(volume: 0)])
         model.stop()
         model.start()
         model.toggleMute()
-        await settle(model, engine, [])
+        await waitUntil { engine.recordedCommands.count == 2 }
         #expect(engine.recordedCommands.last == "setVolume:0.5")
         model.stop()
     }
@@ -200,9 +211,11 @@ struct PlayerModelTests {
         let queue = selectionQueue()
         await settle(model, engine.stub, [.playing(positionMs: 0), .queueChanged(queue)])
         model.selectQueueEntry(queue.next[0].target!)
-        await settle(model, engine.stub, [])
+        await waitUntil { await engine.rejection.started }
         if replace { model.selectQueueEntry(queue.next[1].target!) }
-        try? await Task.sleep(for: .milliseconds(180))
+        await engine.rejection.release()
+        if replace { await waitUntil { engine.stub.recordedCommands == ["selectQueue:10:1"] } }
+        else { await waitUntil { model.queueSelection == .failed } }
         #expect(model.queueSelection == (replace ? .pending(entryID: queue.next[1].id, target: queue.next[1].target!) : .failed))
     }
 
@@ -218,9 +231,20 @@ struct PlayerModelTests {
     }
 
     /// Emits events and waits for the model's consumer task to fold them in.
-    private func settle(_ model: PlayerModel, _ engine: StubPlaybackEngine, _ events: [PlaybackEvent]) async {
+    private func settle(_ model: PlayerModel, _ engine: StubPlaybackEngine, _ events: [PlaybackEvent],
+                        sourceLocation: SourceLocation = #_sourceLocation) async {
         for event in events { engine.emit(event) }
-        try? await Task.sleep(for: .milliseconds(50))
+        let target = engine.emittedEvents
+        await waitUntil(sourceLocation: sourceLocation) { await engine.consumedEvents() >= target }
+    }
+
+    private func waitUntil(sourceLocation: SourceLocation = #_sourceLocation,
+                           _ condition: @MainActor () async -> Bool) async {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while !(await condition()), ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(await condition(), "Playback work did not finish before the deadline", sourceLocation: sourceLocation)
     }
 
     @Test func seekIsClampedWithoutPretendingItSucceeded() async {
@@ -230,13 +254,13 @@ struct PlayerModelTests {
         defer { model.stop() }
         await settle(model, engine, [.trackChanged(makeTrack()), .paused(positionMs: 20_000)])
         model.seek(to: 900_000)
-        try? await Task.sleep(for: .milliseconds(50))
+        await waitUntil { engine.recordedCommands == ["seek:240000"] }
         #expect(engine.recordedCommands == ["seek:240000"])
         #expect(model.state.positionMs == 20_000)
         #expect(model.state.phase == .paused)
     }
     @Test func modesWaitForEngineEventsAndRapidCommandsKeepOrder() async {
-        let engine = StubPlaybackEngine()
+        let engine = StubPlaybackEngine(commandDelay: .milliseconds(80))
         let model = PlayerModel(engine: engine)
         model.start()
         defer { model.stop() }
@@ -246,7 +270,7 @@ struct PlayerModelTests {
         model.next()
         model.setShuffle(true)
         model.setRepeat(.track)
-        try? await Task.sleep(for: .milliseconds(50))
+        await waitUntil { engine.recordedCommands.count == 5 }
         #expect(engine.recordedCommands == ["next", "previous", "next", "setShuffle:true", "setRepeat:track"])
         #expect(!model.state.shuffleEnabled)
         #expect(model.state.repeatMode == .off)
@@ -421,7 +445,7 @@ struct PlayerModelTests {
         await settle(model, engine, [.playing(positionMs: 0)])
 
         model.togglePlayPause()
-        try? await Task.sleep(for: .milliseconds(50))
+        await waitUntil { engine.recordedCommands.contains("pause") }
 
         #expect(engine.recordedCommands.contains("pause"))
         // Commands are requests. Only an event may change the phase.
@@ -448,7 +472,7 @@ struct PlayerModelTests {
 
         let request = PlayRequest(contextURI: SpotifyURI("spotify:playlist:xyz")!)
         model.load(request)
-        try? await Task.sleep(for: .milliseconds(50))
+        await waitUntil { engine.recordedCommands.contains("load:spotify:playlist:xyz") }
 
         #expect(engine.recordedCommands.contains("load:spotify:playlist:xyz"))
     }
@@ -555,12 +579,12 @@ struct PlayerModelTests {
         model.start()
         defer { model.stop() }
         model.togglePlayPause()
-        await settle(model, engine, [])
+        try? await Task.sleep(for: .milliseconds(50))
         #expect(engine.recordedCommands.isEmpty)  // nothing to take over yet
         await settle(model, engine, [.remotePlayback(makeRemote())])
         #expect(model.canPlayHere)
         model.togglePlayPause()
-        await settle(model, engine, [])
+        await waitUntil { engine.recordedCommands == ["playHere"] }
         #expect(engine.recordedCommands == ["playHere"])
         // Only the engine's events may change the state.
         #expect(model.state.phase == .idle)
@@ -580,7 +604,7 @@ struct PlayerModelTests {
         await settle(model, engine, [.activeDeviceChanged(isActive: false)])
         #expect(model.canPlayHere)
         model.playHere()
-        await settle(model, engine, [])
+        await waitUntil { engine.recordedCommands == ["playHere"] }
         #expect(engine.recordedCommands == ["playHere"])
         await settle(model, engine, [.failed(.playbackSessionLost)])
         #expect(!model.canPlayHere)
@@ -615,10 +639,11 @@ struct PlayerModelTests {
 
 private struct FailingSelectionEngine: PlaybackEngine {
     let stub = StubPlaybackEngine()
+    let rejection = SelectionFailureGate()
     var events: AsyncStream<PlaybackEvent> { stub.events }
     func selectQueueEntry(_ target: QueueTarget) async throws {
         if target.rawNextIndex == 0 {
-            try await Task.sleep(for: .milliseconds(150))
+            await rejection.wait()
             throw NSError(domain: "Test rejection", code: 1)
         }
         try await stub.selectQueueEntry(target)
@@ -635,4 +660,14 @@ private struct FailingSelectionEngine: PlaybackEngine {
     func setRepeat(_ mode: RepeatMode) async throws { try await stub.setRepeat(mode) }
     func requestRadio(seed: SpotifyURI) async throws -> RadioMix { throw RadioFailure.unavailable }
     func requestLyrics(for track: SpotifyURI) async throws -> TrackLyrics { throw LyricFailure.unavailable }
+}
+
+private actor SelectionFailureGate {
+    private(set) var started = false
+    private var continuation: CheckedContinuation<Void, Never>?
+    func wait() async {
+        started = true
+        await withCheckedContinuation { continuation = $0 }
+    }
+    func release() { continuation?.resume(); continuation = nil }
 }
