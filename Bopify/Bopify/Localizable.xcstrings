@@ -1,78 +1,21 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "signIn.cancel" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cancel sign-in"
-          }
-        }
-      }
-    },
-    "library.cancelAuthorization" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cancel library sign-in"
-          }
-        }
-      }
-    },
-    "error.credentialCleanupNotRecorded" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bopify stopped playback, but could not save your sign-out request. Saved sign-in may return after restarting. Check free disk space and file access, then retry removal."
-          }
-        }
-      }
-    },
-    "signIn.retryRemoval" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Retry removal"
-          }
-        }
-      }
-    },
-    "signIn.removingCredentials" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Removing saved sign-in…"
-          }
-        }
-      }
-    },
-    "signIn.cleanupError" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Could not finish signing out"
-          }
-        }
-      }
-    },
-    "error.credentialCleanupRequired" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bopify stopped playback, but could not finish removing saved sign-in. Unlock Keychain or check its access, then retry removal."
-          }
-        }
-      }
-    },
     "" : {
 
+    },
+    ", " : {
+
+    },
+    "%@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
     },
     "%lld%%" : {
 
@@ -83,6 +26,61 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bopify"
+          }
+        }
+      }
+    },
+    "artist.popularSongs.accessibility" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Show popular songs by %@"
+          }
+        }
+      }
+    },
+    "artist.popularSongs.empty" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No popular songs available."
+          }
+        }
+      }
+    },
+    "artist.popularSongs.loading" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Loading popular songs"
+          }
+        }
+      }
+    },
+    "artist.popularSongs.retry" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Retry"
+          }
+        }
+      }
+    },
+    "artist.popularSongs.unavailable" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't load popular songs."
           }
         }
       }
@@ -219,6 +217,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bopify can’t access your saved sign-in. Check its access in Keychain Access, then retry."
+          }
+        }
+      }
+    },
+    "error.credentialCleanupNotRecorded" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bopify stopped playback, but could not save your sign-out request. Saved sign-in may return after restarting. Check free disk space and file access, then retry removal."
+          }
+        }
+      }
+    },
+    "error.credentialCleanupRequired" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bopify stopped playback, but could not finish removing saved sign-in. Unlock Keychain or check its access, then retry removal."
           }
         }
       }
@@ -549,6 +567,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bring your recent plays and stations here."
+          }
+        }
+      }
+    },
+    "library.cancelAuthorization" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel library sign-in"
           }
         }
       }
@@ -1176,7 +1204,29 @@
         }
       }
     },
+    "signIn.cancel" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel sign-in"
+          }
+        }
+      }
+    },
+    "signIn.cleanupError" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not finish signing out"
+          }
+        }
+      }
+    },
     "signIn.credentialError" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1187,6 +1237,7 @@
       }
     },
     "signIn.error" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1206,12 +1257,32 @@
         }
       }
     },
+    "signIn.removingCredentials" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Removing saved sign-in…"
+          }
+        }
+      }
+    },
     "signIn.restoring" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Checking saved sign-in…"
+          }
+        }
+      }
+    },
+    "signIn.retryRemoval" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry removal"
           }
         }
       }

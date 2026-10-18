@@ -26,7 +26,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		BF0F1800000000000000000B /* Exceptions for Bopify in BopifyAppTests */ = {
+		BF0F1800000000000000000B /* Exceptions for "Bopify" folder in "BopifyAppTests" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				BopifyApp.swift,
@@ -39,7 +39,7 @@
 		19D0CF2C3061E194001CC3E1 /* Bopify */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				BF0F1800000000000000000B /* Exceptions for Bopify in BopifyAppTests */,
+				BF0F1800000000000000000B /* Exceptions for "Bopify" folder in "BopifyAppTests" target */,
 			);
 			path = Bopify;
 			sourceTree = "<group>";
@@ -433,7 +433,11 @@
 				BUNDLE_LOADER = "";
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @loader_path/Frameworks @executable_path/../Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@loader_path/Frameworks",
+					"@executable_path/../Frameworks",
+				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leesiongchan.bopify.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -455,7 +459,11 @@
 				BUNDLE_LOADER = "";
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @loader_path/Frameworks @executable_path/../Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@loader_path/Frameworks",
+					"@executable_path/../Frameworks",
+				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leesiongchan.bopify.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -495,7 +503,6 @@
 				BF0F18000000000000000009 /* Debug configuration for PBXNativeTarget "BopifyAppTests" */,
 				BF0F1800000000000000000A /* Release configuration for PBXNativeTarget "BopifyAppTests" */,
 			);
-			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
