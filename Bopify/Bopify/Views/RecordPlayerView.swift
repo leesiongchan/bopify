@@ -246,13 +246,8 @@ struct RecordPlayerView: View {
     private var controls: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .top, spacing: 4) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(track?.title ?? String(localized: "player.unknownTrack"))
-                        .font(.system(size: 17, weight: .medium)).lineLimit(1).help(track?.title ?? "")
-                    if let track {
-                        ArtistSongsButton(track: track, player: player, artworkStore: artworkStore, presentation: presentation)
-                    }
-                }.frame(maxWidth: .infinity, alignment: .leading)
+                PlayerTrackMetadata(track: track, player: player, artworkStore: artworkStore, presentation: presentation)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 // Hidden while mirroring: Bopify still has its own track, and the heart would show that track's saved state.
                 if player.state.mirror == nil {
                     FavoriteButton()
@@ -359,6 +354,29 @@ struct RecordPlayerView: View {
         guard let target = entry.target else { return }
         pendingSelection = .pending(entryID: entry.id, target: target)
         player.selectQueueEntry(target)
+    }
+}
+
+struct PlayerTrackMetadata: View {
+    let track: Track?
+    let player: PlayerModel
+    let artworkStore: ArtworkStore
+    let presentation: PlayerPresentation
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(track?.title ?? String(localized: "player.unknownTrack"))
+                .font(.system(size: 17, weight: .medium)).lineLimit(1).help(track?.title ?? "")
+                .frame(height: 21, alignment: .leading)
+            Group {
+                if let track {
+                    ArtistSongsButton(track: track, player: player, artworkStore: artworkStore, presentation: presentation)
+                } else {
+                    Color.clear.accessibilityHidden(true)
+                }
+            }
+            .frame(height: 18)
+        }
     }
 }
 

@@ -51,18 +51,19 @@ struct VolumePopoverContent: View {
     let onEditingEnded: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 6) {
             Button(action: player.toggleMute) {
                 Image(systemName: player.displayVolume == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                    .font(.system(size: 12))
                     .frame(width: 24, height: 24)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Text(player.displayVolume == 0 ? "transport.unmute" : "transport.mute"))
             HorizontalVolumeSlider(value: player.displayVolume, onValueChange: player.setVolume,
                 onEditingBegan: onEditingBegan, onEditingEnded: onEditingEnded)
-                .frame(width: 136, height: 24)
+                .frame(width: 112, height: 24)
         }
-        .padding(12)
+        .padding(8)
     }
 }
 
@@ -72,7 +73,8 @@ private struct HorizontalVolumeSlider: NSViewRepresentable {
     let onEditingBegan: () -> Void
     let onEditingEnded: () -> Void
     func makeNSView(context: Context) -> TrackingSlider {
-        let slider = TrackingSlider(frame: CGRect(x: 0, y: 0, width: 136, height: 24))
+        let slider = TrackingSlider(frame: CGRect(x: 0, y: 0, width: 112, height: 24))
+        slider.cell = SlimVolumeSliderCell()
         slider.minValue = 0; slider.maxValue = 1
         slider.isContinuous = true
         slider.target = slider
@@ -99,5 +101,25 @@ private struct HorizontalVolumeSlider: NSViewRepresentable {
             onValueChange?(doubleValue)
             if !isTracking { onEditingEnded?() }
         }
+    }
+}
+
+private final class SlimVolumeSliderCell: NSSliderCell {
+    override func drawBar(inside rect: NSRect, flipped: Bool) {
+        let bar = NSRect(x: rect.minX, y: rect.midY - 1.5, width: rect.width, height: 3)
+        NSColor.labelColor.withAlphaComponent(0.16).setFill()
+        NSBezierPath(roundedRect: bar, xRadius: 1.5, yRadius: 1.5).fill()
+        guard doubleValue > minValue else { return }
+        var filled = bar
+        filled.size.width = min(bar.width, max(0, knobRect(flipped: flipped).midX - bar.minX))
+        NSColor.labelColor.withAlphaComponent(0.75).setFill()
+        NSBezierPath(roundedRect: filled, xRadius: 1.5, yRadius: 1.5).fill()
+    }
+
+    override func drawKnob(_ knobRect: NSRect) {
+        // Keep the native knob's larger tracking geometry while drawing a smaller thumb.
+        let thumb = NSRect(x: knobRect.midX - 4, y: knobRect.midY - 4, width: 8, height: 8)
+        NSColor.labelColor.setFill()
+        NSBezierPath(ovalIn: thumb).fill()
     }
 }

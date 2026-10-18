@@ -17,6 +17,21 @@ struct EventBridgeArtistTests {
         bridge.finish()
     }
 
+    @Test func sameTrackRequestsMatchTheirArtistWhenRepliesArriveBackwards() async throws {
+        let bridge = EventBridge()
+        let (requests, sent) = AsyncStream.makeStream(of: UInt64.self)
+        var ids = requests.makeAsyncIterator()
+        let first = Task { try await bridge.artistTopTracks(for: track) { sent.yield($0) } }
+        let firstID = try #require(await ids.next())
+        let second = Task { try await bridge.artistTopTracks(for: track) { sent.yield($0) } }
+        let secondID = try #require(await ids.next())
+        emit(reply(id: secondID).replacingOccurrences(of: "Singer", with: "Featured"), into: bridge)
+        emit(reply(id: firstID), into: bridge)
+        #expect(try await first.value.artistName == "Singer")
+        #expect(try await second.value.artistName == "Featured")
+        bridge.finish()
+    }
+
     @Test func wrongTrackFailsInsteadOfShowingStaleSongs() async {
         let bridge = EventBridge()
         await #expect(throws: ArtistTopTracksFailure.unavailable) {

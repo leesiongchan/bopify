@@ -11,7 +11,7 @@ struct QueueView: View {
     var body: some View {
         GeometryReader { geometry in
         ScrollView {
-            LazyVStack(spacing: 2) {
+            LazyVStack(spacing: 1) {
                 if let queue = state.queue {
                     if let current = queue.current { row(for: current, isCurrent: true) }
                     ForEach(queue.next) { entry in row(for: entry, isCurrent: false) }
@@ -27,7 +27,7 @@ struct QueueView: View {
                     .frame(maxWidth: .infinity).padding(.vertical, 50)
                 }
             }
-            .padding(.top, 16)
+            .padding(.top, 6)
             .padding(.bottom, 4)
             .frame(minHeight: geometry.size.height, alignment: .top)
             .background(PlayerBackgroundDragRegion())
@@ -39,7 +39,7 @@ struct QueueView: View {
     private func row(for entry: QueueEntry, isCurrent: Bool) -> some View {
         let track = entry.track ?? (isCurrent && entry.uri == state.currentTrack?.uri ? state.currentTrack : nil)
         let url = track?.artwork?.url
-        let label = HStack(spacing: 12) {
+        let label = HStack(spacing: 8) {
             Group {
                 if let url, let image = artworkStore.image(for: url) {
                     Image(nsImage: image).resizable().scaledToFill()
@@ -50,23 +50,23 @@ struct QueueView: View {
                     }
                 }
             }
-            .frame(width: 48, height: 48)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .frame(width: 32, height: 32)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
             .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(track?.title ?? String(localized: entry.metadataFailed ? "queue.unavailable" : "queue.loadingTrack"))
-                    .font(.system(size: 13, weight: isCurrent ? .medium : .regular)).lineLimit(1)
+                    .font(.system(size: 12, weight: isCurrent ? .medium : .regular)).lineLimit(1)
                 Text(track?.artists.map(\.name).joined(separator: ", ") ?? "")
-                    .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                    .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if isCurrent { Image(systemName: "waveform").font(.system(size: 12)).accessibilityLabel(Text("player.nowPlaying")) }
             Text(track.map { playbackTime($0.durationMs) } ?? "—")
-                .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
+                .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
         }
-        .padding(.vertical, 8).padding(.horizontal, 8)
+        .padding(6)
         .contentShape(Rectangle())
-        .background(.white.opacity(isCurrent ? 0.045 : 0), in: RoundedRectangle(cornerRadius: 12))
+        .background(.primary.opacity(isCurrent ? 0.045 : 0), in: RoundedRectangle(cornerRadius: 6))
         return Group {
             if isCurrent { label }
             else {
@@ -76,7 +76,7 @@ struct QueueView: View {
                 .disabled(entry.target == nil || !player.isEngineReady || !state.isActiveDevice)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.songRow)
         .accessibilityElement(children: .combine)
         .task(id: ArtworkLoadRequest(url: url, retryRevision: artworkStore.retryRevision)) { if let url { await artworkStore.load(url) } }
     }

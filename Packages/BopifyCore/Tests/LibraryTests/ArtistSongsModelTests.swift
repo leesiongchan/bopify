@@ -56,6 +56,27 @@ struct ArtistSongsModelTests {
         #expect(model.result?.trackURI == newer)
     }
 
+    @Test func switchingSingersOnTheSameTrackRejectsTheFirstSingersLateReply() async {
+        let model = ArtistSongsModel()
+        let (started, signal) = AsyncStream.makeStream(of: Void.self)
+        var finish: CheckedContinuation<ArtistTopTracks, Never>?
+        let first = Task {
+            await model.load(for: source) { _ in
+                await withCheckedContinuation { finish = $0; signal.yield(()) }
+            }
+        }
+        for await _ in started { break }
+        let featuredArtist = SpotifyURI("spotify:artist:featured")!
+        await model.load(for: source) {
+            ArtistTopTracks(trackURI: $0, artistURI: featuredArtist, artistName: "Featured singer", tracks: [testTrack("other")])
+        }
+        finish?.resume(returning: response(source))
+        await first.value
+        #expect(model.result?.artistURI == featuredArtist)
+        #expect(model.playRequest(for: testTrack("other")) == PlayRequest(contextURI: testTrack("other").uri))
+        #expect(model.playRequest(for: testTrack("song")) == nil)
+    }
+
     @Test func failedLoadCanRetryAndWrongSourceCannotBeShown() async {
         let model = ArtistSongsModel()
         await model.load(for: source) { _ in throw ArtistTopTracksFailure.network }

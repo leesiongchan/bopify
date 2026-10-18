@@ -432,7 +432,7 @@ pub unsafe extern "C" fn bopify_request_lyrics(
     unsafe { with_engine(handle, |engine| engine.request_lyrics(track, request_id)) }
 }
 
-/// Queues the main artist's popular songs for a canonical track URI.
+/// Queues a displayed artist's popular songs for a canonical track URI.
 ///
 /// # Safety
 /// `handle` must be null or live, and `track_uri` must satisfy `str_from`'s contract.
@@ -440,9 +440,12 @@ pub unsafe extern "C" fn bopify_request_lyrics(
 pub unsafe extern "C" fn bopify_request_artist_top_tracks(
     handle: *mut BopifyEngine,
     track_uri: *const c_char,
+    artist_index: u32,
     request_id: u64,
 ) -> i32 {
-    log::debug!("ffi: bopify_request_artist_top_tracks request_id={request_id}");
+    log::debug!(
+        "ffi: bopify_request_artist_top_tracks artist_index={artist_index} request_id={request_id}"
+    );
     // SAFETY: the URI is borrowed only for this call, under the caller's contract.
     let Some(track) = (unsafe { str_from(track_uri) }) else {
         return BopifyError::InvalidArgument.code();
@@ -450,7 +453,7 @@ pub unsafe extern "C" fn bopify_request_artist_top_tracks(
     // SAFETY: forwards this function's own handle contract.
     unsafe {
         with_engine(handle, |engine| {
-            engine.request_artist_top_tracks(track, request_id)
+            engine.request_artist_top_tracks(track, artist_index, request_id)
         })
     }
 }

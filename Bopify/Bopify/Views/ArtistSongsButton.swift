@@ -9,50 +9,61 @@ struct ArtistSongsButton: View {
     let player: PlayerModel
     let artworkStore: ArtworkStore
     let presentation: PlayerPresentation
+    @State private var selectedArtistIndex: Int?
+    @State private var hoveredArtistIndex: Int?
     @Environment(AppEnvironment.self) private var environment: AppEnvironment?
+    private var canRequest: Bool { environment != nil && player.isEngineReady && track.uri.kind == .track }
 
-    private var isPresented: Binding<Bool> {
-        Binding(get: { presentation.activePopover == .artist }, set: { value in
-            if value { presentation.presentPopover(.artist) }
-            else if presentation.activePopover == .artist { presentation.dismissPopover() }
+    private func isPresented(for index: Int) -> Binding<Bool> {
+        Binding(get: { selectedArtistIndex == index && presentation.activePopover == .artist }, set: { value in
+            if value { selectedArtistIndex = index; presentation.presentPopover(.artist) }
+            else if selectedArtistIndex == index { dismiss() }
         })
     }
 
     var body: some View {
-        if let artist = track.artists.first {
+        ScrollView(.horizontal) {
             HStack(spacing: 0) {
-                Button {
-                    isPresented.wrappedValue.toggle()
-                    BopifyLog.library.debug("artist popular songs toggled")
-                } label: {
-                    HStack(spacing: 3) {
-                        Text(artist.name).lineLimit(1)
-                        Image(systemName: "chevron.down").font(.system(size: 8))
+                ForEach(Array(track.artists.enumerated()), id: \.offset) { index, artist in
+                    if index > 0 { Text(", ").foregroundStyle(.tertiary) }
+                    Button {
+                        isPresented(for: index).wrappedValue.toggle()
+                        BopifyLog.library.debug("artist popular songs toggled index=\(index, privacy: .public)")
+                    } label: {
+                        Text(artist.name).lineLimit(1).fixedSize(horizontal: true, vertical: false)
+                            .foregroundStyle(hoveredArtistIndex == index && canRequest ? .primary : .secondary)
+                            .underline(hoveredArtistIndex == index && canRequest)
                     }
-                }
-                .buttonStyle(.plain)
-                .disabled(environment == nil || !player.isEngineReady || track.uri.kind != .track)
-                .help(String(localized: "artist.popularSongs.help", defaultValue: "Show popular songs"))
-                .accessibilityLabel(String(localized: "artist.popularSongs.accessibility", defaultValue: "Show popular songs by \(artist.name)"))
-                .popover(isPresented: isPresented, arrowEdge: .bottom) {
-                    if let environment {
-                        ArtistSongsPopover(track: track, player: player, artworkStore: artworkStore,
-                                           presentation: presentation, request: environment.requestArtistTopTracks(for:))
-                            .id(track.uri)
+                    .buttonStyle(.plain)
+                    .onHover { hovering in
+                        if hovering && canRequest { hoveredArtistIndex = index }
+                        else if hoveredArtistIndex == index { hoveredArtistIndex = nil }
                     }
-                }
-                if track.artists.count > 1 {
-                    Text(", " + track.artists.dropFirst().map(\.name).joined(separator: ", ")).lineLimit(1)
+                    .disabled(!canRequest)
+                    .help(artist.name)
+                    .accessibilityLabel(String(localized: "artist.popularSongs.accessibility", defaultValue: "Show popular songs by \(artist.name)"))
+                    .popover(isPresented: isPresented(for: index), arrowEdge: .bottom) {
+                        if let environment {
+                            ArtistSongsPopover(track: track, player: player, artworkStore: artworkStore,
+                                               presentation: presentation, request: { source in
+                                try await environment.requestArtistTopTracks(for: source, artistIndex: index)
+                            })
+                            .id("\(track.uri.rawValue):\(index)")
+                        }
+                    }
                 }
             }
-            .font(.system(size: 12)).foregroundStyle(.secondary)
-            .onChange(of: track.uri) { _, _ in dismiss() }
-            .onChange(of: player.engineEpoch) { _, _ in dismiss() }
-            .onDisappear { dismiss() }
         }
+        .font(.system(size: 12))
+        .scrollIndicators(.hidden)
+        .frame(height: 18)
+        .onChange(of: track.uri) { _, _ in dismiss() }
+        .onChange(of: player.engineEpoch) { _, _ in dismiss() }
+        .onDisappear { dismiss() }
     }
 
     private func dismiss() {
+        selectedArtistIndex = nil
         if presentation.activePopover == .artist { presentation.dismissPopover() }
     }
 }
@@ -72,24 +83,18 @@ private struct ArtistSongsPopover: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(model.result?.artistName ?? track.artists.first?.name ?? "")
-                    .font(.system(size: 15, weight: .medium)).lineLimit(1)
-                Text(String(localized: "artist.popularSongs.title", defaultValue: "Popular songs"))
-                    .font(.callout).foregroundStyle(.secondary)
-            }
+        VStack(alignment: .leading, spacing: 0) {
             if let result = model.result {
                 if result.tracks.isEmpty {
                     notice(String(localized: "artist.popularSongs.empty", defaultValue: "No popular songs available."))
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: 2) {
+                        LazyVStack(spacing: 1) {
                             ForEach(Array(result.tracks.prefix(10)), id: \.uri) { song in row(song) }
                         }
                     }
                     .scrollIndicators(.visible)
-                    .frame(height: min(CGFloat(result.tracks.count) * 64, 360))
+                    .frame(height: min(CGFloat(result.tracks.count) * 45 - 1, 314))
                 }
             } else if model.error != nil {
                 VStack(spacing: 12) {
@@ -101,7 +106,7 @@ private struct ArtistSongsPopover: View {
                     .accessibilityLabel(String(localized: "artist.popularSongs.loading", defaultValue: "Loading popular songs"))
             }
         }
-        .padding(16).frame(width: 320)
+        .padding(6).frame(width: 280)
         .onExitCommand { presentation.dismissPopover() }
         .task(id: retryRevision) {
             await model.load(for: track.uri, request: request)
@@ -122,7 +127,7 @@ private struct ArtistSongsPopover: View {
             presentation.dismissPopover()
             BopifyLog.library.debug("artist popular song selected")
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 Group {
                     if let url = song.artwork?.url, let image = artworkStore.image(for: url) {
                         Image(nsImage: image).resizable().scaledToFill()
@@ -133,20 +138,16 @@ private struct ArtistSongsPopover: View {
                         }
                     }
                 }
-                .frame(width: 48, height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: 8)).accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(song.title).font(.system(size: 13)).lineLimit(1)
-                    Text(song.artists.map(\.name).joined(separator: ", "))
-                        .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(width: 32, height: 32)
+                .clipShape(RoundedRectangle(cornerRadius: 5)).accessibilityHidden(true)
+                Text(song.title).font(.system(size: 12)).lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 Text(playbackTime(song.durationMs))
-                    .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
+                    .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
             }
-            .padding(8).contentShape(Rectangle())
+            .padding(6).contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.songRow)
         .disabled(!player.isEngineReady || !sourceIsCurrent)
         .accessibilityElement(children: .combine)
         .task(id: ArtworkLoadRequest(url: song.artwork?.url, retryRevision: artworkStore.retryRevision)) {

@@ -1,9 +1,9 @@
-//! The current track's main artist and their country-specific popular songs.
+//! A displayed track artist and their country-specific popular songs.
 
 use std::{collections::HashSet, future::Future, time::Duration};
 
 use librespot_core::{Session, SpotifyUri, error::ErrorKind};
-use librespot_metadata::{Artist, Metadata, Track};
+use librespot_metadata::{Artist, Metadata, Track, artist::ArtistWithRole};
 use serde::Serialize;
 use tokio::task::JoinSet;
 
@@ -26,6 +26,7 @@ pub(crate) trait ArtistSource: Clone + Send + Sync + 'static {
     fn artist(
         &self,
         track: &SpotifyUri,
+        artist_index: u32,
     ) -> impl Future<Output = Result<ArtistTracks, ArtistTopTracksFailure>> + Send;
     fn track(&self, uri: String) -> impl Future<Output = Option<WireTrack>> + Send;
 }
@@ -34,13 +35,14 @@ pub(crate) trait ArtistSource: Clone + Send + Sync + 'static {
 pub(crate) struct SessionArtist(pub Session);
 
 impl ArtistSource for SessionArtist {
-    async fn artist(&self, track: &SpotifyUri) -> Result<ArtistTracks, ArtistTopTracksFailure> {
+    async fn artist(
+        &self,
+        track: &SpotifyUri,
+        artist_index: u32,
+    ) -> Result<ArtistTracks, ArtistTopTracksFailure> {
         let track = Track::get(&self.0, track).await.map_err(classify)?;
-        let artist = track
-            .artists
-            .first()
-            .ok_or(ArtistTopTracksFailure::Unavailable)?;
-        let artist = Artist::get(&self.0, &artist.id).await.map_err(classify)?;
+        let artist_uri = selected_artist_uri(&track.artists_with_role, artist_index)?;
+        let artist = Artist::get(&self.0, artist_uri).await.map_err(classify)?;
         Ok(ArtistTracks {
             uri: artist.id.to_uri(),
             name: artist.name,
@@ -51,6 +53,17 @@ impl ArtistSource for SessionArtist {
     async fn track(&self, uri: String) -> Option<WireTrack> {
         crate::queue::lookup(self.0.clone(), uri).await
     }
+}
+
+fn selected_artist_uri(
+    artists: &[ArtistWithRole],
+    artist_index: u32,
+) -> Result<&SpotifyUri, ArtistTopTracksFailure> {
+    // The player displays artists_with_role, whose order may differ from Track.artists.
+    artists
+        .get(artist_index as usize)
+        .map(|artist| &artist.id)
+        .ok_or(ArtistTopTracksFailure::Unavailable)
 }
 
 fn classify(error: librespot_core::Error) -> ArtistTopTracksFailure {
@@ -66,18 +79,27 @@ fn classify(error: librespot_core::Error) -> ArtistTopTracksFailure {
 pub(crate) async fn resolve<S: ArtistSource>(
     source: &S,
     track: SpotifyUri,
+    artist_index: u32,
     request_id: u64,
 ) -> WireEvent {
-    resolve_within(source, track, request_id, Duration::from_secs(30)).await
+    resolve_within(
+        source,
+        track,
+        artist_index,
+        request_id,
+        Duration::from_secs(30),
+    )
+    .await
 }
 
 async fn resolve_within<S: ArtistSource>(
     source: &S,
     track: SpotifyUri,
+    artist_index: u32,
     request_id: u64,
     timeout: Duration,
 ) -> WireEvent {
-    let result = tokio::time::timeout(timeout, songs(source, &track))
+    let result = tokio::time::timeout(timeout, songs(source, &track, artist_index))
         .await
         .unwrap_or(Err(ArtistTopTracksFailure::Network));
     match result {
@@ -105,8 +127,9 @@ async fn resolve_within<S: ArtistSource>(
 async fn songs<S: ArtistSource>(
     source: &S,
     track: &SpotifyUri,
+    artist_index: u32,
 ) -> Result<(ArtistTracks, Vec<WireTrack>), ArtistTopTracksFailure> {
-    let mut artist = source.artist(track).await?;
+    let mut artist = source.artist(track, artist_index).await?;
     let has_top_tracks = !artist.tracks.is_empty();
     let mut seen = HashSet::new();
     let mut pending = std::mem::take(&mut artist.tracks)
@@ -150,10 +173,18 @@ mod tests {
         failure: Option<ArtistTopTracksFailure>,
         stall: bool,
         missing_metadata: bool,
+        artist_index: u32,
     }
 
     impl ArtistSource for Fake {
-        async fn artist(&self, _: &SpotifyUri) -> Result<ArtistTracks, ArtistTopTracksFailure> {
+        async fn artist(
+            &self,
+            _: &SpotifyUri,
+            artist_index: u32,
+        ) -> Result<ArtistTracks, ArtistTopTracksFailure> {
+            if artist_index != self.artist_index {
+                return Err(ArtistTopTracksFailure::Unavailable);
+            }
             if self.stall {
                 std::future::pending::<()>().await;
             }
@@ -184,6 +215,42 @@ mod tests {
         }
     }
 
+    #[test]
+    fn artist_selection_follows_display_order_even_with_identical_names() {
+        use librespot_metadata::artist::{ArtistRole, ArtistWithRole};
+        let first = SpotifyUri::from_uri("spotify:artist:6rqhFgbbKwnb9MLmUQDhG6").unwrap();
+        let second = SpotifyUri::from_uri("spotify:artist:11dFghVXANMlKmJXsNCbNl").unwrap();
+        let artists = vec![
+            ArtistWithRole {
+                id: first,
+                name: "Singer".into(),
+                role: ArtistRole::ARTIST_ROLE_MAIN_ARTIST,
+            },
+            ArtistWithRole {
+                id: second.clone(),
+                name: "Singer".into(),
+                role: ArtistRole::ARTIST_ROLE_FEATURED_ARTIST,
+            },
+        ];
+        assert_eq!(selected_artist_uri(&artists, 1), Ok(&second));
+        assert_eq!(
+            selected_artist_uri(&artists, 2),
+            Err(ArtistTopTracksFailure::Unavailable)
+        );
+    }
+
+    #[test]
+    fn missing_displayed_artist_is_unavailable() {
+        assert_eq!(
+            selected_artist_uri(&[], 0),
+            Err(ArtistTopTracksFailure::Unavailable)
+        );
+        assert_eq!(
+            selected_artist_uri(&[], u32::MAX),
+            Err(ArtistTopTracksFailure::Unavailable)
+        );
+    }
+
     fn fake(uris: &[&str]) -> Fake {
         Fake {
             tracks: uris
@@ -193,6 +260,7 @@ mod tests {
             failure: None,
             stall: false,
             missing_metadata: false,
+            artist_index: 0,
         }
     }
 
@@ -201,6 +269,7 @@ mod tests {
         let result = resolve(
             &fake(&[SOURCE, SECOND, SOURCE]),
             SpotifyUri::from_uri(SOURCE).unwrap(),
+            0,
             7,
         )
         .await;
@@ -227,9 +296,21 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn resolves_the_selected_featured_artist() {
+        let source = Fake {
+            artist_index: 1,
+            ..fake(&[])
+        };
+        assert!(matches!(
+            resolve(&source, SpotifyUri::from_uri(SOURCE).unwrap(), 1, 7).await,
+            WireEvent::ArtistTopTracks { request_id: 7, .. }
+        ));
+    }
+
+    #[tokio::test]
     async fn artist_without_top_tracks_returns_empty_list() {
         assert!(
-            matches!(resolve(&fake(&[]), SpotifyUri::from_uri(SOURCE).unwrap(), 7).await,
+            matches!(resolve(&fake(&[]), SpotifyUri::from_uri(SOURCE).unwrap(), 0, 7).await,
             WireEvent::ArtistTopTracks { tracks, .. } if tracks.is_empty())
         );
     }
@@ -241,7 +322,7 @@ mod tests {
             ..fake(&[SOURCE])
         };
         assert!(matches!(
-            resolve(&source, SpotifyUri::from_uri(SOURCE).unwrap(), 7).await,
+            resolve(&source, SpotifyUri::from_uri(SOURCE).unwrap(), 0, 7).await,
             WireEvent::ArtistTopTracksFailed {
                 reason: ArtistTopTracksFailure::Unavailable,
                 ..
@@ -256,7 +337,7 @@ mod tests {
             ..fake(&[])
         };
         assert!(matches!(
-            resolve(&source, SpotifyUri::from_uri(SOURCE).unwrap(), 7).await,
+            resolve(&source, SpotifyUri::from_uri(SOURCE).unwrap(), 0, 7).await,
             WireEvent::ArtistTopTracksFailed {
                 request_id: 7,
                 reason: ArtistTopTracksFailure::Unavailable,
@@ -275,6 +356,7 @@ mod tests {
             resolve_within(
                 &source,
                 SpotifyUri::from_uri(SOURCE).unwrap(),
+                0,
                 7,
                 Duration::from_millis(1)
             )

@@ -1,5 +1,40 @@
 import SwiftUI
 
+struct SongRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        SongRowButtonBody(configuration: configuration)
+    }
+}
+
+extension ButtonStyle where Self == SongRowButtonStyle {
+    static var songRow: SongRowButtonStyle { SongRowButtonStyle() }
+}
+
+private struct SongRowButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    @State private var isHovered = false
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        configuration.label
+            .background(.primary.opacity(!isEnabled ? 0 : configuration.isPressed ? 0.12 : isHovered ? 0.07 : 0),
+                        in: RoundedRectangle(cornerRadius: 6))
+            .overlay(alignment: .leading) {
+                if isEnabled && (isHovered || configuration.isPressed) {
+                    Image(systemName: "play.fill").font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 32, height: 32)
+                        .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 5))
+                        .padding(.leading, 6)
+                        .accessibilityHidden(true).allowsHitTesting(false)
+                }
+            }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isHovered)
+            .onHover { isHovered = $0 }
+    }
+}
+
 struct PlayerControlButtonStyle: ButtonStyle {
     /// nil for plain actions; toggles tint their icon with the accent color while on.
     var isOn: Bool? = nil
