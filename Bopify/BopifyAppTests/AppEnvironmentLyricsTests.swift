@@ -1,5 +1,7 @@
 #if DEBUG
 import Foundation
+import AppKit
+import SwiftUI
 import Testing
 import BopifyAuth
 import BopifyDomain
@@ -8,6 +10,29 @@ import BopifyPlayback
 @MainActor
 @Suite("App live lyrics", .serialized, .timeLimit(.minutes(1)))
 struct AppEnvironmentLyricsTests {
+    @Test(arguments: ["signOut", "quit"])
+    func nativeMenuDisablesLyricsAfterTeardown(action: String) async throws {
+        try await withLyricsApp { f in
+            try await f.ready()
+            let controller = StatusItemController(content: EmptyView(), environment: f.environment)
+            defer { withExtendedLifetime(controller) {} }
+            let menu = NSMenu()
+            let show = NSMenuItem(title: "Show", action: NSSelectorFromString("toggleLiveLyrics:"), keyEquivalent: "")
+            let focus = NSMenuItem(title: "Focus", action: NSSelectorFromString("focusLiveLyrics:"), keyEquivalent: "")
+            let quit = NSMenuItem(title: "Quit", action: NSSelectorFromString("quit:"), keyEquivalent: "")
+            for item in [show, focus, quit] { item.target = controller; menu.addItem(item) }
+            menu.update()
+            #expect(show.isEnabled && focus.isEnabled && quit.isEnabled)
+
+            if action == "signOut" { await f.environment.signOut() }
+            else { await f.environment.prepareForQuit() }
+            show.isEnabled = false; focus.isEnabled = false
+            menu.update()
+            #expect(!show.isEnabled && !focus.isEnabled)
+            #expect(quit.isEnabled)
+        }
+    }
+
     @Test func ownsOneSessionAndRoutesToTheReadyEngine() async throws {
         try await withLyricsApp { f in
             try await f.ready()
