@@ -1,8 +1,33 @@
 # Live lyric ribbon validation
 
-Validated October 18, 2026 on macOS with Xcode 27, arm64. The implementation follows local playback and is available from the status-item menu in Debug and Release. The original Debug evaluation remains recorded below; the Release follow-up supersedes its compilation restrictions. Manual limits remain listed explicitly.
+Validated October 18, 2026 on macOS with Xcode 27, arm64. The implementation follows local playback and is available from the player Lyrics control or Control–Option–L in Debug and Release. Historical evaluations remain below. Manual limits remain listed explicitly.
 
-## Three-row sleeve refinement
+## Glass and record overlap refinement
+
+The current ribbon uses one native regular Liquid Glass surface with olive tint and a translucent charcoal reading overlay. The full 96-point record overlaps in front. The artificial spine, custom outline and extra native panel shadow are removed. Normal geometry remains **448 × 156 points**, including a **94-point three-row viewport**. Sync is a bordered capsule on the glass, avoiding a second glass layer.
+
+Before/after native ink measurements in the same original fixture show previous/current and current/next gaps changing from approximately **12.5/22 points to 17/17 points**. Tests check glyph centers at normal and 1.5× text scale, rather than only line-fragment origins. Enlarged and Arabic captures retain native wrapping/shaping.
+
+Actual `NSWindow.sendEvent` regressions cover dragging from the top, bottom and right border and record face, moving outside every display, spring return into a visible frame, passive keyboard eligibility and persistence of the final frame. Native text events verify exactly one seek on click and selection without seeking for both 10-point and 120-point drags. Additional regressions cover the main player's original focus/callback behavior, drag threshold, layout changes deferred during dragging, hiding during spring and a second drag interrupting the controller's running spring. Intentionally restoring the incorrect pointer-conversion order makes both interruption regressions fail; restoring the fix makes them pass.
+
+| Composited native capture | Observation |
+| --- | --- |
+| [Before](mockups/lyric-sleeve-v2-live.png) | Previous half-concealed record, opaque sleeve and unequal optical spacing. |
+| [Dark desktop](mockups/lyric-glass-dark.png) | Full record overlap and compact three-row field. |
+| [Light desktop](mockups/lyric-glass-light.png) | Charcoal-olive reading tint maintains legibility over the owned bright backdrop. |
+| [Patterned desktop](mockups/lyric-glass-busy.png) | Native glass blur remains visible through the reading tint. |
+| [Manual reading](mockups/lyric-glass-reading.png) | Conditional text-only Sync and stable reading geometry. |
+| [Long cue](mockups/lyric-glass-long.png) | Wrapping remains inside three physical rows. |
+| [Arabic](mockups/lyric-glass-rtl.png) | Native shaping and writing direction; recaptured without an overlapping system dialog. |
+| [Larger text](mockups/lyric-glass-large.png) | Bounded 1.5× typography and viewport. |
+
+Captures used the real Debug app, original words/artwork and owned light/dark/patterned backdrop windows. Window-only captures omit the compositor's backdrop sampling, so the final evidence uses a crop of the owned on-screen rectangle. Temporary fixture hooks and event diagnostics were removed afterward. No playback credentials or real audio were used.
+
+Fresh external HID pointer replay did not reach the preview's event monitor and is not counted as successful OS-level interaction coverage. Native window-event regressions and existing selection/manual-state tests provide the automated evidence. Reduce Motion's immediate branch was code-reviewed; no system accessibility preference was changed. The user's VoiceOver skip remains unchanged.
+
+With temporary hooks removed, the full app suites pass **110 Debug tests** and **79 Release tests**. The core package passes **387 tests** (194, 60, 32 and 101). Final Debug and Release app builds both succeed with `CODE_SIGNING_ALLOWED=NO SWIFT_EMIT_LOC_STRINGS=NO`. Independent review reports no remaining actionable findings.
+
+## Previous three-row sleeve refinement
 
 The revised native sleeve uses a **448 × 156-point** panel and a **94-point, three-row viewport**. The full 96-point record sits behind the sleeve rather than being rectangularly masked. Warm surface shading, a sleeve lip and the reused vinyl rendering provide depth. The footer and Live/Reading labels are removed; artist/provider metadata share the header. Manual mode reveals a text-only native glass Sync control. The main-player Lyrics toggle sits immediately before Playlist, with Focus Lyrics in its context menu; status-menu lyric entries are removed and Control–Option–L remains global.
 

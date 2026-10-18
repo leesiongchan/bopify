@@ -3,6 +3,11 @@ import SwiftUI
 import BopifyPlayback
 import BopifyDomain
 import os
+import Observation
+
+@Observable final class LyricRibbonPosition {
+    var offset: CGPoint = .zero
+}
 
 struct LyricRibbonView: View {
     let model: LyricRibbonModel
@@ -10,7 +15,9 @@ struct LyricRibbonView: View {
     var artworkStore: ArtworkStore? = nil
     var onFocusReader: () -> Void = {}
     var onSeek: (Int64, LyricPlaybackSnapshot) -> Void = { _, _ in }
-    let onDragHeader: (NSEvent) -> Void
+    var position = LyricRibbonPosition()
+    var onPrepareDrag: () -> Void = {}
+    var onDragChanged: (Bool) -> Void = { _ in }
     @FocusState private var syncFocused: Bool
     @State private var rotation = RecordRotation()
     @State private var isCoasting = false
@@ -20,10 +27,6 @@ struct LyricRibbonView: View {
 
     private var palette: ArtworkPalette {
         model.snapshot.artworkURL.flatMap { artworkStore?.palette(for: $0) } ?? .neutral
-    }
-    private var accent: Color {
-        let color: ArtworkColor = switch palette { case let .marble(a, _, _): a; case let .tinted(a): a }
-        return Color(.sRGB, red: color.red, green: color.green, blue: color.blue, opacity: 1)
     }
     private var motorRequest: RecordMotorRequest {
         .resolve(phase: model.snapshot.isPlaying ? .playing : .paused, ready: true, active: true,
@@ -50,16 +53,19 @@ struct LyricRibbonView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
+            dragRegion.frame(width: layout.panelSize.width, height: layout.panelSize.height)
+            sleeve.padding(.leading, LyricRibbonLayout.sleeveInset).padding(.top, LyricRibbonLayout.surfaceInset)
             VinylRecordView(image: model.snapshot.artworkURL.flatMap { artworkStore?.image(for: $0) }.map { Image(nsImage: $0) },
                 occurrenceID: model.snapshot.occurrenceID, direction: model.snapshot.direction, diameter: 96,
                 isMoving: motorRequest == .drive || isCoasting, isVisible: model.isVisible, rotation: rotation,
                 pressingSeed: PressingSeed.offset(model.snapshot.recordingID), palette: palette,
                 reduceMotionOverride: reduceMotion)
-                .offset(y: max(0, (layout.panelSize.height - 96) / 2))
+                .offset(x: 8, y: max(0, (layout.panelSize.height - 96) / 2))
                 .allowsHitTesting(false).accessibilityHidden(true)
-            sleeve.padding(.leading, LyricRibbonLayout.sleeveInset)
         }
         .frame(width: layout.panelSize.width, height: layout.panelSize.height)
+        .offset(x: position.offset.x, y: position.offset.y)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .preferredColorScheme(.dark)
         .onChange(of: model.keyboardSelection) { _, selection in
             syncFocused = selection == .sync
@@ -101,14 +107,15 @@ struct LyricRibbonView: View {
                     }
                     .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
                     .help("\(model.snapshot.title) · \(model.snapshot.artist)")
-                    .overlay { LyricHeaderDrag(onDrag: onDragHeader) }
+                    .overlay { dragRegion }
                     .id(model.snapshot.occurrenceID).transition(trackTransition)
                     if model.isReading { syncControl.fixedSize() }
                 }
                 .frame(height: LyricRibbonLayout.headerHeight, alignment: .leading)
                 LyricPassageView(text: message, content: model.content, projection: model.projection,
                     isReading: model.isReading, textScale: layout.textScale, isRightToLeft: model.source?.isRightToLeft ?? false,
-                    width: max(1, layout.panelSize.width - LyricRibbonLayout.sleeveInset - 2 * LyricRibbonLayout.horizontalInset),
+                    width: max(1, layout.panelSize.width - LyricRibbonLayout.sleeveInset - LyricRibbonLayout.readerInset
+                        - LyricRibbonLayout.horizontalInset - LyricRibbonLayout.surfaceInset),
                     height: layout.textViewportHeight, resetRevision: model.scrollResetRevision,
                     animate: !reduceMotion, onBeginReading: model.beginReading,
                     shouldFocusReader: { model.isKeyboardInteracting && model.keyboardSelection == .reader },
@@ -118,38 +125,27 @@ struct LyricRibbonView: View {
             }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.24), value: model.snapshot.occurrenceID)
-        .padding(.horizontal, LyricRibbonLayout.horizontalInset)
+        .padding(.leading, LyricRibbonLayout.readerInset)
+        .padding(.trailing, LyricRibbonLayout.horizontalInset)
         .padding(.vertical, LyricRibbonLayout.verticalInset)
-        .frame(width: max(1, layout.panelSize.width - LyricRibbonLayout.sleeveInset), height: layout.panelSize.height)
+        .frame(width: max(1, layout.panelSize.width - LyricRibbonLayout.sleeveInset - LyricRibbonLayout.surfaceInset),
+               height: max(1, layout.panelSize.height - 2 * LyricRibbonLayout.surfaceInset))
         .background {
-            let shape = UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10,
-                                                bottomTrailingRadius: 20, topTrailingRadius: 20)
-            if reduceTransparency || contrast == .increased { shape.fill(Color(nsColor: .windowBackgroundColor)) }
+            let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+            if reduceTransparency || contrast == .increased { shape.fill(Color(nsColor: .windowBackgroundColor)).allowsHitTesting(false) }
             else {
-                shape.fill(LinearGradient(colors: [Color(red: 0.19, green: 0.22, blue: 0.16),
-                    Color(red: 0.12, green: 0.15, blue: 0.115), Color(red: 0.10, green: 0.13, blue: 0.10)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing))
+                Color.clear.glassEffect(.regular.tint(Color(red: 0.16, green: 0.20, blue: 0.14).opacity(0.65)), in: shape)
+                    // The native text reader needs a stable dark field on bright desktops.
+                    .overlay { shape.fill(Color(red: 0.08, green: 0.11, blue: 0.075).opacity(0.75)) }
+                    .allowsHitTesting(false)
             }
-        }
-        .overlay(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(LinearGradient(colors: [accent.opacity(0.65), Color.black.opacity(0.45), accent.opacity(0.25)],
-                    startPoint: .leading, endPoint: .trailing))
-                .frame(width: 3).padding(.vertical, 5)
-                .shadow(color: .black.opacity(0.35), radius: 2, x: -1)
-                .allowsHitTesting(false)
-        }
-        .overlay {
-            UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10,
-                                   bottomTrailingRadius: 20, topTrailingRadius: 20)
-                .strokeBorder(.white.opacity(contrast == .increased ? 0.5 : 0.12), lineWidth: 1).allowsHitTesting(false)
         }
     }
 
-    @ViewBuilder private var syncControl: some View {
-        if reduceTransparency || contrast == .increased { syncButton.buttonStyle(.bordered) }
-        else { syncButton.buttonStyle(.glass) }
+    private var dragRegion: some View {
+        PlayerBackgroundDragRegion(takesKeyboardFocus: false, onPrepareDrag: onPrepareDrag, onDragChanged: onDragChanged)
     }
+    private var syncControl: some View { syncButton.buttonStyle(.bordered) }
     private var syncButton: some View {
         Button(action: model.backToLive) {
             Text(String(localized: "action.sync", defaultValue: "Sync", table: "LyricRibbon"))
@@ -162,16 +158,6 @@ struct LyricRibbonView: View {
         .focusable(interactions: [.edit, .activate])
         .focused($syncFocused)
     }
-}
-
-private struct LyricHeaderDrag: NSViewRepresentable {
-    let onDrag: (NSEvent) -> Void
-    final class DragView: NSView {
-        var onDrag: ((NSEvent) -> Void)?
-        override func mouseDown(with event: NSEvent) { onDrag?(event) }
-    }
-    func makeNSView(context: Context) -> DragView { DragView() }
-    func updateNSView(_ view: DragView, context: Context) { view.onDrag = onDrag }
 }
 
 #if DEBUG
@@ -194,7 +180,7 @@ private func previewLyricRibbon(_ kind: String) -> some View {
     model.completeLoad(content, token: model.beginLoad())
     if kind == "reading" { model.beginReading() }
     let layout = LyricRibbonLayout.measure(content: content, width: 448, textScale: 1, availableHeight: 320)
-    return LyricRibbonView(model: model, layout: layout, onDragHeader: { _ in })
+    return LyricRibbonView(model: model, layout: layout)
 }
 
 #Preview("Live lyrics") { previewLyricRibbon("live") }

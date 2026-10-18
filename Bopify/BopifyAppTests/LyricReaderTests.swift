@@ -3,6 +3,27 @@ import Testing
 
 @MainActor @Suite("Native lyric reader", .serialized)
 struct LyricReaderTests {
+    @Test(arguments: [1.0, 1.5]) func followingCentersVisibleGlyphsInEachRow(scale: CGFloat) throws {
+        let document = try LyricDocument(cues: (0..<3).map {
+            LyricCue(id: String($0), startMs: Int64($0) * 1000, text: "HHH")
+        })
+        let text = LyricRibbonLayout.reader(content: .timed(document),
+            projection: document.project(positionMs: 1000, durationMs: 3000), isReading: false, scale: scale)
+        let storage = NSTextStorage(attributedString: text)
+        let manager = NSLayoutManager()
+        let container = NSTextContainer(size: CGSize(width: 300, height: 1000))
+        manager.addTextContainer(container)
+        storage.addLayoutManager(manager)
+        manager.ensureLayout(for: container)
+        let centers: [CGFloat] = try [0, 4, 8].map { character in
+            let font = try #require(storage.attribute(.font, at: character, effectiveRange: nil) as? NSFont)
+            let glyph = manager.glyphIndexForCharacter(at: character)
+            let row = manager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+            return row.minY + manager.location(forGlyphAt: glyph).y - font.capHeight / 2
+        }
+        #expect(abs((centers[1] - centers[0]) - (centers[2] - centers[1])) < 1)
+    }
+
     @Test func cueHitTestingRequiresVisibleTimedWords() throws {
         let reader = try LyricReaderFixture()
         reader.update(position: 3_000, reading: true)

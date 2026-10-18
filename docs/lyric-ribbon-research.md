@@ -4,7 +4,22 @@ Research dates: October 17–18, 2026. The live native ribbon is implemented; se
 
 The lyric ribbon would let a listener glance at the words and reread a passage while music continues. The value to test is whether it fits working on a Mac without taking keyboard focus or demanding attention. The primary use remains a choice between persistent background display, a brief shortcut peek and deliberate close reading.
 
-## Three-row native sleeve revision
+## Glass and record overlap refinement
+
+The latest approved revision retains the **448 × 156-point** footprint and **94-point three-row viewport**. The full **96-point record sits in front of the glass**, with a shared natural shadow instead of a rectangular concealment, artificial spine or extra panel shadow. The lyric field starts beyond the record's edge. This replaces the half-concealed sleeve described below.
+
+The surface uses SwiftUI's native **regular Liquid Glass**, an olive tint and a translucent charcoal reading overlay. Composited bright-background testing exposed insufficient contrast with glass alone; the reading overlay keeps the retro palette and readable text while the system supplies blur and edge treatment. Sync uses a simple bordered capsule on that single glass layer. Reduce Transparency and Increased Contrast retain the opaque fallback.
+
+- Apple's custom glass API supports regular glass, custom rounded shapes and tint. [Applying Liquid Glass to custom views](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views) (checked October 18, 2026).
+- Apple recommends avoiding glass-on-glass and using fills for controls above a glass layer. [Meet Liquid Glass, WWDC25](https://developer.apple.com/videos/play/wwdc2025/219/) (checked October 18, 2026).
+- Sleeve's native desktop music themes provide a reference for compact record depth and materials. [Sleeve](https://replay.software/sleeve) (checked October 18, 2026).
+- TextKit's fixed row height does not optically center unequal fonts. Native baseline and cap-height metrics now center each row; the measured visible gaps in the original fixture change from approximately **12.5/22 pt to 17/17 pt**. [The details of UI typography, WWDC20](https://developer.apple.com/videos/play/wwdc2020/10175/) (checked October 18, 2026).
+
+Dragging reuses the main player's native region with a passive-focus option. Exposed borders, background, metadata and record can drag; the reader and Sync retain their interactions. Drop positioning reuses the existing screen clamp and SwiftUI spring parameters (0.50 seconds, bounce 0.18), with immediate positioning under Reduce Motion. `performDrag` was removed from this path because it returns immediately and does not guarantee a matching mouse-up. [Apple: performDrag(with:)](https://developer.apple.com/documentation/appkit/nswindow/performdrag(with:)) (checked October 18, 2026).
+
+See [native captures and validation](live-lyric-ribbon-validation.md#glass-and-record-overlap-refinement).
+
+## Previous three-row native sleeve revision
 
 The user approved a fixed three-row viewport after the initial native version diverged from the concept and retained too much space. The revised panel is **448 × 156 points**, with a 94-point reading viewport. A consistent line height makes three physical rows fit in both following and manual modes; long cues wrap inside this boundary and can displace an adjacent cue. Larger text scales the reading viewport, bounded by the display. The 96-point record is rendered as a complete circle behind the sleeve, with half naturally concealed by its opaque warm olive-charcoal surface and a subtle sleeve lip. The existing pressing, artwork and rotation components are reused.
 
