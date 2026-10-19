@@ -1,10 +1,23 @@
 import Foundation
+import AppKit
 import Testing
 import BopifyDomain
 import BopifyPlayback
 
 @MainActor @Suite("Live lyric session", .serialized, .timeLimit(.minutes(1)))
 struct LiveLyricRibbonSessionTests {
+    @Test func showingLyricsDoesNotCreateASeparateWindow() async throws {
+        _ = NSApplication.shared
+        let f = LiveLyricFixture(); defer { f.stop() }
+        try await f.ready()
+        let windows = Set(NSApp.windows.map(ObjectIdentifier.init))
+        f.session.show()
+        #expect(Set(NSApp.windows.map(ObjectIdentifier.init)) == windows)
+        #expect(f.session.isVisible)
+        f.session.hide()
+        #expect(!f.session.isVisible)
+    }
+
     @Test func clickingTimedCueSeeksExactlyAndResumesFollowing() async throws {
         let f = LiveLyricFixture(); defer { f.stop() }
         try await f.load()
@@ -305,12 +318,11 @@ struct LiveLyricRibbonSessionTests {
     let clock = LiveLyricTestClock()
     let player: PlayerModel
     let session: LiveLyricRibbonSession
-    private let suite = "live-lyrics-test-" + UUID().uuidString
     init() {
         player = PlayerModel(engine: engine)
         let gate = gate, clock = clock
         session = LiveLyricRibbonSession(player: player, requestLyrics: { try await gate.request(for: $0, epoch: $1) },
-            defaults: UserDefaults(suiteName: suite)!, now: { clock.now }, sleep: { try await clock.sleep(for: $0) })
+            now: { clock.now }, sleep: { try await clock.sleep(for: $0) })
         player.start()
     }
     func ready() async throws {
@@ -324,5 +336,5 @@ struct LiveLyricRibbonSessionTests {
         gate.succeed(0, with: liveLyrics())
         try await liveLyricEventually { self.session.model.source != nil }
     }
-    func stop() { session.shutdown(); player.stop(); gate.finish(); UserDefaults.standard.removePersistentDomain(forName: suite) }
+    func stop() { session.shutdown(); player.stop(); gate.finish() }
 }

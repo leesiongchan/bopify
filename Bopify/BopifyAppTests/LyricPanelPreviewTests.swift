@@ -2,15 +2,15 @@
 import AppKit
 import Testing
 
-@MainActor @Suite("Lyric ribbon preview", .serialized)
-struct LyricRibbonPreviewTests {
+@MainActor @Suite("Lyric panel preview", .serialized)
+struct LyricPanelPreviewTests {
     private let suite = "lyric-preview-tests-\(UUID().uuidString)"
     private var preferences: UserDefaults { UserDefaults(suiteName: suite)! }
 
     @Test func injectedClockTicksPauseFreezesAndHiddenTimeCatchesUp() async throws {
         let clock = LyricTestClock()
         let gate = LyricSleepGate()
-        let session = LyricRibbonPreviewSession(now: { clock.value }, sleep: { _ in try await gate.wait() }, defaults: preferences)
+        let session = LyricPanelPreviewSession(now: { clock.value }, sleep: { _ in try await gate.wait() }, defaults: preferences)
         defer { session.shutdown(); preferences.removePersistentDomain(forName: suite) }
         session.show()
         try await lyricEventually { await gate.count > 0 }
@@ -34,7 +34,7 @@ struct LyricRibbonPreviewTests {
     @Test func cancellationRejectsLateTickAfterHiding() async throws {
         let clock = LyricTestClock()
         let gate = LyricSleepGate()
-        let session = LyricRibbonPreviewSession(now: { clock.value }, sleep: { _ in try await gate.wait() }, defaults: preferences)
+        let session = LyricPanelPreviewSession(now: { clock.value }, sleep: { _ in try await gate.wait() }, defaults: preferences)
         defer { session.shutdown(); preferences.removePersistentDomain(forName: suite) }
         session.show()
         try await lyricEventually { await gate.count > 0 }
@@ -48,7 +48,7 @@ struct LyricRibbonPreviewTests {
     }
 
     @Test func correctionKeepsHoldAndSeekReleasesIt() {
-        let session = LyricRibbonPreviewSession(defaults: preferences)
+        let session = LyricPanelPreviewSession(defaults: preferences)
         defer { session.shutdown(); preferences.removePersistentDomain(forName: suite) }
         session.setPlaying(false)
         session.show()
@@ -67,7 +67,7 @@ struct LyricRibbonPreviewTests {
     }
 
     @Test func fixturesAndRepeatedOccurrencesReplaceHeldContent() {
-        let session = LyricRibbonPreviewSession(defaults: preferences)
+        let session = LyricPanelPreviewSession(defaults: preferences)
         defer { session.shutdown(); preferences.removePersistentDomain(forName: suite) }
         session.setPlaying(false)
         session.show()

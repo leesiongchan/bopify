@@ -8,7 +8,7 @@ nonisolated enum LyricIdleReason: Equatable, Sendable {
         switch self {
         case .noTrack: String(localized: "idle.noTrack", defaultValue: "Play music on this Mac", table: "LyricRibbon")
         case .loadingTrack: String(localized: "idle.loadingTrack", defaultValue: "Loading track…", table: "LyricRibbon")
-        case .otherDevice: String(localized: "idle.otherDevice", defaultValue: "This ribbon follows playback on this Mac", table: "LyricRibbon")
+        case .otherDevice: String(localized: "idle.otherDevice", defaultValue: "Lyrics follow playback on this Mac", table: "LyricRibbon")
         case .connecting: String(localized: "idle.connecting", defaultValue: "Connecting to playback…", table: "LyricRibbon")
         case .unsupported: String(localized: "idle.unsupported", defaultValue: "Lyrics unavailable for this item", table: "LyricRibbon")
         case .playbackUnavailable: String(localized: "idle.playbackUnavailable", defaultValue: "Playback unavailable", table: "LyricRibbon")

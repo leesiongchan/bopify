@@ -9,11 +9,9 @@ final class LiveLyricRibbonSession {
     let model: LyricRibbonModel
     var isVisible: Bool { model.isVisible }
     @ObservationIgnored private let player: PlayerModel
-    @ObservationIgnored private let artworkStore: ArtworkStore?
     @ObservationIgnored private let requestLyrics: @MainActor (SpotifyURI, UInt64) async throws -> TrackLyrics
     @ObservationIgnored private let now: @MainActor () -> Date
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
-    @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var input: Input?
     @ObservationIgnored private var request: Task<Void, Never>?
     @ObservationIgnored private var clock: Task<Void, Never>?
@@ -21,9 +19,6 @@ final class LiveLyricRibbonSession {
     @ObservationIgnored private var observationGeneration: UInt64 = 0
     @ObservationIgnored private var clockGeneration: UInt64 = 0
     @ObservationIgnored private var stopped = false
-    @ObservationIgnored private lazy var controller = LyricRibbonWindowController(model: model, defaults: defaults, artworkStore: artworkStore,
-        onSeek: { [weak self] time, snapshot in self?.seek(to: time, from: snapshot) },
-        onHide: { [weak self] in self?.hide() })
 
     private struct Input: Equatable {
         let epoch: UInt64
@@ -37,14 +32,12 @@ final class LiveLyricRibbonSession {
         case idle(LyricIdleReason, LyricPlaybackSnapshot)
     }
 
-    init(player: PlayerModel, artworkStore: ArtworkStore? = nil,
+    init(player: PlayerModel,
          requestLyrics: @escaping @MainActor (SpotifyURI, UInt64) async throws -> TrackLyrics,
-         defaults: UserDefaults = .standard, now: @escaping @MainActor () -> Date = { .now },
+         now: @escaping @MainActor () -> Date = { .now },
          sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }) {
         self.player = player
-        self.artworkStore = artworkStore
         self.requestLyrics = requestLyrics
-        self.defaults = defaults
         self.now = now
         self.sleep = sleep
         model = LyricRibbonModel(snapshot: LyricPlaybackSnapshot(sessionID: "none", occurrenceID: "none",
@@ -57,7 +50,6 @@ final class LiveLyricRibbonSession {
         model.show()
         observationGeneration &+= 1
         observe()
-        controller.show()
     }
 
     func hide() {
@@ -65,14 +57,15 @@ final class LiveLyricRibbonSession {
         cancelRequest()
         stopClock()
         input = nil
-        controller.hide()
+        model.hide()
         model.setIdle(.noTrack)
     }
 
     func focusForReading() {
         guard !stopped else { return }
         if !isVisible { show() }
-        controller.focusForReading()
+        model.isKeyboardInteracting = true
+        model.keyboardSelection = .reader
     }
 
     func seek(to time: Int64, from rendered: LyricPlaybackSnapshot) {
@@ -149,7 +142,6 @@ final class LiveLyricRibbonSession {
             model.update(snapshot)
             if model.content != .idle(reason) {
                 model.setIdle(reason)
-                controller.refreshLayout(textScale: 1)
             }
         case let .local(next, snapshot):
             model.update(snapshot)
@@ -157,7 +149,6 @@ final class LiveLyricRibbonSession {
                 cancelRequest()
                 input = next
                 let token = model.beginLoad()
-                controller.refreshLayout(textScale: 1)
                 load(next, token: token)
             }
             if snapshot.isPlaying { startClock() } else { stopClock() }
@@ -188,7 +179,6 @@ final class LiveLyricRibbonSession {
                 self.model.completeLoad(error as? LyricFailure == .noLyrics ? .noMatch : .failure, token: token)
                 BopifyLog.playback.debug("live lyrics request unavailable")
             }
-            self.controller.refreshLayout(textScale: 1)
         }
     }
 

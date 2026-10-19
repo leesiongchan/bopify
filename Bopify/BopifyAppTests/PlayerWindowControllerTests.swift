@@ -5,6 +5,76 @@ import BopifyPlayback
 
 @MainActor @Suite("Player window", .serialized)
 struct PlayerWindowControllerTests {
+    @Test func interruptedLyricTransitionsKeepTheNewestFrameAndAnchor() throws {
+        _ = NSApplication.shared
+        let suite = "lyrics-interrupt-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let screen = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let panel = StatusPanel(content: EmptyView())
+        panel.isReleasedWhenClosed = false
+        defer { panel.close() }
+        panel.setFrame(CGRect(x: 400, y: 300, width: 484, height: 158), display: false)
+        let controller = PlayerWindowController(defaults: defaults)
+        controller.attach(to: panel)
+        controller.apply(mode: .compact, reduceMotion: true, visibleFrame: screen, showsLyrics: true)
+        let lyricTop = panel.frame.maxY - controller.layout.lyricsFrame.minY
+        panel.orderFrontRegardless()
+        controller.apply(mode: .expanded, reduceMotion: false, visibleFrame: screen, showsLyrics: true)
+        let obsolete = controller.transitionID
+        controller.apply(mode: .compact, reduceMotion: false, visibleFrame: screen, showsLyrics: true)
+        controller.apply(mode: .expanded, reduceMotion: false, visibleFrame: screen, showsLyrics: true)
+        controller.finishTransition(obsolete)
+        #expect(controller.isTransitioning)
+        controller.finishTransition(controller.transitionID)
+        #expect(!controller.isTransitioning)
+        #expect(panel.frame.size == controller.layout.contentSize)
+        #expect(panel.frame.maxY - controller.layout.lyricsFrame.minY == lyricTop)
+    }
+
+    @Test func lyricsKeepTheirScreenPositionAcrossCollapseAndExpansion() throws {
+        _ = NSApplication.shared
+        let defaults = try #require(UserDefaults(suiteName: "lyrics-anchor-\(UUID().uuidString)"))
+        let screen = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let panel = StatusPanel(content: EmptyView())
+        panel.isReleasedWhenClosed = false
+        defer { panel.close() }
+        panel.setFrame(CGRect(x: 400, y: 500, width: 142, height: 142), display: false)
+        let controller = PlayerWindowController(defaults: defaults)
+        controller.attach(to: panel)
+        controller.apply(mode: .expanded, reduceMotion: true, visibleFrame: screen, showsLyrics: true)
+        func lyricOrigin() -> CGPoint {
+            CGPoint(x: panel.frame.minX + controller.layout.lyricsFrame.minX,
+                    y: panel.frame.maxY - controller.layout.lyricsFrame.minY)
+        }
+        let origin = lyricOrigin()
+        controller.apply(mode: .compact, reduceMotion: true, visibleFrame: screen, showsLyrics: true)
+        #expect(lyricOrigin() == origin)
+        #expect(screen.contains(panel.frame))
+        controller.apply(mode: .expanded, reduceMotion: true, visibleFrame: screen, showsLyrics: true)
+        #expect(lyricOrigin() == origin)
+    }
+
+    @Test func theCompactVinylIsAPassiveClickAndDragTarget() throws {
+        _ = NSApplication.shared
+        let defaults = try #require(UserDefaults(suiteName: "lyrics-hover-\(UUID().uuidString)"))
+        let panel = StatusPanel(content: EmptyView())
+        panel.isReleasedWhenClosed = false
+        defer { panel.close() }
+        let controller = PlayerWindowController(defaults: defaults)
+        controller.attach(to: panel)
+        controller.apply(mode: .compact, reduceMotion: true, visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 900), showsLyrics: true)
+        #expect(panel.containsPlayerPoint?(controller.layout.recordCenter) == false)
+        let recordEdge = CGPoint(x: controller.layout.recordCenter.x + controller.layout.recordDiameter / 2 - 3,
+                                 y: controller.layout.recordCenter.y)
+        #expect(panel.containsPlayerPoint?(recordEdge) == false)
+        #expect(panel.containsLyricsPoint?(recordEdge) == true)
+        let lyric = controller.layout.lyricsFrame
+        let point = CGPoint(x: lyric.midX, y: lyric.midY)
+        #expect(panel.containsPlayerPoint?(point) == false)
+        #expect(panel.containsLyricsPoint?(point) == true)
+    }
+
     @Test func menuBarClickRaisesTheVisiblePlayerAfterAnotherWindowTakesFocus() throws {
         _ = NSApplication.shared
         let defaults = UserDefaults.standard

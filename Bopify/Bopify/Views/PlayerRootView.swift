@@ -8,7 +8,7 @@ struct PlayerRootView: View {
 
     var body: some View {
         Group {
-            if environment.isListening, let player = environment.player {
+            if environment.isListening || environment.isLiveLyricsVisible, let player = environment.player {
                 RecordPlayerView(player: player, artworkStore: environment.artworkStore,
                                    presentation: environment.presentation, windowController: environment.playerWindowController)
                     .id(ObjectIdentifier(player))

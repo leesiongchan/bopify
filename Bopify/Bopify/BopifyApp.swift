@@ -18,7 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItemController: StatusItemController?
     private var lyricShortcutTask: Task<Void, Never>?
     #if DEBUG
-    private var lyricPreview: LyricRibbonPreviewSession?
+    private var lyricPreview: LyricPanelPreviewSession?
     private var browserPreview: MusicBrowserPreviewSession?
     #endif
 
@@ -30,8 +30,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             preview.show()
             return
         }
-        if ProcessInfo.processInfo.arguments.contains("--lyric-ribbon-preview") {
-            let preview = LyricRibbonPreviewSession()
+        if ProcessInfo.processInfo.arguments.contains("--lyrics-preview") {
+            let preview = LyricPanelPreviewSession()
             lyricPreview = preview
             preview.showControls()
             preview.show()

@@ -24,6 +24,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         statusItem.button?.action = #selector(statusItemClicked(_:))
         statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         panel = StatusPanel(content: content)
+        if let panel { environment.playerWindowController.attach(to: panel) }
         panel?.delegate = self
         panel?.onDismiss = { [weak self] in self?.dismiss() }
         panel?.onTogglePlayback = { [weak self] in
@@ -46,7 +47,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         panel?.onPointerChanged = { [weak self] in self?.environment.presentation.sendAttention(.pointer($0)) }
         panel?.onWindowDragChanged = { [weak self] active in
             guard let self else { return }
-            self.environment.playerWindowController.setDragging(active)
+            if self.isWindowControllerAttached { self.environment.playerWindowController.setDragging(active) }
             self.environment.presentation.sendAttention(.interaction(.windowDrag, active))
         }
         if let stored = UserDefaults.standard.string(forKey: "player.frame") {
@@ -71,9 +72,10 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 
     private func configure(mode: PlayerMode, keepOnTop: Bool) {
         guard let panel else { return }
-        panel.level = keepOnTop ? .floating : .normal
+        let floatingLyrics = environment.isLiveLyricsVisible && environment.presentation.mode == .compact
+        panel.level = keepOnTop || floatingLyrics ? .floating : .normal
         UserDefaults.standard.set(keepOnTop, forKey: "player.keepOnTop")
-        if environment.isListening {
+        if environment.isListening || environment.isLiveLyricsVisible {
             if !isWindowControllerAttached {
                 if !hasPosition, PlayerWindowController.restoredAnchor(defaults: .standard) == nil,
                    let button = statusItem.button,
@@ -85,23 +87,26 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                 if panel.isKeyWindow { environment.presentation.sendAttention(.keyboardFocus(true)) }
                 isWindowControllerAttached = true
                 // The new composition has no rendered player geometry to animate from yet.
-                environment.playerWindowController.apply(mode: environment.presentation.mode, reduceMotion: true)
+                environment.playerWindowController.apply(mode: environment.presentation.mode, reduceMotion: true,
+                                                         showsLyrics: environment.isLiveLyricsVisible)
                 BopifyLog.playback.debug("Player listening geometry initialized")
             }
             environment.playerWindowController.apply(mode: environment.presentation.mode,
-                                              reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+                                              reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+                                              showsLyrics: environment.isLiveLyricsVisible)
             return
         }
         if isWindowControllerAttached {
             environment.playerWindowController.invalidateTransition()
-            panel.containsPlayerPoint = nil
             environment.presentation.resetEngagement()
             environment.presentation.sendAttention(.visibility(panel.isVisible))
-            panel.styleMask.insert(.resizable)
-            panel.hasShadow = true
             isWindowControllerAttached = false
             appliedMode = nil
         }
+        panel.containsPlayerPoint = nil
+        panel.containsLyricsPoint = nil
+        panel.styleMask.insert(.resizable)
+        panel.hasShadow = true
         guard appliedMode != mode else { return }
         let compact = mode == .compact
         let oldFrame = panel.frame
@@ -140,7 +145,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     private func reposition() {
         guard let panel else { return }
         if isWindowControllerAttached {
-            environment.playerWindowController.apply(mode: environment.presentation.mode, reduceMotion: true)
+            environment.playerWindowController.apply(mode: environment.presentation.mode, reduceMotion: true,
+                                                     showsLyrics: environment.isLiveLyricsVisible)
             return
         }
         setReachableFrame(origin: panel.frame.origin, size: panel.frame.size)
@@ -184,7 +190,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         }
         environment.presentation.isVisible = true
         environment.presentation.sendAttention(.keyboardFocus(true))
-        if isWindowControllerAttached { environment.playerWindowController.apply(mode: .expanded, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion) }
+        if isWindowControllerAttached { environment.playerWindowController.apply(mode: .expanded, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+                                                                               showsLyrics: environment.isLiveLyricsVisible) }
         panel.makeKeyAndOrderFront(nil)
         panel.orderFrontRegardless()
         BopifyLog.playback.debug("player panel opened")

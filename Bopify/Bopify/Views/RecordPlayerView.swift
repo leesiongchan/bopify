@@ -23,6 +23,8 @@ struct RecordPlayerView: View {
     let artworkStore: ArtworkStore
     let presentation: PlayerPresentation
     let windowController: PlayerWindowController
+    var lyricModel: LyricRibbonModel? = nil
+    var onLyricSeek: ((Int64, LyricPlaybackSnapshot) -> Void)? = nil
     @State private var rotation = RecordRotation()
     @State private var isCoasting = false
     @State private var appliedMotorRequest: RecordMotorRequest?
@@ -45,6 +47,8 @@ struct RecordPlayerView: View {
         motorRequest != .snap && (motorRequest == .drive || isCoasting) && rotation.isMoving(at: ProcessInfo.processInfo.systemUptime)
     }
     private var isEngaged: Bool { presentation.mode != .compact }
+    private var lyrics: LyricRibbonModel? { lyricModel ?? environment?.liveLyricRibbon?.model }
+    private var showsLyrics: Bool { lyrics?.isVisible == true }
     // Bopify's queue says nothing about which way a mirrored device moved.
     private var direction: CarouselDirection {
         guard player.state.mirror == nil else { return .fade }
@@ -90,14 +94,16 @@ struct RecordPlayerView: View {
     var body: some View {
         let layout = windowController.layout
         ZStack(alignment: .topLeading) {
-            PlayerSurface(cornerRadius: layout.sleeveCornerRadius) { PlayerBackgroundDragRegion() }
+            PlayerSurface(cornerRadius: layout.sleeveCornerRadius) {
+                PlayerBackgroundDragRegion(takesKeyboardFocus: isEngaged, onDragChanged: dragLyrics)
+            }
                 .clipShape(RoundedRectangle(cornerRadius: layout.sleeveCornerRadius, style: .continuous))
                 .frame(width: layout.sleeveFrame.width, height: layout.sleeveFrame.height)
                 .offset(x: layout.sleeveFrame.minX, y: layout.sleeveFrame.minY)
-                .opacity(isEngaged ? 1 : 0)
+                .opacity(isEngaged || showsLyrics ? 1 : 0)
                 // Appears instantly hidden behind the record; on collapse it fades only once mostly folded back into it.
-                .animation(isEngaged || reduceMotion ? nil : .easeIn(duration: 0.12).delay(0.3), value: isEngaged)
-                .allowsHitTesting(isEngaged)
+                .animation(isEngaged || reduceMotion ? nil : .easeIn(duration: 0.12).delay(lyrics?.isVisible == true ? 0 : 0.3), value: isEngaged)
+                .allowsHitTesting(isEngaged || showsLyrics)
             ScrollView(layout.controlsFrame.width < 192 ? [.horizontal, .vertical] : .vertical) {
                 // The scroll view swallows clicks on blank space, so the drag region must live inside it.
                 controls.frame(minWidth: 192)
@@ -119,7 +125,14 @@ struct RecordPlayerView: View {
                              tabsInset: layout.controlsFrame.minX - layout.lowerFrame.minX,
                              coverBleed: layout.lowerFrame.minX - layout.sleeveFrame.minX, onPlay: { player.load($0) })
                     .frame(width: layout.lowerFrame.width, height: layout.lowerFrame.maxY - top)
+                    .clipped()
                     .offset(x: layout.lowerFrame.minX, y: top)
+                    .opacity(presentation.mode == .expanded ? 1 : 0)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: presentation.mode)
+                    .allowsHitTesting(presentation.mode == .expanded)
+                    .accessibilityHidden(presentation.mode != .expanded)
+                    .transition(.opacity.combined(with: .offset(y: reduceMotion ? 0 : 18))
+                        .animation(reduceMotion ? nil : .easeOut(duration: 0.16)))
             }
             QueueView(player: player, artworkStore: artworkStore, onSelect: select)
                 .frame(width: layout.lowerFrame.width, height: layout.lowerFrame.height)
@@ -128,14 +141,57 @@ struct RecordPlayerView: View {
                 .allowsHitTesting(presentation.mode == .queue)
                 .disabled(presentation.mode != .queue)
                 .accessibilityHidden(presentation.mode != .queue)
+            if let lyrics, lyrics.isVisible, !layout.lyricsFrame.isEmpty {
+                LyricPanelView(model: lyrics,
+                    layout: LyricRibbonLayout(panelSize: layout.lyricsFrame.size,
+                        textViewportHeight: max(1, layout.lyricsFrame.height - 2 * LyricRibbonLayout.verticalInset - 20
+                            - (layout.controlsFrame.isEmpty ? LyricRibbonLayout.headerHeight + LyricRibbonLayout.sectionSpacing : 0)),
+                        textScale: 1),
+                    isCompact: layout.controlsFrame.isEmpty, onFocusReader: windowController.focusLyrics,
+                    onSeek: { time, snapshot in
+                        if let onLyricSeek { onLyricSeek(time, snapshot) }
+                        else { environment?.liveLyricRibbon?.seek(to: time, from: snapshot) }
+                    }, onPrepareDrag: { windowController.finishTransition(windowController.transitionID) },
+                    onDragChanged: dragLyrics)
+                    .overlay(alignment: .top) {
+                        Rectangle().fill(.primary.opacity(0.14)).frame(height: 0.5)
+                            .padding(.horizontal, LyricRibbonLayout.horizontalInset)
+                            .opacity(isEngaged ? 1 : 0)
+                            .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isEngaged)
+                            .allowsHitTesting(false)
+                    }
+                    .frame(width: layout.lyricsFrame.width, height: layout.lyricsFrame.height)
+                    .offset(x: layout.lyricsFrame.minX, y: layout.lyricsFrame.minY)
+                    .transition(.opacity.animation(reduceMotion ? nil : .easeOut(duration: 0.18)))
+                    .onAppear { windowController.configureLyricsKeyboard(model: lyrics) }
+            }
             record(diameter: layout.recordDiameter)
                 .position(layout.recordCenter)
+            if showsLyrics, !layout.lyricsFrame.isEmpty {
+                let compact = layout.controlsFrame.isEmpty
+                let scale: CGFloat = compact ? 0.75 : 1
+                let width = compact ? max(1, layout.lyricsFrame.width - 88)
+                    : max(1, layout.controlsFrame.width - (player.state.mirror == nil ? 32 : 0))
+                PlayerTrackMetadata(track: track, player: player, artworkStore: artworkStore, presentation: presentation)
+                    .frame(width: width / scale, alignment: .leading)
+                    .scaleEffect(scale, anchor: .topLeading)
+                    .offset(x: compact ? layout.lyricsFrame.minX + 66 : layout.controlsFrame.minX,
+                            y: compact ? layout.lyricsFrame.minY + 8 : layout.controlsFrame.minY)
+                    .allowsHitTesting(!compact)
+                    .transition(.identity)
+            }
         }
         .frame(width: layout.contentSize.width, height: layout.contentSize.height, alignment: .topLeading)
         .offset(x: windowController.contentOffset.x, y: windowController.contentOffset.y)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear { windowController.onCancelInteraction = cancelRecord }
-        .onDisappear { _ = cancelRecord(); setMotor(.snap); windowController.onCancelInteraction = nil }
+        .onDisappear {
+            _ = cancelRecord(); setMotor(.snap); windowController.onCancelInteraction = nil
+            windowController.removeLyricsKeyboard()
+        }
+        .onChange(of: showsLyrics) { _, visible in
+            if !visible { windowController.removeLyricsKeyboard() }
+        }
         .onChange(of: motorRequest, initial: true) { _, request in setMotor(request) }
         .task(id: rotation.stopTime) {
             guard isCoasting, let deadline = rotation.stopTime else { return }
@@ -182,37 +238,50 @@ struct RecordPlayerView: View {
                         rotationOverride: pressedAngle.map { $0 + (scrub?.angleDelta ?? 0) }, isScrubbing: pressedAngle != nil,
                         isEngaged: isEngaged, reduceMotionOverride: reduceMotion)
             .overlay {
-                RecordPointerRegion(onPress: { point, geometryID in
-                    guard presentation.isVisible else { return }
-                    let now = ProcessInfo.processInfo.systemUptime
-                    setMotor(.snap, at: now)
-                    pressedAngle = rotation.angle(at: now)
-                    if canScrub {
-                        scrub = RecordScrub(positionMs: player.displayPositionMs(at: Date()), durationMs: player.displayDurationMs)
+                if showsLyrics && !isEngaged {
+                    PlayerBackgroundDragRegion(takesKeyboardFocus: false,
+                        onPrepareDrag: { windowController.finishTransition(windowController.transitionID) },
+                        onDragChanged: windowController.setDragging, onClick: windowController.focus)
+                        .clipShape(Circle())
+                        .help("Click to open the player. Drag to move.")
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(Text("Open player"))
+                        .accessibilityValue(recordStatus)
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction { windowController.focus() }
+                } else {
+                    RecordPointerRegion(onPress: { point, geometryID in
+                        guard presentation.isVisible else { return }
+                        let now = ProcessInfo.processInfo.systemUptime
+                        setMotor(.snap, at: now)
+                        pressedAngle = rotation.angle(at: now)
+                        if canScrub {
+                            scrub = RecordScrub(positionMs: player.displayPositionMs(at: Date()), durationMs: player.displayDurationMs)
+                            scrub?.update(x: point.x, y: point.y, geometryID: geometryID)
+                        }
+                    }, onDrag: { point, geometryID in
+                        guard pressedAngle != nil, canScrub else { return }
+                        if !isScrubbing {
+                            isScrubbing = true
+                            presentation.sendAttention(.interaction(.seek, true))
+                            BopifyLog.playback.debug("record scrub began")
+                        }
                         scrub?.update(x: point.x, y: point.y, geometryID: geometryID)
-                    }
-                }, onDrag: { point, geometryID in
-                    guard pressedAngle != nil, canScrub else { return }
-                    if !isScrubbing {
-                        isScrubbing = true
-                        presentation.sendAttention(.interaction(.seek, true))
-                        BopifyLog.playback.debug("record scrub began")
-                    }
-                    scrub?.update(x: point.x, y: point.y, geometryID: geometryID)
-                }, onRelease: {
-                    if isScrubbing, canScrub, presentation.isVisible, let scrub {
-                        player.seek(to: scrub.positionMs)
-                        BopifyLog.playback.debug("record scrub committed")
-                    }
-                    _ = cancelRecord()
-                })
-                .clipShape(Circle())
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(Text(track?.title ?? String(localized: "player.unknownTrack")))
-                .accessibilityValue(recordStatus)
-                .accessibilityAddTraits(.isButton)
-                .accessibilityAction { windowController.focus() }
-                .accessibilityFocused($accessibilityFocus)
+                    }, onRelease: {
+                        if isScrubbing, canScrub, presentation.isVisible, let scrub {
+                            player.seek(to: scrub.positionMs)
+                            BopifyLog.playback.debug("record scrub committed")
+                        }
+                        _ = cancelRecord()
+                    })
+                    .clipShape(Circle())
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(track?.title ?? String(localized: "player.unknownTrack")))
+                    .accessibilityValue(recordStatus)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction { windowController.focus() }
+                    .accessibilityFocused($accessibilityFocus)
+                }
             }
             .overlay {
                 if isEngaged {
@@ -227,7 +296,7 @@ struct RecordPlayerView: View {
                 }
             }
             .overlay(alignment: .bottom) {
-                if !isEngaged, let connectionStatus, connectionStatus.isVisible {
+                if !isEngaged && !showsLyrics, let connectionStatus, connectionStatus.isVisible {
                     CompactPlaybackConnectionMenu(connection: connectionStatus)
                         .frame(width: diameter - 24, height: 24)
                         .background(.ultraThinMaterial, in: Capsule())
@@ -243,21 +312,31 @@ struct RecordPlayerView: View {
             }
     }
 
+    private func dragLyrics(_ active: Bool) {
+        windowController.setDragging(active)
+        if isEngaged || !active { presentation.sendAttention(.interaction(.windowDrag, active)) }
+    }
+
+
     private var controls: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .top, spacing: 4) {
-                PlayerTrackMetadata(track: track, player: player, artworkStore: artworkStore, presentation: presentation)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                if showsLyrics, !windowController.layout.lyricsFrame.isEmpty {
+                    Color.clear.frame(height: 42).frame(maxWidth: .infinity).accessibilityHidden(true)
+                } else {
+                    PlayerTrackMetadata(track: track, player: player, artworkStore: artworkStore, presentation: presentation)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 // Hidden while mirroring: Bopify still has its own track, and the heart would show that track's saved state.
                 if player.state.mirror == nil {
                     FavoriteButton()
                         .disabled(track?.uri != player.state.currentTrack?.uri)
                 }
             }
-            .modifier(UnfurlRow(index: 0, isEngaged: isEngaged, reduceMotion: reduceMotion))
+            .modifier(UnfurlRow(index: 0, isEngaged: isEngaged, reduceMotion: reduceMotion, showsLyrics: lyrics?.isVisible == true))
             TransportControls(player: player)
                 .frame(maxWidth: .infinity)
-                .modifier(UnfurlRow(index: 1, isEngaged: isEngaged, reduceMotion: reduceMotion))
+                .modifier(UnfurlRow(index: 1, isEngaged: isEngaged, reduceMotion: reduceMotion, showsLyrics: lyrics?.isVisible == true))
             TimelineView(PlaybackClockSchedule(isRunning: player.isPositionAdvancing && presentation.isVisible, reduceMotion: true)) { context in
                 HStack {
                     Text(playbackTime(isScrubbing ? (scrub?.positionMs ?? 0) : player.displayPositionMs(at: context.date)))
@@ -265,7 +344,7 @@ struct RecordPlayerView: View {
                     Text(playbackTime(player.displayDurationMs))
                 }.font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
             }
-            .modifier(UnfurlRow(index: 2, isEngaged: isEngaged, reduceMotion: reduceMotion))
+            .modifier(UnfurlRow(index: 2, isEngaged: isEngaged, reduceMotion: reduceMotion, showsLyrics: lyrics?.isVisible == true))
             HStack(spacing: 4) {
                 Button { player.setShuffle(!player.state.shuffleEnabled) } label: {
                     Image(systemName: "shuffle").frame(width: 28, height: 28)
@@ -287,11 +366,15 @@ struct RecordPlayerView: View {
                 VolumeControl(player: player, presentation: presentation)
                 if let environment {
                     SearchButton(environment: environment)
-                    Button { environment.toggleLiveLyrics() } label: {
+                    Button {
+                        if let lyricModel {
+                            if lyricModel.isVisible { lyricModel.hide() } else { lyricModel.show() }
+                        } else { environment.toggleLiveLyrics() }
+                    } label: {
                         Image(systemName: "quote.bubble").frame(width: 28, height: 28)
-                    }.buttonStyle(.playerToggle(isOn: environment.isLiveLyricsVisible))
+                    }.buttonStyle(.playerToggle(isOn: lyrics?.isVisible ?? false))
                         .accessibilityLabel(String(localized: "control.title", defaultValue: "Lyrics", table: "LyricRibbon"))
-                        .accessibilityValue(Text(environment.isLiveLyricsVisible ? "control.on" : "control.off"))
+                        .accessibilityValue(Text(lyrics?.isVisible == true ? "control.on" : "control.off"))
                         .help(String(localized: "control.help", defaultValue: "Show or hide lyrics (⌃⌥L)", table: "LyricRibbon"))
                         .contextMenu {
                             Button(String(localized: "menu.focus", table: "LyricRibbon")) { environment.focusLiveLyrics() }
@@ -305,11 +388,11 @@ struct RecordPlayerView: View {
                     .accessibilityValue(Text(presentation.mode == .queue ? "control.on" : "control.off"))
                     .disabled(player.state.mirror != nil && presentation.mode != .queue)
             }
-            .modifier(UnfurlRow(index: 3, isEngaged: isEngaged, reduceMotion: reduceMotion))
+            .modifier(UnfurlRow(index: 3, isEngaged: isEngaged, reduceMotion: reduceMotion, showsLyrics: lyrics?.isVisible == true))
             // The status keeps its line while empty so the library tabs below don't jump each time a track loads.
             ZStack(alignment: .leading) { Text(verbatim: " ").hidden(); status }
                 .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                .modifier(UnfurlRow(index: 4, isEngaged: isEngaged, reduceMotion: reduceMotion))
+                .modifier(UnfurlRow(index: 4, isEngaged: isEngaged, reduceMotion: reduceMotion, showsLyrics: lyrics?.isVisible == true))
         }
         .buttonStyle(.playerControl)
         .onDisappear { presentation.sendAttention(.interaction(.volume, false)) }
@@ -386,13 +469,15 @@ private struct UnfurlRow: ViewModifier {
     let index: Int
     let isEngaged: Bool
     let reduceMotion: Bool
+    let showsLyrics: Bool
     func body(content: Content) -> some View {
         let settled = isEngaged || reduceMotion
         content
             .opacity(isEngaged ? 1 : 0)
             .blur(radius: settled ? 0 : 6)
-            .offset(x: settled ? 0 : -14)
-            .animation(reduceMotion ? nil : isEngaged ? .spring(duration: 0.4, bounce: 0.1).delay(0.12 + Double(index) * 0.04)
+            .offset(x: settled ? 0 : -14, y: !settled && showsLyrics ? 18 : 0)
+            .animation(reduceMotion ? nil : isEngaged ? .spring(duration: showsLyrics ? 0.20 : 0.4, bounce: showsLyrics ? 0 : 0.1)
+                .delay(showsLyrics ? Double(index) * 0.02 : 0.12 + Double(index) * 0.04)
                                                       : .easeOut(duration: 0.12), value: isEngaged)
     }
 }

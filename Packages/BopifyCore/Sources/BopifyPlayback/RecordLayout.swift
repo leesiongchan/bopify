@@ -9,11 +9,31 @@ public struct RecordLayout: Equatable, Sendable {
     public let sleeveCornerRadius: CGFloat
     public let controlsFrame: CGRect
     public let lowerFrame: CGRect
+    public var lyricsFrame: CGRect = .zero
 }
 
-public func recordLayout(mode: PlayerMode, availableSize: CGSize) -> RecordLayout {
+public func recordLayout(mode: PlayerMode, availableSize: CGSize, showsLyrics: Bool = false) -> RecordLayout {
     let width = min(484, availableSize.width.isFinite ? max(1, availableSize.width) : 484)
     let height = availableSize.height.isFinite ? max(1, availableSize.height) : 360
+    if showsLyrics {
+        // Both modes keep three lyric rows and a footer; only compact needs the title header.
+        let lyricHeight = min(mode == .compact ? 154 : 120, max(1, height - 48))
+        let x = min(116, width / 3)
+        if mode == .compact {
+            let lyrics = CGRect(x: 12, y: 12, width: max(1, width - x - 12), height: lyricHeight)
+            let center = CGPoint(x: lyrics.minX + 38, y: lyrics.minY + 21)
+            let point = CGRect(x: lyrics.minX + 112, y: lyrics.minY, width: 0, height: 0)
+            return RecordLayout(contentSize: CGSize(width: lyrics.width + 24, height: min(height, lyricHeight + 24)),
+                recordCenter: center, recordDiameter: 32, sleeveFrame: lyrics,
+                sleeveCornerRadius: 22, controlsFrame: point, lowerFrame: point, lyricsFrame: lyrics)
+        }
+        let upper = recordLayout(mode: mode, availableSize: CGSize(width: width, height: max(1, height - lyricHeight - 20)))
+        let lyrics = CGRect(x: x, y: upper.contentSize.height, width: max(1, width - x - 12), height: lyricHeight)
+        return RecordLayout(contentSize: CGSize(width: width, height: lyrics.maxY + 12), recordCenter: upper.recordCenter,
+            recordDiameter: min(upper.recordDiameter, max(1, upper.contentSize.height - 24)),
+            sleeveFrame: upper.sleeveFrame.union(lyrics), sleeveCornerRadius: upper.sleeveCornerRadius,
+            controlsFrame: upper.controlsFrame, lowerFrame: upper.lowerFrame, lyricsFrame: lyrics)
+    }
     if mode == .compact {
         let size = CGSize(width: min(142, width), height: min(142, height))
         let center = CGPoint(x: size.width / 2, y: size.height / 2)
