@@ -19,7 +19,6 @@ private final class FakeRadio {
     func waitUntilHeld(_ seed: SpotifyURI) async { while held[seed] == nil { await Task.yield() } }
 }
 
-/// Suspends its first top-items request until released, so a test can cancel the caller mid-load.
 private actor HeldHistory: ListeningHistoryService {
     private let seeds: [StationSeed]
     private var holdsNext = true
@@ -38,7 +37,6 @@ private actor HeldHistory: ListeningHistoryService {
     func waitUntilHeld() async { while held == nil { await Task.yield() } }
 }
 
-/// Liked songs that throw until told to succeed, to exercise Explore's fallback failures.
 private actor FailingSavedTracks: SavedTracksService {
     private var failure: LibraryError?
     private let tracks: [Track]
@@ -83,11 +81,11 @@ struct ExploreModelTests {
     }
 
     @Test(arguments: [LibraryError.authorizationRequired, .forbidden])
-    func withoutLikedSongsConsentExploreHasNoChips(failure: LibraryError) async {
+    func likedFallbackAuthorizationFailuresRemainVisible(failure: LibraryError) async {
         let explore = ExploreModel(history: FakeHistory(), savedTracks: FailingSavedTracks(failure),
                                    radio: { _ in throw RadioFailure.noMix }, now: Date.init)
         await explore.reveal(at: Date())
-        #expect(explore.chips.isEmpty && explore.error == nil)
+        #expect(explore.chips.isEmpty && explore.error == failure)
     }
 
     @Test func aRateLimitedLikedFallbackReportsItsErrorUntilRetried() async {
@@ -116,14 +114,13 @@ struct ExploreModelTests {
         #expect(explore.error == nil && explore.chips.map(\.uri) == [testTrack("l1").uri])
     }
 
-    /// Changing the library client ID clears the model while its shelf stays on screen.
-    @Test func clearWhileShownStillRefreshes() async {
+    @Test func clearedLibraryReloadsOnReveal() async {
         let history = FakeHistory()
         await history.setTop(.tracks, [seed("track", "t1")])
         let explore = model(history, FakeRadio())
         await explore.reveal(at: Date())
         explore.clear()
-        await explore.refresh()
+        await explore.reveal(at: Date())
         #expect(await history.topCalls == 4)
         #expect(explore.chips.map(\.name) == ["t1"])
     }

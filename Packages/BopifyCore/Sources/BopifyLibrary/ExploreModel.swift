@@ -83,13 +83,6 @@ public final class ExploreModel: CoverFlowSource {
         await loadChips()
     }
 
-    /// After consent: reloads now when shown, otherwise on the next reveal.
-    public func refresh() async {
-        chipsLoadedAt = nil
-        guard visible, !isLoadingChips else { return }
-        await loadChips()
-    }
-
     public func clear() {
         generation += 1
         station?.cancel()
@@ -136,14 +129,7 @@ public final class ExploreModel: CoverFlowSource {
         do {
             var seeds = Self.interleave(try await history.topItems(.tracks), try await history.topItems(.artists))
             if seeds.isEmpty {
-                // Liked songs are only a fallback; without that consent Explore just has no chips.
-                // Any other failure is a real error, so it is shown and retried rather than cached as empty.
-                let liked: [Track]
-                do {
-                    liked = try await savedTracks.savedTracks(offset: 0, limit: 5).tracks
-                } catch LibraryError.authorizationRequired, LibraryError.forbidden {
-                    liked = []
-                }
+                let liked = try await savedTracks.savedTracks(offset: 0, limit: 5).tracks
                 seeds = liked.map { StationSeed(uri: $0.uri, name: $0.title) }
                 BopifyLog.library.debug("explore chips from liked songs count=\(seeds.count, privacy: .public)")
             }

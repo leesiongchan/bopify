@@ -31,14 +31,7 @@ struct LibraryShelf: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            Group {
-                if environment.isEnablingLibrary {
-                    Button("library.cancelAuthorization", action: environment.cancelLibraryAuthorization)
-                        .buttonStyle(.link).font(.caption)
-                } else {
-                    LibraryTabBar(tab: $tab)
-                }
-            }
+            LibraryTabBar(tab: $tab)
                 .frame(maxWidth: .infinity)
                 .padding(.leading, tabsInset)
             shelf.padding(.horizontal, -coverBleed).clipped()
@@ -55,8 +48,7 @@ struct LibraryShelf: View {
         switch tab {
         case .recents:
             CoverFlowView(model: environment.recents, copy: .recents, artworkStore: artworkStore,
-                          onPlay: { onPlay(environment.recents.playRequest(for: $0)) },
-                          onEnable: { await environment.enableListeningHistory() })
+                          onPlay: { onPlay(environment.recents.playRequest(for: $0)) })
                 .id(LibraryTab.recents)
         case .explore:
             if environment.explore.stationFailure != nil {
@@ -68,25 +60,22 @@ struct LibraryShelf: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(PlayerBackgroundDragRegion())
-                // No Cover Flow here to reveal Explore, yet retry and consent refresh still need it shown.
+                // Station retries still need Explore revealed when no Cover Flow is visible.
                 .modifier(RevealWhileShown(source: environment.explore))
             } else {
                 CoverFlowView(model: environment.explore, copy: .explore, artworkStore: artworkStore,
-                              onPlay: { onPlay(environment.explore.playRequest(for: $0)) },
-                              onEnable: { await environment.enableListeningHistory() }) {
+                              onPlay: { onPlay(environment.explore.playRequest(for: $0)) }) {
                     StationMenu(model: environment.explore)
                 }
                 .id(environment.explore.selectedSeed)
             }
         case .liked:
             CoverFlowView(model: environment.likedSongs, copy: .liked, artworkStore: artworkStore,
-                          onPlay: { onPlay(environment.likedSongs.playRequest(for: $0)) },
-                          onEnable: { await environment.enableLikedSongs() })
+                          onPlay: { onPlay(environment.likedSongs.playRequest(for: $0)) })
                 .id(LibraryTab.liked)
         case .library:
             CoverFlowView(model: environment.collections, copy: .collections, artworkStore: artworkStore,
-                          onPlay: { onPlay(environment.collections.playRequest(for: $0)) },
-                          onEnable: { await environment.enableCollections() })
+                          onPlay: { onPlay(environment.collections.playRequest(for: $0)) })
                 .id(LibraryTab.library)
         }
     }
@@ -180,6 +169,6 @@ private func previewShelf(_ library: PreviewLibrary) -> some View {
 
 #Preview("Library") { previewShelf(.samples) }
 #Preview("Library · empty") { previewShelf(.empty) }
-#Preview("Library · needs permission") { previewShelf(.failing(.authorizationRequired)) }
+#Preview("Library · access expired") { previewShelf(.failing(.authorizationRequired)) }
 #Preview("Library · rate limited") { previewShelf(.failing(.rateLimited(retryAfterSeconds: 30))) }
 #endif

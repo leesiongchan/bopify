@@ -34,32 +34,6 @@ struct LibraryAuthorizationTests {
         }
     }
 
-    @Test(arguments: [Set<String>(), ["playlist-read-private", "playlist-read-collaborative"]])
-    func catalogAndCollectionConsentCanOpenWithoutPlaybackScopes(_ scopes: Set<String>) async throws {
-        let opened = AsyncStream<URL>.makeStream()
-        let service = SpotifyAuthService(clientID: "test", store: InMemoryTokenStore(),
-            openURL: { opened.continuation.yield($0) })
-        let consent = Task {
-            defer { opened.continuation.finish() }
-            return try await service.authorizeLibraryScopes(scopes)
-        }
-        let timeout = Task {
-            try? await Task.sleep(for: .seconds(2))
-            opened.continuation.finish()
-            await service.cancelPendingWork()
-        }
-        defer { timeout.cancel() }
-        var iterator = opened.stream.makeAsyncIterator()
-        let url = await iterator.next()
-        consent.cancel()
-        _ = try? await consent.value
-        let query = url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems }
-        let requested = Set((query?.first { $0.name == "scope" }?.value ?? "").split(separator: " ").map(String.init))
-        #expect(url != nil)
-        #expect(requested == scopes)
-        #expect(!requested.contains("streaming"))
-    }
-
     @Test func normalizesPastedInput() {
         #expect(LibraryAuthorization.normalized("  25BBD3BACCA4412B80F17B892072AF71\n") == id)
     }
@@ -84,7 +58,7 @@ struct LibraryAuthorizationTests {
                 try await library.validAccessToken(requiredScopes: ["user-library-read"])
             }
             await #expect(throws: LibraryError.authorizationRequired) {
-                try await library.authorize(["user-library-read"])
+                try await library.authorize()
             }
         }
     }
@@ -191,14 +165,14 @@ struct LibraryAuthorizationTests {
                 await library.cancelPendingWork()
             }
             defer { deadline.cancel() }
-            let oldConsent = Task { try await library.authorize(["user-library-read"]) }
+            let oldConsent = Task { try await library.authorize() }
             var iterator = opened.stream.makeAsyncIterator()
             let oldURL = try #require(await iterator.next())
             let oldQuery = Dictionary(uniqueKeysWithValues: URLComponents(url: oldURL, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value!) })
             #expect(oldQuery["client_id"] == id)
             _ = try await library.setClientID(other)
             await #expect(throws: PlayerError.authDenied) { try await oldConsent.value }
-            let newConsent = Task { try await library.authorize(["user-library-read"]) }
+            let newConsent = Task { try await library.authorize() }
             let newURL = try #require(await iterator.next())
             let newQuery = Dictionary(uniqueKeysWithValues: URLComponents(url: newURL, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value!) })
             #expect(newQuery["client_id"] == other)
@@ -262,7 +236,7 @@ struct LibraryAuthorizationTests {
                 try await library.validAccessToken(requiredScopes: ["user-library-read"])
             }
             #expect(store.browserOpens == 0 && store.clears == 0)
-            try await library.authorize(["user-library-read"])
+            try await library.authorize()
             let repaired = try await library.validAccessToken(requiredScopes: ["user-library-read"])
             #expect(repaired == "NEW_LIBRARY" && store.browserOpens == 1 && store.clears == 0)
             let stored = try store.load()
@@ -292,7 +266,7 @@ struct LibraryAuthorizationTests {
                         Task { _ = try? await URLSession.shared.data(from: callback) }
                     })
             }
-            await #expect(throws: PlayerError.authDenied) { try await library.authorize(["user-library-read"]) }
+            await #expect(throws: PlayerError.authDenied) { try await library.authorize() }
             #expect(throws: KeychainError.corrupt) { try store.load() }
             #expect(store.clears == 0 && store.browserOpens == 1)
             #expect(defaults.string(forKey: LibraryAuthorization.defaultsKey) == id)
@@ -323,7 +297,6 @@ struct LibraryAuthorizationTests {
     }
 }
 
-/// Records each auth service `makeAuth` builds, so a test can probe one after it is replaced.
 private final class CreatedServices: @unchecked Sendable {
     private let lock = NSLock()
     private var services: [SpotifyAuthService] = []
@@ -379,7 +352,7 @@ private final class LibraryConsentStubProtocol: URLProtocol, @unchecked Sendable
     override func startLoading() {
         let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Data(#"{"access_token":"NEW_LIBRARY","refresh_token":"NEW_RT","expires_in":3600,"scope":"user-library-read"}"#.utf8))
+        client?.urlProtocol(self, didLoad: Data(#"{"access_token":"NEW_LIBRARY","refresh_token":"NEW_RT","expires_in":3600,"scope":"user-library-read user-library-modify user-read-recently-played user-top-read playlist-read-private playlist-read-collaborative user-follow-read"}"#.utf8))
         client?.urlProtocolDidFinishLoading(self)
     }
 }

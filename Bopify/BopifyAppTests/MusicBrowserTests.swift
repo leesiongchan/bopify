@@ -2,7 +2,6 @@ import AppKit
 import Carbon.HIToolbox
 import SwiftUI
 import Testing
-import BopifyAuth
 import BopifyDomain
 import BopifyLibrary
 import BopifyPlayback
@@ -107,7 +106,7 @@ struct MusicBrowserTests {
             timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 0, pressure: 0))
         window.sendEvent(hover)
         #expect(environment.search.selectedURI == tracks[9].uri)
-        environment.searchPopover.didDismiss(environment: environment)
+        environment.searchPopover.close()
         try await waitUntil { !window.isVisible }
         environment.showSearch()
         try await waitUntil {
@@ -135,7 +134,7 @@ struct MusicBrowserTests {
         let tracks = environment.search.tracks
         let selected = environment.search.selectedURI
         environment.showSearch()
-        environment.searchPopover.didDismiss(environment: environment)
+        environment.searchPopover.close()
         #expect(environment.search.query == "Mira" && environment.search.tracks == tracks)
         #expect(environment.search.selectedURI == selected && !environment.searchPopover.isVisible)
         environment.showSearch()
@@ -160,36 +159,6 @@ struct MusicBrowserTests {
         #expect(opened == 1)
     }
 
-    @Test func searchConsentRequestsNoPersonalLibraryScopes() async {
-        let scopes = BrowserScopes()
-        let environment = AppEnvironment(previewPlayer: PlayerModel(), favoriteService: BrowserServices(),
-            authorizeLibraryScopes: { await scopes.record($0) })
-        await environment.enableSearch()
-        #expect(await scopes.values == [Set<String>()])
-        await environment.prepareForQuit()
-    }
-
-    @Test(arguments: [false, true])
-    func searchReturnsAfterConsentUnlessExplicitlyClosed(closeWhileAuthorizing: Bool) async {
-        let consent = BrowserConsentGate()
-        let services = BrowserServices()
-        let environment = AppEnvironment(previewPlayer: PlayerModel(), favoriteService: services,
-            searchService: services, authorizeLibraryScopes: { _ in await consent.wait() })
-        environment.presentation.sendAttention(.visibility(true))
-        environment.search.updateQuery("song")
-        environment.showSearch()
-        let authorizing = Task { await environment.enableSearch() }
-        await consent.waitUntilStarted()
-        environment.searchPopover.didDismiss(environment: environment)
-        #expect(environment.search.query == "song" && !environment.searchPopover.isVisible)
-        if closeWhileAuthorizing { environment.searchPopover.close() }
-        await consent.finish()
-        await authorizing.value
-        #expect(environment.searchPopover.isVisible == !closeWhileAuthorizing)
-        #expect(environment.search.query == "song")
-        await environment.prepareForQuit()
-    }
-
     @Test func playingSearchResultDismissesAndRetainsTheQuery() async {
         let environment = makePreviewEnvironment(.paused)
         defer { environment.player?.stop() }
@@ -200,81 +169,6 @@ struct MusicBrowserTests {
         environment.playSearchResult(previewTracks[0])
         #expect(!environment.searchPopover.isVisible && environment.search.query == "Mira")
         #expect(!environment.search.tracks.isEmpty)
-    }
-
-    @Test(arguments: [false, true])
-    func noScopeConsentResumesAfterInitialClientSetup(cancelSetup: Bool) async throws {
-        let scopes = BrowserScopes()
-        let auth = SpotifyAuthService(clientID: String(repeating: "0", count: 32), store: BrowserTokenStore(), openURL: { _ in })
-        let environment = AppEnvironment(previewPlayer: PlayerModel(), favoriteService: BrowserServices(),
-            authorizeLibraryScopes: { await scopes.record($0) }, libraryAuth: auth, previewLibraryClientID: nil)
-        environment.presentation.sendAttention(.visibility(true))
-        environment.search.updateQuery("song")
-        environment.showSearch()
-        await environment.enableSearch()
-        environment.searchPopover.didDismiss(environment: environment)
-        if cancelSetup {
-            let setup = try #require(NSApp.windows.first { $0.title == String(localized: "librarySetup.title") && $0.isVisible })
-            setup.performClose(nil)
-            #expect(environment.search.query == "song")
-        }
-        #expect(await scopes.values.isEmpty)
-        await environment.setLibraryClientID(String(repeating: "0", count: 32))
-        for _ in 0..<100 {
-            if await !scopes.values.isEmpty, !environment.isEnablingLibrary { break }
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        #expect(await scopes.values == [Set<String>()])
-        #expect(environment.searchPopover.isVisible == !cancelSetup)
-        environment.librarySetupWindow.close()
-        await environment.prepareForQuit()
-    }
-
-    @Test func libraryConsentRequestsOnlyCollectionReadScopes() async {
-        let scopes = BrowserScopes()
-        let environment = AppEnvironment(previewPlayer: PlayerModel(), favoriteService: BrowserServices(),
-            authorizeLibraryScopes: { await scopes.record($0) })
-        await environment.enableCollections()
-        #expect(await scopes.values == [["user-library-read", "playlist-read-private", "playlist-read-collaborative", "user-follow-read"]])
-        await environment.prepareForQuit()
-    }
-
-    @Test func unrelatedLibraryConsentPreservesLoadedSearchPages() async {
-        let services = BrowserServices()
-        let pages = BrowserSearchPages()
-        let environment = AppEnvironment(previewPlayer: PlayerModel(), favoriteService: services,
-            searchService: pages, authorizeLibraryScopes: { _ in })
-        defer { environment.searchPopover.close() }
-        environment.search.updateQuery("song")
-        await environment.search.search()
-        await environment.search.loadMore()
-        environment.search.select(environment.search.tracks[1].uri)
-        let tracks = environment.search.tracks
-        let selected = environment.search.selectedURI
-        environment.searchPopover.close()
-        await environment.enableCollections()
-        #expect(environment.search.query == "song" && environment.search.tracks == tracks)
-        #expect(environment.search.selectedURI == selected && environment.search.hasMore)
-        #expect(await pages.offsets == [0, 1])
-        await environment.prepareForQuit()
-    }
-
-    @Test func searchConsentRetriesTheFailedPageWithoutReplacingEarlierResults() async {
-        let pages = BrowserSearchPages()
-        let environment = AppEnvironment(previewPlayer: PlayerModel(), favoriteService: BrowserServices(),
-            searchService: pages, authorizeLibraryScopes: { _ in await pages.authorize() })
-        environment.search.updateQuery("song")
-        await environment.search.search()
-        await environment.search.loadMore()
-        environment.search.select(environment.search.tracks[1].uri)
-        let selected = environment.search.selectedURI
-        await environment.search.loadMore()
-        #expect(environment.search.error == .authorizationRequired)
-        await environment.enableSearch()
-        #expect(environment.search.tracks == Array(previewTracks.prefix(3)))
-        #expect(environment.search.selectedURI == selected && environment.search.error == nil)
-        #expect(await pages.offsets == [0, 1, 2, 2])
-        await environment.prepareForQuit()
     }
 
     @Test func signOutClearsSearchAndCollectionsAndClosesSearch() async {
@@ -301,41 +195,6 @@ struct MusicBrowserTests {
 @MainActor private func resultTable(in view: NSView?) -> NSTableView? {
     if let table = view as? NSTableView { return table }
     return view?.subviews.lazy.compactMap { resultTable(in: $0) }.first
-}
-
-private actor BrowserScopes {
-    var values: [Set<String>] = []
-    func record(_ scopes: Set<String>) { values.append(scopes) }
-}
-
-private actor BrowserConsentGate {
-    private var pending: CheckedContinuation<Void, Never>?
-    private var started: CheckedContinuation<Void, Never>?
-    func wait() async {
-        await withCheckedContinuation { pending = $0; started?.resume(); started = nil }
-    }
-    func waitUntilStarted() async {
-        if pending != nil { return }
-        await withCheckedContinuation { started = $0 }
-    }
-    func finish() { pending?.resume(); pending = nil }
-}
-
-private struct BrowserTokenStore: TokenStoring {
-    func load() throws -> TokenSet? { nil }
-    func save(_ tokens: TokenSet) throws {}
-    func clear() throws {}
-}
-
-private actor BrowserSearchPages: TrackSearchService {
-    var offsets: [Int] = []
-    private var authorized = false
-    func authorize() { authorized = true }
-    func searchTracks(query: String, offset: Int, limit: Int) async throws -> TrackSearchPage {
-        offsets.append(offset)
-        if offset == 2 && !authorized { throw LibraryError.authorizationRequired }
-        return TrackSearchPage(tracks: [previewTracks[offset]], nextOffset: offset < 2 ? offset + 1 : nil)
-    }
 }
 
 private struct BrowserServices: LibraryService, TrackSearchService, LibraryCollectionsService {

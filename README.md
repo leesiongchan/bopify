@@ -8,7 +8,7 @@ Requires an Apple Silicon Mac, macOS 26 or later, and Spotify Premium.
 ## Install
 
 Download `Bopify-<version>.dmg` from [GitHub Releases](https://github.com/leesiongchan/bopify/releases),
-drag Bopify to Applications, then open it and sign in. Right-click the menu bar
+drag Bopify to Applications, then open it and complete Spotify setup. Right-click the menu bar
 icon for settings or to quit.
 
 Use the magnifying glass or **Command-F** to search Spotify songs in a compact popover. Choose a
@@ -23,14 +23,20 @@ trying to open it. See [Apple’s instructions](https://support.apple.com/en-us/
 
 ## Library setup
 
-Playback needs no developer setup. Favorites, Liked Songs, listening history,
-Library and search require your own Spotify Web API app:
+Setup requires Spotify playback sign-in and your own Spotify Web API app.
+Approve access for Favorites, Liked Songs, listening history and Library together
+before entering the player. Search uses the same library connection.
 
 1. Create an app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
 2. Select **Web API** and add the redirect URI `http://127.0.0.1:8898/callback`.
 3. Save, then add your Spotify account under **User Management** ([Spotify’s allowlist instructions](https://developer.spotify.com/documentation/web-api/concepts/quota-modes#adding-a-user-to-your-apps-allowlist)).
-4. In Bopify, right-click the menu bar icon → **Library Access…**. Paste the
-   **Client ID**, save, then click **Enable** on a library feature or search to authorize it.
+4. In Bopify, choose **Continue setup**, paste the **Client ID**, then choose
+   **Save and authorize**. Approve all requested Spotify access to finish setup.
+
+Existing installations with partial library access return to setup once to approve
+the complete set. Complete grants restore without repeated feature authorization.
+If Spotify access expires or is revoked, Bopify returns to setup to reconnect.
+Use **Library Access…** in the menu bar menu to change your Client ID.
 
 If Spotify reports `INVALID_CLIENT`, check the Client ID and redirect URI. Bopify
 does not need your Client secret. Sign-in credentials are stored in macOS Keychain.

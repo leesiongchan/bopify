@@ -91,32 +91,12 @@
         }
       }
     },
-    "collections.enable" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enable Library"
-          }
-        }
-      }
-    },
     "collections.loading" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Loading your library…"
-          }
-        }
-      }
-    },
-    "collections.permission" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enable access to your playlists and albums."
           }
         }
       }
@@ -457,26 +437,6 @@
         }
       }
     },
-    "favorite.consentFailed" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Favorites permission was not granted. Your streaming session is unchanged."
-          }
-        }
-      }
-    },
-    "favorite.enable" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enable Spotify favorites"
-          }
-        }
-      }
-    },
     "favorite.forbidden" : {
       "localizations" : {
         "en" : {
@@ -493,16 +453,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Updating"
-          }
-        }
-      }
-    },
-    "favorite.permission" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Allow Bopify to read and change your saved tracks. Playback will continue."
           }
         }
       }
@@ -597,26 +547,6 @@
         }
       }
     },
-    "history.enable" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enable Recents and Explore"
-          }
-        }
-      }
-    },
-    "history.permission" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bring your recent plays and stations here."
-          }
-        }
-      }
-    },
     "library.cancelAuthorization" : {
       "localizations" : {
         "en" : {
@@ -637,16 +567,6 @@
         }
       }
     },
-    "library.enable" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enable Liked Songs"
-          }
-        }
-      }
-    },
     "library.loading" : {
       "localizations" : {
         "en" : {
@@ -663,16 +583,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Show more songs"
-          }
-        }
-      }
-    },
-    "library.permission" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bring your liked songs here."
           }
         }
       }
@@ -807,6 +717,16 @@
         }
       }
     },
+    "librarySetup.accessExpired" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotify access expired. Complete setup again to reconnect."
+          }
+        }
+      }
+    },
     "librarySetup.clientID" : {
       "localizations" : {
         "en" : {
@@ -827,12 +747,32 @@
         }
       }
     },
+    "librarySetup.consentFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Setup is incomplete. Approve all requested Spotify access to continue, or try again if the connection failed."
+          }
+        }
+      }
+    },
+    "librarySetup.continue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue setup"
+          }
+        }
+      }
+    },
     "librarySetup.intro" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Favorites, Liked Songs and listening history need your own free Spotify app. Spotify lets each app serve only five people, so Bopify can't share one. Playback works without it."
+            "value" : "To finish setup, create your own free Spotify app and approve library access. This connects your saved music, playlists, followed artists and listening history, and lets you save or remove favorites. All requested access is required to use Bopify."
           }
         }
       }
@@ -857,12 +797,32 @@
         }
       }
     },
+    "librarySetup.requiredDescription" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You’re signed in to Spotify. Approve access to your saved music, playlists, followed artists and listening history, including saving and removing favorites. All access is required before you can start listening."
+          }
+        }
+      }
+    },
+    "librarySetup.requiredTitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finish setting up Bopify"
+          }
+        }
+      }
+    },
     "librarySetup.save" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Save"
+            "value" : "Save and authorize"
           }
         }
       }
@@ -1243,16 +1203,6 @@
         }
       }
     },
-    "search.enable" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enable Search"
-          }
-        }
-      }
-    },
     "search.help" : {
       "localizations" : {
         "en" : {
@@ -1279,16 +1229,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Load More"
-          }
-        }
-      }
-    },
-    "search.permission" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connect Spotify search to find songs."
           }
         }
       }

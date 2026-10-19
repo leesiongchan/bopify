@@ -65,20 +65,14 @@ public actor SpotifyAuthService {
         return try await authorize(scopes: ["streaming"], validateGrant: false)
     }
 
-    public func authorizeLibraryScopes(_ scopes: Set<String>) async throws -> TokenSet {
+    public func authorizeLibrary() async throws -> TokenSet {
         try Task.checkCancellation()
-        let libraryScopes: Set<String> = ["user-library-read", "user-library-modify", "user-read-recently-played", "user-top-read",
-                                          "playlist-read-private", "playlist-read-collaborative", "user-follow-read"]
-        guard scopes.isSubset(of: libraryScopes) else { throw LibraryError.authorizationRequired }
         try await prepareForConsent()
-        let existing: Set<String>
-        do { existing = (try tokens ?? restore())?.grantedScopes.intersection(libraryScopes) ?? [] }
+        do { _ = try tokens ?? restore() }
         catch PlayerError.credentialCorrupt {
-            existing = []
             BopifyLog.auth.notice("explicit library consent will replace a corrupt grant")
         }
-        let required = existing.union(scopes)
-        return try await authorize(scopes: required, validateGrant: true)
+        return try await authorize(scopes: LibraryAuthorization.requiredScopes, validateGrant: true)
     }
 
     private func authorize(scopes: Set<String>, validateGrant: Bool) async throws -> TokenSet {

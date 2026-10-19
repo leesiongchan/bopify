@@ -44,17 +44,6 @@ public final class SavedCollectionsModel: CoverFlowSource {
         guard reveals > 0, !isLoading, error != nil, retryAfter.map({ $0 <= date }) ?? true else { return }
         await load()
     }
-    public func refresh() async {
-        generation += 1
-        loaded = false
-        isLoading = false
-        error = nil
-        retryAfter = nil
-        nextCursors = [.playlists: .offset(0), .albums: .offset(0), .artists: .after(nil)]
-        pendingKinds = LibraryCollectionKind.allCases
-        if reveals > 0 { await load() }
-    }
-
     public func clear() {
         generation += 1
         items = []

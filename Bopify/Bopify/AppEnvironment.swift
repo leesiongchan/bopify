@@ -25,9 +25,9 @@ final class AppEnvironment {
     let collections: SavedCollectionsModel
     let searchPopover = SearchPopoverController()
     @ObservationIgnored private let stations: StationRoute
-    private(set) var isEnablingLibrary = false
+    private(set) var isAuthorizingLibrary = false
     private(set) var libraryAuthorizationNotice: String?
-    @ObservationIgnored private let authorizeLibraryScopes: @Sendable (Set<String>) async throws -> Void
+    @ObservationIgnored private let authorizeLibrary: @Sendable () async throws -> Void
     @ObservationIgnored private var libraryGeneration = 0
     @ObservationIgnored private var libraryAuthorization: Task<Void, Never>?
     let presentation = PlayerPresentation(
@@ -47,8 +47,7 @@ final class AppEnvironment {
     private(set) var libraryClientID: String?
     let librarySetupWindow = LibrarySetupWindowController()
     private(set) var librarySetupError: PlayerError?
-    // The scopes an Enable action asked for before any client ID existed; consent resumes after setup.
-    @ObservationIgnored private var pendingLibraryScopes: Set<String>?
+    @ObservationIgnored private var libraryConsentRequired = false
     private(set) var recovery: PlaybackRecoveryCoordinator?
     var connectionStatus: PlaybackConnectionStatus { recovery?.status ?? .ready }
     @ObservationIgnored private var connectionMonitor: PlaybackConnectionMonitor?
@@ -138,16 +137,16 @@ final class AppEnvironment {
         self.stations = stations
         recents = RecentsModel(service: library)
         explore = ExploreModel(history: library, savedTracks: library, radio: { try await stations.mix(for: $0) })
-        authorizeLibraryScopes = { scopes in try await libraryAuth.authorize(scopes) }
+        authorizeLibrary = { try await libraryAuth.authorize() }
     }
 
     #if DEBUG
-    init(previewPlayer: PlayerModel, favoriteService: any LibraryService,
+    init(previewPlayer: PlayerModel?, favoriteService: any LibraryService,
          savedTracksService: (any SavedTracksService)? = nil,
          historyService: (any ListeningHistoryService)? = nil,
          searchService: (any TrackSearchService)? = nil,
          collectionsService: (any LibraryCollectionsService)? = nil,
-         authorizeLibraryScopes: (@Sendable (Set<String>) async throws -> Void)? = nil,
+         authorizeLibrary: (@Sendable () async throws -> Void)? = nil,
          playbackAuth: SpotifyAuthService? = nil,
          libraryAuth: SpotifyAuthService? = nil,
          previewLibraryClientID: String? = String(repeating: "0", count: 32),
@@ -181,9 +180,9 @@ final class AppEnvironment {
         explore = ExploreModel(history: historyService ?? UnavailableHistory(),
                                savedTracks: savedTracksService ?? UnavailableSavedTracks(),
                                radio: { try await stations.mix(for: $0) })
-        self.authorizeLibraryScopes = authorizeLibraryScopes ?? { _ in throw LibraryError.unavailable }
+        self.authorizeLibrary = authorizeLibrary ?? { throw LibraryError.unavailable }
         player = previewPlayer
-        authState = .signedIn
+        authState = previewPlayer == nil ? .signedOut : .signedIn
         if let recoveryEngineFactory { makeRecoveryEngine = recoveryEngineFactory; monitorEnabled = false }
     }
     #endif
@@ -213,18 +212,6 @@ final class AppEnvironment {
         }
     }
 
-    func enableFavorites() async {
-        await enableLibrary(scopes: ["user-library-read", "user-library-modify"])
-    }
-
-    func enableLikedSongs() async {
-        await enableLibrary(scopes: ["user-library-read"])
-    }
-
-    func enableListeningHistory() async {
-        await enableLibrary(scopes: ["user-read-recently-played", "user-top-read"])
-    }
-
     func showSearch() {
         guard !isPreparingForQuit, authState == .signedIn else { return }
         searchPopover.show(environment: self)
@@ -239,55 +226,49 @@ final class AppEnvironment {
         BopifyLog.library.debug("catalog search result played")
     }
 
-    func enableSearch() async { await enableLibrary(scopes: []) }
-
-    func enableCollections() async {
-        await enableLibrary(scopes: ["user-library-read", "playlist-read-private", "playlist-read-collaborative", "user-follow-read"])
-    }
-
-    private func enableLibrary(scopes: Set<String>) async {
-        guard authState == .signedIn, !isEnablingLibrary else { return }
+    func completeLibrarySetup() async {
+        guard !isPreparingForQuit, !isRemovingCredentials, !isAuthorizingLibrary,
+              authState == .needsLibraryAuthorization else { return }
         guard libraryClientID != nil else {
-            pendingLibraryScopes = (pendingLibraryScopes ?? []).union(scopes)
             librarySetupWindow.show(environment: self)
             BopifyLog.library.info("library setup requested")
             return
         }
         let generation = libraryGeneration
+        let session = sessionGeneration
         let task = Task { [self] in
             defer {
                 if generation == libraryGeneration {
-                    isEnablingLibrary = false
+                    isAuthorizingLibrary = false
                     libraryAuthorization = nil
-                    searchPopover.authorizationFinished(environment: self)
                 }
             }
             do {
-                try await authorizeLibraryScopes(scopes)
+                if libraryConsentRequired {
+                    try await authorizeLibrary()
+                } else if try await !hasCompleteLibraryAccess() {
+                    try await authorizeLibrary()
+                }
                 try Task.checkCancellation()
-                guard authState == .signedIn, generation == libraryGeneration else { return }
-                await refreshFavorite()
-                guard generation == libraryGeneration, !Task.isCancelled else { return }
-                await likedSongs.refresh()
-                guard generation == libraryGeneration, !Task.isCancelled else { return }
-                await recents.refresh()
-                guard generation == libraryGeneration, !Task.isCancelled else { return }
-                await explore.refresh()
-                guard generation == libraryGeneration, !Task.isCancelled else { return }
-                await collections.refresh()
-                guard generation == libraryGeneration, !Task.isCancelled else { return }
-                if search.error == .authorizationRequired { await search.retry(at: Date()) }
+                guard session == sessionGeneration, generation == libraryGeneration else { return }
+                libraryConsentRequired = false
+                await serialize { [self] in
+                    guard session == sessionGeneration, generation == libraryGeneration,
+                          libraryAuthorization?.isCancelled == false else { return }
+                    connect()
+                }.value
             } catch is CancellationError {
                 BopifyLog.library.info("library authorization cancelled")
             } catch {
-                guard authState == .signedIn, generation == libraryGeneration else { return }
-                libraryAuthorizationNotice = String(localized: "favorite.consentFailed")
+                guard session == sessionGeneration, generation == libraryGeneration else { return }
+                libraryAuthorizationNotice = String(localized: "librarySetup.consentFailed")
                 BopifyLog.library.notice("library authorization did not complete")
             }
         }
         libraryAuthorization = task
         libraryAuthorizationNotice = nil
-        isEnablingLibrary = true
+        librarySetupError = nil
+        isAuthorizingLibrary = true
         await task.value
     }
 
@@ -310,13 +291,14 @@ final class AppEnvironment {
         librarySetupError = nil
         // Abandon active consent before it can post a stale notice; preserve a rotated
         // grant waiting for persistence when Save does not interrupt consent.
-        let hadPendingConsent = isEnablingLibrary
+        let hadPendingConsent = isAuthorizingLibrary
         libraryAuthorization?.cancel()
         libraryAuthorization = nil
         libraryGeneration += 1
-        isEnablingLibrary = false
+        isAuthorizingLibrary = false
         if hadPendingConsent { await libraryAuth.cancelPendingWork() }
         let previous = libraryClientID
+        let session = sessionGeneration
         let id: String
         do { id = try await libraryAuth.setClientID(raw) }
         catch {
@@ -324,21 +306,53 @@ final class AppEnvironment {
             BopifyLog.library.error("library setup could not remove the previous grant")
             return
         }
+        guard session == sessionGeneration, !isPreparingForQuit else { return }
         BopifyLog.library.info("library setup saved; pendingConsent=\(hadPendingConsent, privacy: .public)")
         libraryClientID = id
         librarySetupWindow.close()
-        if let previous, id != previous { clearLibrary() }
-        let scopes = pendingLibraryScopes
-        pendingLibraryScopes = nil
-        // Unstructured so Save returns once the ID is stored rather than when consent ends.
-        if let scopes { Task { await enableLibrary(scopes: scopes) } }
+        if id != previous {
+            if authState == .signedIn { await requireLibrarySetup() }
+            else if previous != nil { clearLibrary() }
+        }
+        guard session == sessionGeneration, !isPreparingForQuit else { return }
+        // Save returns once the ID is stored; the remaining consent stays in setup.
+        if authState == .needsLibraryAuthorization { Task { await completeLibrarySetup() } }
+    }
+
+    var hasLibraryAuthorizationFailure: Bool {
+        favorite.error == .authorizationRequired || likedSongs.error == .authorizationRequired ||
+        recents.error == .authorizationRequired || explore.error == .authorizationRequired ||
+        collections.error == .authorizationRequired || search.error == .authorizationRequired
+    }
+
+    func requireLibrarySetup() async {
+        guard !isPreparingForQuit, authState == .signedIn else { return }
+        authState = .needsLibraryAuthorization
+        clearLibrary()
+        libraryConsentRequired = true
+        stopLiveLyrics()
+        recovery?.invalidate()
+        connectionMonitor?.stop()
+        let session = sessionGeneration
+        await serialize { [self] in
+            guard session == sessionGeneration else { return }
+            await recovery?.stop()
+            recovery = nil
+            connectionMonitor = nil
+            stations.engine = nil
+            nowPlaying?.stop()
+            nowPlaying = nil
+            player?.stop()
+            player = nil
+            BopifyLog.auth.info("playback stopped for required library setup")
+        }.value
     }
 
     private func clearLibrary() {
         libraryAuthorization?.cancel()
         libraryAuthorization = nil
         libraryGeneration += 1
-        isEnablingLibrary = false
+        isAuthorizingLibrary = false
         libraryAuthorizationNotice = nil
         favorite.clear()
         likedSongs.clear()
@@ -365,6 +379,40 @@ final class AppEnvironment {
         catch { return true }
     }
 
+    private func hasCompleteLibraryAccess() async throws -> Bool {
+        do {
+            _ = try await libraryAuth.validAccessToken(requiredScopes: LibraryAuthorization.requiredScopes)
+            return true
+        } catch LibraryError.authorizationRequired {
+            return false
+        } catch let error as PlayerError where error == .authExpired || error == .credentialCorrupt {
+            return false
+        }
+    }
+
+    // Called inside serialize so playback cannot start before both grants are ready.
+    private func finishSetup(generation: Int) async {
+        let libraryRevision = libraryGeneration
+        var ready = false
+        do {
+            ready = try await hasCompleteLibraryAccess()
+            guard generation == sessionGeneration else { return }
+            try Task.checkCancellation()
+            librarySetupError = nil
+        } catch is CancellationError {
+            ready = false
+        } catch {
+            guard generation == sessionGeneration else { return }
+            if libraryRevision == libraryGeneration {
+                librarySetupError = error as? PlayerError ?? .credentialUnavailable
+            }
+        }
+        guard generation == sessionGeneration else { return }
+        if ready, libraryRevision == libraryGeneration { connect(); return }
+        authState = .needsLibraryAuthorization
+        BopifyLog.auth.info("full library access required before playback")
+    }
+
     func restoreOrPromptSignIn() async {
         guard !isRemovingCredentials else { return }
         if hasPendingCleanup { await signOut(); return }
@@ -375,7 +423,7 @@ final class AppEnvironment {
             do {
                 let restored = try await auth.restore()
                 guard generation == sessionGeneration else { return }
-                if restored != nil { connect() } else { authState = .signedOut }
+                if restored != nil { await finishSetup(generation: generation) } else { authState = .signedOut }
             } catch {
                 guard generation == sessionGeneration else { return }
                 authState = .error(error as? PlayerError ?? .credentialUnavailable)
@@ -399,7 +447,7 @@ final class AppEnvironment {
                 authState = .authenticating
                 _ = try await auth.signIn()
                 guard generation == sessionGeneration else { return }
-                connect()
+                await finishSetup(generation: generation)
             } catch is CancellationError {
                 guard generation == sessionGeneration else { return }
                 authState = .signedOut
@@ -458,7 +506,8 @@ final class AppEnvironment {
         connectionMonitor?.stop()
         recovery?.invalidate()
         authState = .signedOut
-        pendingLibraryScopes = nil
+        libraryConsentRequired = false
+        librarySetupWindow.close()
         do { try logoutIntent?.begin([.playback, .library]) }
         catch { BopifyLog.auth.error("logout intent could not be persisted; retrying intent for both stores") }
         let clearingAuth = Task { [auth] in

@@ -47,17 +47,6 @@ private actor ControlledSavedTracks: SavedTracksService {
     }
 }
 
-private actor ConsentSavedTracks: SavedTracksService {
-    private(set) var count = 0
-
-    func savedTracks(offset: Int, limit: Int) async throws -> SavedTracksPage {
-        count += 1
-        if count == 1 { throw LibraryError.authorizationRequired }
-        return SavedTracksPage(tracks: [], nextOffset: nil, total: 0)
-    }
-}
-
-/// Answers each offset at once from a fixed set of pages and records what was asked.
 private actor PagedSavedTracks: SavedTracksService {
     private let pages: [Int: SavedTracksPage]
     private(set) var offsets: [Int] = []
@@ -112,7 +101,6 @@ struct LikedSongsModelTests {
         #expect(await service.offsets == [0, 50])
         #expect(model.tracks == [track(1), track(2), track(3)])
     }
-    /// Changing the library client ID clears the model while its shelf stays on screen.
     @Test func clearWhileShownStillRefreshes() async {
         let service = PagedSavedTracks([0: page([1])])
         let model = LikedSongsModel(service: service)
@@ -184,25 +172,14 @@ struct LikedSongsModelTests {
         await service.resolve(.failure(LibraryError.authorizationRequired))
         await retry.value
         #expect(model.error == .authorizationRequired)
-        let enabled = Task { await model.refresh() }
+        model.clear()
+        let reloaded = Task { await model.reveal(at: now.addingTimeInterval(12)) }
         _ = await service.next()
         await service.resolve(.success(page([])))
-        await enabled.value
+        await reloaded.value
         #expect(model.tracks.isEmpty && model.selectedURI == nil && model.error == nil)
         await model.reveal(at: now.addingTimeInterval(13))
         #expect(await service.count == 3)
-    }
-    @Test func consentWhileHiddenRefreshesOnRevealAfterAuthorizationError() async {
-        let service = ConsentSavedTracks()
-        let model = LikedSongsModel(service: service)
-        await model.reveal(at: now)
-        #expect(model.error == .authorizationRequired)
-        model.hide(at: now)
-        await model.refresh()
-        #expect(await service.count == 1)
-        await model.reveal(at: now.addingTimeInterval(1))
-        #expect(await service.count == 2)
-        #expect(model.error == nil)
     }
     @Test func quotaErrorRetainsDistinctReasonAndCooldown() async throws {
         let service = ControlledSavedTracks()

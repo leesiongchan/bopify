@@ -7,16 +7,14 @@ import BopifyPlayback
 
 /// The empty and error copy that differs between library tabs.
 struct CoverFlowCopy {
-    let permission: LocalizedStringKey
-    let enable: LocalizedStringKey
     let empty: LocalizedStringKey
     let unavailable: LocalizedStringKey
     let loading: LocalizedStringKey
 
-    static var liked: Self { .init(permission: "library.permission", enable: "library.enable", empty: "library.empty", unavailable: "library.unavailable", loading: "library.loading") }
-    static var recents: Self { .init(permission: "history.permission", enable: "history.enable", empty: "recents.empty", unavailable: "recents.unavailable", loading: "recents.loading") }
-    static var explore: Self { .init(permission: "history.permission", enable: "history.enable", empty: "explore.empty", unavailable: "explore.unavailable", loading: "explore.loading") }
-    static var collections: Self { .init(permission: "collections.permission", enable: "collections.enable", empty: "collections.empty", unavailable: "collections.unavailable", loading: "collections.loading") }
+    static var liked: Self { .init(empty: "library.empty", unavailable: "library.unavailable", loading: "library.loading") }
+    static var recents: Self { .init(empty: "recents.empty", unavailable: "recents.unavailable", loading: "recents.loading") }
+    static var explore: Self { .init(empty: "explore.empty", unavailable: "explore.unavailable", loading: "explore.loading") }
+    static var collections: Self { .init(empty: "collections.empty", unavailable: "collections.unavailable", loading: "collections.loading") }
 }
 
 /// Counts this view in `source`'s reveals only once its reveal has run, so a task cancelled before it starts
@@ -41,9 +39,8 @@ struct RevealWhileShown<Source: CoverFlowSource>: ViewModifier {
 }
 
 extension CoverFlowView where Accessory == EmptyView {
-    init(model: Source, copy: CoverFlowCopy, artworkStore: ArtworkStore, onPlay: @escaping (Source.Item) -> Void,
-         onEnable: @escaping @MainActor () async -> Void) {
-        self.init(model: model, copy: copy, artworkStore: artworkStore, onPlay: onPlay, onEnable: onEnable) { EmptyView() }
+    init(model: Source, copy: CoverFlowCopy, artworkStore: ArtworkStore, onPlay: @escaping (Source.Item) -> Void) {
+        self.init(model: model, copy: copy, artworkStore: artworkStore, onPlay: onPlay) { EmptyView() }
     }
 }
 
@@ -52,10 +49,8 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
     let copy: CoverFlowCopy
     let artworkStore: ArtworkStore
     let onPlay: (Source.Item) -> Void
-    let onEnable: @MainActor () async -> Void
     /// Follows the artist line, or sits under an empty shelf's message, such as Explore's station menu.
     @ViewBuilder let accessory: () -> Accessory
-    @Environment(AppEnvironment.self) private var environment: AppEnvironment?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Position in covers, driven directly while dragging or scrolling and by the spring after release.
     @State private var spring = CoverFlowSpring(position: 0, velocity: 0, target: 0)
@@ -257,8 +252,7 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
         HStack(spacing: 4) {
             if model.isLoading { ProgressView().controlSize(.mini) }
             if model.error == .authorizationRequired {
-                Button(copy.enable) { Task { await onEnable() } }
-                    .disabled(environment?.isEnablingLibrary == true)
+                Text("librarySetup.accessExpired").font(.caption).foregroundStyle(.secondary)
             } else if model.error != nil {
                 TimelineView(.periodic(from: .now, by: 1)) { context in retryButton(at: context.date) }
             }
@@ -268,12 +262,7 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
         if model.isLoading {
             ProgressView { Text(copy.loading) }.controlSize(.small)
         } else if model.error == .authorizationRequired {
-            VStack(spacing: 8) {
-                Text(copy.permission).font(.caption).foregroundStyle(.secondary)
-                Button(copy.enable) { Task { await onEnable() } }
-                    .disabled(environment?.isEnablingLibrary == true)
-                if let notice = environment?.libraryAuthorizationNotice { Text(notice).font(.caption) }
-            }
+            Text("librarySetup.accessExpired").font(.caption).foregroundStyle(.secondary)
         } else if model.error != nil {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let remaining = model.retryAfter.map { max(0, Int(ceil($0.timeIntervalSince(context.date)))) } ?? 0
