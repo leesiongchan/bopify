@@ -21,7 +21,7 @@ struct FavoriteButton: View {
                 }
             } label: {
                 Group {
-                    if model.isPending || environment.isEnablingLibrary { ProgressView().controlSize(.mini) }
+                    if model.isPending { ProgressView().controlSize(.mini) }
                     else {
                         Image(systemName: model.saved == true ? "heart.fill" : model.saved == nil ? "heart.slash" : "heart")
                             .contentTransition(.symbolEffect(.replace))
@@ -31,14 +31,14 @@ struct FavoriteButton: View {
                 .frame(width: 28, height: 28)
             }
             .buttonStyle(.playerControl)
-            .disabled(model.isPending || environment.isEnablingLibrary || model.uri != environment.player?.state.currentTrack?.uri)
+            .disabled(model.isPending || model.uri != environment.player?.state.currentTrack?.uri)
             .accessibilityLabel(Text("favorite.title"))
             .accessibilityValue(Text(model.isPending ? "favorite.pending" : model.saved == true ? "favorite.saved" : model.saved == false ? "favorite.unsaved" : "favorite.unknown"))
             .help(Text(model.saved == true ? "favorite.remove" : "favorite.save"))
             .popover(isPresented: Binding(get: { environment.presentation.activePopover == .favorite },
                                            set: { if !$0 && environment.presentation.activePopover == .favorite { environment.presentation.dismissPopover() } })) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(environment.libraryAuthorizationNotice ?? favoriteNotice(for: model.error))
+                    Text(favoriteNotice(for: model.error))
                         .font(.callout).fixedSize(horizontal: false, vertical: true)
                     FavoriteMenuAction()
                         .disabled(model.uri != environment.player?.state.currentTrack?.uri)
@@ -56,12 +56,10 @@ struct FavoriteButton: View {
 struct FavoriteMenuAction: View {
     @Environment(AppEnvironment.self) private var environment: AppEnvironment?
     var body: some View {
-        if let environment, environment.player?.state.currentTrack?.uri.kind == .track {
+        if let environment, environment.player?.state.currentTrack?.uri.kind == .track,
+           environment.favorite.error != .authorizationRequired {
             let model = environment.favorite
-            if model.error == .authorizationRequired {
-                Button("favorite.enable") { Task { await environment.enableFavorites() } }
-                    .disabled(environment.isEnablingLibrary)
-            } else if model.saved == nil || model.error != nil {
+            if model.saved == nil || model.error != nil {
                 Button("favorite.retry") { Task { await environment.refreshFavorite() } }
                     .disabled(model.isPending)
             } else {
@@ -74,7 +72,7 @@ struct FavoriteMenuAction: View {
 
 private func favoriteNotice(for error: LibraryError?) -> String {
     switch error {
-    case .authorizationRequired: String(localized: "favorite.permission")
+    case .authorizationRequired: String(localized: "librarySetup.accessExpired")
     case .forbidden: String(localized: "favorite.forbidden")
     case .rateLimited: String(localized: "favorite.rateLimited")
     case .quotaExceeded: String(localized: "library.quotaExceeded")

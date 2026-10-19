@@ -223,7 +223,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             cancel.target = self
             menu.addItem(cancel)
         }
-        if environment.isEnablingLibrary {
+        if environment.isAuthorizingLibrary {
             let cancel = NSMenuItem(title: String(localized: "library.cancelAuthorization"), action: #selector(cancelLibraryAuthorization(_:)), keyEquivalent: "")
             cancel.target = self
             menu.addItem(cancel)

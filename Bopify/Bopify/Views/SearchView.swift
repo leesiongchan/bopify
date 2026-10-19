@@ -115,15 +115,7 @@ struct SearchView: View {
 
     @ViewBuilder private var errorState: some View {
         if model.error == .authorizationRequired {
-            VStack(spacing: 10) {
-                Text("search.permission").foregroundStyle(.secondary)
-                Button("search.enable") { Task { await environment.enableSearch() } }
-                    .disabled(environment.isEnablingLibrary)
-                if environment.isEnablingLibrary {
-                    Button("library.cancelAuthorization", action: environment.cancelLibraryAuthorization)
-                }
-                if let notice = environment.libraryAuthorizationNotice { Text(notice).font(.caption) }
-            }
+            Text("librarySetup.accessExpired").foregroundStyle(.secondary)
         } else {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 VStack(spacing: 10) {

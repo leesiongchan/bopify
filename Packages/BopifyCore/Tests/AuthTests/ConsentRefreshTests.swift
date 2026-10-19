@@ -36,7 +36,7 @@ struct ConsentRefreshTests {
         let service = SpotifyAuthService(clientID: "test",
             client: TokenClient(clientID: "test", session: URLSession(configuration: configuration)),
             store: store, openURL: { opened.continuation.yield($0) })
-        let consent = Task { try await service.authorizeLibraryScopes(["user-library-modify"]) }
+        let consent = Task { try await service.authorizeLibrary() }
         var urls = opened.stream.makeAsyncIterator()
         let url = try #require(await urls.next())
         let redirect = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
@@ -98,7 +98,7 @@ struct ConsentRefreshTests {
         let service = SpotifyAuthService(clientID: "test",
             client: TokenClient(clientID: "test", session: URLSession(configuration: configuration)),
             store: store, openURL: { opened.continuation.yield($0) })
-        let consent = Task { try await service.authorizeLibraryScopes(["user-library-modify"]) }
+        let consent = Task { try await service.authorizeLibrary() }
         var urls = opened.stream.makeAsyncIterator()
         let url = try #require(await urls.next())
         let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!
@@ -166,7 +166,7 @@ private final class ConsentRefreshProtocol: URLProtocol, @unchecked Sendable {
         if Self.gate.holdExchange || String(decoding: body, as: UTF8.self).contains("grant_type=refresh_token") {
             Self.gate.hold(self)
         } else {
-            respond(#"{"access_token":"NEW_CONSENT","expires_in":3600,"refresh_token":"NEW_RT","scope":"user-library-read user-library-modify"}"#)
+            respond(#"{"access_token":"NEW_CONSENT","expires_in":3600,"refresh_token":"NEW_RT","scope":"user-library-read user-library-modify user-read-recently-played user-top-read playlist-read-private playlist-read-collaborative user-follow-read"}"#)
         }
     }
 

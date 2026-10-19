@@ -222,7 +222,9 @@ struct AppEnvironmentLyricsTests {
         let grant = TokenSet(accessToken: "FAKE", refreshToken: "FAKE", expiresAt: .distantFuture, grantedScopes: ["streaming"])
         environment = AppEnvironment(previewPlayer: PlayerModel(), favoriteService: LyricsLibrary(),
             playbackAuth: SpotifyAuthService(clientID: "test", store: LyricsTokenStore(grant)),
-            libraryAuth: SpotifyAuthService(clientID: "test-library", store: LyricsTokenStore(nil)),
+            libraryAuth: SpotifyAuthService(clientID: "test-library", store: LyricsTokenStore(
+                TokenSet(accessToken: "LIBRARY", refreshToken: "LIBRARY_RT", expiresAt: .distantFuture,
+                         grantedScopes: LibraryAuthorization.requiredScopes))),
             recoveryEngineFactory: { _, _ in count.next() == 1 ? first : second })
     }
     func ready() async throws {

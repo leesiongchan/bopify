@@ -36,7 +36,7 @@ public final class LikedSongsModel {
         reveals += 1
         let stale = hiddenAt.map { date.timeIntervalSince($0) >= 60 } ?? false
         hiddenAt = nil
-        guard !isLoading, (error == nil || (needsRefresh && error == .authorizationRequired)),
+        guard !isLoading, error == nil,
               needsRefresh || stale || !loaded else { return }
         await request(refresh: true)
     }

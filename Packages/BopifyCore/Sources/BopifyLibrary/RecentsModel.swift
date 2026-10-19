@@ -52,13 +52,6 @@ public final class RecentsModel: CoverFlowSource {
         await load()
     }
 
-    /// After consent: reloads now when shown, otherwise on the next reveal.
-    public func refresh() async {
-        loadedAt = nil
-        guard visible, !isLoading else { return }
-        await load()
-    }
-
     public func clear() {
         generation += 1
         tracks = []

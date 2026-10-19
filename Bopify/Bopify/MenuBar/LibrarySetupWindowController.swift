@@ -1,12 +1,10 @@
 import AppKit
 import SwiftUI
 
-/// An agent app has no Settings menu, so Library Access gets its own window, opened from the status menu or any Enable action.
+/// An agent app has no Settings menu, so Library Access gets its own window during setup and from the status menu.
 @MainActor
-final class LibrarySetupWindowController: NSObject, NSWindowDelegate {
-    var isVisible: Bool { window?.isVisible == true }
+final class LibrarySetupWindowController {
     private var window: NSWindow?
-    private var onCancel: (() -> Void)?
 
     func show(environment: AppEnvironment) {
         if window == nil {
@@ -14,19 +12,12 @@ final class LibrarySetupWindowController: NSObject, NSWindowDelegate {
             window.title = String(localized: "librarySetup.title")
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
-            window.delegate = self
             self.window = window
         }
-        onCancel = { [weak environment] in environment?.searchPopover.close() }
         window?.center()
         NSApp.activate()
         window?.makeKeyAndOrderFront(nil)
     }
 
-    func close() { onCancel = nil; window?.close() }
-
-    func windowWillClose(_ notification: Notification) {
-        onCancel?()
-        onCancel = nil
-    }
+    func close() { window?.close() }
 }

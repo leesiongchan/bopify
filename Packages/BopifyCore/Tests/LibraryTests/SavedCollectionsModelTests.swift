@@ -65,11 +65,9 @@ struct SavedCollectionsModelTests {
         #expect(await service.requests == ["playlists:0:50", "albums:0:50", "artists:start:50", "playlists:0:50"])
     }
 
-    @Test func clearRejectsLateResponseAndHiddenRefreshWaitsForReveal() async {
+    @Test func clearRejectsLateResponse() async {
         let service = CollectionFixture(page: .init(items: [collection("first")], nextCursor: nil))
         let model = SavedCollectionsModel(service: service)
-        await model.refresh()
-        #expect(await service.requests.isEmpty)
         await service.holdNext()
         let loading = Task { await model.reveal(at: Date()) }
         await service.waitUntilHeld()
@@ -79,7 +77,7 @@ struct SavedCollectionsModelTests {
         #expect(model.items.isEmpty && model.selectedURI == nil && !model.isLoading)
     }
 
-    @Test func artistConsentRetainsExistingCoversAndArtistPagingKeepsSelection() async {
+    @Test func artistAuthorizationFailureIsReportedAndRetryKeepsSelection() async {
         let playlist = collection("playlist"), album = collection("album", kind: .albums)
         let artist = collection("artistA", kind: .artists), nextArtist = collection("artistB", kind: .artists)
         let service = CollectionFixture(page: .init(items: [playlist], nextCursor: nil), albums: .init(items: [album], nextCursor: nil))

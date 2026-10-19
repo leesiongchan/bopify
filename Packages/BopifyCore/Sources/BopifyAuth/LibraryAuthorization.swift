@@ -8,6 +8,10 @@ public enum LibraryClientIDError: Error, Equatable { case invalid }
 /// Development Mode app at five users, so every user registers one; the ID is public, not a secret.
 public actor LibraryAuthorization {
     public static let defaultsKey = "library.clientID"
+    public static let requiredScopes: Set<String> = [
+        "user-library-read", "user-library-modify", "user-read-recently-played", "user-top-read",
+        "playlist-read-private", "playlist-read-collaborative", "user-follow-read"
+    ]
 
     private let defaults: UserDefaults
     private let makeAuth: @Sendable (String) -> SpotifyAuthService
@@ -64,9 +68,9 @@ public actor LibraryAuthorization {
         return id
     }
 
-    public func authorize(_ scopes: Set<String>) async throws {
+    public func authorize() async throws {
         guard let auth else { throw LibraryError.authorizationRequired }
-        _ = try await auth.authorizeLibraryScopes(scopes)
+        _ = try await auth.authorizeLibrary()
     }
 
     public func validAccessToken(requiredScopes: Set<String>) async throws -> String {

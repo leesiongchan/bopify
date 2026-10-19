@@ -72,14 +72,13 @@ struct RecentsModelTests {
         #expect(model.error == nil && model.tracks.count == 1)
     }
 
-    /// Changing the library client ID clears the model while its shelf stays on screen.
-    @Test func clearWhileShownStillRefreshes() async {
+    @Test func clearedLibraryReloadsOnReveal() async {
         let history = FakeHistory()
         await history.setPlays(.success([play("a")]))
         let model = RecentsModel(service: history)
         await model.reveal(at: Date())
         model.clear()
-        await model.refresh()
+        await model.reveal(at: Date())
         #expect(await history.recentCalls == 2)
         #expect(model.tracks.count == 1)
     }

@@ -23,6 +23,8 @@ struct PlayerRootView: View {
                             SignInView(status: .authenticating, onSignIn: requestSignIn, onCancel: environment.cancelPlaybackAuthorization)
                         case .refreshing:
                             SignInView(status: .restoring, onSignIn: requestSignIn)
+                        case .needsLibraryAuthorization:
+                            LibraryAuthorizationSetupView(environment: environment)
                         case let .error(error):
                             SignInView(status: .error(error), onSignIn: requestSignIn, onRetryCredentials: { Task { await environment.restoreOrPromptSignIn() } },
                                        onRetryCleanup: { Task { await environment.signOut() } })
@@ -45,6 +47,9 @@ struct PlayerRootView: View {
             }
         }
         .environment(environment)
+        .onChange(of: environment.hasLibraryAuthorizationFailure, initial: true) { _, failed in
+            if failed { Task { await environment.requireLibrarySetup() } }
+        }
         .onChange(of: environment.presentation.isVisible) { _, visible in
             if visible { environment.artworkStore.retryFailedLoads() }
             else { environment.player?.cancelVolumeEditing() }
@@ -72,7 +77,8 @@ struct PlayerRootView: View {
                         .disabled(!player.isEngineReady || !player.state.isActiveDevice)
                     Divider()
                 }
-                Button("menu.signOut") { Task { await environment.signOut() } }.disabled(environment.authState != .signedIn)
+                Button("menu.signOut") { Task { await environment.signOut() } }
+                    .disabled(environment.authState != .signedIn && environment.authState != .needsLibraryAuthorization)
                 Divider()
                 Button("menu.quit") { Task { await environment.prepareForQuit(); NSApp.terminate(nil) } }
             } label: {
