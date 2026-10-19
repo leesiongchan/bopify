@@ -49,7 +49,7 @@ final class LyricPanelPreviewSession {
     @ObservationIgnored private var baseTime: TimeInterval
     @ObservationIgnored private var controlWindow: NSWindow?
     @ObservationIgnored private lazy var controller = PlayerWindowController(defaults: defaults)
-    @ObservationIgnored private lazy var panel: StatusPanel = {
+    @ObservationIgnored private lazy var panel: StatusPanel = { @MainActor in
         let panel = StatusPanel(content: RecordPlayerView(player: environment.player!, artworkStore: environment.artworkStore,
             presentation: environment.presentation, windowController: controller, lyricModel: model,
             onLyricSeek: { [weak self] time, snapshot in
