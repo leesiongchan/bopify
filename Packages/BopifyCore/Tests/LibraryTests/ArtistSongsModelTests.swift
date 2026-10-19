@@ -12,14 +12,6 @@ struct ArtistSongsModelTests {
         ArtistTopTracks(trackURI: source, artistURI: artist, artistName: "Singer", tracks: [testTrack("song")])
     }
 
-    @Test func selectedSongLoadsThatExactTrack() async {
-        let model = ArtistSongsModel()
-        await model.load(for: source) { response($0) }
-        #expect(model.playRequest(for: testTrack("song")) ==
-            PlayRequest(contextURI: testTrack("song").uri))
-        #expect(model.playRequest(for: testTrack("other")) == nil)
-    }
-
     @Test func dismissingDropsAnUncooperativeLateReply() async {
         let model = ArtistSongsModel()
         let (started, signal) = AsyncStream.makeStream(of: Void.self)

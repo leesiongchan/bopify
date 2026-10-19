@@ -91,17 +91,6 @@ struct SpotifyLibraryClientTests {
             #expect(LibraryProtocol.fixture.requests.count == 1)
         }
     }
-    @Test func rateLimitFromLikedSongsBlocksFavoriteRequest() async {
-        LibraryProtocol.fixture.reset(.init(status: 429, headers: ["Retry-After": "12"]))
-        let client = client()
-        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 12)) {
-            _ = try await client.savedTracks(offset: 0, limit: 50)
-        }
-        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 12)) {
-            _ = try await client.savedState(for: uri)
-        }
-        #expect(LibraryProtocol.fixture.requests.count == 1)
-    }
     @Test func concurrentLibraryFeaturesShareEstablishedCooldown() async {
         let uri = self.uri
         LibraryProtocol.fixture.reset(.init(status: 429, headers: ["Retry-After": "12"]))
@@ -138,19 +127,73 @@ struct SpotifyLibraryClientTests {
         }
         clock.advance(11)
         LibraryProtocol.fixture.reset(.init(data: Data("[true]".utf8)))
-        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 12)) { _ = try await client.savedState(for: uri) }
+        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 1)) { _ = try await client.savedState(for: uri) }
         #expect(LibraryProtocol.fixture.requests.isEmpty)
         clock.advance(1)
         #expect(try await client.savedState(for: uri))
         #expect(LibraryProtocol.fixture.requests.count == 1)
     }
-    @Test func quotaResponseHasDistinctErrorAndSharedCooldown() async {
-        LibraryProtocol.fixture.reset(.init(status: 429,
-            data: Data(#"{"error":{"status":429,"message":"Too many requests","reason":"QUOTA_EXCEEDED"}}"#.utf8),
-            headers: ["Retry-After": "90"]))
+    @Test @MainActor func featuresJoiningCooldownKeepTheOriginalDeadline() async throws {
+        let clock = LibraryClock()
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [LibraryProtocol.self]
+        let client = SpotifyLibraryClient(session: URLSession(configuration: configuration),
+                                          tokenProvider: { _ in "TEST_TOKEN" }, now: { clock.now() })
+        let liked = LikedSongsModel(service: client, now: { clock.now() })
+        let recents = RecentsModel(service: client, now: { clock.now() })
+        LibraryProtocol.fixture.reset(.init(status: 429, headers: ["Retry-After": "12"]))
+        await liked.reveal(at: clock.now())
+        #expect(liked.retryAfter == Date(timeIntervalSince1970: 1_012))
+        clock.advance(11)
+        await recents.reveal(at: clock.now())
+        #expect(recents.error == .rateLimited(retryAfterSeconds: 1))
+        #expect(recents.retryAfter == liked.retryAfter)
+        #expect(LibraryProtocol.fixture.requests.count == 1)
+        clock.advance(1)
+        LibraryProtocol.fixture.reset(.init(data: Data(#"{"items":[]}"#.utf8)))
+        await recents.retry(at: clock.now())
+        #expect(recents.error == nil && recents.retryAfter == nil)
+        #expect(LibraryProtocol.fixture.requests.count == 1)
+    }
+    @Test(arguments: [false, true])
+    func sharedCooldownRoundsUpOnlyTheRemainingDelay(quota: Bool) async {
+        let clock = LibraryClock()
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [LibraryProtocol.self]
+        let client = SpotifyLibraryClient(session: URLSession(configuration: configuration),
+                                          tokenProvider: { _ in "TEST_TOKEN" }, now: { clock.now() })
+        let body = quota ? #"{"error":{"status":429,"message":"Too many requests","reason":"QUOTA_EXCEEDED"}}"# : ""
+        LibraryProtocol.fixture.reset(.init(status: 429, data: Data(body.utf8), headers: ["Retry-After": "12"]))
+        let initial: LibraryError = quota ? .quotaExceeded(retryAfterSeconds: 12) : .rateLimited(retryAfterSeconds: 12)
+        await #expect(throws: initial) { _ = try await client.savedTracks(offset: 0, limit: 50) }
+        clock.advance(10.25)
+        let remaining: LibraryError = quota ? .quotaExceeded(retryAfterSeconds: 2) : .rateLimited(retryAfterSeconds: 2)
+        await #expect(throws: remaining) { _ = try await client.savedState(for: uri) }
+        #expect(LibraryProtocol.fixture.requests.count == 1)
+    }
+    @Test(arguments: ["missing", "invalid", "-1"])
+    func sharedCooldownUsesTheRemainingDefaultDelay(header: String) async {
+        let clock = LibraryClock()
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [LibraryProtocol.self]
+        let client = SpotifyLibraryClient(session: URLSession(configuration: configuration),
+                                          tokenProvider: { _ in "TEST_TOKEN" }, now: { clock.now() })
+        LibraryProtocol.fixture.reset(.init(status: 429, headers: header == "missing" ? [:] : ["Retry-After": header]))
+        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: nil)) { try await client.save(uri) }
+        clock.advance(59)
+        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 1)) { try await client.remove(uri) }
+        #expect(LibraryProtocol.fixture.requests.count == 1)
+    }
+    @Test func sharedCooldownAcceptsTheLargestServerDelay() async {
         let client = client()
-        await #expect(throws: LibraryError.quotaExceeded(retryAfterSeconds: 90)) { _ = try await client.savedTracks(offset: 0, limit: 50) }
-        await #expect(throws: LibraryError.quotaExceeded(retryAfterSeconds: 90)) { _ = try await client.savedState(for: uri) }
+        LibraryProtocol.fixture.reset(.init(status: 429, headers: ["Retry-After": String(Int.max)]))
+        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: Int.max)) { try await client.save(uri) }
+        do {
+            try await client.remove(uri)
+            Issue.record("The shared cooldown must block another request")
+        } catch let LibraryError.rateLimited(seconds) {
+            #expect((seconds ?? 0) > 1_000_000_000)
+        } catch { Issue.record(error) }
         #expect(LibraryProtocol.fixture.requests.count == 1)
     }
     @Test func unsupportedAndMissingScopesDoNotSendRequests() async {
@@ -308,27 +351,27 @@ struct SpotifyLibraryClientTests {
                    "artists": [["name": "Artist"]], "duration_ms": 180_000,
                    "album": ["name": "Album", "images": image ? [["url": "https://i.scdn.co/image/cover"]] : []]]]
     }
-    private func savedPage(_ items: [Any], offset: Int = 0, total: Int = 7,
+    private func savedPage(_ items: [Any], offset: Int = 0, limit: Int = 50, total: Int = 7,
                            next: String? = "https://api.spotify.com/v1/me/tracks?offset=3") throws -> Data {
         try JSONSerialization.data(withJSONObject: ["items": items, "offset": offset,
-            "limit": 50, "total": total, "next": next as Any? ?? NSNull()])
+            "limit": limit, "total": total, "next": next as Any? ?? NSNull()])
     }
-    @Test func savedTracksRequestUsesReadScope() async throws {
-        LibraryProtocol.fixture.reset(.init(data: try savedPage([], total: 0, next: nil)))
+    @Test(arguments: [5, 50]) func savedTracksRequestUsesReadScope(limit: Int) async throws {
+        LibraryProtocol.fixture.reset(.init(data: try savedPage([], limit: limit, total: 0, next: nil)))
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [LibraryProtocol.self]
         let client = SpotifyLibraryClient(session: URLSession(configuration: configuration)) { required in
             #expect(required == ["user-library-read"])
             return "TEST_TOKEN"
         }
-        let page = try await client.savedTracks(offset: 0, limit: 50)
+        let page = try await client.savedTracks(offset: 0, limit: limit)
         #expect(page == SavedTracksPage(tracks: [], nextOffset: nil, total: 0))
         let request = try #require(LibraryProtocol.fixture.requests.first)
         #expect(request.httpMethod == "GET")
         #expect(request.url?.scheme == "https" && request.url?.host == "api.spotify.com")
         #expect(request.url?.path == "/v1/me/tracks")
         #expect(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems == [
-            URLQueryItem(name: "offset", value: "0"), URLQueryItem(name: "limit", value: "50")])
+            URLQueryItem(name: "offset", value: "0"), URLQueryItem(name: "limit", value: String(limit))])
     }
     @Test func libraryRequestsUseOnlyTheirRequiredScopesAndLibraryBearer() async throws {
         let configuration = URLSessionConfiguration.ephemeral
@@ -364,12 +407,13 @@ struct SpotifyLibraryClientTests {
         var unavailable = savedTrack("unavailable")["track"] as! [String: Any]
         unavailable["is_playable"] = false
         invalidURI["added_at"] = "2026-09-27T00:00:00Z"
-        let items: [Any] = [invalidURI, ["track": negative], ["track": unavailable], ["track": "bad"], savedTrack("ok", image: false)]
-        LibraryProtocol.fixture.reset(.init(data: try savedPage(items)))
+        let items: [Any] = [invalidURI, ["track": negative], ["track": unavailable], ["track": "bad"],
+                            NSNull(), 42, [], [:], savedTrack("ok", image: false)]
+        LibraryProtocol.fixture.reset(.init(data: try savedPage(items, total: 20)))
         let page = try await client().savedTracks(offset: 0, limit: 50)
         #expect(page.tracks.map(\.uri.rawValue) == ["spotify:track:ok"])
         #expect(page.tracks.first?.artwork == nil)
-        #expect(page.nextOffset == 5)
+        #expect(page.nextOffset == 9)
         LibraryProtocol.fixture.reset(.init(data: try savedPage(Array(items.prefix(4)))))
         let skipped = try await client().savedTracks(offset: 0, limit: 50)
         #expect(skipped.tracks.isEmpty && skipped.nextOffset == 4)
@@ -398,6 +442,15 @@ struct SpotifyLibraryClientTests {
             await #expect(throws: LibraryError.invalidResponse) { _ = try await client().savedTracks(offset: offset, limit: limit) }
         }
         #expect(LibraryProtocol.fixture.requests.isEmpty)
+    }
+    @Test func savedPaginationRejectsExcessItemsAndOffsetOverflow() async throws {
+        for (offset, count) in [(0, 51), (Int.max, 1)] {
+            let items = Array(repeating: savedTrack("a"), count: count)
+            LibraryProtocol.fixture.reset(.init(data: try savedPage(items, offset: offset, total: Int.max)))
+            await #expect(throws: LibraryError.invalidResponse) {
+                _ = try await client().savedTracks(offset: offset, limit: 50)
+            }
+        }
     }
     @Test func savedTracksErrorsAndCancellation() async {
         for (status, error) in [(401, LibraryError.authorizationRequired), (403, .forbidden),

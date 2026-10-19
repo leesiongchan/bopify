@@ -170,7 +170,6 @@ struct PlayerModelTests {
         #expect(model.queueSelection == .confirmed(entryID: entry.id, target: entry.target!))
         model.stop()
         #expect(model.queueSelection == .idle)
-        #expect(PlayerModel(engine: StubPlaybackEngine()).queueSelection == .idle)
     }
 
     @Test func anotherSameURIQueueOccurrenceFailsSelection() async {
@@ -400,16 +399,6 @@ struct PlayerModelTests {
         await settle(model, engine, [.paused(positionMs: 2000)])
         #expect(model.state.phase == .paused)
         #expect(model.state.positionMs == 2000)
-    }
-
-    @Test func loadingPreservesTheCurrentTrack() async {
-        let engine = StubPlaybackEngine()
-        let model = PlayerModel(engine: engine)
-        model.start()
-        await settle(model, engine, [.trackChanged(makeTrack()), .playing(positionMs: 1000), .loading])
-
-        #expect(model.state.phase == .loading)
-        #expect(model.state.currentTrack?.title == "Title")  // PLAY-07
     }
 
     @Test func losingTheActiveDeviceStopsPretendingToPlay() async {

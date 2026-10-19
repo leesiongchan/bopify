@@ -4,13 +4,12 @@ import BopifyPlayback
 
 @MainActor final class RecoveryFactoryGate {
     var configurations: [PlaybackEngineConfiguration] = []
-    var tokens: [String] = []
     private var pending: [CheckedContinuation<any ManagedPlaybackEngine, any Error>] = []
     private var waiters: [(Int, CheckedContinuation<Void, Never>)] = []
     private var concurrent = 0
     var maximumConcurrentCreations = 0
-    func create(token: String, configuration: PlaybackEngineConfiguration) async throws -> any ManagedPlaybackEngine {
-        configurations.append(configuration); tokens.append(token)
+    func create(configuration: PlaybackEngineConfiguration) async throws -> any ManagedPlaybackEngine {
+        configurations.append(configuration)
         concurrent += 1; maximumConcurrentCreations = max(concurrent, maximumConcurrentCreations)
         defer { concurrent -= 1 }
         return try await withCheckedThrowingContinuation { continuation in

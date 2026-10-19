@@ -44,7 +44,7 @@ struct LyricReaderTests {
     @Test func manualViewportFitsThreeVisualRowsWithoutAFourth() throws {
         let reader = try LyricReaderFixture()
         reader.update(position: 0, reading: true)
-        let layout = LyricRibbonLayout.measure(content: .timed(reader.document), width: 448, textScale: 1, availableHeight: 1000)
+        let layout = LyricRibbonLayout.measure(width: 448, textScale: 1, availableHeight: 1000)
         let third = (reader.view.string as NSString).range(of: "Previous words")
         let fourth = (reader.view.string as NSString).range(of: "Current words")
         #expect(reader.lineTop(at: third.location) < layout.textViewportHeight)

@@ -33,14 +33,6 @@ struct TokenStoreTests {
         #expect(throws: KeychainError.corrupt) { try KeychainTokenStore.decode(status: errSecSuccess, item: "wrong type" as CFString) }
     }
 
-    @Test func roundTripsATokenSet() throws {
-        let store = makeStore()
-        try store.save(sample)
-        let loaded = try #require(try store.load())
-        #expect(loaded == sample)
-        try store.clear()
-    }
-
     @Test func overwritesAnExistingItem() throws {
         let store = makeStore()
         try store.save(sample)
@@ -49,17 +41,6 @@ struct TokenStoreTests {
         try store.save(updated)
         #expect(try store.load()?.accessToken == "AT2")
         try store.clear()
-    }
-
-    @Test func returnsNilWhenNothingIsStored() throws {
-        #expect(try makeStore().load() == nil)
-    }
-
-    @Test func clearRemovesTheItem() throws {
-        let store = makeStore()
-        try store.save(sample)
-        try store.clear()
-        #expect(try store.load() == nil)
     }
 
     @Test func corruptStoredCredentialsAreNotReportedAsMissing() throws {

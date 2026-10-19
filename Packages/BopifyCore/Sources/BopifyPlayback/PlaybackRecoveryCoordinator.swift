@@ -21,11 +21,9 @@ public final class PlaybackRecoveryCoordinator {
         didSet {
             guard oldValue != status else { return }
             BopifyLog.playback.info("connection status=\(String(describing: self.status), privacy: .public) generation=\(self.generation, privacy: .public)")
-            onStatusChange?(status)
         }
     }
     public private(set) var currentEngine: (any ManagedPlaybackEngine)?
-    @ObservationIgnored public var onStatusChange: (@MainActor (PlaybackConnectionStatus) -> Void)?
     @ObservationIgnored public var onEngineChange: (@MainActor ((any ManagedPlaybackEngine)?) -> Void)?
     @ObservationIgnored private let tokenProvider: @Sendable (String?) async throws -> String
     @ObservationIgnored private let makeEngine: @Sendable (String, PlaybackEngineConfiguration) async throws -> any ManagedPlaybackEngine

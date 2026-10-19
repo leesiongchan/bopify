@@ -166,7 +166,7 @@ private func previewLyricPanel(_ kind: String) -> some View {
     model.show()
     model.completeLoad(content, token: model.beginLoad())
     if kind == "reading" { model.beginReading() }
-    let layout = LyricRibbonLayout.measure(content: content, width: 448, textScale: 1, availableHeight: 320)
+    let layout = LyricRibbonLayout.measure(width: 448, textScale: 1, availableHeight: 320)
     return LyricPanelView(model: model, layout: layout)
 }
 

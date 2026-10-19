@@ -66,28 +66,6 @@ struct LyricPresentationTests {
         #expect(model.isVisible)
     }
 
-    @Test func attributionSharesHeaderWithoutChangingCueGeometry() throws {
-        let source = LyricSourceMetadata(lyrics: presentationLyrics(displayName: String(repeating: "Fixture provider ", count: 30)))
-        let content = LyricContent.timed(try lyricTestDocument())
-        let layout = LyricRibbonLayout.measure(content: content, width: 250, textScale: 1.5,
-                                               availableHeight: 240, source: source)
-        #expect(layout.panelSize.height <= 240)
-        #expect(layout.textViewportHeight > 0)
-        let model = LyricRibbonModel(snapshot: lyricTestSnapshot())
-        model.show()
-        model.completeLoad(content, token: model.beginLoad(), source: source)
-        for position: Int64 in [1000, 20_000, 72_000, 87_000] {
-            model.update(lyricTestSnapshot(position: position))
-            let measured = LyricRibbonLayout.measure(content: model.content, width: 250, textScale: 1.5,
-                                                      availableHeight: 240, source: model.source)
-            #expect(measured.panelSize == layout.panelSize)
-        }
-        let original = LyricRibbonLayout.measure(content: .plain("Short"), width: 448, textScale: 1, availableHeight: 480)
-        #expect(original.panelSize.height == 134)
-        #expect(original.panelSize == LyricRibbonLayout.measure(content: .plain("Short"), width: 448,
-            textScale: 1, availableHeight: 480, source: source).panelSize)
-    }
-
     @Test func rightToLeftMetadataControlsParagraphDirection() throws {
         let text = LyricRibbonLayout.passage(previous: "Previous", current: "للنافذة ضوء هادئ", scale: 1, isRightToLeft: true)
         for index in [0, text.length - 1] {

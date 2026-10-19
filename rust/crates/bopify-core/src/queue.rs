@@ -88,27 +88,29 @@ async fn run<F, Fut>(
 {
     let mut jobs = JoinSet::new();
     let mut in_flight = HashMap::new();
-    let mut pending: VecDeque<(String, String)> = VecDeque::new();
+    let mut pending: VecDeque<(Vec<String>, String)> = VecDeque::new();
     let mut cache: HashMap<String, WireTrack> = HashMap::new();
     let mut recent: VecDeque<String> = VecDeque::new();
     let mut generation = 0;
     loop {
         while jobs.len() < 4 {
-            let Some((entry_id, uri)) = pending.pop_front() else {
+            let Some((entry_ids, uri)) = pending.pop_front() else {
                 break;
             };
             if let Some(track) = cache.get(&uri) {
-                sink(WireEvent::QueueMetadata {
-                    generation,
-                    entry_id,
-                    track: Some(track.clone()),
-                });
+                for entry_id in entry_ids {
+                    sink(WireEvent::QueueMetadata {
+                        generation,
+                        entry_id,
+                        track: Some(track.clone()),
+                    });
+                }
                 recent.retain(|key| key != &uri);
                 recent.push_back(uri);
             } else {
                 let lookup = fetch(uri.clone());
                 let task = jobs.spawn(with_metadata_deadline(lookup));
-                in_flight.insert(task.id(), (entry_id, uri));
+                in_flight.insert(task.id(), (entry_ids, uri));
             }
         }
         tokio::select! {
@@ -119,7 +121,17 @@ async fn run<F, Fut>(
                 in_flight.clear();
                 if let Some(request) = requests.borrow_and_update().clone() {
                     generation = request.generation;
-                    pending = request.entries.into();
+                    pending.clear();
+                    let mut positions = HashMap::new();
+                    for (entry_id, uri) in request.entries {
+                        // One attempt per URI in this generation; each occurrence still gets a row event.
+                        let position = *positions.entry(uri.clone()).or_insert_with(|| {
+                            pending.push_back((Vec::new(), uri));
+                            pending.len() - 1
+                        });
+                        pending[position].0.push(entry_id);
+                    }
+                    log::debug!("queue: metadata generation={generation} unique_uris={}", pending.len());
                 }
             }
             result = jobs.join_next_with_id(), if !jobs.is_empty() => {
@@ -131,7 +143,7 @@ async fn run<F, Fut>(
                             (error.id(), None)
                         }
                     };
-                    let Some((entry_id, uri)) = in_flight.remove(&id) else { continue };
+                    let Some((entry_ids, uri)) = in_flight.remove(&id) else { continue };
                     if let Some(track) = &track {
                         cache.insert(uri.clone(), track.clone());
                         recent.retain(|key| key != &uri);
@@ -142,7 +154,9 @@ async fn run<F, Fut>(
                     } else {
                         log::debug!("queue: metadata unavailable");
                     }
-                    sink(WireEvent::QueueMetadata { generation, entry_id, track });
+                    for entry_id in entry_ids {
+                        sink(WireEvent::QueueMetadata { generation, entry_id, track: track.clone() });
+                    }
                 }
             }
         }
@@ -162,6 +176,125 @@ mod tests {
             generation,
             entries: vec![("entry".into(), uri.into())],
         }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn duplicate_rows_share_one_result_and_failed_uris_retry_next_generation() {
+        for outcome in ["success", "failure", "timeout", "panic"] {
+            let (tx, rx) = watch::channel(None);
+            let (events, mut received) = tokio::sync::mpsc::unbounded_channel();
+            let calls = Arc::new(AtomicUsize::new(0));
+            let observed = calls.clone();
+            let task = tokio::spawn(run(
+                rx,
+                Arc::new(move |event| {
+                    events.send(event).unwrap();
+                }),
+                move |uri| {
+                    observed.fetch_add(1, Ordering::SeqCst);
+                    async move {
+                        match outcome {
+                            "success" => Some(WireTrack {
+                                track_uri: uri,
+                                title: "Title".into(),
+                                artists: vec![],
+                                album_title: None,
+                                artwork_url: None,
+                                duration_ms: 1000,
+                            }),
+                            "timeout" => std::future::pending().await,
+                            "panic" => panic!("metadata lookup failed"),
+                            _ => None,
+                        }
+                    }
+                },
+            ));
+            for generation in 1..=2 {
+                tx.send(Some(MetadataRequest {
+                    generation,
+                    entries: (0..8).map(|i| (i.to_string(), "same".into())).collect(),
+                }))
+                .unwrap();
+                let mut ids = Vec::new();
+                for _ in 0..8 {
+                    let deadline = if outcome == "timeout" { 31 } else { 1 };
+                    let event = tokio::time::timeout(
+                        std::time::Duration::from_secs(deadline),
+                        received.recv(),
+                    )
+                    .await
+                    .unwrap()
+                    .unwrap();
+                    let WireEvent::QueueMetadata {
+                        generation: actual,
+                        entry_id,
+                        track,
+                    } = event
+                    else {
+                        panic!("expected queue metadata");
+                    };
+                    assert_eq!(actual, generation);
+                    assert_eq!(
+                        track.as_ref().map(|value| value.track_uri.as_str()),
+                        (outcome == "success").then_some("same")
+                    );
+                    ids.push(entry_id);
+                }
+                ids.sort();
+                assert_eq!(ids, (0..8).map(|i| i.to_string()).collect::<Vec<_>>());
+                assert_eq!(
+                    calls.load(Ordering::SeqCst),
+                    if outcome == "success" {
+                        1
+                    } else {
+                        generation as usize
+                    },
+                    "{outcome}"
+                );
+                assert!(received.try_recv().is_err());
+            }
+            task.abort();
+            let _ = task.await;
+        }
+    }
+
+    #[tokio::test]
+    async fn duplicates_leave_capacity_for_other_uris_in_first_occurrence_order() {
+        let (tx, rx) = watch::channel(None);
+        let (started, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let task = tokio::spawn(run(rx, Arc::new(|_| {}), move |uri| {
+            started.send(uri).unwrap();
+            std::future::pending::<Option<WireTrack>>()
+        }));
+        tx.send(Some(MetadataRequest {
+            generation: 1,
+            entries: [
+                ("a", "same"),
+                ("b", "same"),
+                ("c", "one"),
+                ("d", "same"),
+                ("e", "two"),
+                ("f", "three"),
+                ("g", "four"),
+            ]
+            .into_iter()
+            .map(|(id, uri)| (id.into(), uri.into()))
+            .collect(),
+        }))
+        .unwrap();
+        let mut uris = Vec::new();
+        for _ in 0..4 {
+            uris.push(
+                tokio::time::timeout(std::time::Duration::from_secs(1), received.recv())
+                    .await
+                    .unwrap()
+                    .unwrap(),
+            );
+        }
+        assert_eq!(uris, ["same", "one", "two", "three"]);
+        assert!(received.try_recv().is_err());
+        task.abort();
+        let _ = task.await;
     }
 
     #[tokio::test(start_paused = true)]
@@ -202,27 +335,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_panicking_lookup_reports_the_row_failure() {
-        let (tx, rx) = watch::channel(None);
-        let (events, mut received) = tokio::sync::mpsc::unbounded_channel();
-        let task = tokio::spawn(run(
-            rx,
-            Arc::new(move |event| {
-                events.send(event).unwrap();
-            }),
-            |_| async { panic!("metadata lookup failed") },
-        ));
-        tx.send(Some(request(7, "panicked"))).unwrap();
-        let event = tokio::time::timeout(std::time::Duration::from_secs(1), received.recv())
-            .await
-            .expect("lookup panic must not leave the row loading")
-            .unwrap();
-        assert!(
-            matches!(event, WireEvent::QueueMetadata { generation: 7, entry_id, track: None } if entry_id == "entry")
-        );
-        task.abort();
-    }
-    #[tokio::test]
     async fn replacement_cancels_old_metadata_and_reports_row_failure() {
         let (tx, rx) = watch::channel(None);
         let events = Arc::new(Mutex::new(Vec::new()));
@@ -230,22 +342,39 @@ mod tests {
         let sink: EventSink = Arc::new(move |event| output.lock().unwrap().push(event));
         let started = Arc::new(tokio::sync::Notify::new());
         let signal = started.clone();
-        let task = tokio::spawn(run(rx, sink, move |uri| {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let observed = calls.clone();
+        let task = tokio::spawn(run(rx, sink, move |_| {
             let signal = signal.clone();
+            let attempt = observed.fetch_add(1, Ordering::SeqCst);
             async move {
-                if uri == "old" {
+                if attempt == 0 {
                     signal.notify_one();
                     std::future::pending::<()>().await;
                 }
                 None
             }
         }));
-        tx.send(Some(request(1, "old"))).unwrap();
+        tx.send(Some(MetadataRequest {
+            generation: 1,
+            entries: vec![
+                ("old-a".into(), "same".into()),
+                ("old-b".into(), "same".into()),
+            ],
+        }))
+        .unwrap();
         started.notified().await;
-        tx.send(Some(request(2, "new"))).unwrap();
+        tx.send(Some(MetadataRequest {
+            generation: 2,
+            entries: vec![
+                ("new-a".into(), "same".into()),
+                ("new-b".into(), "same".into()),
+            ],
+        }))
+        .unwrap();
         tokio::time::timeout(std::time::Duration::from_secs(1), async {
             loop {
-                if !events.lock().unwrap().is_empty() {
+                if events.lock().unwrap().len() == 2 {
                     break;
                 }
                 tokio::task::yield_now().await;
@@ -254,46 +383,65 @@ mod tests {
         .await
         .unwrap();
         let events = events.lock().unwrap();
-        assert_eq!(events.len(), 1);
-        assert!(matches!(
-            &events[0],
+        assert_eq!(events.len(), 2);
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+        assert!(events.iter().all(|event| matches!(
+            event,
             WireEvent::QueueMetadata {
                 generation: 2,
                 track: None,
                 ..
             }
-        ));
+        )));
         task.abort();
     }
+
     #[tokio::test]
-    async fn limits_concurrent_metadata_requests_to_four() {
-        let (tx, rx) = watch::channel(None);
-        let count = Arc::new(AtomicUsize::new(0));
-        let started = count.clone();
-        let task = tokio::spawn(run(rx, Arc::new(|_| {}), move |_| {
-            let started = started.clone();
-            async move {
-                started.fetch_add(1, Ordering::SeqCst);
-                std::future::pending().await
+    async fn closing_requests_cancels_the_shared_lookup_without_row_events() {
+        struct OnDrop(tokio::sync::mpsc::UnboundedSender<()>);
+        impl Drop for OnDrop {
+            fn drop(&mut self) {
+                let _ = self.0.send(());
             }
-        }));
+        }
+        let (tx, rx) = watch::channel(None);
+        let (started, mut starts) = tokio::sync::mpsc::unbounded_channel();
+        let (dropped, mut drops) = tokio::sync::mpsc::unbounded_channel();
+        let (events, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let task = tokio::spawn(run(
+            rx,
+            Arc::new(move |event| {
+                events.send(event).unwrap();
+            }),
+            move |_| {
+                started.send(()).unwrap();
+                let guard = OnDrop(dropped.clone());
+                async move {
+                    let _guard = guard;
+                    std::future::pending::<Option<WireTrack>>().await
+                }
+            },
+        ));
         tx.send(Some(MetadataRequest {
             generation: 1,
-            entries: (0..80).map(|i| (i.to_string(), i.to_string())).collect(),
+            entries: vec![("a".into(), "same".into()), ("b".into(), "same".into())],
         }))
         .unwrap();
-        tokio::time::timeout(std::time::Duration::from_secs(1), async {
-            while count.load(Ordering::SeqCst) < 4 {
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .unwrap();
-        for _ in 0..10 {
-            tokio::task::yield_now().await;
-        }
-        assert_eq!(count.load(Ordering::SeqCst), 4);
-        task.abort();
+        tokio::time::timeout(std::time::Duration::from_secs(1), starts.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        drop(tx);
+        tokio::time::timeout(std::time::Duration::from_secs(1), task)
+            .await
+            .unwrap()
+            .unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(1), drops.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(starts.try_recv().is_err());
+        assert!(received.recv().await.is_none());
     }
     #[tokio::test]
     async fn metadata_cache_reuses_recent_tracks_and_evicts_beyond_128() {

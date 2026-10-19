@@ -34,14 +34,9 @@ public struct SpotifyLibraryClient: LibraryService, SavedTracksService, Listenin
         let data = try await request(method: "GET", path: "/v1/me/tracks", query: [
             URLQueryItem(name: "offset", value: String(offset)), URLQueryItem(name: "limit", value: String(limit))
         ], scopes: ["user-library-read"])
-        guard let page = try? JSONDecoder().decode(SavedPage.self, from: data),
-              page.offset == offset, page.limit == limit, page.total >= 0,
-              page.items.count <= limit else { throw LibraryError.invalidResponse }
-        let (next, overflow) = offset.addingReportingOverflow(page.items.count)
-        guard !overflow else { throw LibraryError.invalidResponse }
-        let continues = page.next != nil && !page.items.isEmpty && next < page.total
-        return SavedTracksPage(tracks: page.items.compactMap { $0.track?.domain },
-                               nextOffset: continues ? next : nil, total: page.total)
+        guard let page = try? JSONDecoder().decode(APIPage<SavedItem>.self, from: data) else { throw LibraryError.invalidResponse }
+        return SavedTracksPage(tracks: page.items.compactMap { $0.value?.track.domain },
+                               nextOffset: try page.nextOffset(offset: offset, limit: limit), total: page.total)
     }
 
     public func recentlyPlayed() async throws -> [RecentPlay] {
@@ -177,7 +172,15 @@ private actor LibraryCooldown {
     init(now: @Sendable @escaping () -> Date) { self.now = now }
 
     func check() throws {
-        if let until, now() < until, let failure { throw failure }
+        guard let until, let failure else { return }
+        let remaining = until.timeIntervalSince(now())
+        guard remaining > 0 else { return }
+        let seconds = Int(exactly: ceil(remaining)) ?? Int.max
+        switch failure {
+        case .rateLimited: throw LibraryError.rateLimited(retryAfterSeconds: seconds)
+        case .quotaExceeded: throw LibraryError.quotaExceeded(retryAfterSeconds: seconds)
+        default: throw failure
+        }
     }
 
     func record(_ failure: LibraryError, seconds: Int?) {
@@ -201,21 +204,8 @@ final class LibraryRedirectPolicy: NSObject, URLSessionTaskDelegate {
     }
 }
 
-private struct SavedPage: Decodable {
-    let items: [SavedItem]
-    let offset: Int
-    let limit: Int
-    let total: Int
-    let next: String?
-}
-
 private struct SavedItem: Decodable {
-    let track: SavedTrack?
-    private enum CodingKeys: String, CodingKey { case track }
-    init(from decoder: Decoder) throws {
-        let container = try? decoder.container(keyedBy: CodingKeys.self)
-        track = try? container?.decode(SavedTrack.self, forKey: .track)
-    }
+    let track: SavedTrack
 }
 
 private struct SavedTrack: Decodable {

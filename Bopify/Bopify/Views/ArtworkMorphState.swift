@@ -1,5 +1,4 @@
 import SwiftUI
-import BopifyPlayback
 
 struct ArtworkMorphFrame: Identifiable {
     let id: UUID
@@ -10,11 +9,9 @@ struct ArtworkMorphFrame: Identifiable {
 @MainActor struct ArtworkMorphState {
     private var retained: [ArtworkMorphFrame]
     private var started: Date?
-    private var phaseStart = 0.0
     var duration = 0.42
     private(set) var generation = 0
     private(set) var occurrenceID: String
-    private(set) var navigationDirection: CarouselDirection = .fade
 
     init(image: Image?, occurrenceID: String = "") {
         self.occurrenceID = occurrenceID
@@ -34,16 +31,10 @@ struct ArtworkMorphFrame: Identifiable {
         return result
     }
 
-    func phase(at date: Date) -> Double {
-        phaseStart + (1 - phaseStart) * progress(at: date)
-    }
-
-    mutating func transition(to image: Image?, occurrenceID: String = "", direction: CarouselDirection = .fade,
+    mutating func transition(to image: Image?, occurrenceID: String = "",
                              at date: Date, diameter: CGFloat = 204) {
         guard retained.last?.image != image || self.occurrenceID != occurrenceID else { return }
-        navigationDirection = self.occurrenceID == occurrenceID ? .fade : direction
         self.occurrenceID = occurrenceID
-        let nextPhase = progress(at: date) < 1 ? phase(at: date) : 0
         // Flatten only interrupted blends, preserving their visible colors with at most two live layers.
         retained = frames(at: date)
         if retained.last?.opacity == 1 { retained = [retained.last!] }
@@ -58,7 +49,6 @@ struct ArtworkMorphFrame: Identifiable {
             retained = [ArtworkMorphFrame(id: UUID(), image: snapshot, opacity: 1)]
         }
         retained.append(ArtworkMorphFrame(id: UUID(), image: image, opacity: 0))
-        phaseStart = nextPhase
         started = date
         generation += 1
     }
@@ -66,6 +56,5 @@ struct ArtworkMorphFrame: Identifiable {
     mutating func finish() {
         retained = [ArtworkMorphFrame(id: retained.last!.id, image: retained.last!.image, opacity: 1)]
         started = nil
-        phaseStart = 0
     }
 }
