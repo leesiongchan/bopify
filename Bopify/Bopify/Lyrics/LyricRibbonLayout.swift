@@ -2,9 +2,6 @@ import AppKit
 
 struct LyricRibbonLayout {
     static let horizontalInset: CGFloat = 22
-    static let sleeveInset: CGFloat = 48
-    static let readerInset: CGFloat = 64
-    static let surfaceInset: CGFloat = 6
     static let verticalInset: CGFloat = 8
     static let sectionSpacing: CGFloat = 8
     static let headerHeight: CGFloat = 26
@@ -90,8 +87,8 @@ struct LyricRibbonLayout {
     static func measure(content: LyricContent, width: CGFloat, textScale: CGFloat, availableHeight: CGFloat,
                         source: LyricSourceMetadata? = nil) -> Self {
         let scale = max(1, textScale)
-        let chromeHeight = 2 * (verticalInset + surfaceInset) + headerHeight + sectionSpacing
-        // The document scrolls; its length never controls the companion's footprint.
+        let chromeHeight = 2 * verticalInset + headerHeight + sectionSpacing
+        // The document scrolls; its length never controls the panel's footprint.
         let viewport = min(3 * rowHeight * scale, max(1, availableHeight - chromeHeight))
         return Self(panelSize: CGSize(width: max(1, width), height: viewport + chromeHeight),
                     textViewportHeight: viewport, textScale: scale)

@@ -10,16 +10,6 @@
     "·" : {
 
     },
-    "%@ · %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · %2$@"
-          }
-        }
-      }
-    },
     "%lld%%" : {
 
     },
@@ -87,6 +77,9 @@
           }
         }
       }
+    },
+    "Click to open the player. Drag to move." : {
+
     },
     "collections.empty" : {
       "localizations" : {
@@ -963,6 +956,9 @@
           }
         }
       }
+    },
+    "Open player" : {
+
     },
     "player.buffering" : {
       "localizations" : {

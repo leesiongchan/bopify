@@ -16,8 +16,8 @@ final class PlayerWindowController {
     @ObservationIgnored private weak var panel: StatusPanel?
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var anchor: CGPoint?
-    @ObservationIgnored private var pendingMode: (mode: PlayerMode, reduceMotion: Bool)?
-    @ObservationIgnored private var lastRequest: (mode: PlayerMode, reduceMotion: Bool) = (.compact, false)
+    @ObservationIgnored private var pendingMode: (mode: PlayerMode, reduceMotion: Bool, showsLyrics: Bool)?
+    @ObservationIgnored private var lastRequest: (mode: PlayerMode, reduceMotion: Bool, showsLyrics: Bool) = (.compact, false, false)
     @ObservationIgnored private var targetFrame: CGRect = .zero
 
     init(defaults: UserDefaults) { self.defaults = defaults }
@@ -40,9 +40,36 @@ final class PlayerWindowController {
         panel.maxSize = CGSize(width: 10000, height: 10000)
         panel.styleMask.remove(.resizable)
         panel.containsPlayerPoint = { [weak self] in self?.contains($0) ?? false }
+        panel.containsLyricsPoint = { [weak self] point in
+            guard let self else { return false }
+            let local = CGPoint(x: point.x - self.contentOffset.x, y: point.y - self.contentOffset.y)
+            return self.layout.lyricsFrame.contains(local)
+        }
     }
 
-    func focus() { panel?.makeKey() }
+    func focus() { panel?.focusPlayer() }
+
+    func focusLyrics() { panel?.focusLyrics(keepingPlayerExpanded: !layout.controlsFrame.isEmpty) }
+    func show() { panel?.orderFrontRegardless() }
+
+    func configureLyricsKeyboard(model: LyricRibbonModel) {
+        panel?.onLyricsFocusEnded = { [weak model] in
+            model?.isKeyboardInteracting = false
+            model?.keyboardSelection = nil
+        }
+        panel?.onLyricTab = { [weak self, weak model] in
+            guard let model else { return }
+            model.keyboardSelection = model.isReading && model.keyboardSelection == .reader ? .sync : .reader
+            if model.keyboardSelection == .reader { self?.focusLyrics() }
+        }
+        panel?.onLyricActivate = { [weak self, weak model] in
+            guard model?.keyboardSelection == .sync else { return }
+            model?.backToLive()
+            self?.focusLyrics()
+        }
+    }
+
+    func removeLyricsKeyboard() { panel?.removeLyricsKeyboard() }
 
     static func restoredAnchor(defaults: UserDefaults) -> CGPoint? {
         if let stored = defaults.string(forKey: "player.recordCenter"), stored.hasPrefix("{"), stored.hasSuffix("}") {
@@ -59,16 +86,20 @@ final class PlayerWindowController {
         return nil
     }
 
-    func apply(mode: PlayerMode, reduceMotion: Bool, visibleFrame: CGRect? = nil) {
+    func apply(mode: PlayerMode, reduceMotion: Bool, visibleFrame: CGRect? = nil, showsLyrics: Bool = false) {
         guard let panel else { return }
-        if isDragging { pendingMode = (mode, reduceMotion); return }
-        let desiredAnchor = anchor ?? CGPoint(x: panel.frame.midX, y: panel.frame.midY)
+        if isDragging { pendingMode = (mode, reduceMotion, showsLyrics); return }
+        var desiredAnchor = anchor ?? CGPoint(x: panel.frame.midX, y: panel.frame.midY)
         let screen = NSScreen.screens.first { $0.visibleFrame.contains(desiredAnchor) } ?? panel.screen ?? NSScreen.main
         guard let visible = visibleFrame ?? screen?.visibleFrame else { return }
-        let next = recordLayout(mode: mode, availableSize: visible.size)
+        let next = recordLayout(mode: mode, availableSize: visible.size, showsLyrics: showsLyrics)
+        if !layout.lyricsFrame.isEmpty, !next.lyricsFrame.isEmpty {
+            desiredAnchor.x += layout.lyricsFrame.minX - layout.recordCenter.x - next.lyricsFrame.minX + next.recordCenter.x
+            desiredAnchor.y += layout.recordCenter.y - layout.lyricsFrame.minY - next.recordCenter.y + next.lyricsFrame.minY
+        }
         let target = playerWindowFrame(recordCenter: desiredAnchor, layout: next, visibleFrame: visible)
         guard next != layout || target != targetFrame || (!isTransitioning && panel.frame != target) else { return }
-        lastRequest = (mode, reduceMotion)
+        lastRequest = (mode, reduceMotion, showsLyrics)
         let adjusted = CGPoint(x: target.minX + next.recordCenter.x, y: target.maxY - next.recordCenter.y)
         if adjusted != desiredAnchor { BopifyLog.playback.debug("Player anchor clamped to visible screen") }
         anchor = adjusted
@@ -93,8 +124,10 @@ final class PlayerWindowController {
             panel.setFrame(envelope, display: true)
             isTransitioning = true
         }
-        let duration = mode == .expanded && layout.recordDiameter == 118 ? 0.65 : 0.50
-        withAnimation(.spring(duration: duration, bounce: 0.18), completionCriteria: .removed) {
+        let hasLyrics = showsLyrics || !layout.lyricsFrame.isEmpty
+        let duration = hasLyrics ? 0.40 : mode == .expanded && layout.recordDiameter == 118 ? 0.65 : 0.50
+        withAnimation(.spring(duration: duration, bounce: hasLyrics ? 0.04 : 0.18),
+                      completionCriteria: .removed) {
             layout = next
             contentOffset = CGPoint(x: target.minX - envelope.minX, y: envelope.maxY - target.maxY)
         } completion: { [weak self] in
@@ -125,9 +158,9 @@ final class PlayerWindowController {
         if active { transitionID &+= 1; isTransitioning = false }
         else {
             persistAnchor()
-            let (mode, reduceMotion) = pendingMode ?? lastRequest
+            let (mode, reduceMotion, showsLyrics) = pendingMode ?? lastRequest
             pendingMode = nil
-            apply(mode: mode, reduceMotion: reduceMotion)
+            apply(mode: mode, reduceMotion: reduceMotion, showsLyrics: showsLyrics)
         }
     }
 
@@ -141,6 +174,7 @@ final class PlayerWindowController {
 
     private func contains(_ point: CGPoint) -> Bool {
         let local = CGPoint(x: point.x - contentOffset.x, y: point.y - contentOffset.y)
+        if !layout.lyricsFrame.isEmpty, layout.controlsFrame.isEmpty { return false }
         if hypot(local.x - layout.recordCenter.x, local.y - layout.recordCenter.y) <= layout.recordDiameter / 2 { return true }
         let radius = min(layout.sleeveCornerRadius, layout.sleeveFrame.width / 2, layout.sleeveFrame.height / 2)
         return !layout.sleeveFrame.isEmpty && CGPath(roundedRect: layout.sleeveFrame, cornerWidth: radius, cornerHeight: radius, transform: nil).contains(local)

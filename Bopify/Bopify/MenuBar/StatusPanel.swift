@@ -19,6 +19,13 @@ final class StatusPanel: NSPanel {
     var onPointerChanged: ((Bool) -> Void)?
     var onWindowDragChanged: ((Bool) -> Void)?
     var containsPlayerPoint: ((CGPoint) -> Bool)?
+    var containsLyricsPoint: ((CGPoint) -> Bool)?
+    var onLyricTab: (() -> Void)?
+    var onLyricActivate: (() -> Void)?
+    var onLyricsFocusEnded: (() -> Void)?
+    private var isHandlingPassiveLyrics = false
+    private var isFocusingLyrics = false
+    private var lyricFocusKeepsPlayerExpanded = false
 
     init<Content: View>(content: Content) {
         super.init(contentRect: NSRect(x: 0, y: 0, width: 410, height: 560),
@@ -44,9 +51,9 @@ final class StatusPanel: NSPanel {
         contentView = container
     }
 
-    override var canBecomeKey: Bool { true }
-    override func becomeKey() { super.becomeKey(); onKeyChanged?(true) }
-    override func resignKey() { super.resignKey(); onKeyChanged?(false) }
+    override var canBecomeKey: Bool { !isHandlingPassiveLyrics }
+    override func becomeKey() { super.becomeKey(); onKeyChanged?(!isFocusingLyrics || lyricFocusKeepsPlayerExpanded) }
+    override func resignKey() { super.resignKey(); endLyricsFocus(); onKeyChanged?(false) }
     override func animationResizeTime(_ newFrame: NSRect) -> TimeInterval { 0.36 }
 
     override func cancelOperation(_ sender: Any?) {
@@ -58,9 +65,63 @@ final class StatusPanel: NSPanel {
     override func sendEvent(_ event: NSEvent) {
         if event.type == .leftMouseDown {
             let point = CGPoint(x: event.locationInWindow.x, y: frame.height - event.locationInWindow.y)
-            if containsPlayerPoint?(point) == true { makeKey() }
+            if containsLyricsPoint?(point) == true {
+                lyricFocusKeepsPlayerExpanded = containsPlayerPoint?(point) == true
+                isHandlingPassiveLyrics = !lyricFocusKeepsPlayerExpanded
+                isFocusingLyrics = true
+                if lyricFocusKeepsPlayerExpanded { makeKey() }
+                onKeyChanged?(lyricFocusKeepsPlayerExpanded)
+            } else if containsPlayerPoint?(point) == true {
+                focusPlayer()
+            }
         }
+        defer { isHandlingPassiveLyrics = false }
         super.sendEvent(event)
+        if event.type == .leftMouseUp {
+            updatePlayerPointer(at: CGPoint(x: event.locationInWindow.x, y: frame.height - event.locationInWindow.y))
+        }
+    }
+
+    func updatePlayerPointer(at point: CGPoint?) {
+        guard let point else {
+            onPointerChanged?(false)
+            return
+        }
+        onPointerChanged?(containsPlayerPoint?(point) ?? false)
+    }
+
+    func focusLyrics(keepingPlayerExpanded: Bool) {
+        isFocusingLyrics = true
+        lyricFocusKeepsPlayerExpanded = keepingPlayerExpanded
+        onKeyChanged?(keepingPlayerExpanded)
+        makeKeyAndOrderFront(nil)
+        func reader(in view: NSView?) -> LyricReadingTextView? {
+            guard let view else { return nil }
+            if let text = view as? LyricReadingTextView { return text }
+            return view.subviews.lazy.compactMap { reader(in: $0) }.first
+        }
+        if let text = reader(in: contentView) { makeFirstResponder(text) }
+    }
+
+    func focusPlayer() {
+        endLyricsFocus()
+        makeKey()
+        onKeyChanged?(true)
+    }
+
+    func endLyricsFocus() {
+        if isFocusingLyrics { makeFirstResponder(nil) }
+        isFocusingLyrics = false
+        lyricFocusKeepsPlayerExpanded = false
+        onLyricsFocusEnded?()
+    }
+
+    func removeLyricsKeyboard() {
+        endLyricsFocus()
+        onLyricTab = nil
+        onLyricActivate = nil
+        onLyricsFocusEnded = nil
+        onKeyChanged?(isKeyWindow)
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -74,6 +135,11 @@ final class StatusPanel: NSPanel {
     }
 
     override func keyDown(with event: NSEvent) {
+        if isFocusingLyrics {
+            if event.keyCode == kVK_Tab { onLyricTab?(); return }
+            if event.keyCode == kVK_Space || event.keyCode == kVK_Return,
+               !(firstResponder is LyricReadingTextView) { onLyricActivate?(); return }
+        }
         guard !(firstResponder is NSTextView), !(firstResponder is NSControl) || firstResponder is PlayerShortcutForwarding else {
             super.keyDown(with: event)
             return
@@ -92,6 +158,7 @@ final class StatusPanel: NSPanel {
 
 private final class PlayerHostingView<Content: View>: NSHostingView<Content> {
     private var playerTrackingArea: NSTrackingArea?
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         if let playerTrackingArea { removeTrackingArea(playerTrackingArea) }
@@ -102,10 +169,10 @@ private final class PlayerHostingView<Content: View>: NSHostingView<Content> {
     // Always forward to super: SwiftUI's onHover is driven by these same events.
     override func mouseEntered(with event: NSEvent) { super.mouseEntered(with: event); updatePointer(event) }
     override func mouseMoved(with event: NSEvent) { super.mouseMoved(with: event); updatePointer(event) }
-    override func mouseExited(with event: NSEvent) { super.mouseExited(with: event); (window as? StatusPanel)?.onPointerChanged?(false) }
+    override func mouseExited(with event: NSEvent) { super.mouseExited(with: event); (window as? StatusPanel)?.updatePlayerPointer(at: nil) }
     private func updatePointer(_ event: NSEvent) {
-        guard let panel = window as? StatusPanel, let contains = panel.containsPlayerPoint else { return }
+        guard let panel = window as? StatusPanel else { return }
         let point = CGPoint(x: event.locationInWindow.x, y: panel.frame.height - event.locationInWindow.y)
-        panel.onPointerChanged?(contains(point))
+        panel.updatePlayerPointer(at: point)
     }
 }

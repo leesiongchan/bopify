@@ -5,17 +5,20 @@ struct PlayerBackgroundDragRegion: NSViewRepresentable {
     var takesKeyboardFocus = true
     var onPrepareDrag: () -> Void = {}
     var onDragChanged: ((Bool) -> Void)? = nil
+    var onClick: (() -> Void)? = nil
     func makeNSView(context: Context) -> DragView { DragView() }
     func updateNSView(_ nsView: DragView, context: Context) {
         nsView.takesKeyboardFocus = takesKeyboardFocus
         nsView.onPrepareDrag = onPrepareDrag
         nsView.onDragChanged = onDragChanged
+        nsView.onClick = onClick
     }
 
     class DragView: NSView {
         var takesKeyboardFocus = true
         var onPrepareDrag: () -> Void = {}
         var onDragChanged: ((Bool) -> Void)?
+        var onClick: (() -> Void)?
         private var start: CGPoint?
         private var origin: CGPoint = .zero
         private var isDragging = false
@@ -35,7 +38,11 @@ struct PlayerBackgroundDragRegion: NSViewRepresentable {
             if !isDragging { isDragging = true; notifyDragging(true) }
             panel.setFrameOrigin(CGPoint(x: origin.x + delta.x, y: origin.y + delta.y))
         }
-        override func mouseUp(with event: NSEvent) { endDrag() }
+        override func mouseUp(with event: NSEvent) {
+            let clicked = start != nil && !isDragging && bounds.contains(convert(event.locationInWindow, from: nil))
+            endDrag()
+            if clicked { onClick?() }
+        }
         override func viewWillMove(toWindow newWindow: NSWindow?) {
             if newWindow == nil { endDrag() }
             super.viewWillMove(toWindow: newWindow)

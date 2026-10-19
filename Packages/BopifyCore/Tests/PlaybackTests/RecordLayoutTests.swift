@@ -6,6 +6,47 @@ import Testing
 struct RecordLayoutTests {
     let available = CGSize(width: 1440, height: 900)
 
+    @Test(arguments: [PlayerMode.expanded, .queue])
+    func lyricsFitBelowTheShelfWithoutMovingTransport(_ mode: PlayerMode) {
+        let original = recordLayout(mode: mode, availableSize: available)
+        let lyrics = recordLayout(mode: mode, availableSize: available, showsLyrics: true)
+        #expect(lyrics.controlsFrame == original.controlsFrame)
+        #expect(lyrics.lowerFrame == original.lowerFrame)
+        #expect(lyrics.lyricsFrame.minY >= original.contentSize.height)
+        #expect(CGRect(origin: .zero, size: lyrics.contentSize).contains(lyrics.lyricsFrame))
+    }
+
+    @Test func collapsedLyricsContainTheirVinylHandleWithinTheSharedSurface() {
+        let layout = recordLayout(mode: .compact, availableSize: available, showsLyrics: true)
+        #expect(layout.controlsFrame.isEmpty && layout.lowerFrame.isEmpty)
+        #expect(layout.recordDiameter <= 36)
+        #expect(!layout.lyricsFrame.isEmpty)
+        #expect(layout.sleeveFrame.contains(layout.lyricsFrame))
+        #expect(layout.lyricsFrame.contains(CGRect(x: layout.recordCenter.x - layout.recordDiameter / 2,
+            y: layout.recordCenter.y - layout.recordDiameter / 2, width: layout.recordDiameter, height: layout.recordDiameter)))
+        #expect(layout.contentSize.height < 180)
+    }
+
+    @Test func lyricsShareThePlayerSurfaceWithNoGap() {
+        let layout = recordLayout(mode: .expanded, availableSize: available, showsLyrics: true)
+        #expect(layout.sleeveFrame.contains(layout.lyricsFrame))
+        #expect(layout.lyricsFrame.minY == 360)
+        #expect(layout.sleeveFrame.maxY == layout.lyricsFrame.maxY)
+    }
+
+    @Test(arguments: [CGSize(width: 320, height: 480), CGSize(width: 484, height: 300)])
+    func lyricsAndControlsRemainReachableOnSmallScreens(_ size: CGSize) {
+        let layout = recordLayout(mode: .expanded, availableSize: size, showsLyrics: true)
+        let bounds = CGRect(origin: .zero, size: layout.contentSize)
+        #expect(layout.contentSize.height <= size.height)
+        #expect(bounds.contains(layout.controlsFrame))
+        #expect(bounds.contains(layout.lyricsFrame))
+        #expect(!layout.lyricsFrame.intersects(layout.controlsFrame))
+        #expect(!layout.lyricsFrame.intersects(layout.lowerFrame))
+        #expect(layout.recordCenter.y - layout.recordDiameter / 2 >= 0)
+        #expect(layout.recordCenter.y + layout.recordDiameter / 2 <= layout.lyricsFrame.minY)
+    }
+
     @Test(arguments: [CGSize(width: 484, height: 480), CGSize(width: 320, height: 480), CGSize(width: 484, height: 300)])
     func engagedModesShareGeometry(_ size: CGSize) {
         let expanded = recordLayout(mode: .expanded, availableSize: size)

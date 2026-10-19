@@ -1,5 +1,7 @@
 #if DEBUG
 import Foundation
+import AppKit
+import SwiftUI
 import Observation
 import Testing
 import BopifyAuth
@@ -9,6 +11,60 @@ import BopifyPlayback
 @MainActor
 @Suite("App live lyrics", .serialized, .timeLimit(.minutes(1)))
 struct AppEnvironmentLyricsTests {
+    @Test func lyricsCanShowTheirPlaceholderBeforeFirstPlayback() async throws {
+        _ = NSApplication.shared
+        let keys = ["player.keepOnTop", "player.recordCenter", "player.frame"]
+        let saved = keys.map { UserDefaults.standard.object(forKey: $0) }
+        defer {
+            for (key, value) in zip(keys, saved) {
+                if let value { UserDefaults.standard.set(value, forKey: key) }
+                else { UserDefaults.standard.removeObject(forKey: key) }
+            }
+        }
+        try await withLyricsApp { f in
+            await f.environment.restoreOrPromptSignIn()
+            try await liveLyricEventually { f.environment.player != nil && f.environment.authState == .signedIn }
+            #expect(!f.environment.isListening)
+            let windows = Set(NSApp.windows.map(ObjectIdentifier.init))
+            let controller = StatusItemController(content: PlayerRootView(environment: f.environment), environment: f.environment)
+            let panel = try #require(NSApp.windows.compactMap { $0 as? StatusPanel }
+                .first { !windows.contains(ObjectIdentifier($0)) })
+            panel.isReleasedWhenClosed = false
+            defer { panel.orderOut(nil); panel.close(); withExtendedLifetime(controller) {} }
+            f.environment.showLiveLyrics()
+            try await liveLyricEventually { panel.isVisible && !f.environment.playerWindowController.layout.lyricsFrame.isEmpty }
+            #expect(f.environment.liveLyricRibbon?.model.content == .idle(.connecting))
+        }
+    }
+
+    @Test func showingLyricsRaisesThePlayerAndOnlyCompactLyricsFloat() async throws {
+        _ = NSApplication.shared
+        let keys = ["player.keepOnTop", "player.recordCenter", "player.frame"]
+        let saved = keys.map { UserDefaults.standard.object(forKey: $0) }
+        defer {
+            for (key, value) in zip(keys, saved) {
+                if let value { UserDefaults.standard.set(value, forKey: key) }
+                else { UserDefaults.standard.removeObject(forKey: key) }
+            }
+        }
+        try await withLyricsApp { f in
+            try await f.ready()
+            f.environment.presentation.keepOnTop = false
+            let windows = Set(NSApp.windows.map(ObjectIdentifier.init))
+            let controller = StatusItemController(content: PlayerRootView(environment: f.environment), environment: f.environment)
+            let panel = try #require(NSApp.windows.compactMap { $0 as? StatusPanel }
+                .first { !windows.contains(ObjectIdentifier($0)) })
+            panel.isReleasedWhenClosed = false
+            defer { panel.orderOut(nil); panel.close(); withExtendedLifetime(controller) {} }
+            #expect(!panel.isVisible)
+            f.environment.showLiveLyrics()
+            #expect(panel.isVisible && !panel.isKeyWindow)
+            try await liveLyricEventually { panel.level == .floating }
+            f.environment.presentation.sendAttention(.pointer(true))
+            try await liveLyricEventually { panel.level == .normal }
+        }
+    }
+
     @Test func playerToggleObservesFirstShowAndDirectSessionHide() async throws {
         try await withLyricsApp { f in
             try await f.ready()

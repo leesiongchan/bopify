@@ -39,7 +39,7 @@ final class AppEnvironment {
     }
 
     var playerMode: PlayerMode {
-        isListening ? presentation.mode : .expanded
+        isListening || isLiveLyricsVisible ? presentation.mode : .expanded
     }
 
     @ObservationIgnored private let auth: SpotifyAuthService
@@ -64,7 +64,7 @@ final class AppEnvironment {
     func showLiveLyrics() {
         guard !isPreparingForQuit, authState == .signedIn, let player, let coordinator = recovery else { return }
         if liveLyricRibbon == nil {
-            liveLyricRibbon = LiveLyricRibbonSession(player: player, artworkStore: artworkStore) { [weak coordinator] uri, epoch in
+            liveLyricRibbon = LiveLyricRibbonSession(player: player) { [weak coordinator] uri, epoch in
                 guard let coordinator, coordinator.player.engineEpoch == epoch,
                       coordinator.player.isEngineReady, let engine = coordinator.currentEngine else {
                     throw LyricFailure.unavailable
@@ -79,7 +79,9 @@ final class AppEnvironment {
             }
         }
         liveLyricRibbon?.show()
-        BopifyLog.playback.debug("live lyric ribbon shown")
+        presentation.isVisible = true
+        playerWindowController.show()
+        BopifyLog.playback.debug("live lyrics shown")
     }
 
     func toggleLiveLyrics() {
@@ -87,18 +89,21 @@ final class AppEnvironment {
         if isLiveLyricsVisible { hideLiveLyrics() } else { showLiveLyrics() }
     }
 
-    func hideLiveLyrics() { liveLyricRibbon?.hide() }
+    func hideLiveLyrics() {
+        liveLyricRibbon?.hide()
+    }
 
     func focusLiveLyrics() {
         guard !isPreparingForQuit, authState == .signedIn, player != nil else { return }
         showLiveLyrics()
         liveLyricRibbon?.focusForReading()
+        playerWindowController.focusLyrics()
     }
 
     private func stopLiveLyrics() {
         liveLyricRibbon?.shutdown()
         liveLyricRibbon = nil
-        BopifyLog.playback.debug("live lyric ribbon stopped")
+        BopifyLog.playback.debug("live lyrics stopped")
     }
 
     // Authorization and final teardown remain serialized; recovery has its own worker.

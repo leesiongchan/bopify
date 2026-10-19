@@ -67,7 +67,7 @@ final class LyricRibbonModel {
         guard !isVisible else { return }
         isVisible = true
         reproject(resetScroll: true)
-        BopifyLog.playback.debug("lyric ribbon shown")
+        BopifyLog.playback.debug("lyric panel shown")
     }
 
     func hide() {
@@ -77,7 +77,7 @@ final class LyricRibbonModel {
         isVisible = false
         isKeyboardInteracting = false
         keyboardSelection = nil
-        BopifyLog.playback.debug("lyric ribbon hidden")
+        BopifyLog.playback.debug("lyric panel hidden")
     }
 
     func beginReading() {

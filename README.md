@@ -52,23 +52,31 @@ xcodebuild -project Bopify/Bopify.xcodeproj -scheme Bopify \
 Show or hide lyrics with the **Lyrics** control before Playlist or
 **Control–Option–L**. Scroll to read manually; **Sync** returns to the current
 cue. Click timed words to seek to that line. Right-click the Lyrics control
-and choose **Focus Lyrics** for keyboard reading; Escape hides the focused ribbon.
+and choose **Focus Lyrics** for keyboard reading; Escape hides the player.
 
-### Lyric ribbon development preview
+Lyrics appear below CoverFlow inside the player, separated by a subtle divider.
+When the player loses attention, it folds down to the lyric section with a small
+vinyl in its header. Click that vinyl to reveal the full player, or drag it to move
+the player. The title and artist move into the lyric header on collapse. Hovering,
+scrolling, or selecting lyrics keeps it compact. The provider credit sits quietly
+at the bottom-left; the glass **Sync** icon floats at the bottom-right while reading.
+The compact lyrics stay above other windows.
 
-The native lyric ribbon study is available only in Debug builds. It uses
+### Lyrics development preview
+
+The native player lyrics study is available only in Debug builds. It uses
 original sample words and a simulated clock, with no sign-in or Spotify connection.
 
 ```sh
 xcodebuild -project Bopify/Bopify.xcodeproj -scheme Bopify \
   -configuration Debug -destination 'platform=macOS,arch=arm64' \
-  -derivedDataPath build/lyric-ribbon-study CODE_SIGNING_ALLOWED=NO build
-open -n build/lyric-ribbon-study/Build/Products/Debug/Bopify.app \
-  --args --lyric-ribbon-preview
+  -derivedDataPath build/lyrics-study CODE_SIGNING_ALLOWED=NO build
+open -n build/lyrics-study/Build/Products/Debug/Bopify.app \
+  --args --lyrics-preview
 ```
 
 Use the study window to change samples, advance or pause the clock and enter
-explicit keyboard interaction with **Focus Ribbon**. Scroll to browse the full
+explicit keyboard interaction with **Focus Lyrics**. Scroll to browse the full
 sample, then use **Sync** to follow again. Previous/next sample controls
 exercise the record and song transitions.
 

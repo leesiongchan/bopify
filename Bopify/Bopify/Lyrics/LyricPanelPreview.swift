@@ -34,9 +34,9 @@ enum LyricPreviewFixture: String, CaseIterable {
 }
 
 @MainActor @Observable
-final class LyricRibbonPreviewSession {
+final class LyricPanelPreviewSession {
     let model: LyricRibbonModel
-    let artworkStore = makePreviewArtworkStore()
+    let environment = makePreviewEnvironment(.playing)
     private var songIndex = 0
     private(set) var fixture: LyricPreviewFixture = .timed
     private(set) var isClockRunning = false
@@ -48,16 +48,43 @@ final class LyricRibbonPreviewSession {
     @ObservationIgnored private var basePosition: Int64 = 72_000
     @ObservationIgnored private var baseTime: TimeInterval
     @ObservationIgnored private var controlWindow: NSWindow?
-    @ObservationIgnored private(set) lazy var controller = LyricRibbonWindowController(model: model, defaults: defaults, artworkStore: artworkStore,
-        onSeek: { [weak self] time, snapshot in
-            guard let self, self.model.snapshot.sessionID == snapshot.sessionID,
-                  self.model.snapshot.occurrenceID == snapshot.occurrenceID else { return }
-            self.advance(by: time - self.model.snapshot.positionMs, explicitSeek: true)
-        }, onHide: { [weak self] in self?.hide() })
+    @ObservationIgnored private lazy var controller = PlayerWindowController(defaults: defaults)
+    @ObservationIgnored private lazy var panel: StatusPanel = {
+        let panel = StatusPanel(content: RecordPlayerView(player: environment.player!, artworkStore: environment.artworkStore,
+            presentation: environment.presentation, windowController: controller, lyricModel: model,
+            onLyricSeek: { [weak self] time, snapshot in
+                guard let self, self.model.snapshot.occurrenceID == snapshot.occurrenceID else { return }
+                self.advance(by: time - self.model.snapshot.positionMs, explicitSeek: true)
+            }).environment(environment))
+        panel.isReleasedWhenClosed = false
+        panel.setFrame(CGRect(x: 500, y: 400, width: 484, height: 154), display: false)
+        panel.onDismiss = { [weak self] in self?.hide() }
+        panel.onPointerChanged = { [weak self] in self?.environment.presentation.sendAttention(.pointer($0)) }
+        panel.onKeyChanged = { [weak self] in self?.environment.presentation.sendAttention(.keyboardFocus($0)) }
+        panel.onTogglePlayback = { [weak self] in
+            guard let self else { return }
+            self.setPlaying(!self.model.snapshot.isPlaying)
+        }
+        panel.onWindowDragChanged = { [weak self] active in self?.controller.setDragging(active) }
+        controller.attach(to: panel)
+        return panel
+    }()
+
+    private func observeLayout() {
+        withObservationTracking {
+            controller.apply(mode: environment.presentation.mode, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+                             showsLyrics: model.isVisible)
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                guard let self, self.model.isVisible else { return }
+                self.observeLayout()
+            }
+        }
+    }
 
     init(now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
          sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
-         defaults: UserDefaults = .standard) {
+         defaults: UserDefaults = UserDefaults(suiteName: "com.leesiongchan.bopify.lyrics-preview")!) {
         self.now = now
         self.sleep = sleep
         self.defaults = defaults
@@ -70,11 +97,15 @@ final class LyricRibbonPreviewSession {
 
     func show() {
         synchronize()
-        controller.show()
+        model.show()
+        _ = panel
+        environment.presentation.isVisible = true
+        observeLayout()
+        panel.orderFrontRegardless()
         startClock()
     }
 
-    func hide() { stopClock(); controller.hide() }
+    func hide() { stopClock(); model.hide(); panel.orderOut(nil); environment.presentation.isVisible = false }
 
     func setPlaying(_ playing: Bool) {
         synchronize()
@@ -106,7 +137,6 @@ final class LyricRibbonPreviewSession {
         model.update(input)
         model.completeLoad(fixture.content, token: model.beginLoad(), source: fixtureSource)
         anchorTime()
-        controller.refreshLayout(textScale: 1)
     }
 
     private var fixtureSource: LyricSourceMetadata? {
@@ -133,11 +163,18 @@ final class LyricRibbonPreviewSession {
         model.update(input)
         model.completeLoad(fixture.content, token: model.beginLoad(), source: fixtureSource)
         anchorTime()
-        controller.refreshLayout(textScale: 1)
+    }
+
+    func focusLyrics() { controller.focusLyrics() }
+
+    func setExpanded(_ expanded: Bool) {
+        environment.presentation.sendAttention(.pointer(false))
+        environment.presentation.sendAttention(.keyboardFocus(expanded))
     }
 
     func shutdown() {
         hide()
+        environment.player?.stop()
         controlWindow?.close()
         controlWindow = nil
     }
@@ -146,9 +183,9 @@ final class LyricRibbonPreviewSession {
         if controlWindow == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 370),
                 styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
-            window.title = "Bopify · Lyric ribbon study"
+            window.title = "Bopify · Lyrics study"
             window.isReleasedWhenClosed = false
-            window.contentView = NSHostingView(rootView: LyricRibbonPreviewControls(session: self))
+            window.contentView = NSHostingView(rootView: LyricPanelPreviewControls(session: self))
             window.center()
             controlWindow = window
         }
@@ -189,16 +226,15 @@ final class LyricRibbonPreviewSession {
     }
 }
 
-private struct LyricRibbonPreviewControls: View {
-    let session: LyricRibbonPreviewSession
-    @State private var textScale = 1.0
+private struct LyricPanelPreviewControls: View {
+    let session: LyricPanelPreviewSession
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Sleeve ribbon").font(.title2.weight(.medium))
+            Text("Player lyrics").font(.title2.weight(.medium))
             Text("Original sample words · simulated playback · no live audio")
                 .font(.caption).foregroundStyle(.secondary)
-            Picker("Sample", selection: Binding(get: { session.fixture }, set: { session.selectFixture($0); textScale = 1 })) {
+            Picker("Sample", selection: Binding(get: { session.fixture }, set: { session.selectFixture($0) })) {
                 ForEach(LyricPreviewFixture.allCases, id: \.self) { Text($0.rawValue).tag($0) }
             }
             HStack {
@@ -217,16 +253,14 @@ private struct LyricRibbonPreviewControls: View {
                 Button("Next sample") { session.changeSong(.next) }
             }
             HStack {
-                Text("Text size")
-                Slider(value: $textScale, in: 1...1.5).onChange(of: textScale) { _, value in
-                    session.controller.refreshLayout(textScale: value)
-                }
+                Button("Reveal player") { session.setExpanded(true) }
+                Button("Collapse to lyrics") { session.setExpanded(false) }
             }
             HStack {
-                Button(session.model.isVisible ? "Hide Ribbon" : "Show Ribbon") {
+                Button(session.model.isVisible ? "Hide Player" : "Show Player") {
                     if session.model.isVisible { session.hide() } else { session.show() }
                 }
-                Button("Focus Ribbon") { session.show(); session.controller.focusForReading() }
+                Button("Focus Lyrics") { session.show(); session.model.isKeyboardInteracting = true; session.model.keyboardSelection = .reader; session.focusLyrics() }
                 Spacer()
                 Button("Quit Preview") { session.shutdown(); NSApp.terminate(nil) }
             }
