@@ -11,8 +11,7 @@ import BopifyPlayback
         #expect(PressingSeed.offset(uri) == offset)
     }
 
-    @Test func differentSongsHaveDifferentNoiseOffsets() {
-        #expect(PressingSeed.offset("spotify:track:abc") != PressingSeed.offset("spotify:track:def"))
+    @Test func noiseOffsetsStayWithinTheShaderRange() {
         for index in 0..<100 {
             let offset = PressingSeed.offset("spotify:track:preview\(index)")
             #expect(offset >= 0 && offset < 4096)

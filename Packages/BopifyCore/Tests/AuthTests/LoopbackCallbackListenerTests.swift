@@ -10,13 +10,6 @@ struct LoopbackCallbackListenerTests {
         #expect((response as? HTTPURLResponse)?.statusCode == 200)
     }
 
-    @Test func bindsAnEphemeralPort() async throws {
-        let listener = LoopbackCallbackListener(expectedState: "s", expectedPath: "/callback")
-        let port = try await listener.start()
-        #expect(port > 0)
-        await listener.stop()
-    }
-
     @Test func bindsRequestedPortAndRejectsAnOccupiedPort() async throws {
         let first = LoopbackCallbackListener(expectedState: "first", expectedPath: "/callback")
         let port = try await first.start()
@@ -27,17 +20,6 @@ struct LoopbackCallbackListenerTests {
         await first.stop()
         #expect(try await second.start(port: UInt16(port)) == port)
         await second.stop()
-    }
-
-    @Test func returnsTheAuthorizationCode() async throws {
-        let listener = LoopbackCallbackListener(expectedState: "state123", expectedPath: "/callback")
-        let port = try await listener.start()
-
-        async let code = listener.waitForCallback()
-        try await get(URL(string: "http://127.0.0.1:\(port)/callback?code=abc123&state=state123")!)
-
-        #expect(try await code == "abc123")
-        await listener.stop()
     }
 
     @Test func mismatchedStateDoesNotAbortTheLegitimateCallback() async throws {

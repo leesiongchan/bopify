@@ -256,12 +256,12 @@ public final class EventBridge: Sendable {
                 deliverLyrics(data, requestID: envelope.requestID)
                 return
             }
-        }
-        // Radio replies answer one caller; the playback stream never sees them.
-        if let envelope = try? JSONDecoder().decode(Envelope.self, from: data),
-           RadioReply.eventTypes.contains(envelope.type) {
-            deliverRadio(data, requestID: envelope.requestID)
-            return
+            // Radio replies answer one caller; the playback stream never sees them.
+            if RadioReply.eventTypes.contains(envelope.type),
+               let radio = try? JSONDecoder().decode(Envelope.self, from: data) {
+                deliverRadio(data, requestID: radio.requestID)
+                return
+            }
         }
         // A malformed payload is a bug in the wire contract, not a user-facing
         // failure. Drop it rather than tearing down playback.

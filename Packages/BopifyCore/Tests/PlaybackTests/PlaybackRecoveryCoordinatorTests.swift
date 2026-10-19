@@ -14,7 +14,7 @@ struct PlaybackRecoveryCoordinatorTests {
         let gate = RecoveryFactoryGate()
         let recovery = PlaybackRecoveryCoordinator(player: PlayerModel(volumeDefaults: defaults),
             tokenProvider: { _ in "TOKEN_FAKE" },
-            makeEngine: { token, options in try await gate.create(token: token, configuration: options) })
+            makeEngine: { _, options in try await gate.create(configuration: options) })
         recovery.start()
         await gate.waitForCreationCount(1)
         #expect(gate.configurations[0].startup == .coldLaunch)
@@ -27,7 +27,7 @@ struct PlaybackRecoveryCoordinatorTests {
     var identity: PlaybackIdentity { PlaybackIdentity(trackURI: SpotifyURI("spotify:track:6rqhFgbbKwnb9MLmUQDhG6")!) }
     func settle() async { for _ in 0..<100 { await Task.yield() } }
     func coordinator(_ gate: RecoveryFactoryGate, _ clock: RecoveryTestClock) -> PlaybackRecoveryCoordinator {
-        PlaybackRecoveryCoordinator(player: PlayerModel(), tokenProvider: { _ in "TOKEN_FAKE" }, makeEngine: { token, options in try await gate.create(token: token, configuration: options) }, deviceID: "stable", now: { clock.now }, sleep: { try await clock.sleep(for: $0) }, randomUnit: { 1 })
+        PlaybackRecoveryCoordinator(player: PlayerModel(), tokenProvider: { _ in "TOKEN_FAKE" }, makeEngine: { _, options in try await gate.create(configuration: options) }, deviceID: "stable", now: { clock.now }, sleep: { try await clock.sleep(for: $0) }, randomUnit: { 1 })
     }
     @Test func retryDelaysStayWithinJitterBoundsAndCapWithoutOverflow() {
         #expect(recoveryRetryDelay(failureCount: 1, jitterUnit: 0) == .milliseconds(500))
@@ -52,7 +52,7 @@ struct PlaybackRecoveryCoordinatorTests {
 
     @Test func stopDuringTokenLookupNeverCreates() async {
         let gate = RecoveryFactoryGate(), clock = RecoveryTestClock(), token = RecoverySuspension()
-        let recovery = PlaybackRecoveryCoordinator(player: PlayerModel(), tokenProvider: { _ in await token.wait(); return "TOKEN_FAKE" }, makeEngine: { token, options in try await gate.create(token: token, configuration: options) }, sleep: { try await clock.sleep(for: $0) })
+        let recovery = PlaybackRecoveryCoordinator(player: PlayerModel(), tokenProvider: { _ in await token.wait(); return "TOKEN_FAKE" }, makeEngine: { _, options in try await gate.create(configuration: options) }, sleep: { try await clock.sleep(for: $0) })
         recovery.start(); await token.entered()
         recovery.invalidate(); token.release(); await recovery.stop()
         #expect(gate.configurations.isEmpty)
@@ -83,7 +83,7 @@ struct PlaybackRecoveryCoordinatorTests {
     }
     @Test func forcedRefreshBudgetSurvivesNetworkRetry() async {
         let gate = RecoveryFactoryGate(), clock = RecoveryTestClock(), calls = TokenLookups()
-        let recovery = PlaybackRecoveryCoordinator(player: PlayerModel(), tokenProvider: { rejected in await calls.token(rejected) }, makeEngine: { token, options in try await gate.create(token: token, configuration: options) }, sleep: { try await clock.sleep(for: $0) }, randomUnit: { 1 })
+        let recovery = PlaybackRecoveryCoordinator(player: PlayerModel(), tokenProvider: { rejected in await calls.token(rejected) }, makeEngine: { _, options in try await gate.create(configuration: options) }, sleep: { try await clock.sleep(for: $0) }, randomUnit: { 1 })
         recovery.start(); await gate.waitForCreationCount(1); gate.failNext(with: .authExpired)
         await gate.waitForCreationCount(2); gate.failNext(with: .networkUnavailable); await settle()
         clock.advance(by: .seconds(1)); await gate.waitForCreationCount(3); gate.failNext(with: .authExpired); await settle()
@@ -187,7 +187,7 @@ struct PlaybackRecoveryCoordinatorTests {
     @Test func rejectedTokenRefreshesOnceThenStopsOnRepeatedRejection() async {
         let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
         let calls = TokenLookups()
-        let recovery = PlaybackRecoveryCoordinator(player: PlayerModel(), tokenProvider: { rejected in await calls.token(rejected) }, makeEngine: { token, options in try await gate.create(token: token, configuration: options) }, now: { clock.now }, sleep: { try await clock.sleep(for: $0) })
+        let recovery = PlaybackRecoveryCoordinator(player: PlayerModel(), tokenProvider: { rejected in await calls.token(rejected) }, makeEngine: { _, options in try await gate.create(configuration: options) }, now: { clock.now }, sleep: { try await clock.sleep(for: $0) })
         recovery.start(); await gate.waitForCreationCount(1); gate.failNext(with: .authExpired)
         await gate.waitForCreationCount(2); gate.failNext(with: .authExpired); await settle()
         #expect(await calls.rejections == [nil, "OLD_FAKE"])

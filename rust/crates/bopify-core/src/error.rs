@@ -17,16 +17,6 @@ impl std::fmt::Display for BopifyError {
 impl std::error::Error for BopifyError {}
 
 impl BopifyError {
-    /// All error categories; keep this list in sync with the variants.
-    pub const ALL: [BopifyError; 6] = [
-        Self::InvalidArgument,
-        Self::SessionLost,
-        Self::AuthInvalid,
-        Self::PremiumRequired,
-        Self::NetworkUnavailable,
-        Self::Unknown,
-    ];
-
     pub fn code(&self) -> i32 {
         match self {
             Self::InvalidArgument => -1,

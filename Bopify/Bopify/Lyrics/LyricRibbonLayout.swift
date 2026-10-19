@@ -84,8 +84,7 @@ struct LyricRibbonLayout {
         return result
     }
 
-    static func measure(content: LyricContent, width: CGFloat, textScale: CGFloat, availableHeight: CGFloat,
-                        source: LyricSourceMetadata? = nil) -> Self {
+    static func measure(width: CGFloat, textScale: CGFloat, availableHeight: CGFloat) -> Self {
         let scale = max(1, textScale)
         let chromeHeight = 2 * verticalInset + headerHeight + sectionSpacing
         // The document scrolls; its length never controls the panel's footprint.

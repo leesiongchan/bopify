@@ -40,7 +40,7 @@ struct PlayerRootView: View {
                         }
                     }
                     .padding(16)
-                    .modifier(ScrollablePlayerContent(mode: .expanded))
+                    .modifier(ScrollablePlayerContent())
                 }
             }
         }
@@ -169,18 +169,13 @@ private struct StartupContent: View {
 }
 
 private struct ScrollablePlayerContent: ViewModifier {
-    let mode: PlayerMode
     func body(content: Content) -> some View {
-        if mode == .queue {
-            content
-        } else {
-            GeometryReader { geometry in
-                ScrollView {
-                    content.frame(height: max(560, geometry.size.height))
-                }
-                .scrollDisabled(geometry.size.height >= 560)
-                .scrollIndicators(.hidden)
+        GeometryReader { geometry in
+            ScrollView {
+                content.frame(height: max(560, geometry.size.height))
             }
+            .scrollDisabled(geometry.size.height >= 560)
+            .scrollIndicators(.hidden)
         }
     }
 }

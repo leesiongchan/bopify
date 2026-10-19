@@ -39,7 +39,7 @@ struct VinylRecordView: View {
                             .padding(5 + CGFloat(groove) * diameter * 0.012)
                     }
                     MorphingArtworkView(image: image, diameter: diameter * 0.43,
-                                        occurrenceID: occurrenceID, direction: direction, isVisible: isVisible, reduceMotionOverride: reduceMotion)
+                                        occurrenceID: occurrenceID, isVisible: isVisible, reduceMotionOverride: reduceMotion)
                         .overlay(Circle().stroke(.black.opacity(0.4), lineWidth: 1))
                 }
                 .rotationEffect(.radians(rotationOverride ?? rotation.angle(at: ProcessInfo.processInfo.systemUptime)))

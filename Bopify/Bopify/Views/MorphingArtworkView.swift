@@ -1,13 +1,11 @@
 import SwiftUI
 import os
 import BopifyDomain
-import BopifyPlayback
 
 struct MorphingArtworkView: View {
     let image: Image?
     let diameter: CGFloat
     let occurrenceID: String
-    let direction: CarouselDirection
     var isVisible = true
     var reduceMotionOverride = false
     @State private var morph: ArtworkMorphState
@@ -15,11 +13,10 @@ struct MorphingArtworkView: View {
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     private var reduceMotion: Bool { systemReduceMotion || reduceMotionOverride }
 
-    init(image: Image?, diameter: CGFloat, occurrenceID: String = "", direction: CarouselDirection = .fade, isVisible: Bool = true, reduceMotionOverride: Bool = false) {
+    init(image: Image?, diameter: CGFloat, occurrenceID: String = "", isVisible: Bool = true, reduceMotionOverride: Bool = false) {
         self.image = image
         self.diameter = diameter
         self.occurrenceID = occurrenceID
-        self.direction = direction
         self.isVisible = isVisible
         self.reduceMotionOverride = reduceMotionOverride
         _morph = State(initialValue: ArtworkMorphState(image: image, occurrenceID: occurrenceID))
@@ -51,7 +48,7 @@ struct MorphingArtworkView: View {
 
     private func retarget() {
         morph.duration = reduceMotion ? 0.16 : 0.65
-        morph.transition(to: image, occurrenceID: occurrenceID, direction: direction, at: .now, diameter: diameter)
+        morph.transition(to: image, occurrenceID: occurrenceID, at: .now, diameter: diameter)
         isAnimating = isVisible
         if !isVisible { morph.finish() }
         BopifyLog.playback.debug("artwork blend retargeted")
