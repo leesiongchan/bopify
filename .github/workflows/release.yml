@@ -21,6 +21,7 @@ jobs:
       tag: ${{ steps.version.outputs.version_tag }}
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+      MACOSX_DEPLOYMENT_TARGET: '26.0'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -40,6 +41,30 @@ jobs:
           enable_prerelease_mode: false
       - name: Install Metal toolchain
         run: xcodebuild -downloadComponent MetalToolchain
+      - name: Identify build environment
+        id: build-env
+        run: echo "xcode=$(xcodebuild -version | shasum -a 256 | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Cache release tools
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .build/release-tools
+          key: release-tools-${{ runner.os }}-${{ runner.arch }}-${{ steps.build-env.outputs.xcode }}-${{ hashFiles('rust-toolchain.toml', 'scripts/release-tool.sh') }}
+      - name: Cache pinned librespot source
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .build/librespot-939dc5e
+          key: librespot-${{ hashFiles('scripts/prepare-librespot.sh', 'rust/patches/librespot-queue-selection.patch') }}
+      - name: Verify pinned librespot source
+        run: ./scripts/prepare-librespot.sh
+      - name: Cache Cargo builds
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: |
+            rust -> target
+            .build/librespot-939dc5e -> ../librespot-target
+          key: ${{ runner.os }}-${{ runner.arch }}-${{ steps.build-env.outputs.xcode }}-${{ hashFiles('scripts/build-rust.sh', 'scripts/test-native.sh', 'scripts/prepare-librespot.sh', 'rust/patches/librespot-queue-selection.patch', 'rust/.cargo/config.toml') }}
+          env-vars: CARGO CC CFLAGS CXX CMAKE RUST MACOSX_DEPLOYMENT_TARGET
+          cache-bin: false
       - name: Package ad-hoc DMG
         env:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}

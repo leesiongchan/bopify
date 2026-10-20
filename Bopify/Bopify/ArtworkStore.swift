@@ -30,9 +30,12 @@ final class ArtworkStore {
     @ObservationIgnored private var pipeline: ImagePipeline
     @ObservationIgnored private var imageCache: ImageCache
     @ObservationIgnored private let now: () -> ContinuousClock.Instant
+    @ObservationIgnored private let sleep: (ContinuousClock.Instant) async throws -> Void
 
-    init(configuration: URLSessionConfiguration = .ephemeral, now: @escaping () -> ContinuousClock.Instant = { .now }) {
+    init(configuration: URLSessionConfiguration = .ephemeral, now: @escaping () -> ContinuousClock.Instant = { .now },
+         sleep: @escaping (ContinuousClock.Instant) async throws -> Void = { try await Task.sleep(until: $0, clock: .continuous) }) {
         self.now = now
+        self.sleep = sleep
         configuration.urlCache = nil
         configuration.httpCookieStorage = nil
         configuration.urlCredentialStorage = nil
@@ -175,8 +178,8 @@ final class ArtworkStore {
         retryTask?.cancel()
         retryTask = nil
         guard let deadline = failures.values.filter(\.transient).map(\.retryAt).min() else { return }
-        retryTask = Task { [weak self] in
-            do { try await Task.sleep(until: deadline, clock: .continuous) }
+        retryTask = Task { [weak self, sleep] in
+            do { try await sleep(deadline) }
             catch { return }
             guard !Task.isCancelled else { return }
             self?.retryFailedLoads()
