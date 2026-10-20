@@ -14,5 +14,7 @@ cargo test --manifest-path rust/Cargo.toml --locked --doc \
 
 # Core has dev dependencies and cannot be tested as a non-member of rust/.
 # --lib avoids its account/network integration test; hardware tests stay ignored.
+# Keep its separate lockfile's build cache independent of the shipping workspace.
+export CARGO_TARGET_DIR="$PWD/.build/librespot-target"
 cargo test --manifest-path .build/librespot-939dc5e/Cargo.toml --locked --lib -p librespot-core
 cargo test --manifest-path .build/librespot-939dc5e/Cargo.toml --locked --doc -p librespot-core

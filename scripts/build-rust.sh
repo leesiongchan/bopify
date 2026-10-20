@@ -11,7 +11,9 @@ export MACOSX_DEPLOYMENT_TARGET=26.0   # must match the Xcode target
 TARGET=aarch64-apple-darwin            # arm64 only; for universal, build
                                        # x86_64-apple-darwin too and lipo them
 
-cargo build --release --locked --manifest-path rust/Cargo.toml --target "$TARGET"
+echo "Link these in Package.swift (CBopifyCore linkerSettings):"
+cargo rustc --release --locked --manifest-path rust/crates/bopify-core/Cargo.toml \
+  --target "$TARGET" -- --print=native-static-libs
 header_tool=$(./scripts/release-tool.sh cbindgen)
 mkdir -p artifacts/include
 (cd rust && "$header_tool" --config cbindgen.toml --crate bopify-core --output ../artifacts/include/bopify_core.h)
@@ -21,7 +23,3 @@ xcodebuild -create-xcframework \
   -library "rust/target/$TARGET/release/libbopify_core.a" \
   -headers artifacts/include \
   -output artifacts/BopifyCoreFFI.xcframework
-
-echo "Link these in Package.swift (CBopifyCore linkerSettings):"
-cargo rustc --release --locked --manifest-path rust/crates/bopify-core/Cargo.toml \
-  --target "$TARGET" -- --print=native-static-libs

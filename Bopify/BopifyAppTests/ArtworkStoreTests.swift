@@ -121,21 +121,30 @@ struct ArtworkStoreTests {
         #expect(urls.filter { fixture.store.image(for: $0) != nil }.count == 112)
     }
 
-    @Test(.timeLimit(.minutes(1))) func transientFailureWakesConsumersAfterCooldown() async throws {
-        let fixture = ArtworkFixture()
-        defer { fixture.store.clear() }
-        let url = fixture.url()
+    @Test func transientFailureWakesConsumersAfterCooldown() async throws {
+        let clock = ArtworkRetryClock()
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ArtworkProtocol.self]
+        let store = ArtworkStore(configuration: configuration, now: { clock.now }, sleep: { try await clock.sleep(until: $0) })
+        defer { store.clear() }
+        let url = URL(string: "https://artwork.invalid/\(UUID().uuidString)")!
         ArtworkProtocol.plan(url, status: 503)
-        await fixture.store.load(url)
+        await store.load(url)
         try #require(ArtworkProtocol.count(url) == 1)
-        #expect(fixture.store.image(for: url) == nil)
-        await fixture.store.load(url)
+        #expect(store.image(for: url) == nil)
+        await store.load(url)
         #expect(ArtworkProtocol.count(url) == 1)
-        let revision = fixture.store.retryRevision
-        try await artworkEventually(seconds: 45) { fixture.store.retryRevision > revision }
-        await fixture.store.load(url)
+        let revision = store.retryRevision
+        try await artworkEventually { !clock.waits.isEmpty }
+        clock.advance(by: .seconds(29))
+        await store.load(url)
+        #expect(ArtworkProtocol.count(url) == 1)
+        #expect(store.retryRevision == revision)
+        clock.advance(by: .seconds(1))
+        try await artworkEventually { store.retryRevision > revision }
+        await store.load(url)
         #expect(ArtworkProtocol.count(url) == 2)
-        #expect(fixture.store.image(for: url) != nil)
+        #expect(store.image(for: url) != nil)
     }
 
     @Test func reconnectDoesNotBypassServerThrottling() async throws {
@@ -235,6 +244,28 @@ struct ArtworkStoreTests {
         await fixture.store.loadPalette(url)
         #expect(fixture.store.palette(for: url) != nil)
         #expect(fixture.store.palette(for: url) != .neutral)
+    }
+}
+
+@MainActor
+private final class ArtworkRetryClock {
+    var now = ContinuousClock.now
+    private(set) var waits: [UUID: (ContinuousClock.Instant, CheckedContinuation<Void, any Error>)] = [:]
+
+    func sleep(until deadline: ContinuousClock.Instant) async throws {
+        let id = UUID()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+                if Task.isCancelled { continuation.resume(throwing: CancellationError()); return }
+                if deadline <= now { continuation.resume(); return }
+                waits[id] = (deadline, continuation)
+            }
+        } onCancel: { Task { @MainActor in self.waits.removeValue(forKey: id)?.1.resume(throwing: CancellationError()) } }
+    }
+
+    func advance(by duration: Duration) {
+        now = now.advanced(by: duration)
+        for id in waits.filter({ $0.value.0 <= now }).keys { waits.removeValue(forKey: id)?.1.resume() }
     }
 }
 
