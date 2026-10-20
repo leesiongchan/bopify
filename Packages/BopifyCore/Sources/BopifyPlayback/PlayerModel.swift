@@ -575,7 +575,6 @@ public final class PlayerModel {
             }
             state.remote = remote
             remoteUpdatedAt = .now
-            BopifyLog.playback.debug("remote playback present=\(remote != nil, privacy: .public)")
         }
         if wasMirroring && state.mirror == nil { queueDirection = .fade }
         if state.phase != oldPhase {

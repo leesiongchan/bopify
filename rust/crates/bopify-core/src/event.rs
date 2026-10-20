@@ -222,14 +222,14 @@ pub fn translate(event: PlayerEvent) -> Option<WireEvent> {
         }
 
         // SessionConnected exposes a user identifier; transport events already convey activity.
-        PlayerEvent::SessionConnected { .. } => dropped("SessionConnected"),
-        PlayerEvent::SessionClientChanged { .. } => dropped("SessionClientChanged"),
-        PlayerEvent::PlayRequestIdChanged { .. } => dropped("PlayRequestIdChanged"),
-        PlayerEvent::Stopped { .. } => dropped("Stopped"),
-        PlayerEvent::Preloading { .. } => dropped("Preloading"),
-        PlayerEvent::TimeToPreloadNextTrack { .. } => dropped("TimeToPreloadNextTrack"),
-        PlayerEvent::Unavailable { .. } => dropped("Unavailable"),
-        PlayerEvent::PositionChanged { .. } => dropped("PositionChanged"),
+        PlayerEvent::SessionConnected { .. }
+        | PlayerEvent::SessionClientChanged { .. }
+        | PlayerEvent::PlayRequestIdChanged { .. }
+        | PlayerEvent::Stopped { .. }
+        | PlayerEvent::Preloading { .. }
+        | PlayerEvent::TimeToPreloadNextTrack { .. }
+        | PlayerEvent::Unavailable { .. }
+        | PlayerEvent::PositionChanged { .. } => None,
         PlayerEvent::SetQueue {
             generation,
             current_track,
@@ -256,14 +256,10 @@ pub fn translate(event: PlayerEvent) -> Option<WireEvent> {
                 "off"
             },
         }),
-        PlayerEvent::AutoPlayChanged { .. } => dropped("AutoPlayChanged"),
-        PlayerEvent::FilterExplicitContentChanged { .. } => dropped("FilterExplicitContentChanged"),
+        PlayerEvent::AutoPlayChanged { .. } | PlayerEvent::FilterExplicitContentChanged { .. } => {
+            None
+        }
     }
-}
-
-fn dropped(kind: &str) -> Option<WireEvent> {
-    log::debug!("event: dropping unmodelled player event kind={kind}");
-    None
 }
 
 fn startup_resolved(outcome: StartupOutcome) -> WireEvent {
@@ -282,8 +278,6 @@ fn startup_resolved(outcome: StartupOutcome) -> WireEvent {
 }
 
 fn remote_playback(remote: Option<RemoteState>) -> WireEvent {
-    // Presence only: a device name is whatever the user called their phone.
-    log::debug!("event: remote playback present={}", remote.is_some());
     WireEvent::RemotePlayback {
         remote: remote.map(|remote| WireRemote {
             device_name: remote.device_name,
