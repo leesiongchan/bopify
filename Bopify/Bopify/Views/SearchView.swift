@@ -89,7 +89,7 @@ struct SearchView: View {
                     if let url = song.artwork?.url, let image = environment.artworkStore.image(for: url) {
                         Image(nsImage: image).resizable().scaledToFill()
                     } else {
-                        ZStack { Color.primary.opacity(0.06); Image(systemName: "music.note").foregroundStyle(.secondary) }
+                        ZStack { Color.primary.opacity(0.06); Image(.bopRecord).foregroundStyle(.secondary) }
                     }
                 }
                 .frame(width: 22, height: 22)
