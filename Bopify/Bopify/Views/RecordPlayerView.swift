@@ -371,7 +371,7 @@ struct RecordPlayerView: View {
                             if lyricModel.isVisible { lyricModel.hide() } else { lyricModel.show() }
                         } else { environment.toggleLiveLyrics() }
                     } label: {
-                        Image(systemName: "quote.bubble").frame(width: 28, height: 28)
+                        Image(.bopLyrics).frame(width: 28, height: 28)
                     }.buttonStyle(.playerToggle(isOn: lyrics?.isVisible ?? false))
                         .accessibilityLabel(String(localized: "control.title", defaultValue: "Lyrics", table: "LyricRibbon"))
                         .accessibilityValue(Text(lyrics?.isVisible == true ? "control.on" : "control.off"))
@@ -382,7 +382,7 @@ struct RecordPlayerView: View {
                         .disabled(environment.isPreparingForQuit || environment.authState != .signedIn)
                 }
                 Button { presentation.requestQueue(presentation.mode != .queue) } label: {
-                    Image(systemName: "music.note.list").frame(width: 28, height: 28)
+                    Image(.bopQueue).frame(width: 28, height: 28)
                 }.buttonStyle(.playerToggle(isOn: presentation.mode == .queue))
                     .accessibilityLabel(Text("queue.title"))
                     .accessibilityValue(Text(presentation.mode == .queue ? "control.on" : "control.off"))

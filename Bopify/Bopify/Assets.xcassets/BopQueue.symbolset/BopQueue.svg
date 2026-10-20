@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="3300" height="2200">
+  <g id="Notes">
+    <text id="template-version" x="3036" y="1933">Template v.3.0</text>
+  </g>
+  <g id="Guides" fill="none" stroke="#00AEEF" stroke-width="0.5">
+    <path id="Capline-S" d="M263 625.541H3036"/>
+    <path id="Baseline-S" d="M263 695.541H3036"/>
+    <path id="Capline-M" d="M263 1055.541H3036"/>
+    <path id="Baseline-M" d="M263 1125.541H3036"/>
+    <path id="Capline-L" d="M263 1485.541H3036"/>
+    <path id="Baseline-L" d="M263 1555.541H3036"/>
+    <line id="left-margin-Regular-M" x1="1395" x2="1395" y1="1030" y2="1150"/>
+    <line id="right-margin-Regular-M" x1="1503" x2="1503" y1="1030" y2="1150"/>
+  </g>
+  <g id="Symbols">
+    <g id="Regular-M" transform="matrix(1 0 0 1 1395 1125.541)">
+      <path fill="black" fill-rule="nonzero" d="M13.500 -60.450L94.500 -60.450C96.737 -60.450 98.550 -62.263 98.550 -64.500C98.550 -66.737 96.737 -68.550 94.500 -68.550L13.500 -68.550C11.263 -68.550 9.450 -66.737 9.450 -64.500C9.450 -62.263 11.263 -60.450 13.500 -60.450Z"/>
+      <path fill="black" fill-rule="nonzero" d="M13.500 -33.450L49.500 -33.450C51.737 -33.450 53.550 -35.263 53.550 -37.500C53.550 -39.737 51.737 -41.550 49.500 -41.550L13.500 -41.550C11.263 -41.550 9.450 -39.737 9.450 -37.500C9.450 -35.263 11.263 -33.450 13.500 -33.450Z"/>
+      <path fill="black" fill-rule="nonzero" d="M13.500 -6.450L40.500 -6.450C42.737 -6.450 44.550 -8.263 44.550 -10.500C44.550 -12.737 42.737 -14.550 40.500 -14.550L13.500 -14.550C11.263 -14.550 9.450 -12.737 9.450 -10.500C9.450 -8.263 11.263 -6.450 13.500 -6.450Z"/>
+      <path fill="black" fill-rule="nonzero" d="M72.000 -38.850Q67.500 -41.550 67.500 -36.150L67.500 6.150Q67.500 11.550 72.000 8.850L99.000 -11.400Q103.500 -15.000 99.000 -18.600Z"/>
+    </g>
+  </g>
+</svg>

@@ -11,7 +11,7 @@ struct ArtworkView: View {
             } else {
                 ZStack {
                     Circle().fill(Color(white: 0.12))
-                    Image(systemName: "music.note")
+                    Image(.bopRecord)
                         .font(.system(size: diameter * 0.25, weight: .light))
                         .foregroundStyle(.white.opacity(0.45))
                 }

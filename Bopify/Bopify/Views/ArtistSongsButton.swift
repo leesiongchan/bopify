@@ -134,7 +134,7 @@ private struct ArtistSongsPopover: View {
                     } else {
                         ZStack {
                             Color(white: 0.12)
-                            Image(systemName: "music.note").foregroundStyle(.secondary)
+                            Image(.bopRecord).foregroundStyle(.secondary)
                         }
                     }
                 }

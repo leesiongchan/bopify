@@ -232,7 +232,7 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
             } else {
                 ZStack {
                     LinearGradient(colors: [.gray.opacity(0.3), .black.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    Image(systemName: "music.note").font(.system(size: 22)).foregroundStyle(.white.opacity(0.65))
+                    Image(.bopRecord).font(.system(size: 22)).foregroundStyle(.white.opacity(0.65))
                 }
             }
         }

@@ -19,7 +19,10 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         self.environment = environment
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
-        statusItem.button?.image = NSImage(systemSymbolName: "music.note", accessibilityDescription: "Bopify")
+        let mark = NSImage(resource: .bopStatus).withSymbolConfiguration(.init(pointSize: 16, weight: .regular))
+        mark?.isTemplate = true
+        mark?.accessibilityDescription = "Bopify"
+        statusItem.button?.image = mark
         statusItem.button?.target = self
         statusItem.button?.action = #selector(statusItemClicked(_:))
         statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])

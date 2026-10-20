@@ -124,7 +124,7 @@ private struct StationMenu: View {
                     if let seed { Task { await model.selectChip(seed) } }
                 })) {
                     ForEach(model.chips) { seed in
-                        Label(seed.name, systemImage: glyph(seed)).tag(Optional(seed.uri))
+                        Label { Text(seed.name) } icon: { glyph(seed) }.tag(Optional(seed.uri))
                     }
                 }
                 .pickerStyle(.inline)
@@ -132,7 +132,7 @@ private struct StationMenu: View {
             } label: {
                 HStack(spacing: 3) {
                     Text("explore.from")
-                    Image(systemName: glyph(selected)).font(.system(size: 7, weight: .semibold)).opacity(0.7)
+                    glyph(selected).font(.system(size: 9, weight: .semibold)).opacity(0.7)
                     Text(selected.name).lineLimit(1)
                     Image(systemName: "chevron.down").font(.system(size: 6, weight: .bold)).opacity(0.6)
                 }
@@ -151,8 +151,9 @@ private struct StationMenu: View {
         }
     }
 
-    private func glyph(_ seed: StationSeed) -> String {
-        model.stationFailures[seed.uri] != nil ? "arrow.clockwise" : seed.isArtist ? "person.fill" : "music.note"
+    private func glyph(_ seed: StationSeed) -> Image {
+        if model.stationFailures[seed.uri] != nil { return Image(systemName: "arrow.clockwise") }
+        return seed.isArtist ? Image(systemName: "person.fill") : Image(.bopRadio)
     }
 }
 

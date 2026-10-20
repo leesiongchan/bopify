@@ -23,7 +23,7 @@ struct FavoriteButton: View {
                 Group {
                     if model.isPending { ProgressView().controlSize(.mini) }
                     else {
-                        Image(systemName: model.saved == true ? "heart.fill" : model.saved == nil ? "heart.slash" : "heart")
+                        Image(model.saved == true ? .bopHeartFill : model.saved == nil ? .bopHeartSlash : .bopHeart)
                             .contentTransition(.symbolEffect(.replace))
                             .symbolEffect(.bounce, value: confirmedSaves)
                     }
