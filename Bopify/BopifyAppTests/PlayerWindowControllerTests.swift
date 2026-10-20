@@ -14,7 +14,8 @@ struct PlayerWindowControllerTests {
         let panel = StatusPanel(content: EmptyView())
         panel.isReleasedWhenClosed = false
         defer { panel.close() }
-        panel.setFrame(CGRect(x: 400, y: 300, width: 484, height: 158), display: false)
+        // Stay low: once visible, AppKit clamps the transition envelope to the real display, which is small on CI.
+        panel.setFrame(CGRect(x: 400, y: 100, width: 484, height: 158), display: false)
         let controller = PlayerWindowController(defaults: defaults)
         controller.attach(to: panel)
         controller.apply(mode: .compact, reduceMotion: true, visibleFrame: screen, showsLyrics: true)

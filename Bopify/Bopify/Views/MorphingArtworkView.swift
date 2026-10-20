@@ -1,6 +1,4 @@
 import SwiftUI
-import os
-import BopifyDomain
 
 struct MorphingArtworkView: View {
     let image: Image?
@@ -51,6 +49,5 @@ struct MorphingArtworkView: View {
         morph.transition(to: image, occurrenceID: occurrenceID, at: .now, diameter: diameter)
         isAnimating = isVisible
         if !isVisible { morph.finish() }
-        BopifyLog.playback.debug("artwork blend retargeted")
     }
 }

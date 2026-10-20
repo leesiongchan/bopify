@@ -118,8 +118,6 @@ public actor SpotifyAuthService {
             await stopAuthorization(listener)
             throw PlayerError.authDenied
         }
-        BopifyLog.auth.debug("callback listener bound port=\(port, privacy: .public)")
-
         let redirectURI = "http://127.0.0.1:\(port)\(callbackPath)"
         let request = AuthorizationRequest(clientID: clientID, redirectURI: redirectURI,
                                            scopes: scopes.sorted(), pkce: pkce, state: state)
