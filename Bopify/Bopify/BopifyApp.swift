@@ -3,10 +3,6 @@ import BopifyDomain
 import KeyboardShortcuts
 import os
 
-extension KeyboardShortcuts.Name {
-    static let toggleLiveLyrics = Self("toggleLiveLyrics", initial: .init(.l, modifiers: [.control, .option]))
-}
-
 @main
 struct BopifyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -16,7 +12,7 @@ struct BopifyApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItemController: StatusItemController?
-    private var lyricShortcutTask: Task<Void, Never>?
+    private var shortcutTasks: [Task<Void, Never>] = []
     #if DEBUG
     private var lyricPreview: LyricPanelPreviewSession?
     private var browserPreview: MusicBrowserPreviewSession?
@@ -35,7 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             lyricPreview = preview
             preview.showControls()
             preview.show()
-            registerLyricShortcut { [weak preview] in
+            registerShortcut(.toggleLiveLyrics) { [weak preview] in
                 guard let preview else { return }
                 if preview.model.isVisible { preview.hide() }
                 else { preview.show() }
@@ -44,30 +40,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         #endif
         let environment = AppEnvironment()
-        statusItemController = StatusItemController(content: PlayerRootView(environment: environment), environment: environment)
-        registerLyricShortcut { [weak environment] in environment?.toggleLiveLyrics() }
+        let controller = StatusItemController(content: PlayerRootView(environment: environment), environment: environment)
+        statusItemController = controller
+        registerShortcut(.togglePlayer) { [weak controller] in controller?.togglePlayer() }
+        registerShortcut(.searchMusic) { [weak controller] in controller?.showSearch() }
+        registerShortcut(.toggleLiveLyrics) { [weak environment] in environment?.toggleLiveLyrics() }
         Task { await environment.restoreOrPromptSignIn() }
     }
 
-    private func registerLyricShortcut(action: @escaping @MainActor () -> Void) {
-        lyricShortcutTask?.cancel()
-        let events = KeyboardShortcuts.events(for: .toggleLiveLyrics)
-        if KeyboardShortcuts.isEnabled(for: .toggleLiveLyrics) {
-            BopifyLog.playback.debug("Live lyrics global shortcut registered")
-        } else {
-            BopifyLog.playback.error("Live lyrics global shortcut unavailable; use the player lyrics control")
+    private func registerShortcut(_ name: KeyboardShortcuts.Name, action: @escaping @MainActor () -> Void) {
+        let events = KeyboardShortcuts.events(for: name)
+        if name.shortcut != nil && !KeyboardShortcuts.isEnabled(for: name) {
+            BopifyLog.playback.error("Global shortcut unavailable action=\(name.rawValue, privacy: .public); use the player controls")
         }
-        lyricShortcutTask = Task {
+        shortcutTasks.append(Task {
             for await event in events where event == .keyUp {
                 guard !Task.isCancelled else { return }
                 action()
             }
-        }
+        })
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        lyricShortcutTask?.cancel()
-        lyricShortcutTask = nil
+        shortcutTasks.forEach { $0.cancel() }
+        shortcutTasks.removeAll()
         #if DEBUG
         lyricPreview?.shutdown()
         #endif

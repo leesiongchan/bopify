@@ -6,6 +6,7 @@ import BopifyPlayback
 struct SearchView: View {
     let environment: AppEnvironment
     @State private var text = ""
+    @State private var isNearBottom = false
     private var model: SearchModel { environment.search }
     private var canPlay: Bool { environment.authState == .signedIn && environment.player?.isEngineReady == true }
 
@@ -56,16 +57,23 @@ struct SearchView: View {
                         .environment(\.defaultMinListRowHeight, 32)
                         .scrollContentBackground(.hidden)
                         .frame(height: CGFloat(min(5, model.tracks.count)) * 32)
+                        .onScrollGeometryChange(for: CGFloat?.self) { geometry in
+                            guard geometry.visibleRect.height > 0, geometry.contentSize.height > 0,
+                                  geometry.visibleRect.maxY >= geometry.contentSize.height - 32 else { return nil }
+                            return geometry.contentSize.height
+                        } action: { _, bottomHeight in
+                            isNearBottom = bottomHeight != nil
+                            if bottomHeight != nil {
+                                let query = model.query
+                                Task { await loadMoreWhileVisible(for: query) }
+                            }
+                        }
                         .onAppear { if let uri = model.selectedURI { scroll.scrollTo(uri) } }
                         .onChange(of: model.selectedURI) { _, uri in if let uri { scroll.scrollTo(uri) } }
                     }
                 }
                 if model.error != nil { errorState.font(.caption).padding(6) }
-                else if model.hasMore {
-                    Button("search.more") { Task { await model.loadMore() } }
-                        .buttonStyle(.plain).font(.caption).foregroundStyle(.secondary)
-                        .disabled(model.isLoading).frame(height: 24)
-                } else if model.tracks.isEmpty {
+                else if model.tracks.isEmpty {
                     Text(model.isLoading ? "search.loading" : "search.empty")
                         .font(.caption).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity).padding(6)
@@ -77,6 +85,16 @@ struct SearchView: View {
             if model.tracks.isEmpty && model.error == nil { await model.search() }
         }
         .onExitCommand { environment.searchPopover.close() }
+    }
+
+    private func loadMoreWhileVisible(for query: String) async {
+        while isNearBottom, environment.searchPopover.isVisible, model.query == query,
+              model.hasMore, !model.isLoading, model.error == nil {
+            let count = model.tracks.count
+            await model.loadMore()
+            // Duplicate-only pages leave the scroll geometry unchanged; fresh rows need a layout pass.
+            if model.tracks.count != count { return }
+        }
     }
 
     private func row(_ song: Track) -> some View {

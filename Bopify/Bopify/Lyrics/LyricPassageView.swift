@@ -19,6 +19,8 @@ struct LyricPassageView: NSViewRepresentable {
     var occurrenceID = ""
     var direction: CarouselDirection = .fade
     var onSeek: (Int64) -> Void = { _ in }
+    var onPrevious: (() -> Void)? = nil
+    var onNext: (() -> Void)? = nil
 
     final class Coordinator {
         var resetRevision: UInt64?
@@ -39,12 +41,26 @@ struct LyricPassageView: NSViewRepresentable {
 
         func updateContent(_ scroll: NSScrollView, content: LyricContent, projection: LyricProjection?,
                            reading: Bool, scale: CGFloat, rtl: Bool, fallback: NSAttributedString,
-                           width: CGFloat, height: CGFloat) {
+                           width: CGFloat, height: CGFloat, animated: Bool = false) {
             guard let view = scroll.documentView as? NSTextView else { return }
             let input = Input(content: content, projection: reading ? nil : projection,
                               reading: reading, scale: scale, rtl: rtl)
             let geometryChanged = layoutWidth != max(1, width) || rendered?.scale != scale || rendered?.rtl != rtl
             let changesMetrics = input != rendered || geometryChanged
+            if !animated || reading || geometryChanged || rendered?.content != content {
+                view.layer?.removeAnimation(forKey: "lyricEmphasis")
+            } else if let rendered, !rendered.reading,
+                      rendered.projection?.current?.startMs != projection?.current?.startMs,
+                      scroll.window?.isVisible == true {
+                // Fade one rendered layer; crossfading resized glyph snapshots doubles their outlines.
+                view.wantsLayer = true
+                let emphasis = CABasicAnimation(keyPath: "opacity")
+                emphasis.fromValue = 0.78
+                emphasis.toValue = 1
+                emphasis.duration = 0.28
+                emphasis.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                view.layer?.add(emphasis, forKey: "lyricEmphasis")
+            }
             if !reading && geometryChanged { resetRevision = nil }
             let anchor = reading && changesMetrics ? visibleAnchor(in: scroll) : nil
             if input != rendered {
@@ -122,25 +138,44 @@ struct LyricPassageView: NSViewRepresentable {
         }
 
         func transitionTrack(_ scroll: NSScrollView, occurrenceID: String, direction: CarouselDirection, animated: Bool) {
+            guard let view = scroll.documentView else { return }
+            if !animated {
+                view.layer?.removeAnimation(forKey: "lyricTrackMove")
+                view.layer?.removeAnimation(forKey: "lyricTrackFade")
+            }
+            if let content = rendered?.content {
+                switch content {
+                case .loading, .idle:
+                    view.layer?.removeAnimation(forKey: "lyricTrackMove")
+                    view.layer?.removeAnimation(forKey: "lyricTrackFade")
+                    return
+                default: break
+                }
+            }
+            guard occurrenceID != "none" else { return }
+            // Loading placeholders must not consume the confirmed track's arrival animation.
             defer { self.occurrenceID = occurrenceID }
-            guard let old = self.occurrenceID, old != occurrenceID, let view = scroll.documentView,
+            guard let old = self.occurrenceID, old != occurrenceID,
                   animated, scroll.window?.isVisible == true else { return }
             view.wantsLayer = true
             guard let layer = view.layer else { return }
-            let distance: CGFloat = switch direction { case .next: 9; case .previous: -9; case .fade: 0 }
+            let distance: CGFloat = switch direction { case .next: 48; case .previous: -48; case .fade: 0 }
             let movement = CABasicAnimation(keyPath: "position.x")
             movement.fromValue = layer.position.x + distance
             movement.toValue = layer.position.x
-            movement.duration = 0.24
+            movement.duration = 0.32
+            movement.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
             let fade = CABasicAnimation(keyPath: "opacity")
             fade.fromValue = 0
             fade.toValue = 1
             fade.duration = 0.24
+            fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
             layer.add(movement, forKey: "lyricTrackMove")
             layer.add(fade, forKey: "lyricTrackFade")
         }
 
         func cancelFollow(_ scroll: NSScrollView) {
+            scroll.documentView?.layer?.removeAnimation(forKey: "lyricEmphasis")
             guard let layer = scroll.contentView.layer, layer.animation(forKey: "lyricFollow") != nil else { return }
             let visible = layer.presentation()?.bounds.origin ?? scroll.contentView.bounds.origin
             layer.removeAnimation(forKey: "lyricFollow")
@@ -160,8 +195,8 @@ struct LyricPassageView: NSViewRepresentable {
                 let animation = CABasicAnimation(keyPath: "bounds.origin")
                 animation.fromValue = NSValue(point: previous)
                 animation.toValue = NSValue(point: scroll.contentView.bounds.origin)
-                animation.duration = 0.24
-                animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                animation.duration = 0.4
+                animation.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
                 layer.add(animation, forKey: "lyricFollow")
             }
             self.resetRevision = resetRevision
@@ -183,6 +218,7 @@ struct LyricPassageView: NSViewRepresentable {
         view.linkTextAttributes = [:]
         view.displaysLinkToolTips = false
         view.drawsBackground = false
+        view.wantsLayer = true
         view.textContainerInset = .zero
         view.isVerticallyResizable = false
         view.isHorizontallyResizable = false
@@ -208,12 +244,14 @@ struct LyricPassageView: NSViewRepresentable {
             onBeginReading()
         }
         (scroll as? LyricReadingScrollView)?.onBeginReading = begin
+        (scroll as? LyricReadingScrollView)?.onPrevious = onPrevious
+        (scroll as? LyricReadingScrollView)?.onNext = onNext
         (scroll.verticalScroller as? LyricReadingScroller)?.onBeginReading = begin
         view.onBeginReading = begin
         view.onSeek = onSeek
         if let content {
             coordinator.updateContent(scroll, content: content, projection: projection, reading: isReading,
-                scale: textScale, rtl: isRightToLeft, fallback: text, width: width, height: height)
+                scale: textScale, rtl: isRightToLeft, fallback: text, width: width, height: height, animated: animate)
         } else { coordinator.updateText(view, text: text, width: width, height: height) }
         coordinator.transitionTrack(scroll, occurrenceID: occurrenceID, direction: direction, animated: animate)
         if !animate { view.layer?.removeAllAnimations() }
@@ -230,7 +268,10 @@ struct LyricPassageView: NSViewRepresentable {
 
     static func dismantleNSView(_ scroll: NSScrollView, coordinator: Coordinator) {
         coordinator.cancelFollow(scroll)
+        scroll.documentView?.layer?.removeAllAnimations()
         (scroll as? LyricReadingScrollView)?.onBeginReading = nil
+        (scroll as? LyricReadingScrollView)?.onPrevious = nil
+        (scroll as? LyricReadingScrollView)?.onNext = nil
         (scroll.verticalScroller as? LyricReadingScroller)?.onBeginReading = nil
         (scroll.documentView as? LyricReadingTextView)?.onBeginReading = nil
         (scroll.documentView as? LyricReadingTextView)?.onSeek = nil
@@ -239,9 +280,54 @@ struct LyricPassageView: NSViewRepresentable {
 
 final class LyricReadingScrollView: NSScrollView {
     var onBeginReading: (() -> Void)?
+    var onPrevious: (() -> Void)?
+    var onNext: (() -> Void)?
+    private var swipe = LyricTrackSwipe()
     override func scrollWheel(with event: NSEvent) {
-        if event.scrollingDeltaY != 0 || event.phase == .began { onBeginReading?() }
+        if onPrevious != nil || onNext != nil {
+            switch swipe.update(x: event.scrollingDeltaX, y: event.scrollingDeltaY,
+                phase: event.phase, momentum: event.momentumPhase, precise: event.hasPreciseScrollingDeltas,
+                inverted: event.isDirectionInvertedFromDevice, timestamp: event.timestamp) {
+            case .previous:
+                onPrevious?()
+                return
+            case .next:
+                onNext?()
+                return
+            case .horizontal, .pending: return
+            case .vertical: break
+            }
+        } else { swipe = LyricTrackSwipe() }
+        if event.scrollingDeltaY != 0 { onBeginReading?() }
         super.scrollWheel(with: event)
+    }
+}
+
+struct LyricTrackSwipe {
+    enum Outcome { case pending, horizontal, vertical, previous, next }
+    private var axis: Outcome = .pending
+    private var x: CGFloat = 0
+    private var y: CGFloat = 0
+    private var triggered = false
+    private var lastTimestamp: TimeInterval?
+
+    mutating func update(x deltaX: CGFloat, y deltaY: CGFloat, phase: NSEvent.Phase, momentum: NSEvent.Phase,
+                         precise: Bool, inverted: Bool, timestamp: TimeInterval) -> Outcome {
+        guard momentum.isEmpty else { return axis == .vertical ? .vertical : .horizontal }
+        guard precise else { return .vertical }
+        if phase.contains(.began) || (phase.isEmpty && lastTimestamp.map { timestamp - $0 > 0.25 } != false) {
+            self = LyricTrackSwipe()
+        }
+        lastTimestamp = timestamp
+        if phase.contains(.cancelled) { triggered = true; return axis }
+        x += deltaX
+        y += deltaY
+        if axis == .pending, max(abs(x), abs(y)) >= 6 { axis = abs(x) > abs(y) ? .horizontal : .vertical }
+        guard axis == .horizontal, !triggered, abs(x) >= 48 else { return axis }
+        triggered = true
+        // Natural scrolling follows the fingers; conventional scrolling reverses the deltas.
+        let physicalX = inverted ? x : -x
+        return physicalX < 0 ? .next : .previous
     }
 }
 

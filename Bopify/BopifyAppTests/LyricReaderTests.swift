@@ -1,4 +1,8 @@
 import AppKit
+import BopifyPlayback
+import CoreGraphics
+import QuartzCore
+import SwiftUI
 import Testing
 
 @MainActor @Suite("Native lyric reader", .serialized)
@@ -166,6 +170,165 @@ struct LyricReaderTests {
         #expect(readingRequests == 1)
         #expect(reader.scroll.contentView.bounds.minY < before)
     }
+
+    @Test func cueEmphasisUsesOneGlyphLayerAndRetainsNativeTextAndSelection() throws {
+        let reader = try LyricReaderFixture()
+        let panel = NSPanel(contentRect: reader.scroll.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        panel.isReleasedWhenClosed = false
+        panel.contentView = reader.scroll
+        panel.orderFront(nil)
+        defer { panel.orderOut(nil); panel.close() }
+        reader.view.wantsLayer = true
+        reader.update(position: 3_000, reading: false)
+        let words = reader.view.string
+        let previous = (words as NSString).range(of: "Current words")
+        let origin = reader.scroll.contentView.bounds.origin
+        let height = reader.view.frame.height
+        let selection = NSRange(location: 2, length: 4)
+        reader.view.setSelectedRange(selection)
+
+        reader.update(position: 4_000, reading: false, animated: true)
+
+        let emphasis = try #require(reader.view.layer?.animation(forKey: "lyricEmphasis") as? CABasicAnimation)
+        #expect(emphasis.keyPath == "opacity")
+        #expect(reader.view.layer?.animation(forKey: kCATransition) == nil)
+        #expect(reader.view.string == words)
+        #expect(reader.view.selectedRange() == selection)
+        let current = (words as NSString).range(of: "Upcoming words")
+        #expect(reader.view.textStorage?.attribute(LyricRibbonLayout.currentCueAttribute, at: current.location, effectiveRange: nil) as? Bool == true)
+        #expect(reader.view.textStorage?.attribute(LyricRibbonLayout.currentCueAttribute, at: previous.location, effectiveRange: nil) == nil)
+        #expect(reader.scroll.contentView.bounds.origin == origin)
+        #expect(reader.view.frame.height == height)
+
+        reader.update(position: 5_000, reading: false, animated: true)
+        #expect(reader.view.selectedRange() == selection)
+        reader.update(position: 5_000, reading: false, animated: false)
+        #expect(reader.view.layer?.animation(forKey: "lyricEmphasis") == nil)
+        reader.update(position: 6_000, reading: false, animated: true)
+        #expect(reader.view.layer?.animation(forKey: "lyricEmphasis") != nil)
+        reader.coordinator.cancelFollow(reader.scroll)
+        #expect(reader.view.layer?.animation(forKey: "lyricEmphasis") == nil)
+    }
+
+    @Test func trackArrivalSlidesInTheConfirmedDirectionAfterLoading() throws {
+        let reader = try LyricReaderFixture()
+        let panel = NSPanel(contentRect: reader.scroll.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        panel.isReleasedWhenClosed = false
+        panel.contentView = reader.scroll
+        panel.orderFront(nil)
+        defer { panel.orderOut(nil); panel.close() }
+        reader.view.wantsLayer = true
+        reader.update(position: 3_000, reading: false)
+        reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "first", direction: .next, animated: true)
+        #expect(reader.view.layer?.animation(forKey: "lyricTrackMove") == nil)
+
+        reader.coordinator.updateContent(reader.scroll, content: .loading, projection: nil, reading: false,
+            scale: 1, rtl: false, fallback: NSAttributedString(string: "Loading lyrics…"), width: 300, height: 65)
+        reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "none", direction: .fade, animated: true)
+        reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "second", direction: .next, animated: true)
+        #expect(reader.view.layer?.animation(forKey: "lyricTrackMove") == nil)
+        reader.update(position: 3_000, reading: false)
+        reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "second", direction: .next, animated: true)
+        let next = try #require(reader.view.layer?.animation(forKey: "lyricTrackMove") as? CABasicAnimation)
+        let nextStart = try #require(next.fromValue as? CGFloat)
+        let nextEnd = try #require(next.toValue as? CGFloat)
+        #expect(nextStart > nextEnd)
+
+        reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "third", direction: .previous, animated: true)
+        let previous = try #require(reader.view.layer?.animation(forKey: "lyricTrackMove") as? CABasicAnimation)
+        let previousStart = try #require(previous.fromValue as? CGFloat)
+        let previousEnd = try #require(previous.toValue as? CGFloat)
+        #expect(previousStart < previousEnd)
+        reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "fourth", direction: .next, animated: false)
+        #expect(reader.view.layer?.animation(forKey: "lyricTrackMove") == nil)
+        #expect(reader.view.layer?.animation(forKey: "lyricTrackFade") == nil)
+        reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "fourth", direction: .next, animated: true)
+        #expect(reader.view.layer?.animation(forKey: "lyricTrackMove") == nil)
+    }
+
+    @Test(arguments: [true, false]) func horizontalSwipeNavigatesOnceWithEitherScrollPreference(inverted: Bool) {
+        var gesture = LyricTrackSwipe()
+        let left: CGFloat = inverted ? -1 : 1
+        #expect(gesture.update(x: 0, y: 0, phase: .began, momentum: [], precise: true, inverted: inverted, timestamp: 0) == .pending)
+        #expect(gesture.update(x: left * 20, y: 2, phase: .changed, momentum: [], precise: true, inverted: inverted, timestamp: 0.01) == .horizontal)
+        #expect(gesture.update(x: left * 30, y: 1, phase: .changed, momentum: [], precise: true, inverted: inverted, timestamp: 0.02) == .next)
+        #expect(gesture.update(x: left * 80, y: 0, phase: .changed, momentum: [], precise: true, inverted: inverted, timestamp: 0.03) == .horizontal)
+        #expect(gesture.update(x: 0, y: 0, phase: .ended, momentum: [], precise: true, inverted: inverted, timestamp: 0.04) == .horizontal)
+        #expect(gesture.update(x: -left * 100, y: 0, phase: [], momentum: .changed, precise: true, inverted: inverted, timestamp: 0.05) == .horizontal)
+        #expect(gesture.update(x: -left * 50, y: 0, phase: .began, momentum: [], precise: true, inverted: inverted, timestamp: 0.06) == .previous)
+    }
+
+    @Test func verticalGestureRemainsReadingDespiteLaterHorizontalDrift() {
+        var gesture = LyricTrackSwipe()
+        #expect(gesture.update(x: 2, y: 15, phase: .began, momentum: [], precise: true, inverted: true, timestamp: 0) == .vertical)
+        #expect(gesture.update(x: 80, y: 1, phase: .changed, momentum: [], precise: true, inverted: true, timestamp: 0.01) == .vertical)
+        #expect(gesture.update(x: 0, y: 30, phase: .ended, momentum: [], precise: true, inverted: true, timestamp: 0.02) == .vertical)
+        #expect(gesture.update(x: 0, y: 10, phase: [], momentum: .changed, precise: true, inverted: true, timestamp: 0.03) == .vertical)
+    }
+
+    @Test func shortCancelledAndOrdinaryWheelGesturesDoNotSkipTracks() {
+        var gesture = LyricTrackSwipe()
+        #expect(gesture.update(x: -30, y: 1, phase: .began, momentum: [], precise: true, inverted: true, timestamp: 0) == .horizontal)
+        #expect(gesture.update(x: -30, y: 1, phase: .cancelled, momentum: [], precise: true, inverted: true, timestamp: 0.01) == .horizontal)
+        #expect(gesture.update(x: -100, y: 0, phase: [], momentum: [], precise: false, inverted: true, timestamp: 0.02) == .vertical)
+    }
+
+    @Test func phaselessPreciseGesturesWaitForAQuietIntervalBeforeSkippingAgain() {
+        var gesture = LyricTrackSwipe()
+        #expect(gesture.update(x: -50, y: 1, phase: [], momentum: [], precise: true, inverted: true, timestamp: 0) == .next)
+        #expect(gesture.update(x: -70, y: 0, phase: [], momentum: [], precise: true, inverted: true, timestamp: 0.1) == .horizontal)
+        #expect(gesture.update(x: 50, y: 0, phase: [], momentum: [], precise: true, inverted: true, timestamp: 0.5) == .previous)
+    }
+
+    @Test func horizontalWheelCallbacksAreLimitedToCompactPanelAndPreserveReaderState() async throws {
+        let model = LyricRibbonModel(snapshot: LyricPlaybackSnapshot(sessionID: "test", occurrenceID: "one",
+            recordingID: "song", title: "Song", artist: "Artist", positionMs: 3_000,
+            durationMs: 7_000, isPlaying: true, seekRevision: 0))
+        model.show()
+        model.completeLoad(.timed(try lyricTestDocument()), token: model.beginLoad())
+        let layout = LyricRibbonLayout.measure(width: 448, textScale: 1, availableHeight: 320)
+        var previous = 0
+        var next = 0
+        func root(compact: Bool) -> LyricPanelView {
+            LyricPanelView(model: model, layout: layout, isCompact: compact,
+                onPrevious: { previous += 1 }, onNext: { next += 1 })
+        }
+        let host = NSHostingView(rootView: root(compact: false))
+        host.sizingOptions = []
+        let panel = NSPanel(contentRect: CGRect(origin: .zero, size: layout.panelSize),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        panel.isReleasedWhenClosed = false
+        panel.contentView = host
+        panel.orderFront(nil)
+        defer { panel.orderOut(nil); panel.close() }
+        host.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(50))
+        func passage(in view: NSView) -> LyricReadingScrollView? {
+            if let scroll = view as? LyricReadingScrollView { return scroll }
+            return view.subviews.lazy.compactMap { passage(in: $0) }.first
+        }
+        let scroll = try #require(passage(in: host))
+        let view = try #require(scroll.documentView as? NSTextView)
+        let wheel = try #require(CGEvent(scrollWheelEvent2Source: nil, units: .pixel,
+            wheelCount: 2, wheel1: 0, wheel2: 60, wheel3: 0))
+        wheel.setIntegerValueField(.scrollWheelEventIsContinuous, value: 1)
+        let event = try #require(NSEvent(cgEvent: wheel))
+        scroll.scrollWheel(with: event)
+        #expect(previous == 0 && next == 0)
+        #expect(!model.isReading)
+
+        host.rootView = root(compact: true)
+        host.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(50))
+        view.setSelectedRange(NSRange(location: 2, length: 4))
+        let origin = scroll.contentView.bounds.origin
+        scroll.scrollWheel(with: event)
+        scroll.scrollWheel(with: event)
+        #expect(previous + next == 1)
+        #expect(!model.isReading)
+        #expect(view.selectedRange() == NSRange(location: 2, length: 4))
+        #expect(scroll.contentView.bounds.origin == origin)
+    }
 }
 
 @MainActor private final class LyricReaderFixture {
@@ -194,10 +357,10 @@ struct LyricReaderTests {
         scroll.documentView = view
     }
 
-    func update(position: Int64, reading: Bool) {
+    func update(position: Int64, reading: Bool, animated: Bool = false) {
         coordinator.updateContent(scroll, content: .timed(document),
             projection: document.project(positionMs: position, durationMs: 7_000), reading: reading,
-            scale: 1, rtl: false, fallback: NSAttributedString(), width: 300, height: 65)
+            scale: 1, rtl: false, fallback: NSAttributedString(), width: 300, height: 65, animated: animated)
     }
 
     func foreground(of word: String) throws -> NSColor {

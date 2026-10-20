@@ -118,6 +118,122 @@ struct MusicBrowserTests {
         #expect(environment.search.query == "result" && environment.search.tracks == tracks)
     }
 
+    @Test func scrollingToTheBottomLoadsPagesWithoutChangingSelectionOrEditorFocus() async throws {
+        let service = PagingSearchService()
+        let (environment, panel, window, table) = try await openPagingSearch(service)
+        defer { environment.searchPopover.close(); panel.close(); Task { await service.releasePage() } }
+        let field = try #require(searchField(in: window.contentView))
+        field.selectText(nil)
+        let editor = try #require(field.currentEditor())
+        let selected = environment.search.tracks[1].uri
+        environment.search.select(selected)
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(await service.offsets == [0])
+
+        await service.holdNextPage()
+        table.scrollRowToVisible(9)
+        try await waitUntil { environment.search.isLoading }
+        table.scrollRowToVisible(0)
+        try await Task.sleep(for: .milliseconds(40))
+        table.scrollRowToVisible(9)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(await service.offsets == [0, 10])
+        await service.releasePage()
+        try await waitUntil { table.numberOfRows == 20 && !environment.search.isLoading }
+        #expect(environment.search.selectedURI == selected && table.selectedRow == 1)
+        #expect(window.firstResponder === editor)
+        #expect(environment.search.query == "result")
+
+        table.scrollRowToVisible(19)
+        try await waitUntil { table.numberOfRows == 25 && !environment.search.hasMore }
+        table.scrollRowToVisible(24)
+        table.scrollRowToVisible(0)
+        try await Task.sleep(for: .milliseconds(40))
+        table.scrollRowToVisible(24)
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(await service.offsets == [0, 10, 20])
+        #expect(environment.search.selectedURI == selected && window.firstResponder === editor)
+    }
+
+    @Test(arguments: [0, 1])
+    func overlappingPageContinuesToFreshResultsWithoutLoadingPastTheVisiblePage(uniqueCount: Int) async throws {
+        let service = PagingSearchService(secondPageUniqueCount: uniqueCount)
+        let (environment, panel, _, table) = try await openPagingSearch(service)
+        defer { environment.searchPopover.close(); panel.close() }
+        let selected = environment.search.tracks[1].uri
+        environment.search.select(selected)
+        try await waitUntil { table.selectedRow == 1 }
+
+        table.scrollRowToVisible(9)
+        try await waitUntil { table.numberOfRows == 20 + uniqueCount && !environment.search.isLoading }
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(await service.offsets == [0, 10, 20])
+        #expect(environment.search.hasMore && environment.search.selectedURI == selected)
+
+        table.scrollRowToVisible(19 + uniqueCount)
+        try await waitUntil { table.numberOfRows == 25 && !environment.search.hasMore }
+        #expect(await service.offsets == [0, 10, 20, 30])
+        #expect(environment.search.selectedURI == selected)
+    }
+
+    @Test func failedAutomaticPageKeepsResultsUntilExplicitRetry() async throws {
+        let service = PagingSearchService()
+        let (environment, panel, _, table) = try await openPagingSearch(service)
+        defer { environment.searchPopover.close(); panel.close() }
+        let original = environment.search.tracks
+        environment.search.select(original[1].uri)
+        try await waitUntil { table.selectedRow == 1 }
+        await service.failNextPages(.unavailable)
+        table.scrollRowToVisible(9)
+        try await waitUntil { environment.search.error == .unavailable }
+        table.scrollRowToVisible(0)
+        try await Task.sleep(for: .milliseconds(40))
+        table.scrollRowToVisible(9)
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(await service.offsets == [0, 10])
+        #expect(environment.search.tracks == original && table.numberOfRows == 10)
+        #expect(environment.search.selectedURI == original[1].uri)
+
+        await service.failNextPages(nil)
+        await environment.search.retry(at: Date())
+        try await waitUntil { table.numberOfRows == 20 }
+        #expect(environment.search.error == nil)
+        #expect(await service.offsets == [0, 10, 10])
+        #expect(environment.search.selectedURI == original[1].uri)
+    }
+
+    @Test func closingSearchRejectsAnAutomaticPageThatFinishesLate() async throws {
+        let service = PagingSearchService()
+        let (environment, panel, window, table) = try await openPagingSearch(service)
+        defer { environment.searchPopover.close(); panel.close(); Task { await service.releasePage() } }
+        let original = environment.search.tracks
+        await service.holdNextPage()
+        table.scrollRowToVisible(9)
+        try await waitUntil { environment.search.isLoading }
+        environment.searchPopover.close()
+        try await waitUntil { !window.isVisible }
+        await service.releasePage()
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(environment.search.tracks == original && !environment.search.isLoading)
+        #expect(environment.search.query == "result" && environment.search.hasMore)
+        #expect(await service.offsets == [0, 10])
+    }
+
+    private func openPagingSearch(_ service: PagingSearchService) async throws -> (AppEnvironment, StatusPanel, NSWindow, NSTableView) {
+        let environment = AppEnvironment(previewPlayer: PlayerModel(), favoriteService: BrowserServices(), searchService: service)
+        environment.presentation.sendAttention(.visibility(true))
+        environment.presentation.sendAttention(.keyboardFocus(true))
+        let panel = StatusPanel(content: SearchButton(environment: environment))
+        panel.isReleasedWhenClosed = false
+        panel.makeKeyAndOrderFront(nil)
+        environment.search.updateQuery("result")
+        await environment.search.search()
+        environment.showSearch()
+        try await waitUntil { NSApp.windows.contains { $0.isVisible && resultTable(in: $0.contentView)?.numberOfRows == 10 } }
+        let window = try #require(NSApp.windows.first { $0.isVisible && resultTable(in: $0.contentView)?.numberOfRows == 10 })
+        return (environment, panel, window, try #require(resultTable(in: window.contentView)))
+    }
+
     private func waitUntil(_ condition: () -> Bool, sourceLocation: SourceLocation = #_sourceLocation) async throws {
         let deadline = ContinuousClock.now.advanced(by: .seconds(3))
         while !condition(), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
@@ -208,5 +324,36 @@ private struct BrowserServices: LibraryService, TrackSearchService, LibraryColle
     func savedCollections(_ kind: LibraryCollectionKind, cursor: LibraryCollectionCursor, limit: Int) async throws -> LibraryCollectionsPage {
         LibraryCollectionsPage(items: [LibraryCollection(uri: SpotifyURI("spotify:playlist:sample")!,
             title: "Sample", subtitle: "Owner", artwork: nil)], nextCursor: nil)
+    }
+}
+
+private actor PagingSearchService: TrackSearchService {
+    private(set) var offsets: [Int] = []
+    private let secondPageUniqueCount: Int?
+    private var failure: LibraryError?
+    private var shouldHold = false
+    private var held: CheckedContinuation<Void, Never>?
+    private let tracks = (0..<25).map { index in
+        Track(uri: SpotifyURI("spotify:track:paged\(index)")!, title: "Result \(index)",
+              artists: [ArtistSummary(name: "Artist")], albumTitle: nil, artwork: nil, durationMs: 180_000)
+    }
+
+    init(secondPageUniqueCount: Int? = nil) { self.secondPageUniqueCount = secondPageUniqueCount }
+
+    func holdNextPage() { shouldHold = true }
+    func releasePage() { held?.resume(); held = nil }
+    func failNextPages(_ failure: LibraryError?) { self.failure = failure }
+
+    func searchTracks(query: String, offset: Int, limit: Int) async throws -> TrackSearchPage {
+        offsets.append(offset)
+        if shouldHold {
+            shouldHold = false
+            await withCheckedContinuation { held = $0 }
+        }
+        if let failure { throw failure }
+        let overlap = secondPageUniqueCount.map { limit - $0 } ?? 0
+        let trackOffset = offset >= limit ? offset - overlap : offset
+        return TrackSearchPage(tracks: Array(tracks.dropFirst(trackOffset).prefix(limit)),
+                               nextOffset: trackOffset + limit < tracks.count ? offset + limit : nil)
     }
 }

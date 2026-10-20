@@ -13,6 +13,21 @@
     "%lld%%" : {
 
     },
+    "←  →" : {
+
+    },
+    "↑  ↓" : {
+
+    },
+    "⌘/" : {
+
+    },
+    "⌘←  ⌘→" : {
+
+    },
+    "⌘F" : {
+
+    },
     "app.name" : {
       "localizations" : {
         "en" : {
@@ -346,6 +361,9 @@
           }
         }
       }
+    },
+    "Esc" : {
+
     },
     "explore.empty" : {
       "localizations" : {
@@ -1183,6 +1201,29 @@
         }
       }
     },
+    "record.scrub.help" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drag around the record to seek. Release to seek to that position."
+          }
+        }
+      }
+    },
+    "record.scrub.hint" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drag to seek"
+          }
+        }
+      }
+    },
+    "Return" : {
+
+    },
     "search.clear" : {
       "localizations" : {
         "en" : {
@@ -1223,16 +1264,6 @@
         }
       }
     },
-    "search.more" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Load More"
-          }
-        }
-      }
-    },
     "search.placeholder" : {
       "localizations" : {
         "en" : {
@@ -1259,6 +1290,176 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Couldn’t search Spotify."
+          }
+        }
+      }
+    },
+    "shortcuts.browseCovers" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Browse CoverFlow"
+          }
+        }
+      }
+    },
+    "shortcuts.browsing" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search and CoverFlow"
+          }
+        }
+      }
+    },
+    "shortcuts.changeTrack" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Previous / next track"
+          }
+        }
+      }
+    },
+    "shortcuts.conflict" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This shortcut is already assigned to another Bopify action."
+          }
+        }
+      }
+    },
+    "shortcuts.dismiss" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dismiss search, queue, or player"
+          }
+        }
+      }
+    },
+    "shortcuts.global" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From any app"
+          }
+        }
+      }
+    },
+    "shortcuts.global.help" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose your own shortcuts for the player and search. Click a recorded shortcut to change or clear it."
+          }
+        }
+      }
+    },
+    "shortcuts.lyrics" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show / hide lyrics"
+          }
+        }
+      }
+    },
+    "shortcuts.lyrics.help" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "While reading lyrics, Space scrolls the words. Use Sync to return to the current line."
+          }
+        }
+      }
+    },
+    "shortcuts.player" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "While the player is focused"
+          }
+        }
+      }
+    },
+    "shortcuts.player.help" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Typing and focused controls keep their usual keys. Arrow keys browse covers when CoverFlow has focus."
+          }
+        }
+      }
+    },
+    "shortcuts.playPause" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play / pause"
+          }
+        }
+      }
+    },
+    "shortcuts.playSelection" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play selection"
+          }
+        }
+      }
+    },
+    "shortcuts.seek" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seek back / forward 5 seconds"
+          }
+        }
+      }
+    },
+    "shortcuts.select" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select search result"
+          }
+        }
+      }
+    },
+    "shortcuts.showPlayer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show / hide player"
+          }
+        }
+      }
+    },
+    "shortcuts.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keyboard Shortcuts"
           }
         }
       }
@@ -1405,6 +1606,9 @@
           }
         }
       }
+    },
+    "Space" : {
+
     },
     "transport.mute" : {
       "localizations" : {

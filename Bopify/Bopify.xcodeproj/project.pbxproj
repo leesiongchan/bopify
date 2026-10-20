@@ -17,6 +17,7 @@
 		BF0F180000000000000000D2 /* BopifyAuth in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B2 /* BopifyAuth */; };
 		BF0F180000000000000000D3 /* BopifyPlayback in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B3 /* BopifyPlayback */; };
 		BF0F180000000000000000D4 /* BopifyLibrary in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B4 /* BopifyLibrary */; };
+		BF0F180000000000000000D6 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B6 /* KeyboardShortcuts */; };
 		BF0F180000000000000000D5 /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B5 /* Nuke */; };
 /* End PBXBuildFile section */
 
@@ -71,6 +72,7 @@
 				BF0F180000000000000000D3 /* BopifyPlayback in Frameworks */,
 				BF0F180000000000000000D4 /* BopifyLibrary in Frameworks */,
 				BF0F180000000000000000D5 /* Nuke in Frameworks */,
+				BF0F180000000000000000D6 /* KeyboardShortcuts in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -144,6 +146,7 @@
 				BF0F170000000000000000B3 /* BopifyPlayback */,
 				BF0F170000000000000000B4 /* BopifyLibrary */,
 				BF0F170000000000000000B5 /* Nuke */,
+				BF0F170000000000000000B6 /* KeyboardShortcuts */,
 			);
 			productName = BopifyAppTests;
 			productReference = BF0F18000000000000000001 /* BopifyAppTests.xctest */;

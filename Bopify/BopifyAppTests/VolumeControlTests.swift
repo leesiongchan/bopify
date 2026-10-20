@@ -37,5 +37,23 @@ struct VolumeControlTests {
 
         #expect(player.displayVolume == 0.8)
         #expect(editingEnded == 1)
+
+        for value in [0.0, 1.0] {
+            slider.doubleValue = value
+            let image = NSImage(size: slider.bounds.size)
+            image.lockFocus()
+            slider.draw(slider.bounds)
+            image.unlockFocus()
+            let tiff = try #require(image.tiffRepresentation)
+            let bitmap = try #require(NSBitmapImageRep(data: tiff))
+            let row = bitmap.pixelsHigh / 2
+            let alphas = try (0..<bitmap.pixelsWide).map { x in
+                try #require(bitmap.colorAt(x: x, y: row)).alphaComponent
+            }
+            let thumbAlpha = try #require(alphas.max()) * 0.8
+            let painted = try #require(value == 0 ? alphas.firstIndex { $0 > 0.05 } : alphas.lastIndex { $0 > 0.05 })
+            let thumb = try #require(value == 0 ? alphas.firstIndex { $0 > thumbAlpha } : alphas.lastIndex { $0 > thumbAlpha })
+            #expect(abs(painted - thumb) <= 2, "The track must not extend beyond the thumb at \(Int(value * 100))%")
+        }
     }
 }

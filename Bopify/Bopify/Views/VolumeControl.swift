@@ -20,6 +20,7 @@ struct VolumeControl: View {
         .buttonStyle(.playerToggle(isOn: presentation.activePopover == .volume))
         .accessibilityLabel(Text("transport.volume"))
         .accessibilityValue(Text("\(Int((player.displayVolume * 100).rounded()))%"))
+        .help(Text("transport.volume"))
         .disabled(!player.isEngineReady || !player.state.isActiveDevice)
         .popover(isPresented: isPopoverPresented, arrowEdge: .bottom) {
             VolumePopoverContent(player: player, onEditingBegan: {
@@ -106,7 +107,8 @@ private struct HorizontalVolumeSlider: NSViewRepresentable {
 
 private final class SlimVolumeSliderCell: NSSliderCell {
     override func drawBar(inside rect: NSRect, flipped: Bool) {
-        let bar = NSRect(x: rect.minX, y: rect.midY - 1.5, width: rect.width, height: 3)
+        let track = rect.insetBy(dx: knobRect(flipped: flipped).width / 2, dy: 0)
+        let bar = NSRect(x: track.minX, y: track.midY - 1.5, width: track.width, height: 3)
         NSColor.labelColor.withAlphaComponent(0.16).setFill()
         NSBezierPath(roundedRect: bar, xRadius: 1.5, yRadius: 1.5).fill()
         guard doubleValue > minValue else { return }
