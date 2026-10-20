@@ -15,6 +15,7 @@ final class StatusPanel: NSPanel {
     var onPrevious: (() -> Void)?
     var onNext: (() -> Void)?
     var onSearch: (() -> Void)?
+    var onShowShortcuts: (() -> Void)?
     var onKeyChanged: ((Bool) -> Void)?
     var onPointerChanged: ((Bool) -> Void)?
     var onWindowDragChanged: ((Bool) -> Void)?
@@ -125,6 +126,12 @@ final class StatusPanel: NSPanel {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.charactersIgnoringModifiers == "/",
+           event.modifierFlags.intersection([.command, .option, .control, .shift]) == .command,
+           let onShowShortcuts {
+            if !event.isARepeat { onShowShortcuts() }
+            return true
+        }
         if event.keyCode == kVK_ANSI_F,
            event.modifierFlags.intersection([.command, .option, .control, .shift]) == .command,
            let onSearch {

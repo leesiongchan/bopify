@@ -14,6 +14,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     private var isApplyingFrame = false
     private var isWindowControllerAttached = false
     private let environment: AppEnvironment
+    private let shortcutsWindow = KeyboardShortcutsWindowController()
 
     init<Content: View>(content: Content, environment: AppEnvironment) {
         self.environment = environment
@@ -43,7 +44,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         panel?.onSeek = { [weak self] in self?.environment.player?.seek(by: $0) }
         panel?.onPrevious = { [weak self] in self?.environment.player?.previous() }
         panel?.onNext = { [weak self] in self?.environment.player?.next() }
-        panel?.onSearch = { [weak self] in self?.environment.showSearch() }
+        panel?.onSearch = { [weak self] in self?.showSearch() }
+        panel?.onShowShortcuts = { [weak self] in self?.shortcutsWindow.show() }
         panel?.onDismissPopover = { [weak self] in self?.environment.presentation.dismissPopover() ?? false }
         panel?.onDismissQueue = { [weak self] in self?.environment.presentation.dismissQueue() ?? false }
         panel?.onKeyChanged = { [weak self] in self?.environment.presentation.sendAttention(.keyboardFocus($0)) }
@@ -174,13 +176,24 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         if NSApp.currentEvent?.type == .rightMouseUp {
             showMenu()
         } else {
-            toggle()
+            togglePlayer()
         }
     }
 
-    private func toggle() {
+    func togglePlayer() {
+        guard !environment.isPreparingForQuit, let panel else { return }
+        if panel.isVisible && (panel.isKeyWindow || environment.searchPopover.isVisible) { dismiss(); return }
+        showPlayer()
+    }
+
+    func showSearch() {
+        guard !environment.isPreparingForQuit else { return }
+        showPlayer()
+        environment.showSearch()
+    }
+
+    private func showPlayer() {
         guard let panel, let button = statusItem.button else { return }
-        if panel.isVisible && panel.isKeyWindow { dismiss(); return }
 
         if isWindowControllerAttached {
             hasPosition = true
@@ -196,11 +209,13 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         if isWindowControllerAttached { environment.playerWindowController.apply(mode: .expanded, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
                                                                                showsLyrics: environment.isLiveLyricsVisible) }
         panel.makeKeyAndOrderFront(nil)
+        panel.focusPlayer()
         panel.orderFrontRegardless()
         BopifyLog.playback.debug("player panel opened")
     }
 
     private func dismiss() {
+        if environment.searchPopover.isVisible { environment.searchPopover.close() }
         saveFrame()
         if isWindowControllerAttached { environment.playerWindowController.persistAnchor(); environment.playerWindowController.invalidateTransition() }
         environment.presentation.isVisible = false
@@ -221,6 +236,10 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                                      action: #selector(showLibraryAccess(_:)), keyEquivalent: "")
         libraryItem.target = self
         menu.addItem(libraryItem)
+        let shortcutsItem = NSMenuItem(title: String(localized: "shortcuts.title"),
+                                      action: #selector(showShortcuts(_:)), keyEquivalent: "/")
+        shortcutsItem.target = self
+        menu.addItem(shortcutsItem)
         if environment.isAuthorizingPlayback {
             let cancel = NSMenuItem(title: String(localized: "signIn.cancel"), action: #selector(cancelPlaybackAuthorization(_:)), keyEquivalent: "")
             cancel.target = self
@@ -252,6 +271,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     @objc private func cancelPlaybackAuthorization(_ sender: Any?) { environment.cancelPlaybackAuthorization() }
     @objc private func cancelLibraryAuthorization(_ sender: Any?) { environment.cancelLibraryAuthorization() }
     @objc private func showLibraryAccess(_ sender: Any?) { environment.librarySetupWindow.show(environment: environment) }
+    @objc private func showShortcuts(_ sender: Any?) { shortcutsWindow.show() }
     @objc private func toggleKeepOnTop(_ sender: Any?) { environment.presentation.keepOnTop.toggle() }
 
     @objc private func quit(_ sender: Any?) {

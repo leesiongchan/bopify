@@ -32,6 +32,8 @@ struct RecordPlayerView: View {
     @State private var scrub: RecordScrub?
     @State private var pressedAngle: Double?
     @State private var isScrubbing = false
+    @State private var isRecordHovered = false
+    @AppStorage("record.hasScrubbed") private var hasScrubbed = false
     @State private var pendingSelection: QueueSelectionStatus?
     @State private var controlsContentHeight: CGFloat?
     @AccessibilityFocusState private var accessibilityFocus: Bool
@@ -151,7 +153,8 @@ struct RecordPlayerView: View {
                     onSeek: { time, snapshot in
                         if let onLyricSeek { onLyricSeek(time, snapshot) }
                         else { environment?.liveLyricRibbon?.seek(to: time, from: snapshot) }
-                    }, onPrepareDrag: { windowController.finishTransition(windowController.transitionID) },
+                    }, onPrevious: player.previous, onNext: player.next,
+                    onPrepareDrag: { windowController.finishTransition(windowController.transitionID) },
                     onDragChanged: dragLyrics)
                     .overlay(alignment: .top) {
                         Rectangle().fill(.primary.opacity(0.14)).frame(height: 0.5)
@@ -213,7 +216,7 @@ struct RecordPlayerView: View {
             if mode != .queue { pendingSelection = nil }
         }
         .onChange(of: presentation.isVisible) { _, visible in
-            if !visible { pendingSelection = nil; accessibilityFocus = false; _ = cancelRecord() }
+            if !visible { pendingSelection = nil; accessibilityFocus = false; isRecordHovered = false; _ = cancelRecord() }
         }
         .onChange(of: accessibilityFocus) { _, focused in presentation.sendAttention(.accessibilityFocus(focused)) }
         .onChange(of: track?.artwork.flatMap { artworkStore.palette(for: $0.url) }) { _, palette in
@@ -263,6 +266,9 @@ struct RecordPlayerView: View {
                         guard pressedAngle != nil, canScrub else { return }
                         if !isScrubbing {
                             isScrubbing = true
+                            if !hasScrubbed {
+                                hasScrubbed = true
+                            }
                             presentation.sendAttention(.interaction(.seek, true))
                             BopifyLog.playback.debug("record scrub began")
                         }
@@ -275,6 +281,8 @@ struct RecordPlayerView: View {
                         _ = cancelRecord()
                     })
                     .clipShape(Circle())
+                    .onHover { isRecordHovered = $0 }
+                    .help(canScrub && !hasScrubbed ? String(localized: "record.scrub.help") : "")
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(Text(track?.title ?? String(localized: "player.unknownTrack")))
                     .accessibilityValue(recordStatus)
@@ -293,6 +301,25 @@ struct RecordPlayerView: View {
                             .allowsHitTesting(false)
                             .id(occurrenceID)
                     }
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if canScrub, isEngaged, isScrubbing || (isRecordHovered && !hasScrubbed) {
+                    Group {
+                        if isScrubbing, let scrub {
+                            Text(verbatim: "\(playbackTime(scrub.positionMs)) / \(playbackTime(player.displayDurationMs))")
+                                .monospacedDigit()
+                        } else {
+                            Label("record.scrub.hint", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                    }
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(.black.opacity(0.8), in: Capsule())
+                    .padding(.bottom, 18)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
                 }
             }
             .overlay(alignment: .bottom) {
@@ -346,26 +373,7 @@ struct RecordPlayerView: View {
             }
             .modifier(UnfurlRow(index: 2, isEngaged: isEngaged, reduceMotion: reduceMotion, showsLyrics: lyrics?.isVisible == true))
             HStack(spacing: 4) {
-                Button { player.setShuffle(!player.state.shuffleEnabled) } label: {
-                    Image(systemName: "shuffle").frame(width: 28, height: 28)
-                        .symbolEffect(.bounce, value: reduceMotion ? false : player.state.shuffleEnabled)
-                }.buttonStyle(.playerToggle(isOn: player.state.shuffleEnabled, dimsWhenOff: true))
-                    .accessibilityLabel(Text("transport.shuffle"))
-                    .accessibilityValue(Text(player.state.shuffleEnabled ? "control.on" : "control.off"))
-                    .disabled(!player.isEngineReady || !player.state.isActiveDevice)
-                Button {
-                    player.setRepeat(player.state.repeatMode == .off ? .context : player.state.repeatMode == .context ? .track : .off)
-                } label: {
-                    Image(systemName: player.state.repeatMode == .track ? "repeat.1" : "repeat").frame(width: 28, height: 28)
-                        .contentTransition(.symbolEffect(.replace))
-                }.buttonStyle(.playerToggle(isOn: player.state.repeatMode != .off, dimsWhenOff: true))
-                    .accessibilityLabel(Text("transport.repeat"))
-                    .accessibilityValue(Text(player.state.repeatMode == .off ? "control.off" : player.state.repeatMode == .track ? "transport.repeat.track" : "transport.repeat.context"))
-                    .disabled(!player.isEngineReady || !player.state.isActiveDevice)
-                Spacer(minLength: 0)
-                VolumeControl(player: player, presentation: presentation)
                 if let environment {
-                    SearchButton(environment: environment)
                     Button {
                         if let lyricModel {
                             if lyricModel.isVisible { lyricModel.hide() } else { lyricModel.show() }
@@ -375,7 +383,7 @@ struct RecordPlayerView: View {
                     }.buttonStyle(.playerToggle(isOn: lyrics?.isVisible ?? false))
                         .accessibilityLabel(String(localized: "control.title", defaultValue: "Lyrics", table: "LyricRibbon"))
                         .accessibilityValue(Text(lyrics?.isVisible == true ? "control.on" : "control.off"))
-                        .help(String(localized: "control.help", defaultValue: "Show or hide lyrics (⌃⌥L)", table: "LyricRibbon"))
+                        .help(String(localized: "control.help", defaultValue: "Show or hide lyrics", table: "LyricRibbon"))
                         .contextMenu {
                             Button(String(localized: "menu.focus", table: "LyricRibbon")) { environment.focusLiveLyrics() }
                         }
@@ -386,8 +394,12 @@ struct RecordPlayerView: View {
                 }.buttonStyle(.playerToggle(isOn: presentation.mode == .queue))
                     .accessibilityLabel(Text("queue.title"))
                     .accessibilityValue(Text(presentation.mode == .queue ? "control.on" : "control.off"))
+                    .help(Text("queue.title"))
                     .disabled(player.state.mirror != nil && presentation.mode != .queue)
+                VolumeControl(player: player, presentation: presentation)
+                if let environment { SearchButton(environment: environment) }
             }
+            .frame(maxWidth: .infinity)
             .modifier(UnfurlRow(index: 3, isEngaged: isEngaged, reduceMotion: reduceMotion, showsLyrics: lyrics?.isVisible == true))
             // The status keeps its line while empty so the library tabs below don't jump each time a track loads.
             ZStack(alignment: .leading) { Text(verbatim: " ").hidden(); status }

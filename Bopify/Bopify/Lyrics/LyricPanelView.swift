@@ -8,6 +8,8 @@ struct LyricPanelView: View {
     var isCompact = false
     var onFocusReader: () -> Void = {}
     var onSeek: (Int64, LyricPlaybackSnapshot) -> Void = { _, _ in }
+    var onPrevious: (() -> Void)? = nil
+    var onNext: (() -> Void)? = nil
     var onPrepareDrag: () -> Void = {}
     var onDragChanged: (Bool) -> Void = { _ in }
     @FocusState private var syncFocused: Bool
@@ -74,7 +76,8 @@ struct LyricPanelView: View {
                     animate: !reduceMotion, onBeginReading: model.beginReading,
                     shouldFocusReader: { model.isKeyboardInteracting && model.keyboardSelection == .reader },
                     occurrenceID: model.snapshot.occurrenceID, direction: model.snapshot.direction,
-                    onSeek: { [snapshot = model.snapshot] time in onSeek(time, snapshot) })
+                    onSeek: { [snapshot = model.snapshot] time in onSeek(time, snapshot) },
+                    onPrevious: isCompact ? onPrevious : nil, onNext: isCompact ? onNext : nil)
                     .frame(height: layout.textViewportHeight)
             }
         }

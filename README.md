@@ -17,6 +17,16 @@ Your query and results remain when search closes. Use the clear button to reset 
 The **Library** tab shows your saved playlists, albums, and followed artists together.
 Click a cover to play that collection.
 
+Right-click the menu bar icon and choose **Keyboard Shortcuts**, or press **Command-/**
+while the player is focused, to see the keyboard reference and configure shortcuts that
+work from any app. The player and search shortcuts start unassigned; lyrics defaults
+to **Control–Option–L**. The player shortcut shows or hides Bopify; the search shortcut
+reveals the player and focuses search, keeping your previous query and results.
+
+The record shows **Drag to seek** until your first drag, then keeps that hint hidden.
+While dragging around the record, a timestamp shows the destination; release to seek,
+or press Escape to cancel. Search loads more results automatically as you scroll.
+
 Builds are ad-hoc signed and not notarized. If macOS blocks the app and you trust
 the download, use **System Settings → Privacy & Security → Open Anyway** after
 trying to open it. See [Apple’s instructions](https://support.apple.com/en-us/102445).
@@ -67,6 +77,8 @@ the player. The title and artist move into the lyric header on collapse. Hoverin
 scrolling, or selecting lyrics keeps it compact. The provider credit sits quietly
 at the bottom-left; the glass **Sync** icon floats at the bottom-right while reading.
 The compact lyrics stay above other windows.
+In lyrics-only mode, swipe left to skip to the next track or right for the previous
+track. Vertical scrolling continues to browse the lyrics.
 
 ### Lyrics development preview
 

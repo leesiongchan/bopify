@@ -14,7 +14,15 @@ struct TransportControls: View {
         player.isEngineReady && state.isActiveDevice && state.currentTrack != nil
     }
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 4) {
+            Button { player.setShuffle(!state.shuffleEnabled) } label: {
+                Image(systemName: "shuffle").frame(width: 28, height: 28)
+                    .symbolEffect(.bounce, value: reduceMotion ? false : state.shuffleEnabled)
+            }.buttonStyle(.playerToggle(isOn: state.shuffleEnabled, dimsWhenOff: true))
+                .accessibilityLabel(Text("transport.shuffle"))
+                .accessibilityValue(Text(state.shuffleEnabled ? "control.on" : "control.off"))
+                .help(Text("transport.shuffle"))
+                .disabled(!player.isEngineReady || !state.isActiveDevice)
             Button {
                 if !reduceMotion { previousTaps += 1 }
                 player.previous()
@@ -53,6 +61,17 @@ struct TransportControls: View {
             .disabled(!canControl || !state.canNext)
             .accessibilityLabel(Text("transport.next"))
             .help(Text("transport.next"))
+
+            Button {
+                player.setRepeat(state.repeatMode == .off ? .context : state.repeatMode == .context ? .track : .off)
+            } label: {
+                Image(systemName: state.repeatMode == .track ? "repeat.1" : "repeat").frame(width: 28, height: 28)
+                    .contentTransition(.symbolEffect(.replace))
+            }.buttonStyle(.playerToggle(isOn: state.repeatMode != .off, dimsWhenOff: true))
+                .accessibilityLabel(Text("transport.repeat"))
+                .accessibilityValue(Text(state.repeatMode == .off ? "control.off" : state.repeatMode == .track ? "transport.repeat.track" : "transport.repeat.context"))
+                .help(Text("transport.repeat"))
+                .disabled(!player.isEngineReady || !state.isActiveDevice)
         }
         .buttonStyle(.playerControl)
     }
