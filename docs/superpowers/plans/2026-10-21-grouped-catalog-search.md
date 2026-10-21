@@ -196,7 +196,7 @@ public func cancel()
 public func clear()
 ```
 
-- [ ] **Step 1: Migrate `SearchFixture` and write failing model tests.**
+- [x] **Step 1: Migrate `SearchFixture` and write failing model tests.**
 
 Keep existing normalization, cancellation, selection, paging, and retry tests,
 adapting them to the new service and per-kind pages. Change `SearchFixture` to
@@ -217,13 +217,13 @@ collection result fixtures with valid album, artist, or playlist URIs.
 | `sharedCooldownKeepsOriginalDeadlineAcrossGroupFailures` | Start two held group requests before either fails. Inject a clock starting at 1000. A 12-second cooldown sets deadline 1012; at 1011, the other held request's one-second remaining delay keeps deadline 1012. `#expect(model.retryAfter == Date(timeIntervalSince1970: 1012))`. More and Retry before expiry make no service call; at 1012 they can resume. |
 | `selectionAndPlaybackWorkAcrossAllKinds` | Arrow navigation follows flattened order, starts at either edge, clamps, and excludes controls. For each current result, `#expect(model.playRequest(for: result)?.contextURI == result.uri)`; an absent result yields `nil`. |
 
-- [ ] **Step 2: Run model tests and confirm the missing grouped behavior fails.**
+- [x] **Step 2: Run model tests and confirm the missing grouped behavior fails.**
 
 Run `swift test --package-path Packages/BopifyCore --filter SearchModelTests`.
 Expected: compile failure for the new model interface or a failing grouped-state
 assertion. The native app is not built at this task boundary.
 
-- [ ] **Step 3: Implement grouped state inside the existing model.**
+- [x] **Step 3: Implement grouped state inside the existing model.**
 
 Use initial and per-kind task handles, plus the existing generation guard. New
 query and clear cancel every handle. Cancellation clears only pending loading
@@ -239,12 +239,12 @@ groups. Keep the public initializer's 300 ms debounce. Add existing-style logs
 at request boundaries, completion, cancellation, and failure, including kind and
 offset without query text.
 
-- [ ] **Step 4: Run package tests.**
+- [x] **Step 4: Run package tests.**
 
 Run `swift test --package-path Packages/BopifyCore`.
 Expected: zero failures, including unchanged auth and playback suites.
 
-- [ ] **Step 5: Commit the grouped model.**
+- [x] **Step 5: Commit the grouped model.**
 
 Run `git diff --check`, then commit the model and tests with
 `feat: manage independent catalog search groups`.

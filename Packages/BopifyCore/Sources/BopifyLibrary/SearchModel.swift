@@ -3,27 +3,39 @@ import Observation
 import os
 import BopifyDomain
 
+public struct CatalogSearchGroup: Equatable, Sendable {
+    public let kind: CatalogSearchKind
+    public fileprivate(set) var results: [CatalogSearchResult] = []
+    public fileprivate(set) var nextOffset: Int?
+    public fileprivate(set) var isLoading = false
+    public fileprivate(set) var error: LibraryError?
+    public fileprivate(set) var retryAfter: Date?
+    public var hasMore: Bool { nextOffset != nil }
+}
+
 @MainActor @Observable
 public final class SearchModel {
     public private(set) var query = ""
-    public private(set) var tracks: [Track] = []
+    public private(set) var groups = CatalogSearchKind.allCases.map { CatalogSearchGroup(kind: $0) }
+    public var results: [CatalogSearchResult] { groups.flatMap(\.results) }
+    public private(set) var hasSearched = false
     public private(set) var selectedURI: SpotifyURI?
     public private(set) var isLoading = false
     public private(set) var error: LibraryError?
     public private(set) var retryAfter: Date?
-    public var hasMore: Bool { nextOffset != nil }
-    @ObservationIgnored private let service: any TrackSearchService
+    @ObservationIgnored private let service: any CatalogSearchService
     @ObservationIgnored private let debounce: @Sendable () async throws -> Void
+    @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private var generation = 0
-    @ObservationIgnored private var nextOffset: Int?
-    @ObservationIgnored private var failedOffset = 0
-    @ObservationIgnored private var request: Task<TrackSearchPage, Error>?
+    @ObservationIgnored private var initialRequest: Task<[CatalogSearchKind: CatalogSearchPage], Error>?
+    @ObservationIgnored private var requests: [CatalogSearchKind: Task<[CatalogSearchKind: CatalogSearchPage], Error>] = [:]
 
-    public convenience init(service: any TrackSearchService) {
+    public convenience init(service: any CatalogSearchService) {
         self.init(service: service, debounce: { try await Task.sleep(for: .milliseconds(300)) })
     }
-    init(service: any TrackSearchService, debounce: @escaping @Sendable () async throws -> Void) {
-        self.service = service; self.debounce = debounce
+    init(service: any CatalogSearchService, debounce: @escaping @Sendable () async throws -> Void,
+         now: @escaping @Sendable () -> Date = Date.init) {
+        self.service = service; self.debounce = debounce; self.now = now
     }
 
     public func updateQuery(_ value: String) {
@@ -35,96 +47,142 @@ public final class SearchModel {
     }
 
     public func search() async {
-        guard !query.isEmpty else { return }
+        guard !query.isEmpty, !hasSearched, initialRequest == nil, requestsAllowed(at: now()) else { return }
         generation += 1
         let current = generation
         isLoading = true
         defer { if generation == current { isLoading = false } }
         do { try await debounce() } catch { return }
         guard generation == current, !Task.isCancelled else { return }
-        await load(offset: 0, generation: current)
+        await load(kind: nil, offset: 0, generation: current)
     }
 
-    public func loadMore() async {
-        guard !isLoading, error == nil, let nextOffset else { return }
-        await load(offset: nextOffset, generation: generation)
+    public func loadMore(_ kind: CatalogSearchKind) async {
+        guard hasSearched, !isLoading, requestsAllowed(at: now()),
+              let group = groups.first(where: { $0.kind == kind }),
+              !group.isLoading, group.error == nil, let offset = group.nextOffset else { return }
+        await load(kind: kind, offset: offset, generation: generation)
     }
 
     public func retry(at date: Date) async {
-        guard !query.isEmpty, !isLoading, error != nil, retryAfter.map({ $0 <= date }) ?? true else { return }
-        await load(offset: failedOffset, generation: generation)
+        guard !query.isEmpty, !isLoading, error != nil, requestsAllowed(at: date) else { return }
+        await load(kind: nil, offset: 0, generation: generation)
+    }
+
+    public func retry(_ kind: CatalogSearchKind, at date: Date) async {
+        guard !isLoading, requestsAllowed(at: date),
+              let group = groups.first(where: { $0.kind == kind }),
+              !group.isLoading, group.error != nil, let offset = group.nextOffset else { return }
+        await load(kind: kind, offset: offset, generation: generation)
     }
 
     public func select(_ uri: SpotifyURI) {
-        guard tracks.contains(where: { $0.uri == uri }) else { return }
+        guard results.contains(where: { $0.uri == uri }) else { return }
         selectedURI = uri
     }
 
     public func moveSelection(by delta: Int) {
-        guard !tracks.isEmpty, delta != 0 else { return }
-        let index = tracks.firstIndex { $0.uri == selectedURI } ?? (delta > 0 ? -1 : tracks.count)
-        selectedURI = tracks[min(tracks.count - 1, max(0, index + delta))].uri
+        let items = results
+        guard !items.isEmpty, delta != 0 else { return }
+        let index = items.firstIndex { $0.uri == selectedURI } ?? (delta > 0 ? -1 : items.count)
+        selectedURI = items[min(items.count - 1, max(0, index + delta))].uri
     }
 
-    public func playRequest(for track: Track) -> PlayRequest? {
-        guard tracks.contains(where: { $0.uri == track.uri }) else { return nil }
-        return PlayRequest(contextURI: track.uri)
+    public func playRequest(for result: CatalogSearchResult) -> PlayRequest? {
+        guard results.contains(where: { $0.uri == result.uri }) else { return nil }
+        return PlayRequest(contextURI: result.uri)
     }
 
     public func cancel() {
         generation += 1
-        request?.cancel()
-        request = nil
+        initialRequest?.cancel()
+        initialRequest = nil
+        requests.values.forEach { $0.cancel() }
+        requests = [:]
         isLoading = false
+        for index in groups.indices { groups[index].isLoading = false }
         BopifyLog.library.debug("catalog search pending work cancelled")
     }
 
     public func clear() {
         cancel()
         query = ""
-        tracks = []
+        groups = CatalogSearchKind.allCases.map { CatalogSearchGroup(kind: $0) }
         selectedURI = nil
-        nextOffset = nil
-        failedOffset = 0
+        hasSearched = false
         error = nil
         retryAfter = nil
     }
 
-    private func load(offset: Int, generation current: Int) async {
+    private func requestsAllowed(at date: Date) -> Bool {
+        retryAfter.map { $0 <= date } ?? true
+    }
+
+    private func load(kind: CatalogSearchKind?, offset: Int, generation current: Int) async {
         let query = query
-        isLoading = true
-        error = nil
-        retryAfter = nil
-        failedOffset = offset
-        defer { if generation == current { isLoading = false; request = nil } }
-        BopifyLog.library.debug("catalog search page loading offset=\(offset, privacy: .public)")
+        let service = service
+        let kinds = kind.map { Set([$0]) } ?? Set(CatalogSearchKind.allCases)
+        let index = kind.flatMap { kind in groups.firstIndex { $0.kind == kind } }
+        if requestsAllowed(at: now()) { retryAfter = nil }
+        if let index {
+            groups[index].isLoading = true
+            groups[index].error = nil
+            groups[index].retryAfter = nil
+        } else {
+            isLoading = true
+            error = nil
+        }
+        defer {
+            if generation == current {
+                if let index, let kind {
+                    groups[index].isLoading = false
+                    requests[kind] = nil
+                } else {
+                    isLoading = false
+                    initialRequest = nil
+                }
+            }
+        }
+        let label = kind?.rawValue ?? "all"
+        BopifyLog.library.debug("catalog search page loading kind=\(label, privacy: .public) offset=\(offset, privacy: .public) generation=\(current, privacy: .public)")
         do {
-            let service = service
-            let task = Task { try await service.searchTracks(query: query, offset: offset, limit: 10) }
-            request = task
-            let page = try await withTaskCancellationHandler {
+            let task = Task { try await service.search(query: query, kinds: kinds, offset: offset, limit: kind == nil ? 2 : 10) }
+            if let kind { requests[kind] = task } else { initialRequest = task }
+            let pages = try await withTaskCancellationHandler {
                 try await task.value
             } onCancel: { task.cancel() }
             guard generation == current, !Task.isCancelled else { return }
-            if let next = page.nextOffset, next <= offset { throw LibraryError.invalidResponse }
-            var replacement = offset == 0 ? [] : tracks
-            var seen = Set(replacement.map(\.uri))
-            replacement.append(contentsOf: page.tracks.filter { seen.insert($0.uri).inserted })
-            tracks = replacement
-            nextOffset = page.nextOffset
-            if !tracks.contains(where: { $0.uri == selectedURI }) { selectedURI = nil }
-            BopifyLog.library.debug("catalog search ready count=\(self.tracks.count, privacy: .public)")
+            var replacement = groups
+            for index in replacement.indices where kinds.contains(replacement[index].kind) {
+                guard let page = pages[replacement[index].kind],
+                      page.nextOffset.map({ $0 > offset && $0 <= 1000 }) ?? true else { throw LibraryError.invalidResponse }
+                var items = kind == nil ? [] : replacement[index].results
+                var seen = Set(items.map(\.uri))
+                items.append(contentsOf: page.results.filter { seen.insert($0.uri).inserted })
+                replacement[index].results = items
+                replacement[index].nextOffset = page.nextOffset
+            }
+            groups = replacement
+            if kind == nil { hasSearched = true }
+            if !results.contains(where: { $0.uri == selectedURI }) { selectedURI = nil }
+            BopifyLog.library.debug("catalog search ready kind=\(label, privacy: .public) count=\(self.results.count, privacy: .public) generation=\(current, privacy: .public)")
         } catch is CancellationError {
         } catch {
             guard generation == current, !Task.isCancelled else { return }
             let failure = error as? LibraryError ?? .unavailable
-            self.error = failure
             switch failure {
             case let .rateLimited(seconds), let .quotaExceeded(seconds):
-                retryAfter = Date().addingTimeInterval(TimeInterval(seconds ?? 60))
+                let deadline = now().addingTimeInterval(TimeInterval(seconds ?? 60))
+                retryAfter = max(retryAfter ?? deadline, deadline)
             default: break
             }
-            BopifyLog.library.notice("catalog search failed")
+            if let index {
+                groups[index].error = failure
+                groups[index].retryAfter = retryAfter
+            } else {
+                self.error = failure
+            }
+            BopifyLog.library.notice("catalog search failed kind=\(label, privacy: .public) generation=\(current, privacy: .public)")
         }
     }
 }
