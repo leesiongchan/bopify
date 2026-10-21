@@ -32,6 +32,7 @@ import BopifyPlayback
     nonisolated let events: AsyncStream<PlaybackEvent>
     private let continuation: AsyncStream<PlaybackEvent>.Continuation
     private(set) var commands: [String] = []
+    private(set) var loadRequests: [PlayRequest] = []
     private(set) var seekTargets: [Int64] = []
     private(set) var shutdowns = 0
     var shutdownGate: (@MainActor () async -> Void)?
@@ -42,7 +43,7 @@ import BopifyPlayback
     }
     func emit(_ event: PlaybackEvent) { continuation.yield(event) }
     func shutdown() async { shutdowns += 1; continuation.finish(); await shutdownGate?() }
-    func load(_ request: PlayRequest) async throws { commands.append("load") }
+    func load(_ request: PlayRequest) async throws { commands.append("load"); loadRequests.append(request) }
     func resume() async throws { commands.append("resume") }
     func playHere() async throws { commands.append("playHere") }
     func pause() async throws { commands.append("pause") }

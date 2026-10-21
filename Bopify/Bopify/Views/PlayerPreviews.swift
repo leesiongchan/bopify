@@ -98,7 +98,7 @@ func previewRecordPlayer(_ scenario: PreviewScenario, mode: PlayerMode = .expand
         .frame(width: controller.layout.contentSize.width, height: controller.layout.contentSize.height)
 }
 
-private nonisolated struct PreviewLibraryServices: LibraryService, SavedTracksService, ListeningHistoryService, TrackSearchService, LibraryCollectionsService {
+private nonisolated struct PreviewLibraryServices: LibraryService, SavedTracksService, ListeningHistoryService, CatalogSearchService, LibraryCollectionsService {
     let library: PreviewLibrary
     init(_ library: PreviewLibrary) { self.library = library }
 
@@ -124,11 +124,31 @@ private nonisolated struct PreviewLibraryServices: LibraryService, SavedTracksSe
         try answer(previewTracks.reversed().map { RecentPlay(track: $0, contextURI: SpotifyURI("spotify:playlist:preview-recents")) }, empty: [])
     }
 
-    func searchTracks(query: String, offset: Int, limit: Int) async throws -> TrackSearchPage {
-        let matches = previewTracks.filter { [$0.title, $0.artists.map(\.name).joined(separator: " ")]
-            .joined(separator: " ").localizedCaseInsensitiveContains(query) }
-        return try answer(TrackSearchPage(tracks: Array(matches.dropFirst(offset).prefix(limit)), nextOffset: nil),
-                          empty: TrackSearchPage(tracks: [], nextOffset: nil))
+    func search(query: String, kinds: Set<CatalogSearchKind>, offset: Int, limit: Int) async throws -> [CatalogSearchKind: CatalogSearchPage] {
+        let extra = Track(uri: SpotifyURI("spotify:track:previewsearch")!, title: "Morning Glass",
+            artists: [ArtistSummary(name: "Mira Vale")], albumTitle: "Morning Glass",
+            artwork: previewTracks[0].artwork, durationMs: 210_000)
+        return try Dictionary(uniqueKeysWithValues: kinds.map { kind in
+            let samples: [CatalogSearchResult] = switch kind {
+            case .song: (previewTracks + [extra]).map(CatalogSearchResult.song)
+            case .album: previewTracks.prefix(3).enumerated().map { index, track in
+                .album(LibraryCollection(uri: SpotifyURI("spotify:album:preview\(index)")!,
+                    title: track.title, subtitle: "Mira Vale", artwork: track.artwork))
+            }
+            case .artist: previewTracks.prefix(3).enumerated().map { index, track in
+                .artist(LibraryCollection(uri: SpotifyURI("spotify:artist:preview\(index)")!,
+                    title: ["Mira Vale", "Mira North", "Mira Echo"][index], subtitle: "", artwork: track.artwork))
+            }
+            case .playlist: previewTracks.prefix(3).enumerated().map { index, track in
+                .playlist(LibraryCollection(uri: SpotifyURI("spotify:playlist:preview\(index)")!,
+                    title: ["Late Night", "Quiet Mornings", "On Repeat"][index], subtitle: "Mira Vale", artwork: track.artwork))
+            }
+            }
+            let matches = samples.filter { [$0.title, $0.subtitle].joined(separator: " ").localizedCaseInsensitiveContains(query) }
+            let page = Array(matches.dropFirst(offset).prefix(limit))
+            return (kind, try answer(CatalogSearchPage(results: page, nextOffset: offset + page.count < matches.count ? offset + page.count : nil),
+                                     empty: CatalogSearchPage(results: [], nextOffset: nil)))
+        })
     }
 
     func savedCollections(_ kind: LibraryCollectionKind, cursor: LibraryCollectionCursor, limit: Int) async throws -> LibraryCollectionsPage {

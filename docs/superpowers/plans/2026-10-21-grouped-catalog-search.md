@@ -257,7 +257,7 @@ Run `git diff --check`, then commit the model and tests with
 a grouped `SearchView` using the approved presentation. Production and preview
 injection take `any CatalogSearchService`.
 
-- [ ] **Step 1: Migrate native test fakes and add failing integration tests.**
+- [x] **Step 1: Migrate native test fakes and add failing integration tests.**
 
 Update `BrowserServices`, `PagingSearchService`, and `AuthorizationLibrary` to
 return pages for each requested kind. Preserve their authorization and Library
@@ -284,13 +284,13 @@ recording. Inject it through `PlayerModel(engine:)`; await dispatch and assert
 `#expect(engine.loadRequests.last == PlayRequest(contextURI: result.uri))`.
 This reuses an existing test engine without adding production test hooks.
 
-- [ ] **Step 2: Run native tests and confirm failure before wiring the UI.**
+- [x] **Step 2: Run native tests and confirm failure before wiring the UI.**
 
 Run `xcodebuild -project Bopify/Bopify.xcodeproj -scheme BopifyAppTests -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO test`.
 Expected: track-only app consumers fail to compile or new grouped UI assertions
 fail. Do not weaken these assertions to match the old five-row song list.
 
-- [ ] **Step 3: Implement grouped rows, controls, and retained state.**
+- [x] **Step 3: Implement grouped rows, controls, and retained state.**
 
 Keep `CatalogSearchField` and `SearchPopoverController` behavior; they already
 route input and cancel on close. In `SearchView`, use model groups with native
@@ -312,7 +312,7 @@ mark symbols and artwork decorative. Reuse artwork loading and fallback behavior
 Render full type/title/subtitle in accessibility labels and help text even when
 the visible text truncates. Group and result labels use the string catalog.
 
-- [ ] **Step 4: Migrate app playback, preview fixtures, and localization.**
+- [x] **Step 4: Migrate app playback, preview fixtures, and localization.**
 
 Change `AppEnvironment` injection and `UnavailableMusicBrowser` to the new
 service. Generalize `playSearchResult` to the declared result type while retaining
@@ -327,7 +327,7 @@ labels, “More”, and group-specific More/Retry accessibility labels. Reuse ex
 retry, loading, and error copy. Follow the string catalog's existing formatting
 and interpolation conventions rather than introducing a localization helper.
 
-- [ ] **Step 5: Retire the old service and migrate its last tests.**
+- [x] **Step 5: Retire the old service and migrate its last tests.**
 
 Delete `Packages/BopifyCore/Sources/BopifyDomain/TrackSearchService.swift`; remove
 the client conformance and compatibility method. Update the three existing API
@@ -338,13 +338,13 @@ Run `rg -n 'TrackSearchService|TrackSearchPage|searchTracks|search\.tracks|loadM
 Expected: no matches. Inspect every remaining search reference to ensure no
 obsolete single-offset or automatic-pagination assumption survives.
 
-- [ ] **Step 6: Run app and package checks.**
+- [x] **Step 6: Run app and package checks.**
 
 Run the native command in Step 2 and
 `swift test --package-path Packages/BopifyCore`.
 Expected: `TEST SUCCEEDED` and zero package failures.
 
-- [ ] **Step 7: Commit the native integration.**
+- [x] **Step 7: Commit the native integration.**
 
 Run `git diff --check`, then commit the migrated UI, callers, localization, and tests with
 `feat: show grouped catalog search in the native player`.

@@ -373,7 +373,7 @@ private nonisolated final class AuthorizationStore: TokenStoring, @unchecked Sen
     }
 }
 
-private struct AuthorizationLibrary: LibraryService, TrackSearchService {
+private struct AuthorizationLibrary: LibraryService, CatalogSearchService {
     var revoked = false
     func savedState(for uri: SpotifyURI) async throws -> Bool {
         if revoked { throw LibraryError.authorizationRequired }
@@ -381,9 +381,9 @@ private struct AuthorizationLibrary: LibraryService, TrackSearchService {
     }
     func save(_ uri: SpotifyURI) async throws {}
     func remove(_ uri: SpotifyURI) async throws {}
-    func searchTracks(query: String, offset: Int, limit: Int) async throws -> TrackSearchPage {
+    func search(query: String, kinds: Set<CatalogSearchKind>, offset: Int, limit: Int) async throws -> [CatalogSearchKind: CatalogSearchPage] {
         if revoked { throw LibraryError.authorizationRequired }
-        return TrackSearchPage(tracks: [], nextOffset: nil)
+        return Dictionary(uniqueKeysWithValues: kinds.map { ($0, CatalogSearchPage(results: [], nextOffset: nil)) })
     }
 }
 #endif

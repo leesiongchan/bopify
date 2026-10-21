@@ -144,7 +144,7 @@ final class AppEnvironment {
     init(previewPlayer: PlayerModel?, favoriteService: any LibraryService,
          savedTracksService: (any SavedTracksService)? = nil,
          historyService: (any ListeningHistoryService)? = nil,
-         searchService: (any TrackSearchService)? = nil,
+         searchService: (any CatalogSearchService)? = nil,
          collectionsService: (any LibraryCollectionsService)? = nil,
          authorizeLibrary: (@Sendable () async throws -> Void)? = nil,
          playbackAuth: SpotifyAuthService? = nil,
@@ -218,12 +218,12 @@ final class AppEnvironment {
         BopifyLog.library.debug("catalog search opened")
     }
 
-    func playSearchResult(_ track: Track) {
+    func playSearchResult(_ result: CatalogSearchResult) {
         guard !isPreparingForQuit, authState == .signedIn, let player, player.isEngineReady,
-              let request = search.playRequest(for: track) else { return }
+              let request = search.playRequest(for: result) else { return }
         player.load(request)
         searchPopover.close()
-        BopifyLog.library.debug("catalog search result played")
+        BopifyLog.library.debug("catalog search result played kind=\(result.kind.rawValue, privacy: .public)")
     }
 
     func completeLibrarySetup() async {
@@ -635,8 +635,8 @@ private struct UnavailableSavedTracks: SavedTracksService {
     func savedTracks(offset: Int, limit: Int) async throws -> SavedTracksPage { throw LibraryError.unavailable }
 }
 
-private struct UnavailableMusicBrowser: TrackSearchService, LibraryCollectionsService {
-    func searchTracks(query: String, offset: Int, limit: Int) async throws -> TrackSearchPage { throw LibraryError.unavailable }
+private struct UnavailableMusicBrowser: CatalogSearchService, LibraryCollectionsService {
+    func search(query: String, kinds: Set<CatalogSearchKind>, offset: Int, limit: Int) async throws -> [CatalogSearchKind: CatalogSearchPage] { throw LibraryError.unavailable }
     func savedCollections(_ kind: LibraryCollectionKind, cursor: LibraryCollectionCursor, limit: Int) async throws -> LibraryCollectionsPage { throw LibraryError.unavailable }
 }
 #endif

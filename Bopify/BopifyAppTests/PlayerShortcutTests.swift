@@ -13,7 +13,7 @@ struct PlayerShortcutTests {
         defer { fixture.close() }
         fixture.environment.search.updateQuery("Mira")
         await fixture.environment.search.search()
-        let tracks = fixture.environment.search.tracks
+        let results = fixture.environment.search.results
         #expect(!fixture.panel.isVisible)
 
         fixture.panel.onSearch?()
@@ -28,7 +28,7 @@ struct PlayerShortcutTests {
         }
         #expect(fixture.environment.searchPopover.isVisible)
         #expect(fixture.environment.search.query == "Mira")
-        #expect(fixture.environment.search.tracks == tracks)
+        #expect(fixture.environment.search.results == results)
         let revision = fixture.environment.searchPopover.focusRevision
         fixture.panel.onSearch?()
         #expect(fixture.panel.isVisible)

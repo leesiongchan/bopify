@@ -2,7 +2,7 @@ import Foundation
 import os
 import BopifyDomain
 
-public struct SpotifyLibraryClient: LibraryService, SavedTracksService, ListeningHistoryService, TrackSearchService, CatalogSearchService, LibraryCollectionsService {
+public struct SpotifyLibraryClient: LibraryService, SavedTracksService, ListeningHistoryService, CatalogSearchService, LibraryCollectionsService {
     private let session: URLSession
     private let tokenProvider: @Sendable (Set<String>) async throws -> String
     private let redirects = LibraryRedirectPolicy()
@@ -60,15 +60,6 @@ public struct SpotifyLibraryClient: LibraryService, SavedTracksService, Listenin
             guard let page = try? JSONDecoder().decode(TopPage<TopArtist>.self, from: data) else { throw LibraryError.invalidResponse }
             return page.items.compactMap { $0.value?.seed }
         }
-    }
-
-    public func searchTracks(query: String, offset: Int, limit: Int) async throws -> TrackSearchPage {
-        guard let page = try await search(query: query, kinds: [.song], offset: offset, limit: limit)[.song] else {
-            throw LibraryError.invalidResponse
-        }
-        return TrackSearchPage(tracks: page.results.compactMap {
-            if case let .song(track) = $0 { track } else { nil }
-        }, nextOffset: page.nextOffset)
     }
 
     public func search(query: String, kinds: Set<CatalogSearchKind>, offset: Int, limit: Int) async throws -> [CatalogSearchKind: CatalogSearchPage] {

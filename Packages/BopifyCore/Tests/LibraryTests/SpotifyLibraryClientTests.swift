@@ -233,9 +233,9 @@ struct SpotifyLibraryClientTests {
         let data = try JSONSerialization.data(withJSONObject: ["tracks": ["items": [track, NSNull()],
             "offset": 0, "limit": 10, "total": 12, "next": "https://untrusted.invalid/?offset=999"]])
         LibraryProtocol.fixture.reset(.init(data: data))
-        let page = try await client.searchTracks(query: "  Björk & year:2026  ", offset: 0, limit: 10)
-        #expect(page.tracks.map(\.uri.rawValue) == ["spotify:track:a"])
-        #expect(page.nextOffset == 2)
+        let page = try await client.search(query: "  Björk & year:2026  ", kinds: [.song], offset: 0, limit: 10)
+        #expect(page[.song]?.results.map(\.uri.rawValue) == ["spotify:track:a"])
+        #expect(page[.song]?.nextOffset == 2)
         let request = try #require(LibraryProtocol.fixture.requests.first)
         #expect(request.url?.path == "/v1/search")
         #expect(request.url?.host == "api.spotify.com")
@@ -250,7 +250,7 @@ struct SpotifyLibraryClientTests {
         LibraryProtocol.fixture.reset(.init())
         for (query, offset, limit) in [("  ", 0, 10), ("song", -1, 10), ("song", 1001, 10), ("song", 0, 11)] {
             await #expect(throws: LibraryError.invalidResponse) {
-                _ = try await client().searchTracks(query: query, offset: offset, limit: limit)
+                _ = try await client().search(query: query, kinds: [.song], offset: offset, limit: limit)
             }
         }
         #expect(LibraryProtocol.fixture.requests.isEmpty)
@@ -258,11 +258,11 @@ struct SpotifyLibraryClientTests {
 
     @Test func searchRejectsMismatchedPaginationAndSharesCooldown() async {
         LibraryProtocol.fixture.reset(.init(data: Data(#"{"tracks":{"items":[],"offset":9,"limit":10,"total":0,"next":null}}"#.utf8)))
-        await #expect(throws: LibraryError.invalidResponse) { _ = try await client().searchTracks(query: "song", offset: 0, limit: 10) }
+        await #expect(throws: LibraryError.invalidResponse) { _ = try await client().search(query: "song", kinds: [.song], offset: 0, limit: 10) }
         let client = client()
         LibraryProtocol.fixture.reset(.init(status: 429, headers: ["Retry-After": "15"]))
         await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 15)) {
-            _ = try await client.searchTracks(query: "song", offset: 0, limit: 10)
+            _ = try await client.search(query: "song", kinds: [.song], offset: 0, limit: 10)
         }
         await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 15)) { _ = try await client.savedState(for: uri) }
         #expect(LibraryProtocol.fixture.requests.count == 1)

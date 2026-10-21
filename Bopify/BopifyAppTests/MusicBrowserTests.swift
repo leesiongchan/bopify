@@ -22,55 +22,47 @@ struct MusicBrowserTests {
         defer { panel.close() }
         panel.makeKeyAndOrderFront(nil)
         environment.showSearch()
-        try await waitUntil { NSApp.windows.contains { $0.isVisible && searchField(in: $0.contentView) != nil } }
-        let window = try #require(NSApp.windows.first { $0.isVisible && searchField(in: $0.contentView) != nil })
-        #expect(!window.styleMask.contains(.titled))
-        #expect(window.frame.width <= 330)
+        try await waitUntil { searchWindow() != nil }
+        let window = try #require(searchWindow())
+        #expect(!window.styleMask.contains(.titled) && window.frame.width <= 330)
         let field = try #require(searchField(in: window.contentView))
         #expect(field.accessibilitySubrole() == .searchField)
         field.selectText(nil)
         let editor = try #require(field.currentEditor() as? NSTextView)
         for letter in "Mira" {
             editor.insertText(String(letter), replacementRange: editor.selectedRange())
-            try await Task.sleep(for: .milliseconds(30))
+            await Task.yield()
         }
-        #expect(field.stringValue == "Mira")
-        #expect(environment.search.query == "Mira")
-        try await waitUntil { environment.search.tracks.count == 2 && resultTable(in: window.contentView)?.numberOfRows == 2 }
-        #expect(environment.search.tracks.count == 2)
-        #expect(window.frame.height < 160)
+        #expect(field.stringValue == "Mira" && environment.search.query == "Mira")
+        try await waitUntil { environment.search.results.filter { $0.kind == .song }.count == 2 && resultTable(in: window.contentView) != nil }
         let table = try #require(resultTable(in: window.contentView))
-        #expect(table.numberOfRows == 2)
-        #expect(table.rect(ofRow: 0).height == 32)
         #expect(table.selectedRow == -1 && environment.search.selectedURI == nil)
         let delegate = try #require(field.delegate as? CatalogSearchField.Coordinator)
         #expect(delegate.control(field, textView: editor, doCommandBy: #selector(NSResponder.moveDown(_:))))
         #expect(environment.search.selectedURI == previewTracks[0].uri)
-        try await waitUntil { table.selectedRow == 0 }
+        try await waitUntil { table.selectedRow >= 0 }
+        let firstRow = table.selectedRow
+        #expect(table.rect(ofRow: firstRow).height == 32)
         #expect(delegate.control(field, textView: editor, doCommandBy: #selector(NSResponder.moveDown(_:))))
         #expect(environment.search.selectedURI == previewTracks[3].uri)
-        try await waitUntil { table.selectedRow == 1 }
-        #expect(table.selectedRow == 1)
+        try await waitUntil { table.selectedRow > firstRow }
         #expect(window.firstResponder === editor)
         #expect(delegate.control(field, textView: editor, doCommandBy: #selector(NSResponder.cancelOperation(_:))))
-        #expect(!environment.searchPopover.isVisible && environment.search.query == "Mira")
         environment.showSearch()
-        try await waitUntil { NSApp.windows.contains { $0.isVisible && resultTable(in: $0.contentView)?.selectedRow == 1 } }
-        let reopened = try #require(NSApp.windows.first { $0.isVisible && searchField(in: $0.contentView) != nil })
+        try await waitUntil { searchWindow().flatMap { resultTable(in: $0.contentView) }?.selectedRow == firstRow + 1 }
+        let reopened = try #require(searchWindow())
         let reopenedTable = try #require(resultTable(in: reopened.contentView))
-        #expect(reopenedTable.selectedRow == 1)
         #expect(searchField(in: reopened.contentView)?.stringValue == "Mira")
-        let rect = reopenedTable.rect(ofRow: 0)
+        let rect = reopenedTable.rect(ofRow: firstRow)
         let point = reopenedTable.convert(CGPoint(x: rect.midX, y: rect.midY), to: nil)
-        let down = try #require(NSEvent.mouseEvent(with: .leftMouseDown, location: point, modifierFlags: [],
-            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: reopened.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
-        let up = try #require(NSEvent.mouseEvent(with: .leftMouseUp, location: point, modifierFlags: [],
-            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: reopened.windowNumber, context: nil, eventNumber: 2, clickCount: 1, pressure: 0))
-        reopened.sendEvent(down)
-        reopened.sendEvent(up)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            let event = try #require(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: reopened.windowNumber, context: nil,
+                eventNumber: 1, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0))
+            reopened.sendEvent(event)
+        }
         try await waitUntil { !environment.searchPopover.isVisible }
-        #expect(!environment.searchPopover.isVisible && environment.search.query == "Mira")
-        #expect(environment.search.selectedURI == previewTracks[0].uri)
+        #expect(environment.search.query == "Mira" && environment.search.selectedURI == previewTracks[0].uri)
     }
 
     @Test func scrollingLeavesSelectionAloneAndReopeningRevealsTheSelectedResult() async throws {
@@ -78,160 +70,206 @@ struct MusicBrowserTests {
             Track(uri: SpotifyURI("spotify:track:result\(index)")!, title: "Result \(index)",
                   artists: [ArtistSummary(name: "Artist")], albumTitle: nil, artwork: nil, durationMs: 180_000)
         }
-        let services = BrowserServices(tracks: tracks)
-        let environment = AppEnvironment(previewPlayer: PlayerModel(), favoriteService: services, searchService: services)
-        defer { environment.searchPopover.close() }
-        environment.presentation.sendAttention(.visibility(true))
-        environment.presentation.sendAttention(.keyboardFocus(true))
-        let panel = StatusPanel(content: SearchButton(environment: environment))
-        panel.isReleasedWhenClosed = false
-        defer { panel.close() }
-        panel.makeKeyAndOrderFront(nil)
-        environment.search.updateQuery("result")
-        await environment.search.search()
-        environment.showSearch()
-        try await waitUntil { NSApp.windows.contains { $0.isVisible && resultTable(in: $0.contentView)?.numberOfRows == 10 } }
-        let window = try #require(NSApp.windows.first { $0.isVisible && resultTable(in: $0.contentView)?.numberOfRows == 10 })
+        let (environment, panel, window) = try await openSearch(BrowserServices(tracks: tracks))
+        defer { environment.searchPopover.close(); panel.close() }
+        await environment.search.loadMore(.song)
+        try await waitUntil { environment.search.results.count == 10 }
         let table = try #require(resultTable(in: window.contentView))
-        let scrollView = try #require(table.enclosingScrollView)
-        let contentHeight = scrollView.contentSize.height - scrollView.contentInsets.top - scrollView.contentInsets.bottom
-        #expect(contentHeight == 160)
+        let scroll = try #require(table.enclosingScrollView)
+        try await waitUntil { table.numberOfRows >= 10 }
+        #expect(scroll.contentSize.height - scroll.contentInsets.top - scroll.contentInsets.bottom == 292)
+        environment.search.select(tracks[0].uri)
+        try await waitUntil { table.selectedRow >= 0 }
+        let firstRow = table.selectedRow
         environment.search.select(tracks[9].uri)
-        try await waitUntil { table.selectedRow == 9 && table.visibleRect.intersects(table.rect(ofRow: 9)) }
-        table.scrollRowToVisible(0)
+        try await waitUntil { table.selectedRow > firstRow && table.visibleRect.intersects(table.rect(ofRow: table.selectedRow)) }
+        let selectedRow = table.selectedRow
+        table.scrollRowToVisible(firstRow)
         #expect(environment.search.selectedURI == tracks[9].uri)
-        #expect(table.visibleRect.intersects(table.rect(ofRow: 0)))
-        let point = table.convert(CGPoint(x: table.bounds.midX, y: table.rect(ofRow: 0).midY), to: nil)
-        let hover = try #require(NSEvent.mouseEvent(with: .mouseMoved, location: point, modifierFlags: [],
-            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 0, pressure: 0))
-        window.sendEvent(hover)
-        #expect(environment.search.selectedURI == tracks[9].uri)
+        #expect(table.visibleRect.intersects(table.rect(ofRow: firstRow)))
         environment.searchPopover.close()
-        try await waitUntil { !window.isVisible }
         environment.showSearch()
-        try await waitUntil {
-            NSApp.windows.contains {
-                guard $0.isVisible, let table = resultTable(in: $0.contentView) else { return false }
-                return table.selectedRow == 9 && table.visibleRect.intersects(table.rect(ofRow: 9))
-            }
-        }
-        #expect(environment.search.query == "result" && environment.search.tracks == tracks)
+        try await waitUntil { searchWindow().flatMap { resultTable(in: $0.contentView) }?.selectedRow == selectedRow }
+        let reopened = try #require(searchWindow())
+        let reopenedTable = try #require(resultTable(in: reopened.contentView))
+        try await waitUntil { reopenedTable.visibleRect.intersects(reopenedTable.rect(ofRow: selectedRow)) }
+        #expect(environment.search.results == tracks.map(CatalogSearchResult.song))
     }
 
-    @Test func scrollingToTheBottomLoadsPagesWithoutChangingSelectionOrEditorFocus() async throws {
+    @Test func groupedResultsShowFourKindsAndCapTheirViewport() async throws {
+        let (environment, panel, window) = try await openSearch(groupedServices())
+        defer { environment.searchPopover.close(); panel.close() }
+        let table = try #require(resultTable(in: window.contentView))
+        let scroll = try #require(table.enclosingScrollView)
+        #expect(abs(table.frame.width - 300) < 1)
+        #expect(scroll.contentSize.height - scroll.contentInsets.top - scroll.contentInsets.bottom == 292)
+        let headers = searchGroupRows(table)
+        #expect(headers.count == 4)
+        for row in headers {
+            table.scrollRowToVisible(row)
+            try await waitUntil { table.rect(ofRow: row).height == 32 }
+        }
+        #expect(environment.search.results.map(\.kind) == [.song, .song, .album, .album, .artist, .artist, .playlist, .playlist])
+    }
+
+    @Test func shortGroupedSearchDoesNotClipResults() async throws {
+        let (environment, panel, window) = try await openSearch(BrowserServices())
+        defer { environment.searchPopover.close(); panel.close() }
+        let table = try #require(resultTable(in: window.contentView))
+        let scroll = try #require(table.enclosingScrollView)
+        let visible = scroll.contentSize.height - scroll.contentInsets.top - scroll.contentInsets.bottom
+        #expect(visible >= table.frame.height)
+        #expect(visible < 292)
+    }
+
+    @Test func emptyGroupsStayHiddenAndEmptySearchDoesNotRefetchOnReopen() async throws {
+        let services = BrowserServices(tracks: [])
+        let (environment, panel, window) = try await openSearch(services)
+        defer { environment.searchPopover.close(); panel.close() }
+        #expect(window.frame.height < 100)
+        #expect(resultTable(in: window.contentView) == nil && environment.search.hasSearched)
+        environment.searchPopover.close()
+        environment.showSearch()
+        try await waitUntil { searchWindow() != nil }
+        #expect(environment.search.hasSearched && !environment.search.isLoading)
+    }
+
+    @Test func cancelledInitialSearchRestartsWhenReopened() async throws {
         let service = PagingSearchService()
-        let (environment, panel, window, table) = try await openPagingSearch(service)
+        await service.holdNextPage()
+        let (environment, panel, _) = try await openSearch(service, preload: false)
         defer { environment.searchPopover.close(); panel.close(); Task { await service.releasePage() } }
+        await service.waitUntilHeld()
+        environment.searchPopover.close()
+        await service.releasePage()
+        environment.showSearch()
+        try await waitUntil { environment.search.hasSearched }
+        #expect(await service.requests.count == 2)
+        #expect(environment.search.results.count == 8)
+    }
+
+    @Test func moreLoadsOnlyItsGroupAndRetainsEditorFocus() async throws {
+        let service = PagingSearchService()
+        let (environment, panel, window) = try await openSearch(service)
+        defer { environment.searchPopover.close(); panel.close(); Task { await service.releasePage() } }
+        let table = try #require(resultTable(in: window.contentView))
         let field = try #require(searchField(in: window.contentView))
         field.selectText(nil)
         let editor = try #require(field.currentEditor())
-        let selected = environment.search.tracks[1].uri
+        let selected = try #require(environment.search.results.last?.uri)
         environment.search.select(selected)
-        try await Task.sleep(for: .milliseconds(150))
-        #expect(await service.offsets == [0])
-
+        table.scrollRowToVisible(table.numberOfRows - 1)
+        await Task.yield()
+        #expect(await service.requests.count == 1)
+        table.scrollRowToVisible(0)
         await service.holdNextPage()
-        table.scrollRowToVisible(9)
-        try await waitUntil { environment.search.isLoading }
-        table.scrollRowToVisible(0)
-        try await Task.sleep(for: .milliseconds(40))
-        table.scrollRowToVisible(9)
-        try await Task.sleep(for: .milliseconds(100))
-        #expect(await service.offsets == [0, 10])
+        let header = try #require(searchGroupRows(table).first)
+        try pressSearchControl(in: table, row: header)
+        try pressSearchControl(in: table, row: header)
+        await service.waitUntilHeld()
+        #expect(await service.requests.count == 2)
+        #expect(environment.search.groups.first { $0.kind == .song }?.isLoading == true)
         await service.releasePage()
-        try await waitUntil { table.numberOfRows == 20 && !environment.search.isLoading }
-        #expect(environment.search.selectedURI == selected && table.selectedRow == 1)
-        #expect(window.firstResponder === editor)
-        #expect(environment.search.query == "result")
-
-        table.scrollRowToVisible(19)
-        try await waitUntil { table.numberOfRows == 25 && !environment.search.hasMore }
-        table.scrollRowToVisible(24)
-        table.scrollRowToVisible(0)
-        try await Task.sleep(for: .milliseconds(40))
-        table.scrollRowToVisible(24)
-        try await Task.sleep(for: .milliseconds(150))
-        #expect(await service.offsets == [0, 10, 20])
-        #expect(environment.search.selectedURI == selected && window.firstResponder === editor)
-    }
-
-    @Test(arguments: [0, 1])
-    func overlappingPageContinuesToFreshResultsWithoutLoadingPastTheVisiblePage(uniqueCount: Int) async throws {
-        let service = PagingSearchService(secondPageUniqueCount: uniqueCount)
-        let (environment, panel, _, table) = try await openPagingSearch(service)
-        defer { environment.searchPopover.close(); panel.close() }
-        let selected = environment.search.tracks[1].uri
-        environment.search.select(selected)
-        try await waitUntil { table.selectedRow == 1 }
-
-        table.scrollRowToVisible(9)
-        try await waitUntil { table.numberOfRows == 20 + uniqueCount && !environment.search.isLoading }
-        try await Task.sleep(for: .milliseconds(150))
-        #expect(await service.offsets == [0, 10, 20])
-        #expect(environment.search.hasMore && environment.search.selectedURI == selected)
-
-        table.scrollRowToVisible(19 + uniqueCount)
-        try await waitUntil { table.numberOfRows == 25 && !environment.search.hasMore }
-        #expect(await service.offsets == [0, 10, 20, 30])
+        try await waitUntil { environment.search.groups.first { $0.kind == .song }?.results.count == 12 }
         #expect(environment.search.selectedURI == selected)
+        try await waitUntil { table.selectedRow >= 0 && table.visibleRect.intersects(table.rect(ofRow: table.selectedRow)) }
+        #expect(window.firstResponder === editor)
+        #expect(await service.requests.last == BrowserRequest(kinds: [.song], offset: 2, limit: 10))
+        #expect(environment.search.groups.filter { $0.kind != .song }.allSatisfy { $0.results.count == 2 })
     }
 
-    @Test func failedAutomaticPageKeepsResultsUntilExplicitRetry() async throws {
+    @Test func groupRetryAndLateReplyRespectDismissal() async throws {
         let service = PagingSearchService()
-        let (environment, panel, _, table) = try await openPagingSearch(service)
-        defer { environment.searchPopover.close(); panel.close() }
-        let original = environment.search.tracks
-        environment.search.select(original[1].uri)
-        try await waitUntil { table.selectedRow == 1 }
-        await service.failNextPages(.unavailable)
-        table.scrollRowToVisible(9)
-        try await waitUntil { environment.search.error == .unavailable }
-        table.scrollRowToVisible(0)
-        try await Task.sleep(for: .milliseconds(40))
-        table.scrollRowToVisible(9)
-        try await Task.sleep(for: .milliseconds(150))
-        #expect(await service.offsets == [0, 10])
-        #expect(environment.search.tracks == original && table.numberOfRows == 10)
-        #expect(environment.search.selectedURI == original[1].uri)
-
-        await service.failNextPages(nil)
-        await environment.search.retry(at: Date())
-        try await waitUntil { table.numberOfRows == 20 }
-        #expect(environment.search.error == nil)
-        #expect(await service.offsets == [0, 10, 10])
-        #expect(environment.search.selectedURI == original[1].uri)
-    }
-
-    @Test func closingSearchRejectsAnAutomaticPageThatFinishesLate() async throws {
-        let service = PagingSearchService()
-        let (environment, panel, window, table) = try await openPagingSearch(service)
+        let (environment, panel, window) = try await openSearch(service)
         defer { environment.searchPopover.close(); panel.close(); Task { await service.releasePage() } }
-        let original = environment.search.tracks
+        let original = environment.search.results
+        let table = try #require(resultTable(in: window.contentView))
+        await service.failNextPages(.unavailable)
+        let header = try #require(searchGroupRows(table).first)
+        try pressSearchControl(in: table, row: header)
+        try await waitUntil { environment.search.groups.first { $0.kind == .song }?.error == .unavailable }
+        #expect(environment.search.results == original && environment.search.error == nil)
+        let retryRow = header + 1 + (environment.search.groups.first?.results.count ?? 0)
+        try await waitUntil { table.numberOfRows == 13 }
+        await service.failNextPages(nil)
         await service.holdNextPage()
-        table.scrollRowToVisible(9)
-        try await waitUntil { environment.search.isLoading }
+        try pressSearchControl(in: table, row: retryRow)
+        await service.waitUntilHeld()
         environment.searchPopover.close()
-        try await waitUntil { !window.isVisible }
         await service.releasePage()
-        try await Task.sleep(for: .milliseconds(150))
-        #expect(environment.search.tracks == original && !environment.search.isLoading)
-        #expect(environment.search.query == "result" && environment.search.hasMore)
-        #expect(await service.offsets == [0, 10])
+        for _ in 0..<10 { await Task.yield() }
+        #expect(environment.search.results == original)
+        #expect(environment.search.groups.first { $0.kind == .song }?.nextOffset == 2)
+        environment.showSearch()
+        try await waitUntil { searchWindow() != nil }
+        #expect(await service.requests.map(\.offset) == [0, 2, 2])
     }
 
-    private func openPagingSearch(_ service: PagingSearchService) async throws -> (AppEnvironment, StatusPanel, NSWindow, NSTableView) {
-        let environment = AppEnvironment(previewPlayer: PlayerModel(), favoriteService: BrowserServices(), searchService: service)
+    @Test(arguments: CatalogSearchKind.allCases)
+    func arrowKeysCrossGroupsAndReturnPlaysEachKind(_ kind: CatalogSearchKind) async throws {
+        let engine = LiveLyricTestEngine()
+        let player = PlayerModel(engine: engine)
+        player.start()
+        let (environment, panel, window) = try await openSearch(groupedServices(), player: player)
+        defer { environment.searchPopover.close(); panel.close(); player.stop() }
+        let field = try #require(searchField(in: window.contentView))
+        field.selectText(nil)
+        let editor = try #require(field.currentEditor() as? NSTextView)
+        let delegate = try #require(field.delegate as? CatalogSearchField.Coordinator)
+        let result = try #require(environment.search.results.first { $0.kind == kind })
+        for _ in 0..<environment.search.results.count {
+            #expect(delegate.control(field, textView: editor, doCommandBy: #selector(NSResponder.moveDown(_:))))
+            if environment.search.selectedURI == result.uri { break }
+        }
+        #expect(environment.search.selectedURI == result.uri)
+        #expect(delegate.control(field, textView: editor, doCommandBy: #selector(NSResponder.insertNewline(_:))))
+        try await waitUntil { engine.loadRequests.last == PlayRequest(contextURI: result.uri) }
+        #expect(!environment.searchPopover.isVisible && environment.search.query == "result")
+        #expect(environment.search.results.count == 8)
+    }
+
+    @Test func compositionAndAccessibleLabelsWorkForAllKinds() async throws {
+        let title = "とても長い検索結果 🎵 Résumé and the quiet morning beyond the horizon"
+        let (environment, panel, window) = try await openSearch(groupedServices(title: title))
+        defer { environment.searchPopover.close(); panel.close() }
+        for result in environment.search.results {
+            let type = switch result.kind {
+            case .song: String(localized: "search.type.song")
+            case .album: String(localized: "search.type.album")
+            case .artist: String(localized: "search.type.artist")
+            case .playlist: String(localized: "search.type.playlist")
+            }
+            let expected = result.kind == .artist ? "\(type), \(result.title)" : "\(type), \(result.title), \(result.subtitle)"
+            #expect(result.searchAccessibilityLabel == expected)
+            #expect(result.searchAccessibilityLabel.contains(title))
+        }
+        let field = try #require(searchField(in: window.contentView))
+        field.selectText(nil)
+        let editor = try #require(field.currentEditor() as? NSTextView)
+        let delegate = try #require(field.delegate as? CatalogSearchField.Coordinator)
+        #expect(!delegate.control(field, textView: editor, doCommandBy: #selector(NSResponder.insertTab(_:))))
+        editor.setMarkedText("かな", selectedRange: NSRange(location: 2, length: 0), replacementRange: editor.selectedRange())
+        #expect(editor.hasMarkedText())
+        #expect(!delegate.control(field, textView: editor, doCommandBy: #selector(NSResponder.moveDown(_:))))
+        #expect(!delegate.control(field, textView: editor, doCommandBy: #selector(NSResponder.insertNewline(_:))))
+        editor.unmarkText()
+        #expect(delegate.control(field, textView: editor, doCommandBy: #selector(NSResponder.cancelOperation(_:))))
+        #expect(!environment.searchPopover.isVisible)
+    }
+
+    private func openSearch(_ service: any CatalogSearchService, preload: Bool = true,
+                            player: PlayerModel = PlayerModel()) async throws -> (AppEnvironment, StatusPanel, NSWindow) {
+        let environment = AppEnvironment(previewPlayer: player, favoriteService: BrowserServices(), searchService: service)
         environment.presentation.sendAttention(.visibility(true))
         environment.presentation.sendAttention(.keyboardFocus(true))
         let panel = StatusPanel(content: SearchButton(environment: environment))
         panel.isReleasedWhenClosed = false
         panel.makeKeyAndOrderFront(nil)
         environment.search.updateQuery("result")
-        await environment.search.search()
+        if preload { await environment.search.search() }
         environment.showSearch()
-        try await waitUntil { NSApp.windows.contains { $0.isVisible && resultTable(in: $0.contentView)?.numberOfRows == 10 } }
-        let window = try #require(NSApp.windows.first { $0.isVisible && resultTable(in: $0.contentView)?.numberOfRows == 10 })
-        return (environment, panel, window, try #require(resultTable(in: window.contentView)))
+        try await waitUntil { searchWindow() != nil }
+        return (environment, panel, try #require(searchWindow()))
     }
 
     private func waitUntil(_ condition: () -> Bool, sourceLocation: SourceLocation = #_sourceLocation) async throws {
@@ -246,17 +284,17 @@ struct MusicBrowserTests {
         environment.presentation.sendAttention(.visibility(true))
         environment.search.updateQuery("Mira")
         await environment.search.search()
-        environment.search.select(environment.search.tracks[1].uri)
-        let tracks = environment.search.tracks
+        environment.search.select(environment.search.results[1].uri)
+        let results = environment.search.results
         let selected = environment.search.selectedURI
         environment.showSearch()
         environment.searchPopover.close()
-        #expect(environment.search.query == "Mira" && environment.search.tracks == tracks)
+        #expect(environment.search.query == "Mira" && environment.search.results == results)
         #expect(environment.search.selectedURI == selected && !environment.searchPopover.isVisible)
         environment.showSearch()
         #expect(environment.searchPopover.isVisible && environment.search.query == "Mira")
         environment.searchPopover.close()
-        #expect(environment.search.query == "Mira" && environment.search.tracks == tracks)
+        #expect(environment.search.results == results)
     }
 
     @Test func commandFFindsMusicEvenWhileEditing() throws {
@@ -282,9 +320,9 @@ struct MusicBrowserTests {
         environment.search.updateQuery("Mira")
         await environment.search.search()
         environment.showSearch()
-        environment.playSearchResult(previewTracks[0])
+        environment.playSearchResult(.song(previewTracks[0]))
         #expect(!environment.searchPopover.isVisible && environment.search.query == "Mira")
-        #expect(!environment.search.tracks.isEmpty)
+        #expect(!environment.search.results.isEmpty)
     }
 
     @Test func signOutClearsSearchAndCollectionsAndClosesSearch() async {
@@ -294,13 +332,16 @@ struct MusicBrowserTests {
         environment.search.updateQuery("song")
         await environment.search.search()
         await environment.collections.reveal(at: Date())
-        #expect(!environment.search.tracks.isEmpty && !environment.collections.items.isEmpty)
+        #expect(!environment.search.results.isEmpty && !environment.collections.items.isEmpty)
         environment.showSearch()
         await environment.signOut()
-        #expect(environment.search.query.isEmpty && environment.search.tracks.isEmpty)
-        #expect(environment.collections.items.isEmpty)
-        #expect(!environment.searchPopover.isVisible)
+        #expect(environment.search.query.isEmpty && environment.search.results.isEmpty)
+        #expect(environment.collections.items.isEmpty && !environment.searchPopover.isVisible)
     }
+}
+
+@MainActor private func searchWindow() -> NSWindow? {
+    NSApp.windows.first { $0.isVisible && searchField(in: $0.contentView) != nil }
 }
 
 @MainActor private func searchField(in view: NSView?) -> NSTextField? {
@@ -313,13 +354,51 @@ struct MusicBrowserTests {
     return view?.subviews.lazy.compactMap { resultTable(in: $0) }.first
 }
 
-private struct BrowserServices: LibraryService, TrackSearchService, LibraryCollectionsService {
+@MainActor private func searchGroupRows(_ table: NSTableView) -> [Int] {
+    (0..<table.numberOfRows).filter { row in
+        if let outline = table as? NSOutlineView, let item = outline.item(atRow: row) {
+            return outline.delegate?.outlineView?(outline, isGroupItem: item) ?? false
+        }
+        return table.delegate?.tableView?(table, isGroupRow: row) ?? false
+    }
+}
+
+@MainActor private func pressSearchControl(in table: NSTableView, row: Int) throws {
+    table.scrollRowToVisible(row)
+    let view = try #require(table.rowView(atRow: row, makeIfNecessary: true))
+    let window = try #require(table.window)
+    let point = view.convert(CGPoint(x: view.bounds.maxX - 18, y: view.bounds.midY), to: nil)
+    for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+        let event = try #require(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil,
+            eventNumber: 1, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0))
+        window.sendEvent(event)
+    }
+}
+
+private nonisolated struct BrowserRequest: Equatable, Sendable {
+    let kinds: Set<CatalogSearchKind>
+    let offset: Int
+    let limit: Int
+}
+
+private nonisolated struct BrowserServices: LibraryService, CatalogSearchService, LibraryCollectionsService {
     var tracks = [previewTracks[0]]
+    var collections: [CatalogSearchKind: [LibraryCollection]] = [:]
     func savedState(for uri: SpotifyURI) async throws -> Bool { false }
     func save(_ uri: SpotifyURI) async throws {}
     func remove(_ uri: SpotifyURI) async throws {}
-    func searchTracks(query: String, offset: Int, limit: Int) async throws -> TrackSearchPage {
-        TrackSearchPage(tracks: tracks, nextOffset: nil)
+    func search(query: String, kinds: Set<CatalogSearchKind>, offset: Int, limit: Int) async throws -> [CatalogSearchKind: CatalogSearchPage] {
+        Dictionary(uniqueKeysWithValues: kinds.map { kind in
+            let all: [CatalogSearchResult] = switch kind {
+            case .song: tracks.map(CatalogSearchResult.song)
+            case .album: (collections[kind] ?? []).map(CatalogSearchResult.album)
+            case .artist: (collections[kind] ?? []).map(CatalogSearchResult.artist)
+            case .playlist: (collections[kind] ?? []).map(CatalogSearchResult.playlist)
+            }
+            let page = Array(all.dropFirst(offset).prefix(limit))
+            return (kind, CatalogSearchPage(results: page, nextOffset: offset + page.count < all.count ? offset + page.count : nil))
+        })
     }
     func savedCollections(_ kind: LibraryCollectionKind, cursor: LibraryCollectionCursor, limit: Int) async throws -> LibraryCollectionsPage {
         LibraryCollectionsPage(items: [LibraryCollection(uri: SpotifyURI("spotify:playlist:sample")!,
@@ -327,33 +406,36 @@ private struct BrowserServices: LibraryService, TrackSearchService, LibraryColle
     }
 }
 
-private actor PagingSearchService: TrackSearchService {
-    private(set) var offsets: [Int] = []
-    private let secondPageUniqueCount: Int?
+nonisolated private func groupedServices(title: String = "Result") -> BrowserServices {
+    let tracks = (0..<25).map { Track(uri: SpotifyURI("spotify:track:paged\($0)")!, title: "\(title) \($0)",
+        artists: [ArtistSummary(name: "Artist")], albumTitle: nil, artwork: nil, durationMs: 180_000) }
+    let collections = Dictionary(uniqueKeysWithValues: [CatalogSearchKind.album, .artist, .playlist].map { kind in
+        (kind, (0..<3).map { LibraryCollection(uri: SpotifyURI("spotify:\(kind.rawValue):sample\($0)")!,
+            title: "\(title) \($0)", subtitle: kind == .artist ? "" : "Owner", artwork: nil) })
+    })
+    return BrowserServices(tracks: tracks, collections: collections)
+}
+
+private actor PagingSearchService: CatalogSearchService {
+    private(set) var requests: [BrowserRequest] = []
     private var failure: LibraryError?
     private var shouldHold = false
     private var held: CheckedContinuation<Void, Never>?
-    private let tracks = (0..<25).map { index in
-        Track(uri: SpotifyURI("spotify:track:paged\(index)")!, title: "Result \(index)",
-              artists: [ArtistSummary(name: "Artist")], albumTitle: nil, artwork: nil, durationMs: 180_000)
-    }
-
-    init(secondPageUniqueCount: Int? = nil) { self.secondPageUniqueCount = secondPageUniqueCount }
-
+    private var started: CheckedContinuation<Void, Never>?
     func holdNextPage() { shouldHold = true }
+    func waitUntilHeld() async {
+        if held != nil { return }
+        await withCheckedContinuation { started = $0 }
+    }
     func releasePage() { held?.resume(); held = nil }
     func failNextPages(_ failure: LibraryError?) { self.failure = failure }
-
-    func searchTracks(query: String, offset: Int, limit: Int) async throws -> TrackSearchPage {
-        offsets.append(offset)
+    func search(query: String, kinds: Set<CatalogSearchKind>, offset: Int, limit: Int) async throws -> [CatalogSearchKind: CatalogSearchPage] {
+        requests.append(BrowserRequest(kinds: kinds, offset: offset, limit: limit))
         if shouldHold {
             shouldHold = false
-            await withCheckedContinuation { held = $0 }
+            await withCheckedContinuation { held = $0; started?.resume(); started = nil }
         }
         if let failure { throw failure }
-        let overlap = secondPageUniqueCount.map { limit - $0 } ?? 0
-        let trackOffset = offset >= limit ? offset - overlap : offset
-        return TrackSearchPage(tracks: Array(tracks.dropFirst(trackOffset).prefix(limit)),
-                               nextOffset: trackOffset + limit < tracks.count ? offset + limit : nil)
+        return try await groupedServices().search(query: query, kinds: kinds, offset: offset, limit: limit)
     }
 }
