@@ -55,7 +55,7 @@ struct ArtistSongsButton: View {
             }
         }
         .font(.system(size: 12))
-        .scrollIndicators(.hidden)
+        .scrollIndicators(.never)
         .frame(height: 18)
         .onChange(of: track.uri) { _, _ in dismiss() }
         .onChange(of: player.engineEpoch) { _, _ in dismiss() }

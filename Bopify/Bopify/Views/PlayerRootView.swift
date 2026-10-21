@@ -181,7 +181,7 @@ private struct ScrollablePlayerContent: ViewModifier {
                 content.frame(height: max(560, geometry.size.height))
             }
             .scrollDisabled(geometry.size.height >= 560)
-            .scrollIndicators(.hidden)
+            .scrollIndicators(.never)
         }
     }
 }

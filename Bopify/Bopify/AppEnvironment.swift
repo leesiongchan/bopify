@@ -547,6 +547,9 @@ final class AppEnvironment {
 
     func prepareForQuit() async {
         isPreparingForQuit = true
+        playerWindowController.hide()
+        presentation.isVisible = false
+        librarySetupWindow.close()
         BopifyLog.playback.info("prepare for quit starting")
         stopLiveLyrics()
         searchPopover.close()

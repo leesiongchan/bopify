@@ -79,10 +79,17 @@ struct AppEnvironmentLyricsTests {
         }
     }
 
-    @Test func quittingDisablesLyricsWhileEngineShutdownIsPending() async throws {
+    @Test func quittingHidesPlayerBeforeEngineShutdownAndPreventsReopening() async throws {
         try await withLyricsApp { f in
             try await f.ready()
+            let windows = Set(NSApp.windows.map(ObjectIdentifier.init))
+            let controller = StatusItemController(content: PlayerRootView(environment: f.environment), environment: f.environment)
+            let panel = try #require(NSApp.windows.compactMap { $0 as? StatusPanel }
+                .first { !windows.contains(ObjectIdentifier($0)) })
+            panel.isReleasedWhenClosed = false
+            defer { panel.close(); withExtendedLifetime(controller) {} }
             f.environment.showLiveLyrics()
+            try await liveLyricEventually { panel.isVisible }
             let (resume, continuation) = AsyncStream<Void>.makeStream()
             defer { continuation.finish() }
             f.first.shutdownGate = { for await _ in resume { break } }
@@ -92,10 +99,14 @@ struct AppEnvironmentLyricsTests {
             f.environment.showLiveLyrics()
             f.environment.toggleLiveLyrics()
             f.environment.focusLiveLyrics()
+            controller.togglePlayer()
+            controller.showSearch()
             #expect(f.environment.liveLyricRibbon == nil && !f.environment.isLiveLyricsVisible)
+            #expect(!panel.isVisible && !f.environment.presentation.isVisible)
 
             continuation.finish()
             await quitting.value
+            #expect(!panel.isVisible)
         }
     }
 

@@ -1305,6 +1305,7 @@
       }
     },
     "search.more" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {

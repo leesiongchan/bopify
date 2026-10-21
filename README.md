@@ -15,7 +15,7 @@ Use the magnifying glass or **Command-F** to search Spotify songs, albums, artis
 in one list, ranked by closest title or name match using [FuzzyMatch](https://github.com/ordo-one/FuzzyMatch).
 Ranking tolerates typos and differences in case, accents, and character width. Subtle icons identify each result type.
 Choose a result or use the arrow keys and Return to play it immediately; Escape closes search.
-Use **More** to load further matches.
+Scroll through search results to load further matches automatically.
 Your query and results remain when search closes. Use the clear button to reset them.
 The **Library** tab shows your saved playlists, albums, and followed artists together.
 Click a cover to play that collection.

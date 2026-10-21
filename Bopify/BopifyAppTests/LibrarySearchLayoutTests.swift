@@ -59,6 +59,8 @@ struct LibrarySearchLayoutTests {
         panel.contentView?.layoutSubtreeIfNeeded()
         let scroll = try #require(scrollViews(in: panel.contentView).first { abs($0.frame.width - 176) < 1 })
         #expect((scroll.documentView?.frame.width ?? 0) >= 192)
+        #expect(scroll.horizontalScroller?.isHidden != false)
+        #expect(scroll.verticalScroller?.isHidden != false)
     }
 
     private func waitUntil(_ condition: () -> Bool) async throws {

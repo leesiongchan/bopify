@@ -36,6 +36,7 @@ struct RecordPlayerView: View {
     @AppStorage("record.hasScrubbed") private var hasScrubbed = false
     @State private var pendingSelection: QueueSelectionStatus?
     @State private var controlsContentHeight: CGFloat?
+    @State private var hoveredControl: String?
     @AccessibilityFocusState private var accessibilityFocus: Bool
     @Environment(AppEnvironment.self) private var environment: AppEnvironment?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -95,6 +96,8 @@ struct RecordPlayerView: View {
 
     var body: some View {
         let layout = windowController.layout
+        let previous: (() -> Void)? = player.isEngineReady && player.state.isActiveDevice && player.state.canPrevious ? { player.previous() } : nil
+        let next: (() -> Void)? = player.isEngineReady && player.state.isActiveDevice && player.state.canNext ? { player.next() } : nil
         ZStack(alignment: .topLeading) {
             PlayerSurface(cornerRadius: layout.sleeveCornerRadius) {
                 PlayerBackgroundDragRegion(takesKeyboardFocus: isEngaged, onDragChanged: dragLyrics)
@@ -113,7 +116,7 @@ struct RecordPlayerView: View {
                     .frame(minHeight: layout.controlsFrame.height, alignment: .top)
                     .background(PlayerBackgroundDragRegion())
             }
-            .scrollIndicators(.hidden)
+            .scrollIndicators(.never)
             .frame(width: layout.controlsFrame.width, height: layout.controlsFrame.height)
             .offset(x: layout.controlsFrame.minX, y: layout.controlsFrame.minY)
             .allowsHitTesting(isEngaged)
@@ -153,7 +156,7 @@ struct RecordPlayerView: View {
                     onSeek: { time, snapshot in
                         if let onLyricSeek { onLyricSeek(time, snapshot) }
                         else { environment?.liveLyricRibbon?.seek(to: time, from: snapshot) }
-                    }, onPrevious: player.previous, onNext: player.next,
+                    }, onPrevious: previous, onNext: next,
                     onPrepareDrag: { windowController.finishTransition(windowController.transitionID) },
                     onDragChanged: dragLyrics)
                     .overlay(alignment: .top) {
@@ -168,8 +171,6 @@ struct RecordPlayerView: View {
                     .transition(.opacity.animation(reduceMotion ? nil : .easeOut(duration: 0.18)))
                     .onAppear { windowController.configureLyricsKeyboard(model: lyrics) }
             }
-            record(diameter: layout.recordDiameter)
-                .position(layout.recordCenter)
             if showsLyrics, !layout.lyricsFrame.isEmpty {
                 let compact = layout.controlsFrame.isEmpty
                 let scale: CGFloat = compact ? 0.75 : 1
@@ -185,6 +186,15 @@ struct RecordPlayerView: View {
             }
         }
         .frame(width: layout.contentSize.width, height: layout.contentSize.height, alignment: .topLeading)
+        .mask(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: layout.sleeveCornerRadius, style: .continuous)
+                .frame(width: layout.sleeveFrame.width, height: layout.sleeveFrame.height)
+                .offset(x: layout.sleeveFrame.minX, y: layout.sleeveFrame.minY)
+        }
+        .overlay(alignment: .topLeading) {
+            record(diameter: layout.recordDiameter)
+                .position(layout.recordCenter)
+        }
         .offset(x: windowController.contentOffset.x, y: windowController.contentOffset.y)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear { windowController.onCancelInteraction = cancelRecord }
@@ -214,9 +224,11 @@ struct RecordPlayerView: View {
         }
         .onChange(of: presentation.mode) { _, mode in
             if mode != .queue { pendingSelection = nil }
+            if mode == .compact { hoveredControl = nil }
         }
+        .onChange(of: presentation.activePopover) { _, _ in hoveredControl = nil }
         .onChange(of: presentation.isVisible) { _, visible in
-            if !visible { pendingSelection = nil; accessibilityFocus = false; isRecordHovered = false; _ = cancelRecord() }
+            if !visible { pendingSelection = nil; accessibilityFocus = false; isRecordHovered = false; hoveredControl = nil; _ = cancelRecord() }
         }
         .onChange(of: accessibilityFocus) { _, focused in presentation.sendAttention(.accessibilityFocus(focused)) }
         .onChange(of: track?.artwork.flatMap { artworkStore.palette(for: $0.url) }) { _, palette in
@@ -384,6 +396,7 @@ struct RecordPlayerView: View {
                         .accessibilityLabel(String(localized: "control.title", defaultValue: "Lyrics", table: "LyricRibbon"))
                         .accessibilityValue(Text(lyrics?.isVisible == true ? "control.on" : "control.off"))
                         .help(String(localized: "control.help", defaultValue: "Show or hide lyrics", table: "LyricRibbon"))
+                        .onHover { updateControlHint(String(localized: "control.title", defaultValue: "Lyrics", table: "LyricRibbon"), hovering: $0) }
                         .contextMenu {
                             Button(String(localized: "menu.focus", table: "LyricRibbon")) { environment.focusLiveLyrics() }
                         }
@@ -395,19 +408,39 @@ struct RecordPlayerView: View {
                     .accessibilityLabel(Text("queue.title"))
                     .accessibilityValue(Text(presentation.mode == .queue ? "control.on" : "control.off"))
                     .help(Text("queue.title"))
+                    .onHover { updateControlHint(String(localized: "queue.title"), hovering: $0) }
                     .disabled(player.state.mirror != nil && presentation.mode != .queue)
                 VolumeControl(player: player, presentation: presentation)
-                if let environment { SearchButton(environment: environment) }
+                    .onHover { updateControlHint(String(localized: "transport.volume"), hovering: $0) }
+                if let environment {
+                    SearchButton(environment: environment)
+                        .onHover { updateControlHint(String(localized: "search.title"), hovering: $0) }
+                }
             }
             .frame(maxWidth: .infinity)
             .modifier(UnfurlRow(index: 3, isEngaged: isEngaged, reduceMotion: reduceMotion, showsLyrics: lyrics?.isVisible == true))
             // The status keeps its line while empty so the library tabs below don't jump each time a track loads.
-            ZStack(alignment: .leading) { Text(verbatim: " ").hidden(); status }
+            ZStack(alignment: .leading) {
+                Text(verbatim: " ").hidden()
+                status.opacity(hoveredControl == nil ? 1 : 0)
+            }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .overlay {
+                    if let hoveredControl {
+                        Text(hoveredControl).foregroundStyle(.primary).lineLimit(1)
+                            .allowsHitTesting(false).accessibilityHidden(true)
+                    }
+                }
                 .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 .modifier(UnfurlRow(index: 4, isEngaged: isEngaged, reduceMotion: reduceMotion, showsLyrics: lyrics?.isVisible == true))
         }
         .buttonStyle(.playerControl)
         .onDisappear { presentation.sendAttention(.interaction(.volume, false)) }
+    }
+
+    private func updateControlHint(_ title: String, hovering: Bool) {
+        if hovering { hoveredControl = title }
+        else if hoveredControl == title { hoveredControl = nil }
     }
 
     @ViewBuilder private var status: some View {

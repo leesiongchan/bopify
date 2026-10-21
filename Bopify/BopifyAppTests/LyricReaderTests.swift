@@ -210,7 +210,8 @@ struct LyricReaderTests {
         #expect(reader.view.layer?.animation(forKey: "lyricEmphasis") == nil)
     }
 
-    @Test func trackArrivalSlidesInTheConfirmedDirectionAfterLoading() throws {
+    @Test(arguments: [CarouselDirection.next, .previous, .fade])
+    func trackChangeTransitionsTheViewportBeforeReplacingLyrics(direction: CarouselDirection) throws {
         let reader = try LyricReaderFixture()
         let panel = NSPanel(contentRect: reader.scroll.frame, styleMask: [.borderless], backing: .buffered, defer: false)
         panel.isReleasedWhenClosed = false
@@ -220,30 +221,78 @@ struct LyricReaderTests {
         reader.view.wantsLayer = true
         reader.update(position: 3_000, reading: false)
         reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "first", direction: .next, animated: true)
-        #expect(reader.view.layer?.animation(forKey: "lyricTrackMove") == nil)
+        #expect(reader.scroll.contentView.layer?.animation(forKey: kCATransition) == nil)
 
+        reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "none", direction: .fade, animated: true)
+        reader.coordinator.updateContent(reader.scroll, content: .idle(.loadingTrack), projection: nil, reading: false,
+            scale: 1, rtl: false, fallback: NSAttributedString(string: "Loading track…"), width: 300, height: 65)
+        reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "second", direction: direction, animated: true)
+        let transition = try #require(reader.scroll.contentView.layer?.animation(forKey: kCATransition) as? CATransition)
+        #expect(transition.type == (direction == .fade ? .fade : .push))
+        #expect(transition.subtype == (direction == .next ? .fromRight : direction == .previous ? .fromLeft : nil))
+        #expect(transition.duration >= 0.4)
+        #expect(reader.scroll.contentView.layer?.bounds.width == reader.scroll.contentView.bounds.width)
         reader.coordinator.updateContent(reader.scroll, content: .loading, projection: nil, reading: false,
             scale: 1, rtl: false, fallback: NSAttributedString(string: "Loading lyrics…"), width: 300, height: 65)
-        reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "none", direction: .fade, animated: true)
-        reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "second", direction: .next, animated: true)
-        #expect(reader.view.layer?.animation(forKey: "lyricTrackMove") == nil)
+        #expect(reader.scroll.contentView.layer?.animation(forKey: kCATransition) != nil)
+        reader.scroll.contentView.layer?.removeAnimation(forKey: kCATransition)
+        reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "second", direction: direction, animated: true)
         reader.update(position: 3_000, reading: false)
-        reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "second", direction: .next, animated: true)
-        let next = try #require(reader.view.layer?.animation(forKey: "lyricTrackMove") as? CABasicAnimation)
-        let nextStart = try #require(next.fromValue as? CGFloat)
-        let nextEnd = try #require(next.toValue as? CGFloat)
-        #expect(nextStart > nextEnd)
+        #expect(reader.scroll.contentView.layer?.animation(forKey: kCATransition) == nil)
 
         reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "third", direction: .previous, animated: true)
-        let previous = try #require(reader.view.layer?.animation(forKey: "lyricTrackMove") as? CABasicAnimation)
-        let previousStart = try #require(previous.fromValue as? CGFloat)
-        let previousEnd = try #require(previous.toValue as? CGFloat)
-        #expect(previousStart < previousEnd)
+        let previous = try #require(reader.scroll.contentView.layer?.animation(forKey: kCATransition) as? CATransition)
+        #expect(previous.subtype == .fromLeft)
         reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "fourth", direction: .next, animated: false)
-        #expect(reader.view.layer?.animation(forKey: "lyricTrackMove") == nil)
-        #expect(reader.view.layer?.animation(forKey: "lyricTrackFade") == nil)
+        #expect(reader.scroll.contentView.layer?.animation(forKey: kCATransition) == nil)
         reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "fourth", direction: .next, animated: true)
-        #expect(reader.view.layer?.animation(forKey: "lyricTrackMove") == nil)
+        #expect(reader.scroll.contentView.layer?.animation(forKey: kCATransition) == nil)
+    }
+
+    @Test(arguments: [CarouselDirection.next, .previous])
+    func swipingTransitionsOutgoingLyricsBeforeTransientLoading(direction: CarouselDirection) throws {
+        let reader = try LyricReaderFixture()
+        let panel = NSPanel(contentRect: reader.scroll.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        panel.isReleasedWhenClosed = false
+        panel.contentView = reader.scroll
+        panel.orderFront(nil)
+        defer { panel.orderOut(nil); panel.close() }
+        reader.update(position: 3_000, reading: false)
+        reader.coordinator.updateScroll(reader.scroll, resetRevision: 1)
+        reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "first", direction: .fade, animated: true)
+        reader.scroll.prepareTrackSwipe(direction)
+        reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "first", direction: .fade, animated: true)
+        reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "none", direction: .fade,
+            animated: true, content: .idle(.loadingTrack))
+        let transition = try #require(reader.scroll.contentView.layer?.animation(forKey: kCATransition) as? CATransition)
+        #expect(reader.view.string.contains("Current words"))
+        #expect(transition.type == .push)
+        #expect(transition.subtype == (direction == .next ? .fromRight : .fromLeft))
+        reader.coordinator.updateContent(reader.scroll, content: .idle(.loadingTrack), projection: nil, reading: false,
+            scale: 1, rtl: false, fallback: NSAttributedString(string: "Loading track…"), width: 300, height: 65)
+        reader.coordinator.updateScroll(reader.scroll, resetRevision: 2, animated: true)
+        #expect(reader.scroll.contentView.layer?.animation(forKey: "lyricFollow") == nil)
+        reader.scroll.contentView.layer?.removeAnimation(forKey: kCATransition)
+        reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "second", direction: direction,
+            animated: true, content: .loading)
+        reader.coordinator.updateContent(reader.scroll, content: .loading, projection: nil, reading: false,
+            scale: 1, rtl: false, fallback: NSAttributedString(string: "Loading lyrics…"), width: 300, height: 65)
+        #expect(reader.scroll.contentView.layer?.animation(forKey: kCATransition) == nil)
+        reader.coordinator.transitionTrack(reader.scroll, occurrenceID: "second", direction: direction, animated: true)
+        reader.update(position: 3_000, reading: false)
+        #expect(reader.scroll.contentView.layer?.animation(forKey: kCATransition) == nil)
+        #expect(reader.scroll.takeTrackSwipe() == nil)
+    }
+
+    @Test func abandonedSwipeDirectionsExpireAndCannotAffectLaterNavigation() {
+        let scroll = LyricReadingScrollView()
+        scroll.prepareTrackSwipe(.next, at: 10)
+        #expect(scroll.takeTrackSwipe(at: 12) == nil)
+        scroll.prepareTrackSwipe(.previous, at: 20)
+        scroll.prepareTrackSwipe(.next, at: 20.05)
+        scroll.prepareTrackSwipe(.previous, at: 20.1)
+        #expect(scroll.takeTrackSwipe(at: 20.1) == .previous)
+        #expect(scroll.takeTrackSwipe(at: 20.2) == nil)
     }
 
     @Test(arguments: [true, false]) func horizontalSwipeNavigatesOnceWithEitherScrollPreference(inverted: Bool) {

@@ -52,6 +52,12 @@ final class PlayerWindowController {
     func focusLyrics() { panel?.focusLyrics(keepingPlayerExpanded: !layout.controlsFrame.isEmpty) }
     func show() { panel?.orderFrontRegardless() }
 
+    func hide() {
+        persistAnchor()
+        invalidateTransition()
+        panel?.orderOut(nil)
+    }
+
     func configureLyricsKeyboard(model: LyricRibbonModel) {
         panel?.onLyricsFocusEnded = { [weak model] in
             model?.isKeyboardInteracting = false

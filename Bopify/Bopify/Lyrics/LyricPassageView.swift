@@ -29,6 +29,7 @@ struct LyricPassageView: NSViewRepresentable {
         private var currentCueOffset: CGFloat = 0
         private var rendered: Input?
         private var occurrenceID: String?
+        private var swipedThroughLoading = false
         private var highlightedStart: Int64?
 
         private struct Input: Equatable {
@@ -137,41 +138,52 @@ struct LyricPassageView: NSViewRepresentable {
             if view.frame.size != size { view.setFrameSize(size) }
         }
 
-        func transitionTrack(_ scroll: NSScrollView, occurrenceID: String, direction: CarouselDirection, animated: Bool) {
-            guard let view = scroll.documentView else { return }
+        func transitionTrack(_ scroll: NSScrollView, occurrenceID: String, direction: CarouselDirection,
+                             animated: Bool, content: LyricContent? = nil) {
+            let reader = scroll as? LyricReadingScrollView
             if !animated {
-                view.layer?.removeAnimation(forKey: "lyricTrackMove")
-                view.layer?.removeAnimation(forKey: "lyricTrackFade")
+                scroll.contentView.layer?.removeAnimation(forKey: kCATransition)
+                reader?.clearTrackSwipe()
+                swipedThroughLoading = false
             }
-            if let content = rendered?.content {
-                switch content {
-                case .loading, .idle:
-                    view.layer?.removeAnimation(forKey: "lyricTrackMove")
-                    view.layer?.removeAnimation(forKey: "lyricTrackFade")
+            // Transient playback gaps retain the last confirmed track's identity.
+            guard !occurrenceID.isEmpty, occurrenceID != "none" else {
+                guard case .idle(.loadingTrack)? = content else {
+                    reader?.clearTrackSwipe()
+                    swipedThroughLoading = false
                     return
-                default: break
+                }
+                if self.occurrenceID != nil, animated, let direction = reader?.takeTrackSwipe() {
+                    swipedThroughLoading = true
+                    animateTrack(scroll, direction: direction)
+                }
+                return
+            }
+            let changed = self.occurrenceID != occurrenceID
+            defer {
+                self.occurrenceID = occurrenceID
+                if changed || swipedThroughLoading {
+                    swipedThroughLoading = false
+                    reader?.clearTrackSwipe()
                 }
             }
-            guard occurrenceID != "none" else { return }
-            // Loading placeholders must not consume the confirmed track's arrival animation.
-            defer { self.occurrenceID = occurrenceID }
             guard let old = self.occurrenceID, old != occurrenceID,
-                  animated, scroll.window?.isVisible == true else { return }
-            view.wantsLayer = true
-            guard let layer = view.layer else { return }
-            let distance: CGFloat = switch direction { case .next: 48; case .previous: -48; case .fade: 0 }
-            let movement = CABasicAnimation(keyPath: "position.x")
-            movement.fromValue = layer.position.x + distance
-            movement.toValue = layer.position.x
-            movement.duration = 0.32
-            movement.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
-            let fade = CABasicAnimation(keyPath: "opacity")
-            fade.fromValue = 0
-            fade.toValue = 1
-            fade.duration = 0.24
-            fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            layer.add(movement, forKey: "lyricTrackMove")
-            layer.add(fade, forKey: "lyricTrackFade")
+                  !swipedThroughLoading, animated else { return }
+            animateTrack(scroll, direction: direction)
+        }
+
+        private func animateTrack(_ scroll: NSScrollView, direction: CarouselDirection) {
+            guard scroll.window?.isVisible == true else { return }
+            cancelFollow(scroll)
+            scroll.contentView.wantsLayer = true
+            guard let layer = scroll.contentView.layer else { return }
+            layer.masksToBounds = true
+            let transition = CATransition()
+            transition.type = direction == .fade ? .fade : .push
+            transition.subtype = switch direction { case .next: .fromRight; case .previous: .fromLeft; case .fade: nil }
+            transition.duration = 0.45
+            transition.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
+            layer.add(transition, forKey: kCATransition)
         }
 
         func cancelFollow(_ scroll: NSScrollView) {
@@ -191,7 +203,8 @@ struct LyricPassageView: NSViewRepresentable {
             scroll.contentView.scroll(to: target)
             scroll.reflectScrolledClipView(scroll.contentView)
             if animated, self.resetRevision != nil, scroll.window?.isVisible == true,
-               let layer = scroll.contentView.layer, previous != target {
+               let layer = scroll.contentView.layer, previous != target,
+               layer.animation(forKey: kCATransition) == nil {
                 let animation = CABasicAnimation(keyPath: "bounds.origin")
                 animation.fromValue = NSValue(point: previous)
                 animation.toValue = NSValue(point: scroll.contentView.bounds.origin)
@@ -246,14 +259,16 @@ struct LyricPassageView: NSViewRepresentable {
         (scroll as? LyricReadingScrollView)?.onBeginReading = begin
         (scroll as? LyricReadingScrollView)?.onPrevious = onPrevious
         (scroll as? LyricReadingScrollView)?.onNext = onNext
+        if onPrevious == nil, onNext == nil { (scroll as? LyricReadingScrollView)?.clearTrackSwipe() }
         (scroll.verticalScroller as? LyricReadingScroller)?.onBeginReading = begin
         view.onBeginReading = begin
         view.onSeek = onSeek
+        // Capture the outgoing viewport before replacing its text, including loading placeholders.
+        coordinator.transitionTrack(scroll, occurrenceID: occurrenceID, direction: direction, animated: animate, content: content)
         if let content {
             coordinator.updateContent(scroll, content: content, projection: projection, reading: isReading,
                 scale: textScale, rtl: isRightToLeft, fallback: text, width: width, height: height, animated: animate)
         } else { coordinator.updateText(view, text: text, width: width, height: height) }
-        coordinator.transitionTrack(scroll, occurrenceID: occurrenceID, direction: direction, animated: animate)
         if !animate { view.layer?.removeAllAnimations() }
         if shouldFocusReader() {
             // SwiftUI finishes removing the focused Sync control after this update.
@@ -268,10 +283,12 @@ struct LyricPassageView: NSViewRepresentable {
 
     static func dismantleNSView(_ scroll: NSScrollView, coordinator: Coordinator) {
         coordinator.cancelFollow(scroll)
+        scroll.contentView.layer?.removeAnimation(forKey: kCATransition)
         scroll.documentView?.layer?.removeAllAnimations()
         (scroll as? LyricReadingScrollView)?.onBeginReading = nil
         (scroll as? LyricReadingScrollView)?.onPrevious = nil
         (scroll as? LyricReadingScrollView)?.onNext = nil
+        (scroll as? LyricReadingScrollView)?.clearTrackSwipe()
         (scroll.verticalScroller as? LyricReadingScroller)?.onBeginReading = nil
         (scroll.documentView as? LyricReadingTextView)?.onBeginReading = nil
         (scroll.documentView as? LyricReadingTextView)?.onSeek = nil
@@ -283,16 +300,30 @@ final class LyricReadingScrollView: NSScrollView {
     var onPrevious: (() -> Void)?
     var onNext: (() -> Void)?
     private var swipe = LyricTrackSwipe()
+    private var pendingTrackSwipe: (direction: CarouselDirection, expiresAt: TimeInterval)?
+
+    func prepareTrackSwipe(_ direction: CarouselDirection, at time: TimeInterval = CACurrentMediaTime()) {
+        pendingTrackSwipe = (direction, time + 1)
+    }
+
+    func takeTrackSwipe(at time: TimeInterval = CACurrentMediaTime()) -> CarouselDirection? {
+        defer { clearTrackSwipe() }
+        guard let pendingTrackSwipe, pendingTrackSwipe.expiresAt > time else { return nil }
+        return pendingTrackSwipe.direction
+    }
+
+    func clearTrackSwipe() { pendingTrackSwipe = nil }
+
     override func scrollWheel(with event: NSEvent) {
         if onPrevious != nil || onNext != nil {
             switch swipe.update(x: event.scrollingDeltaX, y: event.scrollingDeltaY,
                 phase: event.phase, momentum: event.momentumPhase, precise: event.hasPreciseScrollingDeltas,
                 inverted: event.isDirectionInvertedFromDevice, timestamp: event.timestamp) {
             case .previous:
-                onPrevious?()
+                if let onPrevious { prepareTrackSwipe(.previous); onPrevious() }
                 return
             case .next:
-                onNext?()
+                if let onNext { prepareTrackSwipe(.next); onNext() }
                 return
             case .horizontal, .pending: return
             case .vertical: break

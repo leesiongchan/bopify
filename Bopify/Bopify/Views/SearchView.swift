@@ -6,6 +6,7 @@ import BopifyPlayback
 struct SearchView: View {
     let environment: AppEnvironment
     @State private var text = ""
+    @State private var remainingScrollHeight: CGFloat = .infinity
     private var model: SearchModel { environment.search }
     private var canPlay: Bool { environment.authState == .signedIn && environment.player?.isEngineReady == true }
     private var failedGroups: [CatalogSearchGroup] { model.groups.filter { $0.error != nil } }
@@ -83,7 +84,7 @@ struct SearchView: View {
                     }
                 }
                 if showsMore {
-                    moreControl
+                    paginationIndicator
                         .selectionDisabled()
                         .listRowInsets(EdgeInsets()).listRowSeparator(.hidden)
                 }
@@ -94,7 +95,14 @@ struct SearchView: View {
             .frame(height: resultsHeight)
             .task(id: environment.searchPopover.focusRevision) { await revealSelection(in: scroll) }
             .task(id: model.selectedURI) { await revealSelection(in: scroll) }
-            .task(id: model.results.map(\.uri)) { await revealSelection(in: scroll) }
+            .onScrollGeometryChange(for: ScrollGeometry.self) { $0 } action: { _, geometry in
+                let remaining = geometry.containerSize.height > 0
+                    ? max(0, geometry.contentSize.height - geometry.visibleRect.maxY) : .infinity
+                remainingScrollHeight = remaining
+                if remaining <= 64 {
+                    Task { await loadNextPagesIfNeeded() }
+                }
+            }
         }
     }
 
@@ -104,25 +112,28 @@ struct SearchView: View {
         scroll.scrollTo(uri, anchor: .center)
     }
 
-    private var moreControl: some View {
+    private var paginationIndicator: some View {
         HStack {
             Spacer()
-            if isLoadingMore {
-                ProgressView().controlSize(.mini).accessibilityLabel(Text("search.loading"))
-            } else {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    Button("search.more") {
-                        environment.showSearch()
-                        Task { await model.loadMore() }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(model.retryAfter.map { $0 > context.date } ?? false)
-                    .accessibilityIdentifier("catalog-search-more")
-                }
-            }
+            ProgressView().controlSize(.mini).accessibilityLabel(Text("search.loading"))
+                .opacity(isLoadingMore ? 1 : 0)
         }
-        .font(.system(size: 11)).foregroundStyle(.secondary)
         .padding(.horizontal, 4).frame(height: 32)
+        .accessibilityIdentifier("catalog-search-loading-more")
+        .task {
+            if model.results.isEmpty { await loadNextPagesIfNeeded() }
+        }
+    }
+
+    private func loadNextPagesIfNeeded() async {
+        while remainingScrollHeight <= 64 || model.results.isEmpty,
+              environment.searchPopover.isVisible, !Task.isCancelled {
+            let offsets = model.groups.map(\.nextOffset)
+            let count = model.results.count
+            await model.loadMore()
+            // Filtered or duplicate-only pages advance their cursors without changing scroll geometry.
+            guard model.results.count == count, offsets != model.groups.map(\.nextOffset) else { return }
+        }
     }
 
     private func row(_ result: CatalogSearchResult) -> some View {

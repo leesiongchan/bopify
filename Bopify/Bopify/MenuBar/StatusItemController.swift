@@ -76,7 +76,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 
     private func configure(mode: PlayerMode, keepOnTop: Bool) {
-        guard let panel else { return }
+        guard !environment.isPreparingForQuit, let panel else { return }
         let floatingLyrics = environment.isLiveLyricsVisible && environment.presentation.mode == .compact
         panel.level = keepOnTop || floatingLyrics ? .floating : .normal
         UserDefaults.standard.set(keepOnTop, forKey: "player.keepOnTop")
