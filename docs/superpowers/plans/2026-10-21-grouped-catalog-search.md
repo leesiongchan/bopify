@@ -354,7 +354,7 @@ Run `git diff --check`, then commit the migrated UI, callers, localization, and 
 **Consumes:** Completed grouped search and existing offline preview.
 **Produces:** Accurate README search instructions and evidence of native behavior.
 
-- [ ] **Step 1: Capture and inspect the native result states.**
+- [x] **Step 1: Capture and inspect the native result states.**
 
 Rebuild and launch with the exact Debug preview commands from Task 1. Capture
 `/tmp/bopify-search-after.png` using the same method as the baseline, plus a
@@ -365,21 +365,21 @@ and a fixture failure with Retry. Use the existing `.empty` / `.failing` preview
 service behavior in test fixtures for those states; do not add product controls.
 Remove temporary screenshot instrumentation before final verification.
 
-- [ ] **Step 2: Update only README search instructions.**
+- [x] **Step 2: Update only README search instructions.**
 
 Replace the song-only description and automatic-pagination sentence with search
 across songs, albums, artists, and playlists; explain group More controls and
 immediate playback. Preserve query retention and keyboard instructions. Keep
 setup, release, lyrics, and unrelated documentation unchanged.
 
-- [ ] **Step 3: Complete the live smoke check when a local session is available.**
+- [x] **Step 3: Complete the live smoke check when a local session is available.**
 
 Search and play one result of each kind, including a searchable playlist the
 account does not own. Confirm observed playback and displayed context. If no
 authenticated local session is available, record this check as unperformed in
 the handoff; do not claim live playback was verified from fixture results.
 
-- [ ] **Step 4: Finish verification.**
+- [x] **Step 4: Finish verification.**
 
 If visual fixes changed code, rerun the app/package checks from Task 3 after the
 last fix. Otherwise, use their passing results without redundant full-suite runs.
@@ -387,7 +387,7 @@ Run `git diff --check` and inspect `git status --short` and the final diff again
 the pre-implementation commit. Confirm every change implements this spec and
 the compatibility adapter is gone.
 
-- [ ] **Step 5: Commit documentation and verified visual adjustments.**
+- [x] **Step 5: Commit documentation and verified visual adjustments.**
 
 Commit the README and any verified visual
 adjustments with `docs: describe grouped catalog search` or a subject describing

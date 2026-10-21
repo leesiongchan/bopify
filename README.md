@@ -11,8 +11,9 @@ Download `Bopify-<version>.dmg` from [GitHub Releases](https://github.com/leesio
 drag Bopify to Applications, then open it and complete Spotify setup. Right-click the menu bar
 icon for settings or to quit.
 
-Use the magnifying glass or **Command-F** to search Spotify songs in a compact popover. Choose a
-result or use the arrow keys and Return to play it; Escape closes search.
+Use the magnifying glass or **Command-F** to search Spotify songs, albums, artists, and playlists
+in grouped results. Choose a result or use the arrow keys and Return to play it immediately;
+Escape closes search. Use **More** beside a group to load more results of that type.
 Your query and results remain when search closes. Use the clear button to reset them.
 The **Library** tab shows your saved playlists, albums, and followed artists together.
 Click a cover to play that collection.
@@ -25,7 +26,7 @@ reveals the player and focuses search, keeping your previous query and results.
 
 The record shows **Drag to seek** until your first drag, then keeps that hint hidden.
 While dragging around the record, a timestamp shows the destination; release to seek,
-or press Escape to cancel. Search loads more results automatically as you scroll.
+or press Escape to cancel.
 
 Builds are ad-hoc signed and not notarized. If macOS blocks the app and you trust
 the download, use **System Settings → Privacy & Security → Open Anyway** after
