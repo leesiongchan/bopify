@@ -76,14 +76,14 @@ public protocol CatalogSearchService: Sendable {
 The declarations above specify signatures, not complete implementation bodies.
 Result subtitles come from track artist names or the existing collection subtitle.
 
-- [ ] **Step 1: Establish the baseline.**
+- [x] **Step 1: Establish the baseline.**
 
 Run `swift test --package-path Packages/BopifyCore` and
 `xcodebuild -project Bopify/Bopify.xcodeproj -scheme BopifyAppTests -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO test`.
 Expected: zero failed tests and `TEST SUCCEEDED`. The local FFI artifact exists;
 if missing or incompatible, build it using `./scripts/build-rust.sh` first.
 
-- [ ] **Step 2: Capture native search before changes.**
+- [x] **Step 2: Capture native search before changes.**
 
 Build the existing Debug preview with
 `xcodebuild -project Bopify/Bopify.xcodeproj -scheme Bopify -configuration Debug -destination 'platform=macOS,arch=arm64' -derivedDataPath build/search-study CODE_SIGNING_ALLOWED=NO build`,
@@ -99,7 +99,7 @@ test using `bitmapImageRepForCachingDisplay(in:)`, `cacheDisplay(in:to:)`, and
 capture method after implementation and remove temporary capture instrumentation
 before committing. Inspect the image; the browser study is not the native baseline.
 
-- [ ] **Step 3: Add failing client boundary tests to `SpotifyLibraryClientTests.swift`.**
+- [x] **Step 3: Add failing client boundary tests to `SpotifyLibraryClientTests.swift`.**
 
 Reuse its serialized `LibraryProtocol` / `LibraryFixture`, `client(scopes:)`,
 `LibraryClock`, `savedTrack(_:image:)`, and `query(_:)` helpers. Add private JSON
@@ -123,14 +123,14 @@ Use Swift Testing assertions in these new tests, for example:
 #expect(LibraryProtocol.fixture.requests.isEmpty) // Invalid inputs.
 ```
 
-- [ ] **Step 4: Run the new boundary tests and confirm failure.**
+- [x] **Step 4: Run the new boundary tests and confirm failure.**
 
 Run `swift test --package-path Packages/BopifyCore --filter SpotifyLibraryClientTests`.
 Expected before implementation: missing catalog types or missing `search` API,
 or an assertion demonstrating a required contract is absent. Resolve unrelated
 baseline failures before proceeding.
 
-- [ ] **Step 5: Implement the contract and extend the existing client.**
+- [x] **Step 5: Implement the contract and extend the existing client.**
 
 Add the signatures above in `CatalogSearchService.swift`. Make
 `SpotifyLibraryClient` conform to `CatalogSearchService`; keep its old conformance
@@ -145,12 +145,12 @@ Temporarily delegate `searchTracks(query:offset:limit:)` to the new search metho
 with `kinds: [.song]`, unwrapping song results into the old page. This adapter is
 removed in Task 3. Keep request logging free of query text.
 
-- [ ] **Step 6: Run client tests.**
+- [x] **Step 6: Run client tests.**
 
 Run the Step 4 command. Expected: all client tests pass, including existing
 Library and legacy song tests.
 
-- [ ] **Step 7: Commit the tested boundary.**
+- [x] **Step 7: Commit the tested boundary.**
 
 Run `git diff --check`, then commit only this task's files with
 `feat: add typed catalog search for four music kinds`.

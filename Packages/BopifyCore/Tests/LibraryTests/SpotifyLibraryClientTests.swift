@@ -268,6 +268,137 @@ struct SpotifyLibraryClientTests {
         #expect(LibraryProtocol.fixture.requests.count == 1)
     }
 
+    @Test func catalogSearchEncodesAllKindsAndUsesNoUserScopes() async throws {
+        let body = ["tracks": catalogPage([]), "albums": catalogPage([]),
+                    "artists": catalogPage([]), "playlists": catalogPage([])]
+        LibraryProtocol.fixture.reset(.init(data: try JSONSerialization.data(withJSONObject: body)))
+        let pages = try await client(scopes: []).search(query: "  Björk 🎵 & year:2026  ",
+            kinds: [.song, .album, .artist, .playlist], offset: 0, limit: 2)
+        #expect(Set(pages.keys) == [.song, .album, .artist, .playlist])
+        let request = try #require(LibraryProtocol.fixture.requests.first)
+        #expect(request.url?.host == "api.spotify.com" && request.url?.path == "/v1/search")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer TEST_TOKEN")
+        #expect(query(request) == [URLQueryItem(name: "q", value: "Björk 🎵 & year:2026"),
+            URLQueryItem(name: "type", value: "track,album,artist,playlist"),
+            URLQueryItem(name: "offset", value: "0"), URLQueryItem(name: "limit", value: "2")])
+    }
+
+    @Test func catalogSearchDecodesAllKindsAndPlaylistOwner() async throws {
+        let body = ["tracks": catalogPage([savedTrack("a")["track"]!]),
+            "albums": catalogPage([["uri": "spotify:album:b", "name": "Album b",
+                "artists": [["name": "Mira Vale"]], "images": [["url": "https://i.scdn.co/image/b"]]]]),
+            "artists": catalogPage([["uri": "spotify:artist:c", "name": "Mira Vale", "images": []]]),
+            "playlists": catalogPage([["uri": "spotify:playlist:d", "name": "Playlist d",
+                "owner": ["display_name": "Mira Vale"], "images": []]])]
+        LibraryProtocol.fixture.reset(.init(data: try JSONSerialization.data(withJSONObject: body)))
+        let pages = try await client().search(query: "Mira", kinds: [.song, .album, .artist, .playlist], offset: 0, limit: 2)
+        #expect(pages[.song]?.results == [.song(Track(uri: SpotifyURI("spotify:track:a")!, title: "Song a",
+            artists: [ArtistSummary(name: "Artist")], albumTitle: "Album",
+            artwork: Artwork(url: URL(string: "https://i.scdn.co/image/cover")!), durationMs: 180_000))])
+        #expect(pages[.album]?.results == [.album(LibraryCollection(uri: SpotifyURI("spotify:album:b")!,
+            title: "Album b", subtitle: "Mira Vale", artwork: Artwork(url: URL(string: "https://i.scdn.co/image/b")!)))])
+        #expect(pages[.artist]?.results == [.artist(LibraryCollection(uri: SpotifyURI("spotify:artist:c")!,
+            title: "Mira Vale", subtitle: "", artwork: nil))])
+        #expect(pages[.playlist]?.results == [.playlist(LibraryCollection(uri: SpotifyURI("spotify:playlist:d")!,
+            title: "Playlist d", subtitle: "Mira Vale", artwork: nil))])
+        for (kind, page) in pages {
+            #expect(page.results.first?.kind == kind)
+            #expect(page.nextOffset == nil)
+        }
+    }
+
+    @Test(arguments: ["null", "wrongKind", "invalidURI", "missingOwner", "nullOwner", "missingArtwork", "unsafeArtwork"])
+    func catalogSearchSkipsMalformedRowsBeforeDerivingDisplayResults(_ scenario: String) async throws {
+        var item: [String: Any] = ["uri": "spotify:playlist:a", "name": "Playlist a",
+            "owner": ["display_name": "Mira Vale"], "images": [["url": "https://i.scdn.co/image/a"]]]
+        var invalid: Any = NSNull()
+        switch scenario {
+        case "wrongKind": invalid = ["uri": "spotify:album:wrong", "name": "Wrong"]
+        case "invalidURI": invalid = ["uri": "spotify:playlist:bad,id", "name": "Wrong"]
+        case "missingOwner": item.removeValue(forKey: "owner")
+        case "nullOwner": item["owner"] = NSNull()
+        case "missingArtwork": item.removeValue(forKey: "images")
+        case "unsafeArtwork": item["images"] = [["url": "http://localhost/artwork"]]
+        default: break
+        }
+        let body = ["tracks": catalogPage([savedTrack("a")["track"]!, NSNull()], total: 4, next: true),
+            "playlists": catalogPage([item, invalid], total: 4, next: true)]
+        LibraryProtocol.fixture.reset(.init(data: try JSONSerialization.data(withJSONObject: body)))
+        let pages = try await client().search(query: "a", kinds: [.song, .playlist], offset: 0, limit: 2)
+        #expect(pages[.song]?.results.map(\.uri.rawValue) == ["spotify:track:a"])
+        #expect(pages[.song]?.nextOffset == 2)
+        let result = try #require(pages[.playlist]?.results.first)
+        #expect(pages[.playlist]?.results.count == 1 && pages[.playlist]?.nextOffset == 2)
+        #expect(result.uri.rawValue == "spotify:playlist:a" && result.title == "Playlist a")
+        #expect(result.subtitle == (["missingOwner", "nullOwner"].contains(scenario) ? "" : "Mira Vale"))
+        #expect(result.artwork?.url.absoluteString == (["missingArtwork", "unsafeArtwork"].contains(scenario) ? nil : "https://i.scdn.co/image/a"))
+    }
+
+    @Test func catalogSearchPaginatesOnlyRequestedKinds() async throws {
+        let items = (0..<10).map { ["uri": "spotify:playlist:p\($0)", "name": "Playlist \($0)"] }
+        let body = ["playlists": catalogPage(items, offset: 2, limit: 10, total: 15, next: true)]
+        LibraryProtocol.fixture.reset(.init(data: try JSONSerialization.data(withJSONObject: body)))
+        let pages = try await client().search(query: "playlist", kinds: [.playlist], offset: 2, limit: 10)
+        #expect(Set(pages.keys) == [.playlist])
+        #expect(pages[.playlist]?.results.count == 10 && pages[.playlist]?.nextOffset == 12)
+        #expect(query(LibraryProtocol.fixture.requests.first) == [URLQueryItem(name: "q", value: "playlist"),
+            URLQueryItem(name: "type", value: "playlist"), URLQueryItem(name: "offset", value: "2"),
+            URLQueryItem(name: "limit", value: "10")])
+    }
+
+    @Test func catalogSearchRejectsInvalidInputsAndRequestedPageShapes() async throws {
+        let invalidInputs: [(String, Set<CatalogSearchKind>, Int, Int)] = [
+            (" ", [.song], 0, 2), ("song", [], 0, 2), ("song", [.song], -1, 2),
+            ("song", [.song], 1001, 2), ("song", [.song], 0, 0), ("song", [.song], 0, 11)]
+        LibraryProtocol.fixture.reset(.init())
+        for (text, kinds, offset, limit) in invalidInputs {
+            await #expect(throws: LibraryError.invalidResponse) {
+                _ = try await client().search(query: text, kinds: kinds, offset: offset, limit: limit)
+            }
+        }
+        #expect(LibraryProtocol.fixture.requests.isEmpty)
+        let badPages: [[String: Any]] = [[:], ["tracks": NSNull()],
+            ["tracks": catalogPage([], offset: 1)], ["tracks": catalogPage([], limit: 10)],
+            ["tracks": catalogPage([], total: -1)], ["tracks": catalogPage([NSNull(), NSNull(), NSNull()])]]
+        for body in badPages {
+            LibraryProtocol.fixture.reset(.init(data: try JSONSerialization.data(withJSONObject: body)))
+            await #expect(throws: LibraryError.invalidResponse) {
+                _ = try await client().search(query: "song", kinds: [.song], offset: 0, limit: 2)
+            }
+        }
+        LibraryProtocol.fixture.reset(.init(data: Data("{".utf8)))
+        await #expect(throws: LibraryError.invalidResponse) {
+            _ = try await client().search(query: "song", kinds: [.song], offset: 0, limit: 2)
+        }
+    }
+
+    @Test func catalogSearchStopsAtOffsetCeilingAndKeepsSharedCooldown() async throws {
+        let body = ["tracks": catalogPage([savedTrack("a")["track"]!, NSNull()], offset: 1000, total: 1005, next: true)]
+        LibraryProtocol.fixture.reset(.init(data: try JSONSerialization.data(withJSONObject: body)))
+        let pages = try await client().search(query: "song", kinds: [.song], offset: 1000, limit: 2)
+        #expect(pages[.song]?.nextOffset == nil)
+        let clock = LibraryClock()
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [LibraryProtocol.self]
+        let client = SpotifyLibraryClient(session: URLSession(configuration: configuration),
+            tokenProvider: { _ in "TEST_TOKEN" }, now: { clock.now() })
+        LibraryProtocol.fixture.reset(.init(status: 429, headers: ["Retry-After": "12"]))
+        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 12)) {
+            _ = try await client.search(query: "song", kinds: [.song], offset: 0, limit: 2)
+        }
+        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 12)) { _ = try await client.savedState(for: uri) }
+        #expect(LibraryProtocol.fixture.requests.count == 1)
+        clock.advance(12)
+        LibraryProtocol.fixture.reset(.init(data: Data("[true]".utf8)))
+        #expect(try await client.savedState(for: uri))
+    }
+
+    private func catalogPage(_ items: [Any], offset: Int = 0, limit: Int = 2,
+                             total: Int? = nil, next: Bool = false) -> [String: Any] {
+        ["items": items, "offset": offset, "limit": limit, "total": total ?? items.count,
+         "next": next ? "https://untrusted.invalid/?offset=999" as Any : NSNull()]
+    }
+
     @Test func followedArtistsAreLibraryCollections() async throws {
         let kind = try #require(LibraryCollectionKind(rawValue: "artists"))
         let configuration = URLSessionConfiguration.ephemeral

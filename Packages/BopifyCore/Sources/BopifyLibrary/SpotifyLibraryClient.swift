@@ -2,7 +2,7 @@ import Foundation
 import os
 import BopifyDomain
 
-public struct SpotifyLibraryClient: LibraryService, SavedTracksService, ListeningHistoryService, TrackSearchService, LibraryCollectionsService {
+public struct SpotifyLibraryClient: LibraryService, SavedTracksService, ListeningHistoryService, TrackSearchService, CatalogSearchService, LibraryCollectionsService {
     private let session: URLSession
     private let tokenProvider: @Sendable (Set<String>) async throws -> String
     private let redirects = LibraryRedirectPolicy()
@@ -63,15 +63,26 @@ public struct SpotifyLibraryClient: LibraryService, SavedTracksService, Listenin
     }
 
     public func searchTracks(query: String, offset: Int, limit: Int) async throws -> TrackSearchPage {
+        guard let page = try await search(query: query, kinds: [.song], offset: offset, limit: limit)[.song] else {
+            throw LibraryError.invalidResponse
+        }
+        return TrackSearchPage(tracks: page.results.compactMap {
+            if case let .song(track) = $0 { track } else { nil }
+        }, nextOffset: page.nextOffset)
+    }
+
+    public func search(query: String, kinds: Set<CatalogSearchKind>, offset: Int, limit: Int) async throws -> [CatalogSearchKind: CatalogSearchPage] {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty, (0...1000).contains(offset), (1...10).contains(limit) else { throw LibraryError.invalidResponse }
+        guard !query.isEmpty, !kinds.isEmpty, (0...1000).contains(offset), (1...10).contains(limit) else { throw LibraryError.invalidResponse }
+        let types = CatalogSearchKind.allCases.filter { kinds.contains($0) }
         let data = try await request(method: "GET", path: "/v1/search", query: [
-            URLQueryItem(name: "q", value: query), URLQueryItem(name: "type", value: "track"),
+            URLQueryItem(name: "q", value: query), URLQueryItem(name: "type", value: types.map(\.rawValue).joined(separator: ",")),
             URLQueryItem(name: "offset", value: String(offset)), URLQueryItem(name: "limit", value: String(limit))
         ], scopes: [])
         guard let response = try? JSONDecoder().decode(SearchResponse.self, from: data) else { throw LibraryError.invalidResponse }
-        let next = try response.tracks.nextOffset(offset: offset, limit: limit, maximum: 1000)
-        return TrackSearchPage(tracks: response.tracks.items.compactMap { $0.value?.domain }, nextOffset: next)
+        return try Dictionary(uniqueKeysWithValues: types.map { kind in
+            (kind, try response.page(for: kind, offset: offset, limit: limit))
+        })
     }
 
     public func savedCollections(_ kind: LibraryCollectionKind, cursor: LibraryCollectionCursor, limit: Int) async throws -> LibraryCollectionsPage {
@@ -272,7 +283,28 @@ private struct TopArtist: Decodable {
     }
 }
 
-private struct SearchResponse: Decodable { let tracks: APIPage<SavedTrack> }
+private struct SearchResponse: Decodable {
+    let tracks: Lenient<APIPage<SavedTrack>>?
+    let albums: Lenient<APIPage<CollectionEntity>>?
+    let artists: Lenient<APIPage<CollectionEntity>>?
+    let playlists: Lenient<APIPage<CollectionEntity>>?
+
+    func page(for kind: CatalogSearchKind, offset: Int, limit: Int) throws -> CatalogSearchPage {
+        switch kind {
+        case .song: try page(tracks, offset: offset, limit: limit) { $0.domain.map(CatalogSearchResult.song) }
+        case .album: try page(albums, offset: offset, limit: limit) { $0.domain(.albums).map(CatalogSearchResult.album) }
+        case .artist: try page(artists, offset: offset, limit: limit) { $0.domain(.artists).map(CatalogSearchResult.artist) }
+        case .playlist: try page(playlists, offset: offset, limit: limit) { $0.domain(.playlists).map(CatalogSearchResult.playlist) }
+        }
+    }
+
+    private func page<Item>(_ response: Lenient<APIPage<Item>>?, offset: Int, limit: Int,
+                            result: (Item) -> CatalogSearchResult?) throws -> CatalogSearchPage {
+        guard let page = response?.value else { throw LibraryError.invalidResponse }
+        let next = try page.nextOffset(offset: offset, limit: limit, maximum: 1000)
+        return CatalogSearchPage(results: page.items.compactMap { $0.value.flatMap(result) }, nextOffset: next)
+    }
+}
 private struct SavedAlbum: Decodable { let album: CollectionEntity }
 
 private struct APIPage<Item: Decodable>: Decodable {
