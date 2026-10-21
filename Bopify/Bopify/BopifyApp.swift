@@ -15,17 +15,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var shortcutTasks: [Task<Void, Never>] = []
     #if DEBUG
     private var lyricPreview: LyricPanelPreviewSession?
-    private var browserPreview: MusicBrowserPreviewSession?
     #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--music-browser-preview") {
-            let preview = MusicBrowserPreviewSession()
-            browserPreview = preview
-            preview.show()
-            return
-        }
         if ProcessInfo.processInfo.arguments.contains("--lyrics-preview") {
             let preview = LyricPanelPreviewSession()
             lyricPreview = preview

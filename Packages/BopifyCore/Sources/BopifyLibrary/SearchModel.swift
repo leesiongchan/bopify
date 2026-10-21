@@ -133,7 +133,6 @@ public final class SearchModel {
         requests = [:]
         isLoading = false
         for index in groups.indices { groups[index].isLoading = false }
-        BopifyLog.library.debug("catalog search pending work cancelled")
     }
 
     public func clear() {

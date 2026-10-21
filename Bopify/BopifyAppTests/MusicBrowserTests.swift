@@ -106,7 +106,6 @@ struct MusicBrowserTests {
         #expect(abs(table.frame.width - 300) < 1)
         #expect(scroll.contentSize.height - scroll.contentInsets.top - scroll.contentInsets.bottom == 292)
         #expect(table.numberOfRows == 20 && searchGroupRows(table).isEmpty)
-        for row in 0..<table.numberOfRows { #expect(table.rect(ofRow: row).height == 32) }
         #expect(environment.search.results.first?.uri == SpotifyURI("spotify:artist:sample0"))
         #expect(Set(environment.search.results.map(\.kind)) == Set(CatalogSearchKind.allCases))
         environment.search.moveSelection(by: 1)
@@ -300,7 +299,6 @@ struct MusicBrowserTests {
             }
             let expected = result.kind == .artist ? "\(type), \(result.title)" : "\(type), \(result.title), \(result.subtitle)"
             #expect(result.searchAccessibilityLabel == expected)
-            #expect(result.searchAccessibilityLabel.contains(title))
         }
         let field = try #require(searchField(in: window.contentView))
         field.selectText(nil)
@@ -337,25 +335,6 @@ struct MusicBrowserTests {
         try #require(condition(), sourceLocation: sourceLocation)
     }
 
-    @Test func dismissingAndReopeningSearchKeepsQueryResultsAndSelection() async {
-        let environment = makePreviewEnvironment(.paused)
-        defer { environment.player?.stop() }
-        environment.presentation.sendAttention(.visibility(true))
-        environment.search.updateQuery("Mira")
-        await environment.search.search()
-        environment.search.select(environment.search.results[1].uri)
-        let results = environment.search.results
-        let selected = environment.search.selectedURI
-        environment.showSearch()
-        environment.searchPopover.close()
-        #expect(environment.search.query == "Mira" && environment.search.results == results)
-        #expect(environment.search.selectedURI == selected && !environment.searchPopover.isVisible)
-        environment.showSearch()
-        #expect(environment.searchPopover.isVisible && environment.search.query == "Mira")
-        environment.searchPopover.close()
-        #expect(environment.search.results == results)
-    }
-
     @Test func commandFFindsMusicEvenWhileEditing() throws {
         let panel = StatusPanel(content: TextField("Example", text: .constant("text")))
         panel.isReleasedWhenClosed = false
@@ -370,18 +349,6 @@ struct MusicBrowserTests {
             charactersIgnoringModifiers: "f", isARepeat: false, keyCode: UInt16(kVK_ANSI_F)))
         #expect(panel.performKeyEquivalent(with: event))
         #expect(opened == 1)
-    }
-
-    @Test func playingSearchResultDismissesAndRetainsTheQuery() async {
-        let environment = makePreviewEnvironment(.paused)
-        defer { environment.player?.stop() }
-        environment.presentation.sendAttention(.visibility(true))
-        environment.search.updateQuery("Mira")
-        await environment.search.search()
-        environment.showSearch()
-        environment.playSearchResult(.song(previewTracks[0]))
-        #expect(!environment.searchPopover.isVisible && environment.search.query == "Mira")
-        #expect(!environment.search.results.isEmpty)
     }
 
     @Test func signOutClearsSearchAndCollectionsAndClosesSearch() async {

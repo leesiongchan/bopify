@@ -1,6 +1,5 @@
 import SwiftUI
 import Observation
-import os
 import BopifyPlayback
 import BopifyDomain
 import BopifyLibrary
@@ -24,7 +23,6 @@ final class SearchPopoverController {
 
     private func dismiss() {
         if isVisible { environment?.presentation.dismissPopover() }
-        BopifyLog.library.debug("catalog search dismissed")
     }
 }
 
