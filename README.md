@@ -12,8 +12,9 @@ drag Bopify to Applications, then open it and complete Spotify setup. Right-clic
 icon for settings or to quit.
 
 Use the magnifying glass or **Command-F** to search Spotify songs, albums, artists, and playlists
-in grouped results. Choose a result or use the arrow keys and Return to play it immediately;
-Escape closes search. Use **More** beside a group to load more results of that type.
+in one list, ranked by closest title or name match. Subtle icons identify each result type.
+Choose a result or use the arrow keys and Return to play it immediately; Escape closes search.
+Use **More** to load further matches.
 Your query and results remain when search closes. Use the clear button to reset them.
 The **Library** tab shows your saved playlists, albums, and followed artists together.
 Click a cover to play that collection.

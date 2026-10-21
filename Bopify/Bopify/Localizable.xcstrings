@@ -1304,16 +1304,6 @@
         }
       }
     },
-    "search.more %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "More %@"
-          }
-        }
-      }
-    },
     "search.more" : {
       "localizations" : {
         "en" : {

@@ -17,7 +17,17 @@ public struct CatalogSearchGroup: Equatable, Sendable {
 public final class SearchModel {
     public private(set) var query = ""
     public private(set) var groups = CatalogSearchKind.allCases.map { CatalogSearchGroup(kind: $0) }
-    public var results: [CatalogSearchResult] { groups.flatMap(\.results) }
+    public var results: [CatalogSearchResult] {
+        let items = groups.flatMap(\.results)
+        let ranked = items.enumerated().map { index, result in
+            (index: index, result: result, rank: matchRank(result.title))
+        }
+        return ranked.sorted { lhs, rhs in
+            if lhs.rank.0 != rhs.rank.0 { return lhs.rank.0 < rhs.rank.0 }
+            if lhs.rank.1 != rhs.rank.1 { return lhs.rank.1 < rhs.rank.1 }
+            return lhs.index < rhs.index
+        }.map { $0.result }
+    }
     public private(set) var hasSearched = false
     public private(set) var selectedURI: SpotifyURI?
     public private(set) var isLoading = false
@@ -55,6 +65,22 @@ public final class SearchModel {
         do { try await debounce() } catch { return }
         guard generation == current, !Task.isCancelled else { return }
         await load(kind: nil, offset: 0, generation: current)
+    }
+
+    public func loadMore() async {
+        guard hasSearched, !isLoading, !groups.contains(where: \.isLoading), requestsAllowed(at: now()) else { return }
+        let current = generation
+        let kinds = groups.filter { $0.hasMore && $0.error == nil }.map(\.kind)
+        await withTaskGroup(of: Void.self) { tasks in
+            for kind in kinds {
+                tasks.addTask { await self.loadMore(kind, generation: current) }
+            }
+        }
+    }
+
+    private func loadMore(_ kind: CatalogSearchKind, generation current: Int) async {
+        guard generation == current, !Task.isCancelled else { return }
+        await loadMore(kind)
     }
 
     public func loadMore(_ kind: CatalogSearchKind) async {
@@ -112,6 +138,15 @@ public final class SearchModel {
         hasSearched = false
         error = nil
         retryAfter = nil
+    }
+
+    private func matchRank(_ title: String) -> (Int, Int) {
+        guard let match = title.localizedStandardRange(of: query) else { return (3, 0) }
+        let extra = title.count - title[match].count
+        if match.lowerBound == title.startIndex {
+            return (match.upperBound == title.endIndex ? 0 : 1, extra)
+        }
+        return (2, extra)
     }
 
     private func requestsAllowed(at date: Date) -> Bool {

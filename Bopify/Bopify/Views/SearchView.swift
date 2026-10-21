@@ -8,9 +8,12 @@ struct SearchView: View {
     @State private var text = ""
     private var model: SearchModel { environment.search }
     private var canPlay: Bool { environment.authState == .signedIn && environment.player?.isEngineReady == true }
-    private var visibleGroups: [CatalogSearchGroup] { model.groups.filter { !$0.results.isEmpty || $0.hasMore || $0.error != nil } }
+    private var failedGroups: [CatalogSearchGroup] { model.groups.filter { $0.error != nil } }
+    private var isLoadingMore: Bool { model.groups.contains { $0.isLoading } }
+    private var showsMore: Bool { isLoadingMore || model.groups.contains { $0.hasMore && $0.error == nil } }
+    private var hasContent: Bool { !model.results.isEmpty || showsMore || !failedGroups.isEmpty }
     private var resultsHeight: CGFloat {
-        min(292, visibleGroups.reduce(0) { $0 + 32 + CGFloat($1.results.count) * 32 + ($1.error == nil ? 0 : 44) })
+        min(292, CGFloat(model.results.count) * 32 + CGFloat(failedGroups.count) * 44 + (showsMore ? 32 : 0))
     }
 
     init(environment: AppEnvironment) {
@@ -45,9 +48,9 @@ struct SearchView: View {
             .padding(.horizontal, 8).padding(.vertical, 4)
             if !model.query.isEmpty {
                 Divider().padding(.horizontal, 4)
-                if !visibleGroups.isEmpty { resultList }
+                if hasContent { resultList }
                 if let error = model.error { errorState(error).font(.caption).padding(6) }
-                else if visibleGroups.isEmpty {
+                else if !hasContent {
                     Text(model.isLoading ? "search.loading" : "search.empty")
                         .font(.caption).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity).padding(6)
@@ -67,20 +70,22 @@ struct SearchView: View {
             List(selection: Binding(get: { model.selectedURI }, set: { uri in
                 if let uri { model.select(uri) }
             })) {
-                ForEach(visibleGroups, id: \.kind) { group in
-                    groupHeader(group)
-                        .selectionDisabled()
+                ForEach(model.results, id: \.uri) { result in
+                    row(result).tag(result.uri).id(result.uri)
                         .listRowInsets(EdgeInsets()).listRowSeparator(.hidden)
-                    ForEach(group.results, id: \.uri) { result in
-                        row(result).tag(result.uri).id(result.uri)
-                            .listRowInsets(EdgeInsets()).listRowSeparator(.hidden)
-                    }
+                }
+                ForEach(failedGroups, id: \.kind) { group in
                     if let error = group.error {
                         errorState(error, kind: group.kind)
                             .frame(height: 44).padding(.horizontal, 4)
                             .selectionDisabled()
                             .listRowInsets(EdgeInsets()).listRowSeparator(.hidden)
                     }
+                }
+                if showsMore {
+                    moreControl
+                        .selectionDisabled()
+                        .listRowInsets(EdgeInsets()).listRowSeparator(.hidden)
                 }
             }
             .listStyle(.plain)
@@ -99,29 +104,25 @@ struct SearchView: View {
         scroll.scrollTo(uri, anchor: .center)
     }
 
-    private func groupHeader(_ group: CatalogSearchGroup) -> some View {
+    private var moreControl: some View {
         HStack {
-            Text(group.kind.title).fontWeight(.semibold)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("catalog-search-group-\(group.kind.rawValue)")
             Spacer()
-            if group.isLoading {
+            if isLoadingMore {
                 ProgressView().controlSize(.mini).accessibilityLabel(Text("search.loading"))
-            } else if group.hasMore && group.error == nil {
+            } else {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     Button("search.more") {
                         environment.showSearch()
-                        Task { await model.loadMore(group.kind) }
+                        Task { await model.loadMore() }
                     }
                     .buttonStyle(.plain)
                     .disabled(model.retryAfter.map { $0 > context.date } ?? false)
-                    .accessibilityLabel(Text("search.more \(group.kind.title)"))
-                    .accessibilityIdentifier("catalog-search-more-\(group.kind.rawValue)")
+                    .accessibilityIdentifier("catalog-search-more")
                 }
             }
         }
-        .font(.system(size: 10)).foregroundStyle(.secondary)
-        .padding(.horizontal, 4).frame(height: 32).textCase(nil)
+        .font(.system(size: 11)).foregroundStyle(.secondary)
+        .padding(.horizontal, 4).frame(height: 32)
     }
 
     private func row(_ result: CatalogSearchResult) -> some View {
@@ -189,12 +190,15 @@ struct SearchView: View {
     }
 
     private func retryButton(kind: CatalogSearchKind?, at date: Date, remaining: Int) -> some View {
-        Button("library.retry") {
+        Button {
             environment.showSearch()
             Task {
                 if let kind { await model.retry(kind, at: date) }
                 else { await model.retry(at: date) }
             }
+        } label: {
+            if let kind { Text("search.retry \(kind.title)") }
+            else { Text("library.retry") }
         }
         .disabled(model.isLoading || remaining > 0)
         .accessibilityLabel(kind.map { Text("search.retry \($0.title)") } ?? Text("library.retry"))
