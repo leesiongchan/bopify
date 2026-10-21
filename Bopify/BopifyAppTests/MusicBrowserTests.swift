@@ -34,7 +34,7 @@ struct MusicBrowserTests {
             await Task.yield()
         }
         #expect(field.stringValue == "Mira" && environment.search.query == "Mira")
-        try await waitUntil { environment.search.results.filter { $0.kind == .song }.count == 2 && resultTable(in: window.contentView) != nil }
+        try await waitUntil { environment.search.results.filter { $0.kind == .song }.count == 3 && resultTable(in: window.contentView) != nil }
         let table = try #require(resultTable(in: window.contentView))
         #expect(table.selectedRow == -1 && environment.search.selectedURI == nil)
         let delegate = try #require(field.delegate as? CatalogSearchField.Coordinator)
@@ -44,7 +44,7 @@ struct MusicBrowserTests {
         let firstRow = table.selectedRow
         #expect(table.rect(ofRow: firstRow).height == 32)
         #expect(delegate.control(field, textView: editor, doCommandBy: #selector(NSResponder.moveDown(_:))))
-        #expect(environment.search.selectedURI == SpotifyURI("spotify:artist:preview1"))
+        #expect(environment.search.selectedURI == SpotifyURI("spotify:artist:preview2"))
         try await waitUntil { table.selectedRow > firstRow }
         #expect(window.firstResponder === editor)
         #expect(delegate.control(field, textView: editor, doCommandBy: #selector(NSResponder.cancelOperation(_:))))
@@ -72,7 +72,6 @@ struct MusicBrowserTests {
         }
         let (environment, panel, window) = try await openSearch(BrowserServices(tracks: tracks))
         defer { environment.searchPopover.close(); panel.close() }
-        await environment.search.loadMore(.song)
         try await waitUntil { environment.search.results.count == 10 }
         let table = try #require(resultTable(in: window.contentView))
         let scroll = try #require(table.enclosingScrollView)
@@ -105,8 +104,8 @@ struct MusicBrowserTests {
         let table = try #require(resultTable(in: window.contentView))
         let scroll = try #require(table.enclosingScrollView)
         #expect(abs(table.frame.width - 300) < 1)
-        #expect(scroll.contentSize.height - scroll.contentInsets.top - scroll.contentInsets.bottom == 288)
-        #expect(table.numberOfRows == 9 && searchGroupRows(table).isEmpty)
+        #expect(scroll.contentSize.height - scroll.contentInsets.top - scroll.contentInsets.bottom == 292)
+        #expect(table.numberOfRows == 20 && searchGroupRows(table).isEmpty)
         for row in 0..<table.numberOfRows { #expect(table.rect(ofRow: row).height == 32) }
         #expect(environment.search.results.first?.uri == SpotifyURI("spotify:artist:sample0"))
         #expect(Set(environment.search.results.map(\.kind)) == Set(CatalogSearchKind.allCases))
@@ -121,17 +120,17 @@ struct MusicBrowserTests {
         let (environment, panel, window) = try await openSearch(service)
         defer { environment.searchPopover.close(); panel.close() }
         let table = try #require(resultTable(in: window.contentView))
-        for count in [21, 31, 34] {
+        for count in [29, 34] {
             try await waitUntil { table.numberOfRows == environment.search.results.count + 1 }
             try pressSearchControl(in: table, row: environment.search.results.count)
             try await waitUntil { environment.search.results.count == count && environment.search.groups.allSatisfy { !$0.isLoading } }
         }
         try await waitUntil { table.numberOfRows == 34 }
         #expect(environment.search.groups.allSatisfy { !$0.hasMore })
-        #expect(await service.requests.count == 7)
+        #expect(await service.requests.count == 3)
         #expect(await service.requests.suffix(2) == [
-            BrowserRequest(kinds: [.song], offset: 12, limit: 10),
-            BrowserRequest(kinds: [.song], offset: 22, limit: 10)])
+            BrowserRequest(kinds: [.song], offset: 10, limit: 10),
+            BrowserRequest(kinds: [.song], offset: 20, limit: 10)])
     }
 
     @Test func filteredFirstPageKeepsMoreAndRetryUntilResultsAreExhausted() async throws {
@@ -166,7 +165,7 @@ struct MusicBrowserTests {
         host.layoutSubtreeIfNeeded()
         environment.search.updateQuery("result")
         await environment.search.search()
-        #expect(environment.search.results.count == 8 && environment.search.error == nil)
+        #expect(environment.search.results.count == 19 && environment.search.error == nil)
         await service.failNextPages(.authorizationRequired)
         await environment.search.loadMore(.song)
         try await waitUntil { environment.authState == .needsLibraryAuthorization && environment.player == nil }
@@ -206,7 +205,7 @@ struct MusicBrowserTests {
         environment.showSearch()
         try await waitUntil { environment.search.hasSearched }
         #expect(await service.requests.count == 2)
-        #expect(environment.search.results.count == 8)
+        #expect(environment.search.results.count == 19)
     }
 
     @Test func singleMoreRetainsSelectionAndEditorFocus() async throws {
@@ -228,14 +227,14 @@ struct MusicBrowserTests {
         try pressSearchControl(in: table, row: more)
         await service.waitUntilHeld()
         try await waitUntil { environment.search.groups.filter { $0.kind != .song }.allSatisfy { !$0.isLoading && $0.results.count == 3 } }
-        #expect(await service.requests.count == 5)
+        #expect(await service.requests.count == 2)
         #expect(environment.search.groups.first { $0.kind == .song }?.isLoading == true)
         await service.releasePage()
-        try await waitUntil { environment.search.results.count == 21 }
+        try await waitUntil { environment.search.results.count == 29 }
         #expect(environment.search.selectedURI == selected)
         try await waitUntil { table.selectedRow >= 0 && table.visibleRect.intersects(table.rect(ofRow: table.selectedRow)) }
         #expect(window.firstResponder === editor)
-        #expect(Set(await service.requests.dropFirst().map(\.kinds)) == Set(CatalogSearchKind.allCases.map { Set([$0]) }))
+        #expect(Set(await service.requests.dropFirst().map(\.kinds)) == Set([Set([CatalogSearchKind.song])]))
     }
 
     @Test func typeRetryAndLateReplyRespectDismissal() async throws {
@@ -247,9 +246,9 @@ struct MusicBrowserTests {
         try pressSearchControl(in: table, row: environment.search.results.count)
         try await waitUntil { environment.search.groups.first { $0.kind == .song }?.error == .unavailable &&
             environment.search.groups.allSatisfy { !$0.isLoading } }
-        #expect(environment.search.results.count == 11 && environment.search.error == nil)
+        #expect(environment.search.results.count == 19 && environment.search.error == nil)
         let original = environment.search.results
-        try await waitUntil { table.numberOfRows == 12 }
+        try await waitUntil { table.numberOfRows == 20 }
         await service.failNextPages(nil, for: .song)
         await service.holdNextPage(.song)
         try pressSearchControl(in: table, row: original.count)
@@ -258,11 +257,11 @@ struct MusicBrowserTests {
         await service.releasePage()
         for _ in 0..<10 { await Task.yield() }
         #expect(environment.search.results == original)
-        #expect(environment.search.groups.first { $0.kind == .song }?.nextOffset == 2)
+        #expect(environment.search.groups.first { $0.kind == .song }?.nextOffset == 10)
         environment.showSearch()
         try await waitUntil { searchWindow() != nil }
-        #expect(await service.requests.count == 6)
-        #expect(await service.requests.last == BrowserRequest(kinds: [.song], offset: 2, limit: 10))
+        #expect(await service.requests.count == 3)
+        #expect(await service.requests.last == BrowserRequest(kinds: [.song], offset: 10, limit: 10))
     }
 
     @Test(arguments: CatalogSearchKind.allCases)
@@ -285,7 +284,7 @@ struct MusicBrowserTests {
         #expect(delegate.control(field, textView: editor, doCommandBy: #selector(NSResponder.insertNewline(_:))))
         try await waitUntil { engine.loadRequests.last == PlayRequest(contextURI: result.uri) }
         #expect(!environment.searchPopover.isVisible && environment.search.query == "result")
-        #expect(environment.search.results.count == 8)
+        #expect(environment.search.results.count == 19)
     }
 
     @Test func compositionAndAccessibleLabelsWorkForAllKinds() async throws {

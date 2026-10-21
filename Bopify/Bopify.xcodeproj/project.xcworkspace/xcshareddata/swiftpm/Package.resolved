@@ -1,5 +1,5 @@
 {
-  "originHash" : "b9f2ba7967cd9699669cc0c489ba0352db690c062574e87ef9614600ffe748fb",
+  "originHash" : "ffe4c08129e5e06f29522e459f1471417d00644f5a72a01daba79a1a170a4c40",
   "pins" : [
     {
       "identity" : "appauth-ios",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "a972daac82d449d58ab119e91c68153e29ddac33",
         "version" : "3.0.0"
+      }
+    },
+    {
+      "identity" : "fuzzymatch",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ordo-one/FuzzyMatch.git",
+      "state" : {
+        "revision" : "ea09aa7faa3c1832716d1ccdb81dcb83bea89774",
+        "version" : "1.4.0"
       }
     },
     {

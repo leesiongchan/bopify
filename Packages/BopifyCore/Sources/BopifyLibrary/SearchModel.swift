@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import os
 import BopifyDomain
+import FuzzyMatch
 
 public struct CatalogSearchGroup: Equatable, Sendable {
     public let kind: CatalogSearchKind
@@ -19,12 +20,17 @@ public final class SearchModel {
     public private(set) var groups = CatalogSearchKind.allCases.map { CatalogSearchGroup(kind: $0) }
     public var results: [CatalogSearchResult] {
         let items = groups.flatMap(\.results)
+        // Music titles use literal text similarity rather than code identifier acronyms or subsequences.
+        let matcher = FuzzyMatcher(config: MatchConfig(algorithm: .editDistance(EditDistanceConfig(
+            acronymWeight: 0, isSubsequenceMatchingEnabled: false))))
+        let prepared = matcher.prepare(normalized(query))
+        var buffer = matcher.makeBuffer()
         let ranked = items.enumerated().map { index, result in
-            (index: index, result: result, rank: matchRank(result.title))
+            (index: index, result: result,
+             score: matcher.score(normalized(result.title), against: prepared, buffer: &buffer)?.score)
         }
         return ranked.sorted { lhs, rhs in
-            if lhs.rank.0 != rhs.rank.0 { return lhs.rank.0 < rhs.rank.0 }
-            if lhs.rank.1 != rhs.rank.1 { return lhs.rank.1 < rhs.rank.1 }
+            if lhs.score != rhs.score { return (lhs.score ?? -.infinity) > (rhs.score ?? -.infinity) }
             return lhs.index < rhs.index
         }.map { $0.result }
     }
@@ -140,13 +146,9 @@ public final class SearchModel {
         retryAfter = nil
     }
 
-    private func matchRank(_ title: String) -> (Int, Int) {
-        guard let match = title.localizedStandardRange(of: query) else { return (3, 0) }
-        let extra = title.count - title[match].count
-        if match.lowerBound == title.startIndex {
-            return (match.upperBound == title.endIndex ? 0 : 1, extra)
-        }
-        return (2, extra)
+    private func normalized(_ value: String) -> String {
+        value.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+                      locale: Locale(identifier: "en_US_POSIX"))
     }
 
     private func requestsAllowed(at date: Date) -> Bool {
@@ -181,7 +183,7 @@ public final class SearchModel {
         let label = kind?.rawValue ?? "all"
         BopifyLog.library.debug("catalog search page loading kind=\(label, privacy: .public) offset=\(offset, privacy: .public) generation=\(current, privacy: .public)")
         do {
-            let task = Task { try await service.search(query: query, kinds: kinds, offset: offset, limit: kind == nil ? 2 : 10) }
+            let task = Task { try await service.search(query: query, kinds: kinds, offset: offset, limit: 10) }
             if let kind { requests[kind] = task } else { initialRequest = task }
             let pages = try await withTaskCancellationHandler {
                 try await task.value

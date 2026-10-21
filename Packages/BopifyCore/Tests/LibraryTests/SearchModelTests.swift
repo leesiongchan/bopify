@@ -23,12 +23,56 @@ struct SearchModelTests {
         let model = SearchModel(service: service, debounce: {})
         model.updateQuery(query)
         await model.search()
-        #expect(model.results.map(\.title) == ["Björk", "Björk Live", "Björk Live at Home", "My Björk", "Unrelated"])
+        #expect(model.results.map(\.title) == ["Björk", "Björk Live", "My Björk", "Björk Live at Home", "Unrelated"])
         model.moveSelection(by: 1)
         #expect(model.selectedURI == SpotifyURI("spotify:artist:rank"))
         model.moveSelection(by: 1)
         #expect(model.selectedURI == SpotifyURI("spotify:track:rank1"))
         #expect(model.playRequest(for: model.results[0])?.contextURI == SpotifyURI("spotify:artist:rank"))
+    }
+
+    @Test(arguments: [
+        ("bohemain rhapsody", "Bohemian Rhapsody"),
+        ("taylr swift", "Taylor Swift"),
+        ("trinh", "Trịnh"),
+        ("istanbul", "İstanbul"),
+        ("ＢＪＯＲＫ", "Björk"),
+    ])
+    func ranksClosestNameAcrossKindsWithoutDroppingUnmatchedResults(query: String, title: String) async {
+        let service = SearchFixture()
+        let target = CatalogSearchResult.artist(LibraryCollection(uri: SpotifyURI("spotify:artist:closest")!,
+            title: title, subtitle: "", artwork: nil))
+        await service.setPage(CatalogSearchPage(results: [target], nextOffset: nil), for: .artist)
+        let model = SearchModel(service: service, debounce: {})
+        model.updateQuery(query)
+        await model.search()
+        #expect(model.results.first == target)
+        #expect(model.results.map(\.uri) == [target.uri, searchResult(.song, "first").uri,
+            searchResult(.album, "first").uri, searchResult(.playlist, "first").uri])
+    }
+
+    @Test func equalScoresKeepSourceOrderAcrossKinds() async {
+        let service = SearchFixture()
+        for kind in CatalogSearchKind.allCases {
+            let result: CatalogSearchResult
+            if kind == .song {
+                result = .song(Track(uri: SpotifyURI("spotify:track:equal")!, title: "Mira",
+                    artists: [], albumTitle: nil, artwork: nil, durationMs: 180_000))
+            } else {
+                let collection = LibraryCollection(uri: SpotifyURI("spotify:\(kind.rawValue):equal")!,
+                    title: "Mira", subtitle: "", artwork: nil)
+                switch kind {
+                case .album: result = .album(collection)
+                case .artist: result = .artist(collection)
+                default: result = .playlist(collection)
+                }
+            }
+            await service.setPage(CatalogSearchPage(results: [result], nextOffset: nil), for: kind)
+        }
+        let model = SearchModel(service: service, debounce: {})
+        model.updateQuery("mira")
+        await model.search()
+        #expect(model.results.map(\.kind) == CatalogSearchKind.allCases)
     }
 
     @Test func equalMatchesRetainSpotifyOrderAndNeverFilterResults() async {
@@ -106,7 +150,7 @@ struct SearchModelTests {
         #expect(await service.requests.isEmpty)
         model.updateQuery("  song name  ")
         await model.search()
-        #expect(await service.requests == [SearchRequest(query: "song name", kinds: [.song, .album, .artist, .playlist], offset: 0, limit: 2)])
+        #expect(await service.requests == [SearchRequest(query: "song name", kinds: [.song, .album, .artist, .playlist], offset: 0, limit: 10)])
         #expect(model.query == "song name" && model.selectedURI == nil)
         #expect(model.results.first == .song(testTrack("first")))
     }
@@ -120,7 +164,7 @@ struct SearchModelTests {
         #expect(!model.isLoading && model.error == nil && !model.hasSearched)
     }
 
-    @Test func initialSearchRequestsTwoPerKindAndRanksCombinedResults() async {
+    @Test func initialSearchRequestsTenPerKindAndRanksCombinedResults() async {
         let service = SearchFixture()
         let model = SearchModel(service: service, debounce: {})
         model.updateQuery("music")
@@ -129,7 +173,7 @@ struct SearchModelTests {
         #expect(model.results.map(\.kind) == [.album, .artist, .playlist, .song])
         #expect(model.hasSearched && !model.isLoading && model.error == nil)
         #expect(model.selectedURI == nil)
-        #expect(await service.requests == [SearchRequest(query: "music", kinds: [.song, .album, .artist, .playlist], offset: 0, limit: 2)])
+        #expect(await service.requests == [SearchRequest(query: "music", kinds: [.song, .album, .artist, .playlist], offset: 0, limit: 10)])
         for kind in CatalogSearchKind.allCases {
             await service.setPage(CatalogSearchPage(results: [], nextOffset: nil), for: kind)
         }

@@ -12,7 +12,8 @@ drag Bopify to Applications, then open it and complete Spotify setup. Right-clic
 icon for settings or to quit.
 
 Use the magnifying glass or **Command-F** to search Spotify songs, albums, artists, and playlists
-in one list, ranked by closest title or name match. Subtle icons identify each result type.
+in one list, ranked by closest title or name match using [FuzzyMatch](https://github.com/ordo-one/FuzzyMatch).
+Ranking tolerates typos and differences in case, accents, and character width. Subtle icons identify each result type.
 Choose a result or use the arrow keys and Return to play it immediately; Escape closes search.
 Use **More** to load further matches.
 Your query and results remain when search closes. Use the clear button to reset them.

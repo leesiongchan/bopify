@@ -13,6 +13,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/openid/AppAuth-iOS.git", exact: "3.0.0"),
+        .package(url: "https://github.com/ordo-one/FuzzyMatch.git", exact: "1.4.0"),
     ],
     targets: [
         .target(name: "BopifyDomain", swiftSettings: [.swiftLanguageMode(.v6)]),
@@ -39,7 +40,7 @@ let package = Package(
             ]
         ),
         .target(name: "BopifyPlayback", dependencies: ["BopifyDomain", "CBopifyCore"], swiftSettings: [.swiftLanguageMode(.v6)]),
-        .target(name: "BopifyLibrary", dependencies: ["BopifyDomain"], swiftSettings: [.swiftLanguageMode(.v6)]),
+        .target(name: "BopifyLibrary", dependencies: ["BopifyDomain", .product(name: "FuzzyMatch", package: "FuzzyMatch")], swiftSettings: [.swiftLanguageMode(.v6)]),
         .testTarget(name: "LibraryTests", dependencies: ["BopifyLibrary"], swiftSettings: [.swiftLanguageMode(.v6)]),
         .testTarget(name: "DomainTests", dependencies: ["BopifyDomain"], swiftSettings: [.swiftLanguageMode(.v6)]),
         .testTarget(name: "AuthTests", dependencies: ["BopifyAuth"], swiftSettings: [.swiftLanguageMode(.v6)]),
