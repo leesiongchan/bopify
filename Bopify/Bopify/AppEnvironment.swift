@@ -322,7 +322,8 @@ final class AppEnvironment {
     var hasLibraryAuthorizationFailure: Bool {
         favorite.error == .authorizationRequired || likedSongs.error == .authorizationRequired ||
         recents.error == .authorizationRequired || explore.error == .authorizationRequired ||
-        collections.error == .authorizationRequired || search.error == .authorizationRequired
+        collections.error == .authorizationRequired || search.error == .authorizationRequired ||
+        search.groups.contains { $0.error == .authorizationRequired }
     }
 
     func requireLibrarySetup() async {

@@ -103,13 +103,63 @@ struct MusicBrowserTests {
         let scroll = try #require(table.enclosingScrollView)
         #expect(abs(table.frame.width - 300) < 1)
         #expect(scroll.contentSize.height - scroll.contentInsets.top - scroll.contentInsets.bottom == 292)
-        let headers = searchGroupRows(table)
-        #expect(headers.count == 4)
-        for row in headers {
+        #expect(table.numberOfRows == 12)
+        for row in [0, 3, 6, 9] {
             table.scrollRowToVisible(row)
             try await waitUntil { table.rect(ofRow: row).height == 32 }
         }
         #expect(environment.search.results.map(\.kind) == [.song, .song, .album, .album, .artist, .artist, .playlist, .playlist])
+    }
+
+    @Test func groupHeadingsDoNotFloatOverOtherKindsAndMoreTargetsItsOwnGroup() async throws {
+        let service = PagingSearchService()
+        let (environment, panel, window) = try await openSearch(service)
+        defer { environment.searchPopover.close(); panel.close() }
+        let table = try #require(resultTable(in: window.contentView))
+        table.scrollRowToVisible(table.numberOfRows - 1)
+        #expect(searchGroupRows(table).isEmpty)
+        try pressSearchControl(in: table, row: 3)
+        try await waitUntil { environment.search.groups.first { $0.kind == .album }?.results.count == 3 }
+        #expect(await service.requests.last == BrowserRequest(kinds: [.album], offset: 2, limit: 10))
+    }
+
+    @Test func filteredFirstPageKeepsMoreAndRetryUntilResultsAreExhausted() async throws {
+        let service = PagingSearchService()
+        await service.filterInitialPage()
+        let (environment, panel, window) = try await openSearch(service)
+        defer { environment.searchPopover.close(); panel.close() }
+        #expect(environment.search.hasSearched && environment.search.results.isEmpty)
+        let table = try #require(resultTable(in: window.contentView))
+        #expect(table.numberOfRows == 1)
+        await service.failNextPages(.unavailable)
+        try pressSearchControl(in: table, row: 0)
+        try await waitUntil { environment.search.groups.first?.error == .unavailable }
+        try await waitUntil { table.numberOfRows == 2 }
+        await service.failNextPages(nil)
+        try pressSearchControl(in: table, row: 1)
+        try await waitUntil { environment.search.results.count == 10 }
+        #expect(await service.requests.map(\.offset) == [0, 2, 2])
+        #expect(environment.search.results.allSatisfy { $0.kind == .song })
+    }
+
+    @Test func paginationAuthorizationFailureReturnsToSetup() async throws {
+        let service = PagingSearchService()
+        let environment = AppEnvironment(previewPlayer: PlayerModel(), favoriteService: BrowserServices(), searchService: service)
+        let host = NSHostingView(rootView: PlayerRootView(environment: environment).frame(width: 410, height: 560))
+        let window = NSWindow(contentRect: CGRect(x: 300, y: 300, width: 410, height: 560),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        window.contentView = host
+        window.makeKeyAndOrderFront(nil)
+        host.layoutSubtreeIfNeeded()
+        environment.search.updateQuery("result")
+        await environment.search.search()
+        #expect(environment.search.results.count == 8 && environment.search.error == nil)
+        await service.failNextPages(.authorizationRequired)
+        await environment.search.loadMore(.song)
+        try await waitUntil { environment.authState == .needsLibraryAuthorization && environment.player == nil }
+        #expect(environment.search.query.isEmpty && environment.search.results.isEmpty)
     }
 
     @Test func shortGroupedSearchDoesNotClipResults() async throws {
@@ -163,7 +213,7 @@ struct MusicBrowserTests {
         #expect(await service.requests.count == 1)
         table.scrollRowToVisible(0)
         await service.holdNextPage()
-        let header = try #require(searchGroupRows(table).first)
+        let header = 0
         try pressSearchControl(in: table, row: header)
         try pressSearchControl(in: table, row: header)
         await service.waitUntilHeld()
@@ -185,7 +235,7 @@ struct MusicBrowserTests {
         let original = environment.search.results
         let table = try #require(resultTable(in: window.contentView))
         await service.failNextPages(.unavailable)
-        let header = try #require(searchGroupRows(table).first)
+        let header = 0
         try pressSearchControl(in: table, row: header)
         try await waitUntil { environment.search.groups.first { $0.kind == .song }?.error == .unavailable }
         #expect(environment.search.results == original && environment.search.error == nil)
@@ -419,6 +469,8 @@ nonisolated private func groupedServices(title: String = "Result") -> BrowserSer
 private actor PagingSearchService: CatalogSearchService {
     private(set) var requests: [BrowserRequest] = []
     private var failure: LibraryError?
+    private var filteredInitialPage = false
+    func filterInitialPage() { filteredInitialPage = true }
     private var shouldHold = false
     private var held: CheckedContinuation<Void, Never>?
     private var started: CheckedContinuation<Void, Never>?
@@ -436,6 +488,11 @@ private actor PagingSearchService: CatalogSearchService {
             await withCheckedContinuation { held = $0; started?.resume(); started = nil }
         }
         if let failure { throw failure }
+        if filteredInitialPage && offset == 0 {
+            return Dictionary(uniqueKeysWithValues: kinds.map {
+                ($0, CatalogSearchPage(results: [], nextOffset: $0 == .song ? 2 : nil))
+            })
+        }
         return try await groupedServices().search(query: query, kinds: kinds, offset: offset, limit: limit)
     }
 }

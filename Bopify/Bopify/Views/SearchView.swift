@@ -8,7 +8,7 @@ struct SearchView: View {
     @State private var text = ""
     private var model: SearchModel { environment.search }
     private var canPlay: Bool { environment.authState == .signedIn && environment.player?.isEngineReady == true }
-    private var visibleGroups: [CatalogSearchGroup] { model.groups.filter { !$0.results.isEmpty } }
+    private var visibleGroups: [CatalogSearchGroup] { model.groups.filter { !$0.results.isEmpty || $0.hasMore || $0.error != nil } }
     private var resultsHeight: CGFloat {
         min(292, visibleGroups.reduce(0) { $0 + 32 + CGFloat($1.results.count) * 32 + ($1.error == nil ? 0 : 44) })
     }
@@ -45,9 +45,9 @@ struct SearchView: View {
             .padding(.horizontal, 8).padding(.vertical, 4)
             if !model.query.isEmpty {
                 Divider().padding(.horizontal, 4)
-                if !model.results.isEmpty { resultList }
+                if !visibleGroups.isEmpty { resultList }
                 if let error = model.error { errorState(error).font(.caption).padding(6) }
-                else if model.results.isEmpty {
+                else if visibleGroups.isEmpty {
                     Text(model.isLoading ? "search.loading" : "search.empty")
                         .font(.caption).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity).padding(6)
@@ -68,23 +68,23 @@ struct SearchView: View {
                 if let uri { model.select(uri) }
             })) {
                 ForEach(visibleGroups, id: \.kind) { group in
-                    Section {
-                        ForEach(group.results, id: \.uri) { result in
-                            row(result).tag(result.uri).id(result.uri)
-                                .listRowInsets(EdgeInsets()).listRowSeparator(.hidden)
-                        }
-                        if let error = group.error {
-                            errorState(error, kind: group.kind)
-                                .frame(height: 44).padding(.horizontal, 4)
-                                .selectionDisabled()
-                                .listRowInsets(EdgeInsets()).listRowSeparator(.hidden)
-                        }
-                    } header: { groupHeader(group) }
+                    groupHeader(group)
+                        .selectionDisabled()
+                        .listRowInsets(EdgeInsets()).listRowSeparator(.hidden)
+                    ForEach(group.results, id: \.uri) { result in
+                        row(result).tag(result.uri).id(result.uri)
+                            .listRowInsets(EdgeInsets()).listRowSeparator(.hidden)
+                    }
+                    if let error = group.error {
+                        errorState(error, kind: group.kind)
+                            .frame(height: 44).padding(.horizontal, 4)
+                            .selectionDisabled()
+                            .listRowInsets(EdgeInsets()).listRowSeparator(.hidden)
+                    }
                 }
             }
             .listStyle(.plain)
             .environment(\.defaultMinListRowHeight, 32)
-            .environment(\.defaultMinListHeaderHeight, 32)
             .scrollContentBackground(.hidden)
             .frame(height: resultsHeight)
             .task(id: environment.searchPopover.focusRevision) { await revealSelection(in: scroll) }
@@ -121,7 +121,7 @@ struct SearchView: View {
             }
         }
         .font(.system(size: 10)).foregroundStyle(.secondary)
-        .padding(.horizontal, 4).frame(height: 24).textCase(nil)
+        .padding(.horizontal, 4).frame(height: 32).textCase(nil)
     }
 
     private func row(_ result: CatalogSearchResult) -> some View {

@@ -27,8 +27,10 @@ Show groups in the fixed order Songs, Albums, Artists, Playlists. Preserve
 Spotify's result order within each group. Initially request two results per type;
 do not combine the four lists into a new relevance ranking. The fourth group may
 require scrolling within the capped viewport even before loading more. Hide
-groups with no displayable results. Show the existing empty state if the complete
-response has no displayable results.
+groups with no displayable results once their pages are exhausted. If filtering
+removes an entire page while more pages remain, keep its heading and More/Retry
+control so later valid results remain reachable. Show the existing empty state
+when no group has displayable results or further pages.
 
 Each group has a quiet heading and a More button when another page is available.
 Each row shows artwork, a primary title, and a small trailing icon: a music note
