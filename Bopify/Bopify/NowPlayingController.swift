@@ -1,3 +1,4 @@
+import Nuke
 import AppKit
 import MediaPlayer
 import Observation
@@ -12,7 +13,8 @@ final class NowPlayingController {
     private let center = MPNowPlayingInfoCenter.default()
     private let commands = MPRemoteCommandCenter.shared()
     private var targets: [(command: MPRemoteCommand, token: Any)] = []
-    private var artwork: (url: URL, item: MPMediaItemArtwork)?
+    private var artwork = NowPlayingArtwork()
+    private var artworkTask: Task<Void, Never>?
     private var isClaimed = false
     private var isStopped = false
     private var requestedArtwork: ArtworkLoadRequest?
@@ -38,6 +40,7 @@ final class NowPlayingController {
             // Read the image so artwork that finishes loading later triggers another write.
             _ = info?.artworkURL.flatMap { artworkStore.image(for: $0) }
             _ = artworkStore.retryRevision
+            _ = artworkStore.sessionRevision
             return info
         } onChange: { [weak self] in
             Task { @MainActor in self?.observe() }
@@ -50,6 +53,9 @@ final class NowPlayingController {
             if isClaimed { BopifyLog.playback.debug("now playing released") }
             isClaimed = false
             requestedArtwork = nil
+            artworkTask?.cancel()
+            artworkTask = nil
+            artwork = NowPlayingArtwork()
             center.nowPlayingInfo = nil
             // macOS cannot infer this from an audio session, so it must be set on every change.
             center.playbackState = .stopped
@@ -68,7 +74,7 @@ final class NowPlayingController {
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
         ]
         if let album = info.album { values[MPMediaItemPropertyAlbumTitle] = album }
-        if let item = artworkItem(for: info.artworkURL) { values[MPMediaItemPropertyArtwork] = item }
+        if let item = artwork.item(for: info.artworkURL, image: info.artworkURL.flatMap { artworkStore.image(for: $0) }) { values[MPMediaItemPropertyArtwork] = item }
         center.nowPlayingInfo = values
         center.playbackState = info.isPlaying ? .playing : .paused
         setEnabled(transport: true, next: info.canNext, previous: info.canPrevious, seek: info.canSeek)
@@ -76,24 +82,20 @@ final class NowPlayingController {
 
     /// The record view only loads artwork while it is on screen, so the controller asks for it when the URL changes.
     private func loadArtworkIfNeeded(_ url: URL?) {
-        let request = ArtworkLoadRequest(url: url, retryRevision: artworkStore.retryRevision)
+        let request = ArtworkLoadRequest(url: url, retryRevision: artworkStore.retryRevision,
+                                         sessionRevision: artworkStore.sessionRevision)
         guard request != requestedArtwork else { return }
+        if requestedArtwork?.sessionRevision != request.sessionRevision { artwork = NowPlayingArtwork() }
         requestedArtwork = request
-        guard let url, artworkStore.image(for: url) == nil else { return }
-        Task { await artworkStore.load(url) }
-    }
-
-    private func artworkItem(for url: URL?) -> MPMediaItemArtwork? {
-        guard let url, let image = artworkStore.image(for: url) else { return nil }
-        if let artwork, artwork.url == url { return artwork.item }
-        let item = Self.makeArtwork(image)
-        artwork = (url, item)
-        return item
-    }
-
-    /// MediaPlayer asks for the image off the main thread, so the handler must not be main-actor isolated.
-    private nonisolated static func makeArtwork(_ image: NSImage) -> MPMediaItemArtwork {
-        return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+        artworkTask?.cancel()
+        artworkTask = nil
+        guard let url, artwork.item(for: url, image: artworkStore.image(for: url)) == nil else { return }
+        artworkTask = Task { [weak self, artworkStore] in
+            guard let response = await artworkStore.load(url), !Task.isCancelled,
+                  let self, requestedArtwork == request, !isStopped else { return }
+            _ = artwork.item(for: url, image: response.image)
+            apply(nowPlayingInfo(for: player.state, positionMs: player.displayPositionMs(at: .now), connectionReady: player.isEngineReady))
+        }
     }
 
     private func setEnabled(transport: Bool, next: Bool, previous: Bool, seek: Bool) {
@@ -144,5 +146,24 @@ final class NowPlayingController {
     private nonisolated static func onMain(_ body: @MainActor () -> MPRemoteCommandHandlerStatus) -> MPRemoteCommandHandlerStatus {
         if Thread.isMainThread { return MainActor.assumeIsolated(body) }
         return DispatchQueue.main.sync { MainActor.assumeIsolated(body) }
+    }
+}
+
+struct NowPlayingArtwork {
+    private var retained: (url: URL, item: MPMediaItemArtwork)?
+
+    mutating func item(for url: URL?, image: NSImage?) -> MPMediaItemArtwork? {
+        guard let url else { retained = nil; return nil }
+        if let retained, retained.url == url { return retained.item }
+        retained = nil
+        guard let image else { return nil }
+        let item = Self.makeArtwork(image)
+        retained = (url, item)
+        return item
+    }
+
+    /// MediaPlayer requests images off the main thread.
+    private nonisolated static func makeArtwork(_ image: NSImage) -> MPMediaItemArtwork {
+        MPMediaItemArtwork(boundsSize: image.size) { _ in image }
     }
 }

@@ -88,9 +88,6 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
                                 .accessibilityValue(Text(index == selectedIndex ? "library.selected" : ""))
                                 .accessibilityAction(named: Text("library.play")) { onPlay(track) }
                                 .help(label(for: track))
-                                .task(id: ArtworkLoadRequest(url: track.artwork?.url, retryRevision: artworkStore.retryRevision)) {
-                                    if let url = track.artwork?.url { await artworkStore.load(url) }
-                                }
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -226,14 +223,10 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
         }
     }
     private func cover(for track: Source.Item) -> some View {
-        let face = Group {
-            if let url = track.artwork?.url, let image = artworkStore.image(for: url) {
-                Image(nsImage: image).resizable().scaledToFill()
-            } else {
-                ZStack {
-                    LinearGradient(colors: [.gray.opacity(0.3), .black.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    Image(.bopRecord).font(.system(size: 22)).foregroundStyle(.white.opacity(0.65))
-                }
+        let face = RemoteArtworkView(url: track.artwork?.url, store: artworkStore, size: 76) {
+            ZStack {
+                LinearGradient(colors: [.gray.opacity(0.3), .black.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                Image(.bopRecord).font(.system(size: 22)).foregroundStyle(.white.opacity(0.65))
             }
         }
         .frame(width: 76, height: 76)

@@ -40,14 +40,10 @@ struct QueueView: View {
         let track = entry.track ?? (isCurrent && entry.uri == state.currentTrack?.uri ? state.currentTrack : nil)
         let url = track?.artwork?.url
         let label = HStack(spacing: 8) {
-            Group {
-                if let url, let image = artworkStore.image(for: url) {
-                    Image(nsImage: image).resizable().scaledToFill()
-                } else {
-                    ZStack {
-                        Color(white: 0.12)
-                        Image(.bopRecord).foregroundStyle(.secondary)
-                    }
+            RemoteArtworkView(url: url, store: artworkStore, size: 32) {
+                ZStack {
+                    Color(white: 0.12)
+                    Image(.bopRecord).foregroundStyle(.secondary)
                 }
             }
             .frame(width: 32, height: 32)
@@ -78,7 +74,6 @@ struct QueueView: View {
         }
         .buttonStyle(.songRow)
         .accessibilityElement(children: .combine)
-        .task(id: ArtworkLoadRequest(url: url, retryRevision: artworkStore.retryRevision)) { if let url { await artworkStore.load(url) } }
     }
 }
 

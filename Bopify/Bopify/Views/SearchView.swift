@@ -142,12 +142,8 @@ struct SearchView: View {
             play(result)
         } label: {
             HStack(spacing: 6) {
-                Group {
-                    if let url = result.artwork?.url, let image = environment.artworkStore.image(for: url) {
-                        Image(nsImage: image).resizable().scaledToFill()
-                    } else {
-                        ZStack { Color.primary.opacity(0.06); Image(.bopRecord).foregroundStyle(.secondary) }
-                    }
+                RemoteArtworkView(url: result.artwork?.url, store: environment.artworkStore, size: 22) {
+                    ZStack { Color.primary.opacity(0.06); Image(.bopRecord).foregroundStyle(.secondary) }
                 }
                 .frame(width: 22, height: 22)
                 .clipShape(RoundedRectangle(cornerRadius: result.kind == .artist ? 11 : 4)).accessibilityHidden(true)
@@ -171,9 +167,6 @@ struct SearchView: View {
         .accessibilityIdentifier("catalog-search-result-\(result.uri.rawValue)")
         .accessibilityAddTraits(model.selectedURI == result.uri ? .isSelected : [])
         .help(result.searchAccessibilityLabel)
-        .task(id: ArtworkLoadRequest(url: result.artwork?.url, retryRevision: environment.artworkStore.retryRevision)) {
-            if let url = result.artwork?.url { await environment.artworkStore.load(url) }
-        }
     }
 
     private func errorState(_ failure: LibraryError, kind: CatalogSearchKind? = nil) -> some View {

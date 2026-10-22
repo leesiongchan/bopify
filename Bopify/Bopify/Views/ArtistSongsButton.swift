@@ -128,14 +128,10 @@ private struct ArtistSongsPopover: View {
             BopifyLog.library.debug("artist popular song selected")
         } label: {
             HStack(spacing: 8) {
-                Group {
-                    if let url = song.artwork?.url, let image = artworkStore.image(for: url) {
-                        Image(nsImage: image).resizable().scaledToFill()
-                    } else {
-                        ZStack {
-                            Color(white: 0.12)
-                            Image(.bopRecord).foregroundStyle(.secondary)
-                        }
+                RemoteArtworkView(url: song.artwork?.url, store: artworkStore, size: 32) {
+                    ZStack {
+                        Color(white: 0.12)
+                        Image(.bopRecord).foregroundStyle(.secondary)
                     }
                 }
                 .frame(width: 32, height: 32)
@@ -150,9 +146,6 @@ private struct ArtistSongsPopover: View {
         .buttonStyle(.songRow)
         .disabled(!player.isEngineReady || !sourceIsCurrent)
         .accessibilityElement(children: .combine)
-        .task(id: ArtworkLoadRequest(url: song.artwork?.url, retryRevision: artworkStore.retryRevision)) {
-            if let url = song.artwork?.url { await artworkStore.load(url) }
-        }
     }
 }
 

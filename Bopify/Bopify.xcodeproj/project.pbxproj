@@ -19,6 +19,8 @@
 		BF0F180000000000000000D4 /* BopifyLibrary in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B4 /* BopifyLibrary */; };
 		BF0F180000000000000000D6 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B6 /* KeyboardShortcuts */; };
 		BF0F180000000000000000D5 /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B5 /* Nuke */; };
+		BF0F170000000000000000C7 /* NukeUI in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B7 /* NukeUI */; };
+		BF0F180000000000000000D7 /* NukeUI in Frameworks */ = {isa = PBXBuildFile; productRef = BF0F170000000000000000B7 /* NukeUI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -61,6 +63,7 @@
 				BF0F170000000000000000C3 /* BopifyPlayback in Frameworks */,
 				BF0F170000000000000000C4 /* BopifyLibrary in Frameworks */,
 				BF0F170000000000000000C5 /* Nuke in Frameworks */,
+				BF0F170000000000000000C7 /* NukeUI in Frameworks */,
 				BF0F170000000000000000C6 /* KeyboardShortcuts in Frameworks */,
 			);
 		};
@@ -72,6 +75,7 @@
 				BF0F180000000000000000D3 /* BopifyPlayback in Frameworks */,
 				BF0F180000000000000000D4 /* BopifyLibrary in Frameworks */,
 				BF0F180000000000000000D5 /* Nuke in Frameworks */,
+				BF0F180000000000000000D7 /* NukeUI in Frameworks */,
 				BF0F180000000000000000D6 /* KeyboardShortcuts in Frameworks */,
 			);
 		};
@@ -119,6 +123,7 @@
 				BF0F170000000000000000B3 /* BopifyPlayback */,
 				BF0F170000000000000000B4 /* BopifyLibrary */,
 				BF0F170000000000000000B5 /* Nuke */,
+				BF0F170000000000000000B7 /* NukeUI */,
 				BF0F170000000000000000B6 /* KeyboardShortcuts */,
 			);
 			productName = Bopify;
@@ -146,6 +151,7 @@
 				BF0F170000000000000000B3 /* BopifyPlayback */,
 				BF0F170000000000000000B4 /* BopifyLibrary */,
 				BF0F170000000000000000B5 /* Nuke */,
+				BF0F170000000000000000B7 /* NukeUI */,
 				BF0F170000000000000000B6 /* KeyboardShortcuts */,
 			);
 			productName = BopifyAppTests;
@@ -566,6 +572,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = BF0F170000000000000000A2 /* XCRemoteSwiftPackageReference "Nuke" */;
 			productName = Nuke;
+		};
+		BF0F170000000000000000B7 /* NukeUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BF0F170000000000000000A2 /* XCRemoteSwiftPackageReference "Nuke" */;
+			productName = NukeUI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -2,13 +2,235 @@
 import AppKit
 import Foundation
 import ImageIO
+import MediaPlayer
+import Network
+import Nuke
 import Observation
+import SwiftUI
+import BopifyDomain
+import BopifyLibrary
 import Testing
 import BopifyPlayback
 
 @MainActor
 @Suite("Artwork store", .serialized)
 struct ArtworkStoreTests {
+    @Test func displayedCoverSurvivesUnrelatedCachePressure() async throws {
+        let fixture = ArtworkFixture()
+        defer { fixture.store.clear() }
+        let url = fixture.url()
+        let track = Track(uri: SpotifyURI("spotify:track:artworkretention")!, title: "Cover retention",
+                          artists: [], albumTitle: nil, artwork: Artwork(url: url), durationMs: 180_000)
+        let model = RecentsModel(service: ArtworkHistory(track: track))
+        let host = NSHostingView(rootView: CoverFlowView(model: model, copy: .recents,
+            artworkStore: fixture.store, onPlay: { _ in }).frame(width: 200, height: 120))
+        let window = NSWindow(contentRect: CGRect(x: 300, y: 300, width: 200, height: 120),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        window.contentView = host
+        window.makeKeyAndOrderFront(nil)
+        try await artworkEventually { ArtworkProtocol.count(url) == 1 }
+        try await artworkEventually { self.redPixels(in: host, snapshot: "before") > 1_000 }
+        fixture.cache.removeAll()
+        await fixture.store.load(fixture.url())
+        try #require(fixture.store.image(for: url) == nil)
+        try await Task.sleep(for: .milliseconds(100))
+        try await artworkEventually { self.redPixels(in: host, snapshot: "after") > 1_000 }
+        #expect(ArtworkProtocol.count(url) == 1)
+    }
+
+    @Test func changedURLAndSessionRejectStaleDisplayedArtwork() async throws {
+        let fixture = ArtworkFixture()
+        defer { fixture.store.clear() }
+        let oldURL = fixture.url()
+        let newURL = fixture.url()
+        ArtworkProtocol.plan(oldURL, data: ArtworkFixture.png(color: CGColor(red: 0, green: 0.8, blue: 0, alpha: 1)))
+        ArtworkProtocol.hold(oldURL)
+        func content(_ url: URL) -> some View {
+            RemoteArtworkView(url: url, store: fixture.store, size: 32) { Color.gray }.frame(width: 76, height: 76)
+        }
+        let (host, window) = artworkWindow(content(oldURL))
+        defer { window.close() }
+        try await artworkEventually { ArtworkProtocol.count(oldURL) == 1 }
+        let survivor = Task { await fixture.store.load(oldURL, pixelSize: 64) }
+        try await Task.sleep(for: .milliseconds(30))
+        host.rootView = content(newURL)
+        try await artworkEventually { self.redPixels(in: host) > 1_000 }
+        ArtworkProtocol.release(oldURL)
+        _ = await survivor.value
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(redPixels(in: host) > 1_000, "An old URL must not replace the current image")
+        ArtworkProtocol.hold(newURL)
+        fixture.store.clear()
+        try await artworkEventually { ArtworkProtocol.count(newURL) == 2 }
+        #expect(redPixels(in: host) == 0, "Session reset must remove retained artwork")
+        ArtworkProtocol.release(newURL)
+        try await artworkEventually { self.redPixels(in: host) > 1_000 }
+    }
+
+    @Test func playerKeepsRetainedArtworkWhenAnotherImageRetries() async throws {
+        let clock = ArtworkRetryClock()
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ArtworkProtocol.self]
+        let cache = ImageCache(costLimit: 32 * 1024 * 1024)
+        let store = ArtworkStore(configuration: configuration, imageCache: cache,
+            now: { clock.now }, sleep: { try await clock.sleep(until: $0) })
+        defer { store.clear() }
+        let environment = makePreviewEnvironment(.paused, library: .empty)
+        let player = try #require(environment.player)
+        defer { player.stop() }
+        let url = URL(string: "https://artwork.invalid/\(UUID().uuidString)")!
+        let track = Track(uri: previewTracks[1].uri, title: "Retained player artwork", artists: [],
+                          albumTitle: nil, artwork: Artwork(url: url), durationMs: 180_000)
+        player.applyPreviewEvents([.trackChanged(track)])
+        let content = RecordPlayerView(player: player, artworkStore: store, presentation: environment.presentation,
+            windowController: environment.playerWindowController).environment(environment).frame(width: 380, height: 600)
+        let (host, window) = artworkWindow(content)
+        window.setContentSize(CGSize(width: 380, height: 600))
+        defer { window.close() }
+        try await artworkEventually { store.palette(for: url) != nil && self.redPixels(in: host) > 1_000 }
+        cache.removeAll()
+        ArtworkProtocol.plan(url, status: 503)
+        let other = URL(string: "https://artwork.invalid/\(UUID().uuidString)")!
+        ArtworkProtocol.plan(other, status: 503)
+        await store.load(other)
+        try await artworkEventually { !clock.waits.isEmpty }
+        let revision = store.retryRevision
+        clock.advance(by: .seconds(30))
+        try await artworkEventually { store.retryRevision > revision }
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(ArtworkProtocol.count(url) == 1, "Unrelated retries must reuse the player's retained artwork")
+        #expect(redPixels(in: host) > 1_000)
+    }
+
+    @Test func mountedArtworkRecoversAfterTransientCooldown() async throws {
+        let clock = ArtworkRetryClock()
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ArtworkProtocol.self]
+        let store = ArtworkStore(configuration: configuration, now: { clock.now }, sleep: { try await clock.sleep(until: $0) })
+        defer { store.clear() }
+        let url = URL(string: "https://artwork.invalid/\(UUID().uuidString)")!
+        ArtworkProtocol.plan(url, status: 503)
+        let (host, window) = artworkWindow(
+            RemoteArtworkView(url: url, store: store, size: 32) { Color.gray }.frame(width: 76, height: 76))
+        defer { window.close() }
+        try await artworkEventually { !clock.waits.isEmpty }
+        #expect(redPixels(in: host) == 0)
+        clock.advance(by: .seconds(30))
+        try await artworkEventually { self.redPixels(in: host) > 1_000 }
+        #expect(ArtworkProtocol.count(url) == 2)
+    }
+
+    private func artworkWindow<Content: View>(_ content: Content) -> (NSHostingView<Content>, NSWindow) {
+        let host = NSHostingView(rootView: content)
+        let window = NSWindow(contentRect: CGRect(x: 300, y: 300, width: 76, height: 76),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.makeKeyAndOrderFront(nil)
+        return (host, window)
+    }
+
+    @Test func nowPlayingRetainsArtworkUntilTheURLChangesOrIsReleased() async throws {
+        let fixture = ArtworkFixture()
+        defer { fixture.store.clear() }
+        let url = fixture.url()
+        let response = try #require(await fixture.store.load(url))
+        var artwork = NowPlayingArtwork()
+        func select(_ url: URL?, image: NSImage?) -> MPMediaItemArtwork? { artwork.item(for: url, image: image) }
+        let first = try #require(select(url, image: response.image))
+        fixture.cache.removeAll()
+        #expect(select(url, image: fixture.store.image(for: url)) === first)
+        #expect(select(fixture.url(), image: nil) == nil)
+        #expect(select(url, image: nil) == nil)
+        _ = select(url, image: response.image)
+        #expect(select(nil, image: nil) == nil)
+        #expect(select(url, image: nil) == nil)
+    }
+
+    @Test func thumbnailsUseTheRequestedPixelSize() async throws {
+        let fixture = ArtworkFixture()
+        defer { fixture.store.clear() }
+        let url = fixture.url()
+        let small = try #require(await fixture.store.load(url, pixelSize: 64))
+        let cover = try #require(await fixture.store.load(url, pixelSize: 160))
+        #expect(small.image.cgImage(forProposedRect: nil, context: nil, hints: nil)?.width == 64)
+        #expect(cover.image.cgImage(forProposedRect: nil, context: nil, hints: nil)?.width == 160)
+    }
+
+    @Test func httpCacheSurvivesImageEvictionAndIsClearedWithTheSession() async throws {
+        let server = try ArtworkHTTPServer(data: ArtworkFixture.png(size: 32))
+        let url = try await server.start()
+        defer { server.stop() }
+        let httpCache = URLCache(memoryCapacity: 8 * 1024 * 1024, diskCapacity: 0)
+        let configuration = URLSessionConfiguration.default
+        configuration.urlCache = httpCache
+        let cache = ImageCache(costLimit: 32 * 1024 * 1024)
+        let store = ArtworkStore(configuration: configuration, imageCache: cache)
+        defer { store.clear() }
+        #expect(await store.load(url) != nil)
+        try await artworkEventually { httpCache.cachedResponse(for: URLRequest(url: url)) != nil }
+        cache.removeAll()
+        #expect(await store.load(url) != nil)
+        #expect(server.requests == 1)
+        store.clear()
+        #expect(httpCache.cachedResponse(for: URLRequest(url: url)) == nil)
+    }
+
+    @Test func sessionClearRejectsAnInFlightCacheableHTTPResponse() async throws {
+        let server = try ArtworkHTTPServer(data: ArtworkFixture.png(size: 32), hold: true)
+        let url = try await server.start()
+        defer { server.stop() }
+        let httpCache = URLCache(memoryCapacity: 8 * 1024 * 1024, diskCapacity: 0)
+        let configuration = URLSessionConfiguration.default
+        configuration.urlCache = httpCache
+        let store = ArtworkStore(configuration: configuration)
+        defer { store.clear() }
+        let old = Task { await store.load(url) }
+        try await artworkEventually { server.requests == 1 }
+        store.clear()
+        server.release()
+        #expect(await old.value == nil)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(httpCache.cachedResponse(for: URLRequest(url: url)) == nil)
+        #expect(await store.load(url) != nil)
+        #expect(server.requests == 2)
+    }
+
+    @Test func paletteLoadReturnsItsImageEvenWhenTheCacheEvictsIt() async throws {
+        let gate = ArtworkPaletteGate()
+        let fixture = ArtworkFixture(extractor: { await gate.extract($0) })
+        defer { fixture.store.clear() }
+        let url = fixture.url()
+        let load = Task { await fixture.store.loadPalette(url) }
+        try await artworkEventually { await gate.count == 1 }
+        fixture.cache.removeAll()
+        await gate.release()
+        let artwork = try #require(await load.value)
+        #expect(artwork.palette == .neutral)
+        #expect(artwork.image.cgImage(forProposedRect: nil, context: nil, hints: nil) != nil)
+        #expect(fixture.store.image(for: url) == nil)
+    }
+
+    private func redPixels(in view: NSView, snapshot: String? = nil) -> Int {
+        view.layoutSubtreeIfNeeded()
+        guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return 0 }
+        view.cacheDisplay(in: view.bounds, to: bitmap)
+        var count = 0
+        for y in stride(from: 0, to: bitmap.pixelsHigh, by: 2) {
+            for x in stride(from: 0, to: bitmap.pixelsWide, by: 2) {
+                if let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB),
+                   color.redComponent > 0.6, color.greenComponent < 0.4, color.blueComponent < 0.3 { count += 1 }
+            }
+        }
+        if count > 1_000, let snapshot {
+            try? bitmap.representation(using: .png, properties: [:])?.write(
+                to: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("bopify-artwork-\(snapshot).png"))
+        }
+        return count
+    }
+
     @Test func sharedLoadSurvivesOneCancellationAndThenUsesTheCache() async throws {
         let fixture = ArtworkFixture()
         defer { fixture.store.clear() }
@@ -24,7 +246,7 @@ struct ArtworkStoreTests {
         try await artworkEventually { cancelledReturned }
         #expect(ArtworkProtocol.stops(url) == 0)
         ArtworkProtocol.release(url)
-        await survivor.value
+        _ = await survivor.value
         #expect(fixture.store.image(for: url) != nil)
         await fixture.store.load(url)
         #expect(ArtworkProtocol.count(url) == 1)
@@ -38,7 +260,7 @@ struct ArtworkStoreTests {
         let load = Task { await fixture.store.load(url) }
         try await artworkEventually { ArtworkProtocol.count(url) == 1 }
         load.cancel()
-        await load.value
+        _ = await load.value
         try await artworkEventually { ArtworkProtocol.stops(url) == 1 }
         #expect(fixture.store.image(for: url) == nil)
     }
@@ -51,13 +273,13 @@ struct ArtworkStoreTests {
         let old = Task { await fixture.store.load(url) }
         try await artworkEventually { ArtworkProtocol.count(url) == 1 }
         fixture.store.clear()
-        await old.value
+        _ = await old.value
         try await artworkEventually { ArtworkProtocol.stops(url) == 1 }
         #expect(fixture.store.image(for: url) == nil)
         let fresh = Task { await fixture.store.load(url) }
         try await artworkEventually { ArtworkProtocol.count(url) == 2 }
         ArtworkProtocol.release(url)
-        await fresh.value
+        _ = await fresh.value
         #expect(fixture.store.image(for: url) != nil)
     }
 
@@ -83,8 +305,8 @@ struct ArtworkStoreTests {
         await Task.yield()
         #expect(await gate.count == 1)
         await gate.release()
-        await first.value
-        await second.value
+        _ = await first.value
+        _ = await second.value
         #expect(fixture.store.palette(for: url) == .neutral)
 
         let lateURL = fixture.url()
@@ -92,7 +314,7 @@ struct ArtworkStoreTests {
         try await artworkEventually { await gate.count == 2 }
         fixture.store.clear()
         await gate.release()
-        await late.value
+        _ = await late.value
         #expect(fixture.store.palette(for: lateURL) == nil)
         #expect(fixture.store.image(for: lateURL) == nil)
     }
@@ -203,11 +425,11 @@ struct ArtworkStoreTests {
         let replacement = Task { replacementEntered = true; await fixture.store.loadPalette(url) }
         try await artworkEventually { replacementEntered }
         await gate.release()
-        await old.value
+        _ = await old.value
         do { try await artworkEventually { await gate.count == 2 } }
         catch { await gate.release(); throw error }
         await gate.release()
-        await replacement.value
+        _ = await replacement.value
         #expect(fixture.store.palette(for: url) == .neutral)
     }
 
@@ -231,7 +453,7 @@ struct ArtworkStoreTests {
         try await artworkEventually { await gate.count == 1 }
         caller.cancel()
         await gate.release()
-        await caller.value
+        _ = await caller.value
         await fixture.store.loadPalette(url)
         #expect(fixture.store.palette(for: url) == .neutral)
         #expect(await gate.count == 1)
@@ -278,22 +500,89 @@ private func artworkEventually(seconds: Double = 2, _ condition: () async -> Boo
     try #require(await condition(), "Artwork operation did not settle before the deadline")
 }
 
+private nonisolated final class ArtworkHTTPServer: @unchecked Sendable {
+    private let listener: NWListener
+    private let response: Data
+    private let lock = NSLock()
+    private var count = 0
+    private var holding: Bool
+    private var pending: [NWConnection] = []
+    var requests: Int { lock.withLock { count } }
+
+    init(data: Data, hold: Bool = false) throws {
+        holding = hold
+        let parameters = NWParameters.tcp
+        parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: .any)
+        listener = try NWListener(using: parameters)
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss 'GMT'"
+        let headers = "HTTP/1.1 200 OK\r\nDate: \(formatter.string(from: Date()))\r\nCache-Control: public, max-age=3600\r\nContent-Type: image/png\r\nContent-Length: \(data.count)\r\nConnection: close\r\n\r\n"
+        response = Data(headers.utf8) + data
+    }
+
+    func start() async throws -> URL {
+        listener.newConnectionHandler = { [self] connection in
+            connection.start(queue: .main)
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 8192) { [self] _, _, _, _ in
+                let waiting = lock.withLock {
+                    count += 1
+                    if holding { pending.append(connection); return true }
+                    return false
+                }
+                if !waiting { send(connection) }
+            }
+        }
+        let port: UInt16 = try await withCheckedThrowingContinuation { continuation in
+            listener.stateUpdateHandler = { [listener] state in
+                if case .ready = state, let port = listener.port {
+                    listener.stateUpdateHandler = nil
+                    continuation.resume(returning: port.rawValue)
+                } else if case let .failed(error) = state {
+                    listener.stateUpdateHandler = nil
+                    continuation.resume(throwing: error)
+                }
+            }
+            listener.start(queue: .main)
+        }
+        return URL(string: "http://127.0.0.1:\(port)/cover.png")!
+    }
+
+    private func send(_ connection: NWConnection) {
+        connection.send(content: response, completion: .contentProcessed { _ in connection.cancel() })
+    }
+
+    func release() {
+        let connections = lock.withLock { holding = false; let connections = pending; pending = []; return connections }
+        connections.forEach(send)
+    }
+
+    func stop() { release(); listener.newConnectionHandler = nil; listener.cancel() }
+}
+
+private nonisolated struct ArtworkHistory: ListeningHistoryService {
+    let track: Track
+    func recentlyPlayed() async throws -> [RecentPlay] { [RecentPlay(track: track, contextURI: nil)] }
+    func topItems(_ kind: TopItemKind) async throws -> [StationSeed] { [] }
+}
+
 @MainActor
 private struct ArtworkFixture {
     let store: ArtworkStore
+    let cache = ImageCache(costLimit: 32 * 1024 * 1024, countLimit: 112)
     init(extractor: (@Sendable (CGImage) async -> ArtworkPalette?)? = nil) {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [ArtworkProtocol.self]
-        let session = URLSession(configuration: configuration)
-        if let extractor { store = ArtworkStore(session: session, paletteExtractor: extractor) }
-        else { store = ArtworkStore(session: session) }
+        if let extractor { store = ArtworkStore(configuration: configuration, imageCache: cache, paletteExtractor: extractor) }
+        else { store = ArtworkStore(configuration: configuration, imageCache: cache) }
     }
     func url() -> URL { URL(string: "https://artwork.invalid/\(UUID().uuidString)")! }
-    nonisolated static func png(size: Int = 1200) -> Data {
+    nonisolated static func png(size: Int = 1200, color: CGColor = CGColor(red: 0.8, green: 0.2, blue: 0.1, alpha: 1)) -> Data {
         let context = CGContext(data: nil, width: size, height: size, bitsPerComponent: 8,
             bytesPerRow: size * 4, space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-        context.setFillColor(CGColor(red: 0.8, green: 0.2, blue: 0.1, alpha: 1))
+        context.setFillColor(color)
         context.fill(CGRect(x: 0, y: 0, width: size, height: size))
         let data = NSMutableData()
         let destination = CGImageDestinationCreateWithData(data, "public.png" as CFString, 1, nil)!

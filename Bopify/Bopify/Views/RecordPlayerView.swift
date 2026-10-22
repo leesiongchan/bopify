@@ -29,6 +29,8 @@ struct RecordPlayerView: View {
     @State private var isCoasting = false
     @State private var appliedMotorRequest: RecordMotorRequest?
     @State private var displayedPressing = PressingAppearance.neutral
+    @State private var loadedArtwork: LoadedArtwork?
+    @State private var loadedArtworkRequest: ArtworkLoadRequest?
     @State private var scrub: RecordScrub?
     @State private var pressedAngle: Double?
     @State private var isScrubbing = false
@@ -65,17 +67,23 @@ struct RecordPlayerView: View {
     private var occurrenceID: String {
         player.state.mirror?.trackURI.rawValue ?? player.state.queue?.current?.id ?? player.state.currentTrack?.uri.rawValue ?? "missing"
     }
-    private var image: Image? { track?.artwork.flatMap { artworkStore.image(for: $0.url) }.map { Image(nsImage: $0) } }
+    private var image: Image? {
+        if loadedArtworkRequest?.url == track?.artwork?.url,
+           loadedArtworkRequest?.sessionRevision == artworkStore.sessionRevision, let loadedArtwork {
+            return Image(nsImage: loadedArtwork.image)
+        }
+        return track?.artwork.flatMap { artworkStore.image(for: $0.url) }.map { Image(nsImage: $0) }
+    }
     private struct PressingRequest: Equatable {
         let uri: String?
         let artworkURL: URL?
         let retryRevision: Int
-        let hasImage: Bool
+        let sessionRevision: Int
     }
     private var pressingRequest: PressingRequest {
         PressingRequest(uri: player.state.mirror?.trackURI.rawValue ?? track?.uri.rawValue ?? player.state.queue?.current?.uri?.rawValue,
                         artworkURL: track?.artwork?.url, retryRevision: artworkStore.retryRevision,
-                        hasImage: track?.artwork.flatMap { artworkStore.image(for: $0.url) } != nil)
+                        sessionRevision: artworkStore.sessionRevision)
     }
     private var recordStatus: Text {
         if let connectionStatus, connectionStatus.isVisible { return connectionStatus.message }
@@ -231,15 +239,22 @@ struct RecordPlayerView: View {
             if !visible { pendingSelection = nil; accessibilityFocus = false; isRecordHovered = false; hoveredControl = nil; _ = cancelRecord() }
         }
         .onChange(of: accessibilityFocus) { _, focused in presentation.sendAttention(.accessibilityFocus(focused)) }
-        .onChange(of: track?.artwork.flatMap { artworkStore.palette(for: $0.url) }) { _, palette in
-            guard let palette else { return }
-            displayedPressing = PressingAppearance(seed: pressingRequest.uri.map(PressingSeed.offset) ?? 0, palette: palette)
-        }
         .task(id: pressingRequest) {
             let request = pressingRequest
-            if let url = request.artworkURL { await artworkStore.loadPalette(url) }
+            let artwork: LoadedArtwork?
+            if loadedArtworkRequest?.url == request.artworkURL,
+               loadedArtworkRequest?.sessionRevision == request.sessionRevision, let loadedArtwork {
+                artwork = loadedArtwork
+            } else if let url = request.artworkURL {
+                artwork = await artworkStore.loadPalette(url)
+            } else {
+                artwork = nil
+            }
             guard !Task.isCancelled, request == pressingRequest else { return }
-            let palette = request.artworkURL.flatMap { artworkStore.palette(for: $0) } ?? .neutral
+            loadedArtwork = artwork
+            loadedArtworkRequest = ArtworkLoadRequest(url: request.artworkURL, retryRevision: request.retryRevision,
+                                                     sessionRevision: request.sessionRevision)
+            let palette = artwork?.palette ?? .neutral
             let ready = PressingAppearance(seed: request.uri.map(PressingSeed.offset) ?? 0, palette: palette)
             displayedPressing = ready
         }
