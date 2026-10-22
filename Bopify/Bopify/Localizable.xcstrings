@@ -1294,6 +1294,26 @@
         }
       }
     },
+    "search.invalidLink" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This Spotify link is invalid."
+          }
+        }
+      }
+    },
+    "search.itemUnavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This Spotify item is unavailable."
+          }
+        }
+      }
+    },
     "search.loading" : {
       "localizations" : {
         "en" : {
@@ -1391,6 +1411,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Couldn’t search Spotify."
+          }
+        }
+      }
+    },
+    "search.unsupportedLink" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This Spotify link type isn’t supported."
           }
         }
       }

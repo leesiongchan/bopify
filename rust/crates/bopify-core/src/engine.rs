@@ -12,7 +12,7 @@ use librespot_connect::{
 use librespot_core::{Session, SessionConfig, authentication::Credentials};
 use librespot_playback::{
     audio_backend,
-    config::{AudioFormat, PlayerConfig},
+    config::{AudioFormat, Bitrate, PlayerConfig},
     mixer::{Mixer, MixerConfig, softmixer::SoftMixer},
     player::{Player, PlayerEventChannel},
 };
@@ -65,7 +65,7 @@ impl Engine {
         options: Option<crate::recovery::EngineCreateOptions>,
         sink: EventSink,
     ) -> Result<Self, BopifyError> {
-        log::info!("engine: creating Connect device");
+        log::info!("engine: creating Connect device requested_bitrate_kbps=320");
 
         let reporter = EngineReporter::new(sink);
         let event_reporter = reporter.clone();
@@ -99,7 +99,10 @@ impl Engine {
                 })?);
             let output_failed = reporter.output_error_signal();
             let player = Player::new(
-                PlayerConfig::default(),
+                PlayerConfig {
+                    bitrate: Bitrate::Bitrate320,
+                    ..PlayerConfig::default()
+                },
                 session.clone(),
                 mixer.get_soft_volume(),
                 move || {

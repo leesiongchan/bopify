@@ -39,6 +39,12 @@ public final class SearchModel {
     public private(set) var isLoading = false
     public private(set) var error: LibraryError?
     public private(set) var retryAfter: Date?
+    public var canRetry: Bool {
+        switch error {
+        case .invalidLink, .unsupportedLink, .notFound, .authorizationRequired, nil: false
+        default: true
+        }
+    }
     @ObservationIgnored private let service: any CatalogSearchService
     @ObservationIgnored private let debounce: @Sendable () async throws -> Void
     @ObservationIgnored private let now: @Sendable () -> Date
@@ -97,7 +103,7 @@ public final class SearchModel {
     }
 
     public func retry(at date: Date) async {
-        guard !query.isEmpty, !isLoading, error != nil, requestsAllowed(at: date) else { return }
+        guard !query.isEmpty, !isLoading, canRetry, requestsAllowed(at: date) else { return }
         await load(kind: nil, offset: 0, generation: generation)
     }
 
@@ -201,6 +207,9 @@ public final class SearchModel {
             groups = replacement
             if kind == nil { hasSearched = true }
             if !results.contains(where: { $0.uri == selectedURI }) { selectedURI = nil }
+            if kind == nil, case .resource = SpotifySearchInput(query), results.count == 1 {
+                selectedURI = results[0].uri
+            }
             BopifyLog.library.debug("catalog search ready kind=\(label, privacy: .public) count=\(self.results.count, privacy: .public) generation=\(current, privacy: .public)")
         } catch is CancellationError {
         } catch {

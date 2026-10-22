@@ -6,6 +6,78 @@ import BopifyDomain
 @MainActor @Suite("Catalog search")
 struct SearchModelTests {
 
+    @Test(arguments: CatalogSearchKind.allCases)
+    func resolvedLinkSelectsItsOnlyResultAndHasNoMorePages(_ kind: CatalogSearchKind) async {
+        let service = SearchFixture()
+        let result = searchResult(kind, "linked")
+        for pageKind in CatalogSearchKind.allCases {
+            await service.setPage(CatalogSearchPage(results: pageKind == kind ? [result] : [], nextOffset: nil), for: pageKind)
+        }
+        let model = SearchModel(service: service, debounce: {})
+        model.updateQuery("https://open.spotify.com/\(kind.rawValue)/original?si=sharing")
+        await model.search()
+        #expect(model.results == [result] && model.selectedURI == result.uri)
+        #expect(model.playRequest(for: result) == PlayRequest(contextURI: result.uri))
+        await model.loadMore()
+        #expect(await service.requests.count == 1)
+        model.cancel()
+        await model.search()
+        #expect(model.selectedURI == result.uri && model.results == [result])
+        #expect(await service.requests.count == 1)
+        model.updateQuery("music")
+        await model.search()
+        #expect(model.selectedURI == nil)
+        model.clear()
+        #expect(model.results.isEmpty && model.query.isEmpty)
+    }
+
+    @Test(arguments: [LibraryError.invalidLink, .unsupportedLink, .notFound])
+    func deterministicLinkFailuresDoNotRetry(_ failure: LibraryError) async {
+        let service = SearchFixture()
+        await service.fail(failure, for: .song)
+        let model = SearchModel(service: service, debounce: {})
+        model.updateQuery("spotify:track:abc")
+        await model.search()
+        #expect(model.error == failure)
+        await model.retry(at: Date())
+        #expect(await service.requests.count == 1)
+    }
+
+    @Test(arguments: ["edit", "clear", "close"])
+    func staleLinkLookupCannotReplaceCurrentResults(_ action: String) async {
+        let service = SearchFixture()
+        let model = SearchModel(service: service, debounce: {})
+        model.updateQuery("spotify:track:abc")
+        await service.holdNext()
+        let pending = Task { await model.search() }
+        await service.waitUntilHeld()
+        if action == "edit" {
+            model.updateQuery("new text")
+            await model.search()
+        } else if action == "clear" { model.clear() }
+        else { model.cancel() }
+        let expected = model.results
+        await service.finishHeld(Dictionary(uniqueKeysWithValues: CatalogSearchKind.allCases.map {
+            ($0, CatalogSearchPage(results: $0 == .song ? [searchResult(.song, "late")] : [], nextOffset: nil))
+        }))
+        await pending.value
+        #expect(model.results == expected && model.selectedURI == nil && !model.isLoading)
+    }
+
+    @Test func transientLinkFailureCanRetryAndSelectTheResult() async {
+        let service = SearchFixture()
+        await service.fail(.unavailable, for: .song)
+        let model = SearchModel(service: service, debounce: {})
+        model.updateQuery("spotify:track:abc")
+        await model.search()
+        for kind in CatalogSearchKind.allCases {
+            await service.setPage(CatalogSearchPage(results: kind == .song ? [searchResult(.song, "abc")] : [], nextOffset: nil), for: kind)
+        }
+        await model.retry(at: Date())
+        #expect(model.error == nil && model.selectedURI == SpotifyURI("spotify:track:abc"))
+        #expect(await service.requests.count == 2)
+    }
+
     @Test(arguments: ["  bjork  ", "BJÖRK"])
     func ranksTitlesAcrossKindsIgnoringCaseAndAccents(_ query: String) async {
         let service = SearchFixture()

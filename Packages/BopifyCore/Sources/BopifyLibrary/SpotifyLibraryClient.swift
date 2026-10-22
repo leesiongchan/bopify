@@ -65,6 +65,25 @@ public struct SpotifyLibraryClient: LibraryService, SavedTracksService, Listenin
     public func search(query: String, kinds: Set<CatalogSearchKind>, offset: Int, limit: Int) async throws -> [CatalogSearchKind: CatalogSearchPage] {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty, !kinds.isEmpty, (0...1000).contains(offset), (1...10).contains(limit) else { throw LibraryError.invalidResponse }
+        switch SpotifySearchInput(query) {
+        case .invalidLink: throw LibraryError.invalidLink
+        case .unsupportedLink: throw LibraryError.unsupportedLink
+        case let .resource(uri):
+            let kind: CatalogSearchKind
+            switch uri.kind {
+            case .track: kind = .song
+            case .album: kind = .album
+            case .artist: kind = .artist
+            case .playlist: kind = .playlist
+            default: throw LibraryError.unsupportedLink
+            }
+            let result = offset == 0 && kinds.contains(kind) ? try await lookup(uri) : nil
+            BopifyLog.library.debug("catalog link resolved kind=\(kind.rawValue, privacy: .public) count=\(result == nil ? 0 : 1, privacy: .public)")
+            return Dictionary(uniqueKeysWithValues: kinds.map {
+                ($0, CatalogSearchPage(results: $0 == kind ? result.map { [$0] } ?? [] : [], nextOffset: nil))
+            })
+        case .text: break
+        }
         let types = CatalogSearchKind.allCases.filter { kinds.contains($0) }
         let data = try await request(method: "GET", path: "/v1/search", query: [
             URLQueryItem(name: "q", value: query), URLQueryItem(name: "type", value: types.map(\.rawValue).joined(separator: ",")),
@@ -74,6 +93,38 @@ public struct SpotifyLibraryClient: LibraryService, SavedTracksService, Listenin
         return try Dictionary(uniqueKeysWithValues: types.map { kind in
             (kind, try response.page(for: kind, offset: offset, limit: limit))
         })
+    }
+
+    private func lookup(_ uri: SpotifyURI) async throws -> CatalogSearchResult {
+        let path: String
+        switch uri.kind {
+        case .track: path = "tracks"
+        case .album: path = "albums"
+        case .artist: path = "artists"
+        case .playlist: path = "playlists"
+        default: throw LibraryError.unsupportedLink
+        }
+        let scopes: Set<String> = uri.kind == .playlist ? ["playlist-read-private", "playlist-read-collaborative"] : []
+        let data = try await request(method: "GET", path: "/v1/\(path)/\(uri.id)", query: [], scopes: scopes)
+        if uri.kind == .track {
+            guard let item = try? JSONDecoder().decode(SavedTrack.self, from: data) else { throw LibraryError.invalidResponse }
+            guard item.is_playable != false, item.is_local != true else { throw LibraryError.notFound }
+            // The authenticated endpoint can return a playable regional version with a different URI.
+            guard let track = item.domain else { throw LibraryError.invalidResponse }
+            return .song(track)
+        }
+        guard let item = try? JSONDecoder().decode(CollectionEntity.self, from: data), item.uri == uri.rawValue else {
+            throw LibraryError.invalidResponse
+        }
+        let result: CatalogSearchResult?
+        switch uri.kind {
+        case .album: result = item.domain(.albums).map(CatalogSearchResult.album)
+        case .artist: result = item.domain(.artists).map(CatalogSearchResult.artist)
+        case .playlist: result = item.domain(.playlists).map(CatalogSearchResult.playlist)
+        default: throw LibraryError.unsupportedLink
+        }
+        guard let result else { throw LibraryError.invalidResponse }
+        return result
     }
 
     public func savedCollections(_ kind: LibraryCollectionKind, cursor: LibraryCollectionCursor, limit: Int) async throws -> LibraryCollectionsPage {
@@ -135,7 +186,7 @@ public struct SpotifyLibraryClient: LibraryService, SavedTracksService, Listenin
         try Task.checkCancellation()
         var components = URLComponents(string: "https://api.spotify.com")!
         components.path = path
-        components.queryItems = query
+        components.queryItems = query.isEmpty ? nil : query
         var request = URLRequest(url: components.url!, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)
         request.httpMethod = method
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -153,6 +204,7 @@ public struct SpotifyLibraryClient: LibraryService, SavedTracksService, Listenin
         case 200: return data
         case 401: throw LibraryError.authorizationRequired
         case 403: throw LibraryError.forbidden
+        case 404: throw LibraryError.notFound
         case 429:
             let seconds = http.value(forHTTPHeaderField: "Retry-After").flatMap(Int.init).flatMap { $0 >= 0 ? $0 : nil }
             let quota = (try? JSONDecoder().decode(LibraryLimitResponse.self, from: data))?.error.reason == "QUOTA_EXCEEDED"

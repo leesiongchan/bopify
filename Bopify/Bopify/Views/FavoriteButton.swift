@@ -76,7 +76,7 @@ private func favoriteNotice(for error: LibraryError?) -> String {
     case .forbidden: String(localized: "favorite.forbidden")
     case .rateLimited: String(localized: "favorite.rateLimited")
     case .quotaExceeded: String(localized: "library.quotaExceeded")
-    case .invalidResponse, .unavailable: String(localized: "favorite.unavailable")
+    case .invalidResponse, .unavailable, .invalidLink, .unsupportedLink, .notFound: String(localized: "favorite.unavailable")
     case nil: String(localized: "favorite.unknown")
     }
 }

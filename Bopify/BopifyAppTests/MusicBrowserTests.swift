@@ -8,6 +8,62 @@ import BopifyPlayback
 
 @MainActor @Suite("Music browser integration", .serialized)
 struct MusicBrowserTests {
+    @Test func pastedLongLinkStaysOnOneScrollableLine() async throws {
+        let (environment, panel, window) = try await openSearch(LinkedSearchService(kind: .song))
+        defer { environment.searchPopover.close(); panel.close() }
+        let field = try #require(searchField(in: window.contentView))
+        field.selectText(nil)
+        let editor = try #require(field.currentEditor() as? NSTextView)
+        editor.insertText("https://open.spotify.com/track/6rqhFgbbKwnb9MLmUQDhG6?si=\(String(repeating: "a", count: 60))",
+                          replacementRange: editor.selectedRange())
+        try await waitUntil { environment.search.hasSearched && !environment.search.isLoading }
+        let container = try #require(editor.textContainer)
+        let layout = try #require(editor.layoutManager)
+        layout.ensureLayout(for: container)
+        #expect(layout.usedRect(for: container).height <= field.bounds.height)
+    }
+
+    @Test(arguments: CatalogSearchKind.allCases, [false, true])
+    func pastedMusicLinkWaitsForSelectionBeforePlaying(_ kind: CatalogSearchKind, byClick: Bool) async throws {
+        let engine = LiveLyricTestEngine()
+        let player = PlayerModel(engine: engine)
+        player.start()
+        let service = LinkedSearchService(kind: kind)
+        let (environment, panel, window) = try await openSearch(service, player: player)
+        defer { environment.searchPopover.close(); panel.close(); player.stop() }
+        let field = try #require(searchField(in: window.contentView))
+        field.selectText(nil)
+        let editor = try #require(field.currentEditor() as? NSTextView)
+        let link = "https://open.spotify.com/\(kind.rawValue)/linked?si=sharing"
+        editor.insertText(link, replacementRange: editor.selectedRange())
+        try await waitUntil { environment.search.hasSearched && !environment.search.isLoading }
+        let uri = try #require(SpotifyURI("spotify:\(kind.rawValue):linked"))
+        #expect(environment.search.query == link && environment.search.results.count == 1)
+        #expect(engine.loadRequests.isEmpty)
+        #expect(environment.search.selectedURI == uri)
+        if byClick {
+            try pressSearchControl(in: #require(resultTable(in: window.contentView)), row: 0)
+        } else {
+            let delegate = try #require(field.delegate as? CatalogSearchField.Coordinator)
+            #expect(delegate.control(field, textView: editor, doCommandBy: #selector(NSResponder.insertNewline(_:))))
+        }
+        try await waitUntil { engine.loadRequests.last == PlayRequest(contextURI: uri) }
+        #expect(!environment.searchPopover.isVisible)
+    }
+
+    @Test(arguments: [LibraryError.invalidLink, .unsupportedLink, .notFound])
+    func invalidLinksShowAnErrorWithoutRetryOrPlayback(_ failure: LibraryError) async throws {
+        let (environment, panel, window) = try await openSearch(LinkedSearchService(kind: .song, failure: failure))
+        defer { environment.searchPopover.close(); panel.close() }
+        let field = try #require(searchField(in: window.contentView))
+        field.selectText(nil)
+        let editor = try #require(field.currentEditor() as? NSTextView)
+        editor.insertText("https://open.spotify.com/track/missing", replacementRange: editor.selectedRange())
+        try await waitUntil { environment.search.error == failure && !environment.search.isLoading }
+        #expect(!environment.search.canRetry && environment.search.selectedURI == nil)
+        #expect(environment.search.results.isEmpty && resultTable(in: window.contentView) == nil)
+    }
+
     @Test func typingMultipleCharactersKeepsTheInsertionPointAndArrowKeysSelectResults() async throws {
         let environment = makePreviewEnvironment(.paused)
         defer { environment.searchPopover.close(); environment.player?.stop() }
@@ -389,6 +445,26 @@ struct MusicBrowserTests {
         await environment.signOut()
         #expect(environment.search.query.isEmpty && environment.search.results.isEmpty)
         #expect(environment.collections.items.isEmpty && !environment.searchPopover.isVisible)
+    }
+}
+
+private nonisolated struct LinkedSearchService: CatalogSearchService {
+    let kind: CatalogSearchKind
+    var failure: LibraryError?
+    func search(query: String, kinds: Set<CatalogSearchKind>, offset: Int, limit: Int) async throws -> [CatalogSearchKind: CatalogSearchPage] {
+        if let failure { throw failure }
+        let uri = SpotifyURI("spotify:\(kind.rawValue):linked")!
+        let item = LibraryCollection(uri: uri, title: "Linked music", subtitle: kind == .artist ? "" : "Artist", artwork: nil)
+        let result: CatalogSearchResult = switch kind {
+        case .song: .song(Track(uri: uri, title: "Linked music", artists: [ArtistSummary(name: "Artist")],
+            albumTitle: nil, artwork: nil, durationMs: 180_000))
+        case .album: .album(item)
+        case .artist: .artist(item)
+        case .playlist: .playlist(item)
+        }
+        return Dictionary(uniqueKeysWithValues: kinds.map {
+            ($0, CatalogSearchPage(results: $0 == kind ? [result] : [], nextOffset: nil))
+        })
     }
 }
 

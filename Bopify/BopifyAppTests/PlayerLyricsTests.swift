@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Testing
 import BopifyDomain
+import BopifyLibrary
 import BopifyPlayback
 
 @MainActor @Suite("Player lyrics", .serialized)
@@ -58,6 +59,32 @@ struct PlayerLyricsTests {
         try await Task.sleep(for: .milliseconds(1300))
         #expect(f.environment.presentation.mode == .compact)
         #expect(!f.panel.isKeyWindow)
+    }
+
+    @Test func compactFavoriteClickTogglesSavedStateWithoutExpandingOrDragging() async throws {
+        let preview = makePreviewEnvironment(.paused)
+        let environment = AppEnvironment(previewPlayer: preview.player, favoriteService: LyricFavoriteService(),
+                                         artworkStore: preview.artworkStore)
+        let f = try PlayerLyricsFixture(environment: environment)
+        defer { f.close() }
+        await f.environment.refreshFavorite()
+        try #require(f.environment.favorite.saved == true)
+        try await f.show()
+        let origin = f.panel.frame.origin
+        let lyric = f.controller.layout.lyricsFrame
+        let point = CGPoint(x: lyric.maxX - LyricRibbonLayout.horizontalInset - 14,
+                            y: f.panel.frame.height - lyric.minY - LyricRibbonLayout.verticalInset - 14)
+        for saved in [false, true] {
+            NSApp.postEvent(try f.event(.leftMouseUp, at: point), atStart: true)
+            f.panel.sendEvent(try f.event(.leftMouseDown, at: point))
+            while let up = NSApp.nextEvent(matching: .leftMouseUp, until: Date(), inMode: .default, dequeue: true) {
+                f.panel.sendEvent(up)
+            }
+            try await Task.sleep(for: .milliseconds(100))
+            #expect(f.environment.favorite.saved == saved)
+            #expect(f.environment.presentation.mode == .compact && !f.panel.isKeyWindow)
+            #expect(f.panel.frame.origin == origin && !f.controller.isDragging)
+        }
     }
 
     @Test(arguments: [false, true])
@@ -245,7 +272,7 @@ struct PlayerLyricsTests {
 }
 
 @MainActor private final class PlayerLyricsFixture {
-    let environment = makePreviewEnvironment(.paused)
+    let environment: AppEnvironment
     let model = LyricRibbonModel(snapshot: lyricTestSnapshot())
     let controller: PlayerWindowController
     let panel: StatusPanel
@@ -255,8 +282,9 @@ struct PlayerLyricsTests {
     private let defaults: UserDefaults
     private let eventTime = ProcessInfo.processInfo.systemUptime
 
-    init() throws {
+    init(environment: AppEnvironment = makePreviewEnvironment(.paused)) throws {
         _ = NSApplication.shared
+        self.environment = environment
         defaults = try #require(UserDefaults(suiteName: suite))
         controller = PlayerWindowController(defaults: defaults)
         let seeks = seeks
@@ -311,3 +339,10 @@ struct PlayerLyricsTests {
 }
 
 @MainActor private final class LyricSeekTargets { var values: [Int64] = [] }
+
+private actor LyricFavoriteService: LibraryService {
+    private var saved = true
+    func savedState(for uri: SpotifyURI) async throws -> Bool { saved }
+    func save(_ uri: SpotifyURI) async throws { saved = true }
+    func remove(_ uri: SpotifyURI) async throws { saved = false }
+}

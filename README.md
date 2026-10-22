@@ -4,6 +4,7 @@ A native Spotify player for the macOS menu bar. Plays audio directly through
 [librespot](https://github.com/librespot-org/librespot), without the Spotify app.
 
 Requires an Apple Silicon Mac, macOS 26 or later, and Spotify Premium.
+Playback prefers 320 kbps when available, falling back to formats offered for each track.
 
 ## Install
 
@@ -17,6 +18,11 @@ Ranking tolerates typos and differences in case, accents, and character width. S
 Choose a result or use the arrow keys and Return to play it immediately; Escape closes search.
 Scroll through search results to load further matches automatically.
 Your query and results remain when search closes. Use the clear button to reset them.
+Paste a Spotify song, album, artist, or playlist URL into search to find that exact item.
+Spotify URIs (`spotify:track:…`), localized web URLs, and sharing parameters are supported.
+Pasting selects the item without interrupting playback; press Return or click it to play.
+Short links such as `spotify.link` and `spoti.fi` are not supported yet; use the item's
+`open.spotify.com` URL from Spotify's web player instead.
 The **Library** tab shows your saved playlists, albums, and followed artists together.
 Click a cover to play that collection.
 

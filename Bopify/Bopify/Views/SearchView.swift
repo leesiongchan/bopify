@@ -187,7 +187,7 @@ struct SearchView: View {
                 VStack(spacing: 10) {
                     Text(errorText(failure)).foregroundStyle(.secondary)
                     if remaining > 0 { Text("library.retryIn \(remaining)").font(.caption).foregroundStyle(.secondary) }
-                    if failure != .authorizationRequired { retryButton(kind: nil, at: context.date, remaining: remaining) }
+                    if model.canRetry { retryButton(kind: nil, at: context.date, remaining: remaining) }
                 }
             }
         }
@@ -214,6 +214,9 @@ struct SearchView: View {
         case .authorizationRequired: "librarySetup.accessExpired"
         case .quotaExceeded: "library.quotaExceeded"
         case .rateLimited: "library.rateLimited"
+        case .invalidLink: "search.invalidLink"
+        case .unsupportedLink: "search.unsupportedLink"
+        case .notFound: "search.itemUnavailable"
         default: "search.unavailable"
         }
     }

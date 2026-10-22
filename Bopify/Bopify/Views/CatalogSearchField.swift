@@ -20,6 +20,7 @@ struct CatalogSearchField: NSViewRepresentable {
         field.drawsBackground = false
         field.focusRingType = .none
         field.usesSingleLineMode = true
+        field.cell?.isScrollable = true
         field.font = .systemFont(ofSize: 13)
         return field
     }
