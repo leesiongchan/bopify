@@ -95,7 +95,8 @@ struct MusicBrowserTests {
         #expect(environment.search.results == tracks.map(CatalogSearchResult.song))
     }
 
-    @Test func mixedResultsHaveNoHeadingsAndOneLoadingFooter() async throws {
+    @Test(arguments: [NSScroller.Style.overlay, .legacy])
+    func mixedResultsHaveNoHeadingsAndOneLoadingFooter(scrollerStyle: NSScroller.Style) async throws {
         var service = groupedServices()
         service.collections[.artist]?[0] = LibraryCollection(uri: SpotifyURI("spotify:artist:sample0")!,
             title: "Result", subtitle: "", artwork: nil)
@@ -103,7 +104,12 @@ struct MusicBrowserTests {
         defer { environment.searchPopover.close(); panel.close() }
         let table = try #require(resultTable(in: window.contentView))
         let scroll = try #require(table.enclosingScrollView)
-        #expect(abs(table.frame.width - 300) < 1)
+        scroll.scrollerStyle = scrollerStyle
+        window.contentView?.layoutSubtreeIfNeeded()
+        let horizontalInsets = scroll.contentInsets.left + scroll.contentInsets.right
+        #expect(abs(scroll.frame.width - horizontalInsets - 300) < 1)
+        // Legacy scrollbars reserve space inside the fixed-width search view.
+        #expect(abs(table.frame.width - (scroll.contentSize.width - horizontalInsets)) < 1)
         #expect(scroll.contentSize.height - scroll.contentInsets.top - scroll.contentInsets.bottom == 292)
         #expect(table.numberOfRows == 20 && searchGroupRows(table).isEmpty)
         #expect(environment.search.results.first?.uri == SpotifyURI("spotify:artist:sample0"))
