@@ -232,6 +232,11 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         keepOnTop.target = self
         keepOnTop.state = environment.presentation.keepOnTop ? .on : .off
         menu.addItem(keepOnTop)
+        let artworkBackground = NSMenuItem(title: String(localized: "menu.artworkBackground"),
+                                          action: #selector(toggleArtworkBackground(_:)), keyEquivalent: "")
+        artworkBackground.target = self
+        artworkBackground.state = (UserDefaults.standard.object(forKey: "player.artworkBackground") as? Bool ?? true) ? .on : .off
+        menu.addItem(artworkBackground)
         let libraryItem = NSMenuItem(title: String(localized: "menu.libraryAccess"),
                                      action: #selector(showLibraryAccess(_:)), keyEquivalent: "")
         libraryItem.target = self
@@ -273,6 +278,11 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     @objc private func showLibraryAccess(_ sender: Any?) { environment.librarySetupWindow.show(environment: environment) }
     @objc private func showShortcuts(_ sender: Any?) { shortcutsWindow.show() }
     @objc private func toggleKeepOnTop(_ sender: Any?) { environment.presentation.keepOnTop.toggle() }
+    @objc private func toggleArtworkBackground(_ sender: Any?) {
+        let enabled = !(UserDefaults.standard.object(forKey: "player.artworkBackground") as? Bool ?? true)
+        UserDefaults.standard.set(enabled, forKey: "player.artworkBackground")
+        BopifyLog.playback.debug("artwork background changed enabled=\(enabled, privacy: .public)")
+    }
 
     @objc private func quit(_ sender: Any?) {
         // `bopify_engine_destroy` (inside `shutdown()`) joins the Rust

@@ -8,6 +8,34 @@ import BopifyPlayback
 
 @MainActor @Suite("Player shortcuts", .serialized)
 struct PlayerShortcutTests {
+    @Test func artworkBackgroundOptionPersistsAcrossControllerRecreation() async throws {
+        let defaults = UserDefaults.standard
+        let key = "player.artworkBackground"
+        let saved = defaults.object(forKey: key)
+        defaults.removeObject(forKey: key)
+        defer {
+            if let saved { defaults.set(saved, forKey: key) }
+            else { defaults.removeObject(forKey: key) }
+        }
+        let first = try Fixture()
+        defer { first.close() }
+        first.controller.togglePlayer()
+        try await waitUntil { first.panel.isVisible && first.environment.presentation.mode == .expanded }
+        try await Task.sleep(for: .milliseconds(800))
+        try saveBackgroundSnapshot(first.panel.contentView, name: "on")
+        let action = NSSelectorFromString("toggleArtworkBackground:")
+        try #require(first.controller.responds(to: action))
+        try #require(NSApp.sendAction(action, to: first.controller, from: nil))
+        #expect(defaults.object(forKey: key) as? Bool == false)
+        try await Task.sleep(for: .milliseconds(800))
+        try saveBackgroundSnapshot(first.panel.contentView, name: "off")
+
+        let second = try Fixture()
+        defer { second.close() }
+        try #require(NSApp.sendAction(action, to: second.controller, from: nil))
+        #expect(defaults.object(forKey: key) as? Bool == true)
+    }
+
     @Test func searchRevealsTheHiddenPlayerAndFocusesTheRetainedQuery() async throws {
         let fixture = try Fixture()
         defer { fixture.close() }
@@ -123,6 +151,15 @@ struct PlayerShortcutTests {
     private func searchField(in view: NSView?) -> NSTextField? {
         if let field = view as? NSTextField, field.identifier?.rawValue == "catalog-search-input" { return field }
         return view?.subviews.lazy.compactMap { searchField(in: $0) }.first
+    }
+
+    private func saveBackgroundSnapshot(_ content: NSView?, name: String) throws {
+        let view = try #require(content)
+        view.layoutSubtreeIfNeeded()
+        let bitmap = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+        view.cacheDisplay(in: view.bounds, to: bitmap)
+        let data = try #require(bitmap.representation(using: .png, properties: [:]))
+        try data.write(to: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("bopify-background-\(name).png"))
     }
 
     @MainActor private struct Fixture {

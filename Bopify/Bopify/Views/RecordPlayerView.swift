@@ -36,6 +36,7 @@ struct RecordPlayerView: View {
     @State private var isScrubbing = false
     @State private var isRecordHovered = false
     @AppStorage("record.hasScrubbed") private var hasScrubbed = false
+    @AppStorage("player.artworkBackground") private var showsArtworkBackground = true
     @State private var pendingSelection: QueueSelectionStatus?
     @State private var controlsContentHeight: CGFloat?
     @AccessibilityFocusState private var accessibilityFocus: Bool
@@ -73,6 +74,14 @@ struct RecordPlayerView: View {
         }
         return track?.artwork.flatMap { artworkStore.image(for: $0.url) }.map { Image(nsImage: $0) }
     }
+    private var backgroundImage: Image? {
+        guard showsArtworkBackground, track?.artwork != nil else { return nil }
+        // Keep the last cover's colors while the next cover loads, without retaining artwork across sign-outs.
+        if loadedArtworkRequest?.sessionRevision == artworkStore.sessionRevision, let loadedArtwork {
+            return Image(nsImage: loadedArtwork.image)
+        }
+        return image
+    }
     private struct PressingRequest: Equatable {
         let uri: String?
         let artworkURL: URL?
@@ -106,7 +115,7 @@ struct RecordPlayerView: View {
         let previous: (() -> Void)? = player.isEngineReady && player.state.isActiveDevice && player.state.canPrevious ? { player.previous() } : nil
         let next: (() -> Void)? = player.isEngineReady && player.state.isActiveDevice && player.state.canNext ? { player.next() } : nil
         ZStack(alignment: .topLeading) {
-            PlayerSurface(cornerRadius: layout.sleeveCornerRadius) {
+            PlayerSurface(cornerRadius: layout.sleeveCornerRadius, artwork: backgroundImage) {
                 PlayerBackgroundDragRegion(takesKeyboardFocus: isEngaged, onDragChanged: dragLyrics)
             }
                 .clipShape(RoundedRectangle(cornerRadius: layout.sleeveCornerRadius, style: .continuous))

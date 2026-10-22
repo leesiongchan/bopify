@@ -895,6 +895,16 @@
         }
       }
     },
+    "menu.artworkBackground" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Artwork Background"
+          }
+        }
+      }
+    },
     "menu.libraryAccess" : {
       "localizations" : {
         "en" : {
