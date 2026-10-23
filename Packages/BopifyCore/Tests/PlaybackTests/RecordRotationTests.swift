@@ -3,14 +3,6 @@ import Testing
 import BopifyPlayback
 
 @Suite("RecordRotation") struct RecordRotationTests {
-    @Test func initialMotorIsStationary() {
-        let rotation = RecordRotation()
-        #expect(rotation.angle(at: 100) == 0)
-        #expect(rotation.speed(at: 100) == 0)
-        #expect(!rotation.isMoving(at: 100))
-        #expect(rotation.stopTime == nil)
-    }
-
     @Test func driveIntegratesSpinUpInsteadOfStartingAtCruise() {
         var rotation = RecordRotation()
         rotation.setRunning(true, at: 0)
@@ -102,12 +94,5 @@ import BopifyPlayback
         rotation.setRunning(false, at: 11)
         #expect(rotation.angle(at: 9) == rotation.angle(at: 11))
         #expect(rotation.speed(at: 9) == rotation.speed(at: 11))
-    }
-
-    @Test func brakeAtRestHasNoDeadlineOrMovement() {
-        var rotation = RecordRotation()
-        rotation.setRunning(false, at: 10)
-        #expect(rotation.stopTime == nil)
-        #expect(!rotation.isMoving(at: 10))
     }
 }

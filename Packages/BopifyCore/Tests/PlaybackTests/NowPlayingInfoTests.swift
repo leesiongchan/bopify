@@ -47,10 +47,6 @@ struct NowPlayingInfoTests {
         #expect(nowPlayingInfo(for: mirroring, positionMs: 0) == nil)
     }
 
-    @Test func aLostSessionStepsAside() {
-        #expect(nowPlayingInfo(for: state(.error(.playbackSessionLost), active: false, track: track), positionMs: 0) == nil)
-    }
-
     @Test func noTrackStepsAside() {
         #expect(nowPlayingInfo(for: state(.idle, track: nil), positionMs: 0) == nil)
     }

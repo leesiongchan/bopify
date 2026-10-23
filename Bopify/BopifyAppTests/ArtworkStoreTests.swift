@@ -8,35 +8,27 @@ import Nuke
 import Observation
 import SwiftUI
 import BopifyDomain
-import BopifyLibrary
 import Testing
 import BopifyPlayback
 
 @MainActor
 @Suite("Artwork store", .serialized)
 struct ArtworkStoreTests {
-    @Test func displayedCoverSurvivesUnrelatedCachePressure() async throws {
+    @Test(arguments: [1.0, 2.0]) func displayedCoverSurvivesUnrelatedCachePressure(scale: CGFloat) async throws {
         let fixture = ArtworkFixture()
         defer { fixture.store.clear() }
         let url = fixture.url()
-        let track = Track(uri: SpotifyURI("spotify:track:artworkretention")!, title: "Cover retention",
-                          artists: [], albumTitle: nil, artwork: Artwork(url: url), durationMs: 180_000)
-        let model = RecentsModel(service: ArtworkHistory(track: track))
-        let host = NSHostingView(rootView: CoverFlowView(model: model, copy: .recents,
-            artworkStore: fixture.store, onPlay: { _ in }).frame(width: 200, height: 120))
-        let window = NSWindow(contentRect: CGRect(x: 300, y: 300, width: 200, height: 120),
-                              styleMask: [.borderless], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
+        // Isolate one consumer so a cover-flow reflection cannot start a separate load after eviction.
+        let (host, window) = artworkWindow(
+            RemoteArtworkView(url: url, store: fixture.store, size: 76) { Color.gray }.frame(width: 76, height: 76))
         defer { window.close() }
-        window.contentView = host
-        window.makeKeyAndOrderFront(nil)
         try await artworkEventually { ArtworkProtocol.count(url) == 1 }
-        try await artworkEventually { self.redPixels(in: host, snapshot: "before") > 1_000 }
+        try await artworkEventually { self.redArea(in: host, snapshot: "before", scale: scale) > 1_000 }
         fixture.cache.removeAll()
         await fixture.store.load(fixture.url())
         try #require(fixture.store.image(for: url) == nil)
         try await Task.sleep(for: .milliseconds(100))
-        try await artworkEventually { self.redPixels(in: host, snapshot: "after") > 1_000 }
+        try await artworkEventually { self.redArea(in: host, snapshot: "after", scale: scale) > 1_000 }
         #expect(ArtworkProtocol.count(url) == 1)
     }
 
@@ -56,20 +48,20 @@ struct ArtworkStoreTests {
         let survivor = Task { await fixture.store.load(oldURL, pixelSize: 64) }
         try await Task.sleep(for: .milliseconds(30))
         host.rootView = content(newURL)
-        try await artworkEventually { self.redPixels(in: host) > 1_000 }
+        try await artworkEventually { self.redArea(in: host) > 1_000 }
         ArtworkProtocol.release(oldURL)
         _ = await survivor.value
         try await Task.sleep(for: .milliseconds(100))
-        #expect(redPixels(in: host) > 1_000, "An old URL must not replace the current image")
+        #expect(redArea(in: host) > 1_000, "An old URL must not replace the current image")
         ArtworkProtocol.hold(newURL)
         fixture.store.clear()
         try await artworkEventually { ArtworkProtocol.count(newURL) == 2 }
-        #expect(redPixels(in: host) == 0, "Session reset must remove retained artwork")
+        #expect(redArea(in: host) == 0, "Session reset must remove retained artwork")
         ArtworkProtocol.release(newURL)
-        try await artworkEventually { self.redPixels(in: host) > 1_000 }
+        try await artworkEventually { self.redArea(in: host) > 1_000 }
     }
 
-    @Test func playerKeepsRetainedArtworkWhenAnotherImageRetries() async throws {
+    @Test(arguments: [1.0, 2.0]) func playerKeepsRetainedArtworkWhenAnotherImageRetries(scale: CGFloat) async throws {
         let clock = ArtworkRetryClock()
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [ArtworkProtocol.self]
@@ -89,7 +81,7 @@ struct ArtworkStoreTests {
         let (host, window) = artworkWindow(content)
         window.setContentSize(CGSize(width: 380, height: 600))
         defer { window.close() }
-        try await artworkEventually { store.palette(for: url) != nil && self.redPixels(in: host) > 1_000 }
+        try await artworkEventually { store.palette(for: url) != nil && self.redArea(in: host, scale: scale) > 1_000 }
         cache.removeAll()
         ArtworkProtocol.plan(url, status: 503)
         let other = URL(string: "https://artwork.invalid/\(UUID().uuidString)")!
@@ -101,7 +93,7 @@ struct ArtworkStoreTests {
         try await artworkEventually { store.retryRevision > revision }
         try await Task.sleep(for: .milliseconds(100))
         #expect(ArtworkProtocol.count(url) == 1, "Unrelated retries must reuse the player's retained artwork")
-        #expect(redPixels(in: host) > 1_000)
+        #expect(redArea(in: host, scale: scale) > 1_000)
     }
 
     @Test func mountedArtworkRecoversAfterTransientCooldown() async throws {
@@ -116,9 +108,9 @@ struct ArtworkStoreTests {
             RemoteArtworkView(url: url, store: store, size: 32) { Color.gray }.frame(width: 76, height: 76))
         defer { window.close() }
         try await artworkEventually { !clock.waits.isEmpty }
-        #expect(redPixels(in: host) == 0)
+        #expect(redArea(in: host) == 0)
         clock.advance(by: .seconds(30))
-        try await artworkEventually { self.redPixels(in: host) > 1_000 }
+        try await artworkEventually { self.redArea(in: host) > 1_000 }
         #expect(ArtworkProtocol.count(url) == 2)
     }
 
@@ -213,9 +205,13 @@ struct ArtworkStoreTests {
         #expect(fixture.store.image(for: url) == nil)
     }
 
-    private func redPixels(in view: NSView, snapshot: String? = nil) -> Int {
+    private func redArea(in view: NSView, snapshot: String? = nil, scale: CGFloat = 1) -> CGFloat {
         view.layoutSubtreeIfNeeded()
-        guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return 0 }
+        guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil,
+            pixelsWide: Int(view.bounds.width * scale), pixelsHigh: Int(view.bounds.height * scale),
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return 0 }
+        bitmap.size = view.bounds.size
         view.cacheDisplay(in: view.bounds, to: bitmap)
         var count = 0
         for y in stride(from: 0, to: bitmap.pixelsHigh, by: 2) {
@@ -224,11 +220,13 @@ struct ArtworkStoreTests {
                    color.redComponent > 0.6, color.greenComponent < 0.4, color.blueComponent < 0.3 { count += 1 }
             }
         }
-        if count > 1_000, let snapshot {
+        // Each sample covers four pixels; compare square points at either backing scale.
+        let area = CGFloat(count * 4) / (scale * scale)
+        if area > 1_000, let snapshot {
             try? bitmap.representation(using: .png, properties: [:])?.write(
                 to: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("bopify-artwork-\(snapshot).png"))
         }
-        return count
+        return area
     }
 
     @Test func sharedLoadSurvivesOneCancellationAndThenUsesTheCache() async throws {
@@ -559,12 +557,6 @@ private nonisolated final class ArtworkHTTPServer: @unchecked Sendable {
     }
 
     func stop() { release(); listener.newConnectionHandler = nil; listener.cancel() }
-}
-
-private nonisolated struct ArtworkHistory: ListeningHistoryService {
-    let track: Track
-    func recentlyPlayed() async throws -> [RecentPlay] { [RecentPlay(track: track, contextURI: nil)] }
-    func topItems(_ kind: TopItemKind) async throws -> [StationSeed] { [] }
 }
 
 @MainActor

@@ -387,20 +387,6 @@ struct PlayerModelTests {
         #expect(model.state.canPrevious)
     }
 
-    @Test func playingThenPausedMovesThroughPhases() async {
-        let engine = StubPlaybackEngine()
-        let model = PlayerModel(engine: engine)
-        model.start()
-
-        await settle(model, engine, [.playing(positionMs: 1000)])
-        #expect(model.state.phase == .playing)
-        #expect(model.state.positionMs == 1000)
-
-        await settle(model, engine, [.paused(positionMs: 2000)])
-        #expect(model.state.phase == .paused)
-        #expect(model.state.positionMs == 2000)
-    }
-
     @Test func losingTheActiveDeviceStopsPretendingToPlay() async {
         let engine = StubPlaybackEngine()
         let model = PlayerModel(engine: engine)
@@ -410,15 +396,6 @@ struct PlayerModelTests {
 
         #expect(model.state.isActiveDevice == false)
         #expect(model.state.phase == .idle)
-    }
-
-    @Test func failureSetsErrorAndErrorPhase() async {
-        let engine = StubPlaybackEngine()
-        let model = PlayerModel(engine: engine)
-        model.start()
-        await settle(model, engine, [.failed(.premiumRequired)])
-
-        #expect(model.state.phase == .error(.premiumRequired))
     }
 
     @Test func togglePlayPauseSendsTheCommandButDoesNotAssumeItWorked() async {

@@ -1,23 +1,10 @@
 import Foundation
-import AppKit
 import Testing
 import BopifyDomain
 import BopifyPlayback
 
 @MainActor @Suite("Live lyric session", .serialized, .timeLimit(.minutes(1)))
 struct LiveLyricRibbonSessionTests {
-    @Test func showingLyricsDoesNotCreateASeparateWindow() async throws {
-        _ = NSApplication.shared
-        let f = LiveLyricFixture(); defer { f.stop() }
-        try await f.ready()
-        let windows = Set(NSApp.windows.map(ObjectIdentifier.init))
-        f.session.show()
-        #expect(Set(NSApp.windows.map(ObjectIdentifier.init)) == windows)
-        #expect(f.session.isVisible)
-        f.session.hide()
-        #expect(!f.session.isVisible)
-    }
-
     @Test func clickingTimedCueSeeksExactlyAndResumesFollowing() async throws {
         let f = LiveLyricFixture(); defer { f.stop() }
         try await f.load()

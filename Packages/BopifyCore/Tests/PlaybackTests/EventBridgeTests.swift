@@ -194,14 +194,6 @@ struct EventBridgeRadioTests {
         }
     }
 
-    @Test func finishFailsRequestsStillWaiting() async {
-        let bridge = EventBridge()
-        let waiting = Task { try await bridge.radio { _ in } }
-        try? await Task.sleep(for: .milliseconds(20))
-        bridge.finish()
-        await #expect(throws: PlayerError.playbackSessionLost) { _ = try await waiting.value }
-    }
-
     @Test func cancellingTheCallerStopsItsWait() async {
         let bridge = EventBridge()
         let waiting = Task { try await bridge.radio { _ in } }

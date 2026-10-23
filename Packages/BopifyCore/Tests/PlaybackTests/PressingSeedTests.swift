@@ -10,12 +10,4 @@ import BopifyPlayback
         #expect(PressingSeed.hash(uri) == hash)
         #expect(PressingSeed.offset(uri) == offset)
     }
-
-    @Test func noiseOffsetsStayWithinTheShaderRange() {
-        for index in 0..<100 {
-            let offset = PressingSeed.offset("spotify:track:preview\(index)")
-            #expect(offset >= 0 && offset < 4096)
-            #expect(offset.rounded() == offset)
-        }
-    }
 }

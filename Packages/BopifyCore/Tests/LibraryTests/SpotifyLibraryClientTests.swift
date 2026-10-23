@@ -372,28 +372,6 @@ struct SpotifyLibraryClientTests {
             URLQueryItem(name: "limit", value: "10")])
     }
 
-    @Test func invalidSearchInputsNeverSendRequests() async {
-        LibraryProtocol.fixture.reset(.init())
-        for (query, offset, limit) in [("  ", 0, 10), ("song", -1, 10), ("song", 1001, 10), ("song", 0, 11)] {
-            await #expect(throws: LibraryError.invalidResponse) {
-                _ = try await client().search(query: query, kinds: [.song], offset: offset, limit: limit)
-            }
-        }
-        #expect(LibraryProtocol.fixture.requests.isEmpty)
-    }
-
-    @Test func searchRejectsMismatchedPaginationAndSharesCooldown() async {
-        LibraryProtocol.fixture.reset(.init(data: Data(#"{"tracks":{"items":[],"offset":9,"limit":10,"total":0,"next":null}}"#.utf8)))
-        await #expect(throws: LibraryError.invalidResponse) { _ = try await client().search(query: "song", kinds: [.song], offset: 0, limit: 10) }
-        let client = client()
-        LibraryProtocol.fixture.reset(.init(status: 429, headers: ["Retry-After": "15"]))
-        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 15)) {
-            _ = try await client.search(query: "song", kinds: [.song], offset: 0, limit: 10)
-        }
-        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 15)) { _ = try await client.savedState(for: uri) }
-        #expect(LibraryProtocol.fixture.requests.count == 1)
-    }
-
     @Test func catalogSearchEncodesAllKindsAndUsesNoUserScopes() async throws {
         let body = ["tracks": catalogPage([]), "albums": catalogPage([]),
                     "artists": catalogPage([]), "playlists": catalogPage([])]

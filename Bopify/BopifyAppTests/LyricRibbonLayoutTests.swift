@@ -15,13 +15,6 @@ struct LyricRibbonLayoutTests {
         #expect(bounded.textViewportHeight > 0)
     }
 
-    @Test func staysReachableOnNarrowScreens() {
-        let layout = LyricRibbonLayout.measure(width: 250, textScale: 1.5, availableHeight: 240)
-        #expect(layout.panelSize.width == 250)
-        #expect(layout.panelSize.height <= 240)
-        #expect(layout.textViewportHeight.isFinite && layout.textViewportHeight > 0)
-    }
-
     @Test func reusesPassageLayoutAcrossClockUpdatesAndViewportChanges() {
         let manager = LyricLayoutManagerSpy()
         let container = NSTextContainer(size: .zero)

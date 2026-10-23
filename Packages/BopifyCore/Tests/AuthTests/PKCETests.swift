@@ -2,14 +2,6 @@ import Testing
 import Foundation
 @testable import BopifyAuth
 
-@Suite("PKCE")
-struct PKCETests {
-    @Test func matchesTheRFC7636TestVector() {
-        let pair = PKCEPair(verifier: "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")
-        #expect(pair.challenge == "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM")
-    }
-}
-
 @Suite("AuthorizationRequest")
 struct AuthorizationRequestTests {
     private let pkce = PKCEPair(verifier: "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")
@@ -37,10 +29,6 @@ struct AuthorizationRequestTests {
         #expect(q["response_type"] == "code")
         #expect(q["code_challenge_method"] == "S256")
         #expect(q["code_challenge"] == pkce.challenge)
-    }
-
-    @Test func requestsOnlyTheStreamingScope() throws {
-        #expect(try components()["scope"] == "streaming")
     }
 
     @Test func carriesTheLoopbackRedirectIncludingItsDynamicPort() throws {

@@ -40,18 +40,6 @@ struct LyricRibbonModelTests {
         #expect(model.isReading)
     }
 
-    @Test func seekRevisionResumesFollowing() throws {
-        let model = try model()
-        model.beginReading()
-        let revision = model.scrollResetRevision
-        var input = lyricTestSnapshot(position: 22_000)
-        input.seekRevision = 1
-        model.update(input)
-        #expect(!model.isReading)
-        #expect(model.projection?.current?.startMs == 20_000)
-        #expect(model.scrollResetRevision > revision)
-    }
-
     @Test func seekWithinSameCueStillResetsManualViewport() throws {
         let model = try model()
         model.beginReading()

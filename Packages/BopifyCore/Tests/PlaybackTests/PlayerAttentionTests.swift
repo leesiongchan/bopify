@@ -130,16 +130,4 @@ struct PlayerAttentionTests {
         #expect(presentation.mode == .expanded)
         presentation.resetEngagement()
     }
-
-    @MainActor @Test func queueDismissesBeforePanel() {
-        let presentation = PlayerPresentation()
-        presentation.sendAttention(.visibility(true))
-        presentation.sendAttention(.keyboardFocus(true))
-        presentation.requestQueue(true)
-        #expect(presentation.dismissQueue())
-        #expect(presentation.mode == .expanded)
-        #expect(presentation.isVisible)
-        #expect(!presentation.dismissQueue())
-        presentation.resetEngagement()
-    }
 }

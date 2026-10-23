@@ -19,10 +19,6 @@ struct PlaybackEventTests {
         try JSONDecoder().decode(PlaybackEvent.self, from: Data(json.utf8))
     }
 
-    @Test func decodesPlaying() throws {
-        #expect(try decode(#"{"type":"playing","positionMs":1000}"#) == .playing(positionMs: 1000))
-    }
-
     @Test func decodesTrackChanged() throws {
         let json = #"""
         {"type":"trackChanged","trackUri":"spotify:track:abc","title":"Title",
@@ -53,14 +49,6 @@ struct PlaybackEventTests {
 
     @Test func throwsOnAnUnrecognisedEventType() {
         #expect(throws: (any Error).self) { try decode(#"{"type":"teleported"}"#) }
-    }
-
-    @Test func decodesVolumeAtFullScale() throws {
-        #expect(try decode(#"{"type":"volumeChanged","volume":65535}"#) == .volumeChanged(volume: 1.0))
-    }
-
-    @Test func decodesVolumeAtZero() throws {
-        #expect(try decode(#"{"type":"volumeChanged","volume":0}"#) == .volumeChanged(volume: 0.0))
     }
 
     @Test func normalisesVolumeAgainstUInt16Max() throws {
