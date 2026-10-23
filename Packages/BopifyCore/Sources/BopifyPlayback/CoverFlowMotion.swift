@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// Placement of one cover at a fractional distance (in covers) from the strip's position.
 public struct CoverFlowTransform: Equatable, Sendable {
@@ -74,8 +75,7 @@ public struct CoverFlowVelocity: Sendable {
     }
 }
 
-/// A damped spring stepped with its exact solution, so it stays stable at any frame interval and can be
-/// grabbed mid-flight from its true position.
+/// Keeps the spring's current position and velocity available so motion can be grabbed mid-flight.
 public struct CoverFlowSpring: Equatable, Sendable {
     public var position: Double
     public var velocity: Double
@@ -92,26 +92,11 @@ public struct CoverFlowSpring: Equatable, Sendable {
     public mutating func step(dt: Double, reduceMotion: Bool) {
         guard dt > 0, !isSettled else { return }
         // Reduce Motion: quicker and critically damped, never overshooting.
-        let omega = 2 * .pi / (reduceMotion ? 0.2 : 0.35)
-        let zeta = reduceMotion ? 1.0 : 0.85
-        let x0 = position - target, v0 = velocity
-        let decay = exp(-zeta * omega * dt)
-        let x: Double, v: Double
-        if zeta >= 1 {
-            x = (x0 + (v0 + omega * x0) * dt) * decay
-            v = (v0 - omega * (v0 + omega * x0) * dt) * decay
-        } else {
-            let damped = omega * (1 - zeta * zeta).squareRoot()
-            let (sine, cosine) = (sin(damped * dt), cos(damped * dt))
-            x = decay * (x0 * cosine + (v0 + zeta * omega * x0) / damped * sine)
-            v = decay * (v0 * cosine - (zeta * omega * v0 + omega * omega * x0) / damped * sine)
-        }
-        if abs(x) < 0.0005 && abs(v) < 0.005 {
+        let spring = Spring(response: reduceMotion ? 0.2 : 0.35, dampingRatio: reduceMotion ? 1 : 0.85)
+        spring.update(value: &position, velocity: &velocity, target: target, deltaTime: dt)
+        if abs(position - target) < 0.0005 && abs(velocity) < 0.005 {
             position = target
             velocity = 0
-        } else {
-            position = target + x
-            velocity = v
         }
     }
 }
