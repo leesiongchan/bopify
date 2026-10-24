@@ -116,9 +116,14 @@ final class NowPlayingController {
         add(commands.nextTrackCommand, "next") { player, _ in player.next() }
         add(commands.previousTrackCommand, "previous") { player, _ in player.previous() }
         add(commands.changePlaybackPositionCommand, "changePosition") { player, event in
-            guard let event = event as? MPChangePlaybackPositionCommandEvent, event.positionTime.isFinite else { return }
-            player.seek(to: Int64(event.positionTime * 1000))
+            guard let event = event as? MPChangePlaybackPositionCommandEvent,
+                  let position = Self.seekPositionMs(seconds: event.positionTime) else { return }
+            player.seek(to: position)
         }
+    }
+
+    nonisolated static func seekPositionMs(seconds: TimeInterval) -> Int64? {
+        Int64(exactly: (seconds * 1000).rounded(.towardZero))
     }
 
     /// Mirrors Bopify's own button and the Space key, which ignore loading and buffering.

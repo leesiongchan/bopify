@@ -20,19 +20,23 @@ private final class FakeRadio {
 }
 
 private actor HeldHistory: ListeningHistoryService {
-    private let seeds: [StationSeed]
+    private var seeds: [StationSeed]
+    private(set) var topCalls = 0
     private var holdsNext = true
     private var held: CheckedContinuation<Void, Never>?
     init(_ seeds: [StationSeed]) { self.seeds = seeds }
 
     func recentlyPlayed() async throws -> [RecentPlay] { [] }
     func topItems(_ kind: TopItemKind) async throws -> [StationSeed] {
+        topCalls += 1
+        let result = kind == .tracks ? seeds : []
         if holdsNext {
             holdsNext = false
             await withCheckedContinuation { held = $0 }
         }
-        return kind == .tracks ? seeds : []
+        return result
     }
+    func setSeeds(_ seeds: [StationSeed]) { self.seeds = seeds }
     func release() { held?.resume(); held = nil }
     func waitUntilHeld() async { while held == nil { await Task.yield() } }
 }
@@ -198,17 +202,29 @@ struct ExploreModelTests {
         #expect(explore.stationFailure == nil && explore.tracks.map(\.uri) == [testTrack("x").uri])
     }
 
-    @Test func aCancelledRevealDoesNotBlockTheNextOne() async {
+    @Test(arguments: [false, true])
+    func inFlightChipsSurviveViewCancellationButNotLibraryClear(clear: Bool) async {
         let t1 = seed("track", "t1")
         let history = HeldHistory([t1])
         let explore = ExploreModel(history: history, savedTracks: FakeSavedTracks([]), radio: { _ in throw RadioFailure.noMix }, now: Date.init)
         let opening = Task { await explore.reveal(at: Date()) }
         await history.waitUntilHeld()
         opening.cancel()
+        explore.hide(at: Date())
+        let expected = clear ? seed("track", "new").uri : t1.uri
+        if clear {
+            explore.clear()
+            await history.setSeeds([StationSeed(uri: expected, name: "New")])
+            await explore.reveal(at: Date())
+        }
+        let reopened = clear ? nil : await startLibraryReveal { await explore.reveal(at: Date()) }
         await history.release()
         await opening.value
-        #expect(explore.chips.isEmpty && !explore.isLoading)
+        await reopened?.value
+        #expect(explore.chips.map(\.uri) == [expected])
+        #expect(!explore.isLoading)
         await explore.reveal(at: Date())
-        #expect(explore.chips.map(\.uri) == [t1.uri])
+        #expect(explore.chips.map(\.uri) == [expected])
+        #expect(await history.topCalls == (clear ? 3 : 2))
     }
 }

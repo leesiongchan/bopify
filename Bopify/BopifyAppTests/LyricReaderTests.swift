@@ -45,6 +45,36 @@ struct LyricReaderTests {
         #expect(reader.view.seekTimestamp(at: CGPoint(x: 5, y: 5)) == nil)
     }
 
+    @Test func indirectLinkActivationSeeksWithoutAMouseEvent() throws {
+        let reader = try LyricReaderFixture()
+        reader.update(position: 3_000, reading: true)
+        let range = (reader.view.string as NSString).range(of: "Upcoming words")
+        var seeks: [Int64] = []
+        reader.view.onSeek = { seeks.append($0) }
+
+        reader.view.clicked(onLink: "4000", at: range.location)
+
+        #expect(seeks == [4000])
+    }
+
+    @Test func indirectLinkActivationRejectsHiddenOrReplacedCues() throws {
+        let reader = try LyricReaderFixture()
+        reader.update(position: 1_000, reading: false)
+        let range = (reader.view.string as NSString).range(of: "Upcoming words")
+        var seeks: [Int64] = []
+        reader.view.onSeek = { seeks.append($0) }
+        reader.view.clicked(onLink: "4000", at: range.location)
+
+        reader.update(position: 3_000, reading: true)
+        reader.view.clicked(onLink: "3000", at: range.location)
+        reader.view.clicked(onLink: "4000", at: -1)
+        reader.view.clicked(onLink: "4000", at: reader.view.string.utf16.count)
+        reader.coordinator.updateText(reader.view, text: NSAttributedString(string: "Untimed words"), width: 300, height: 65)
+        reader.view.clicked(onLink: "4000", at: 0)
+
+        #expect(seeks.isEmpty)
+    }
+
     @Test func manualViewportFitsThreeVisualRowsWithoutAFourth() throws {
         let reader = try LyricReaderFixture()
         reader.update(position: 0, reading: true)

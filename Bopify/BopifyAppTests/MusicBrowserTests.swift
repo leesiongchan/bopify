@@ -42,6 +42,7 @@ struct MusicBrowserTests {
         #expect(engine.loadRequests.isEmpty)
         #expect(environment.search.selectedURI == uri)
         if byClick {
+            try await waitUntil { resultTable(in: window.contentView)?.numberOfRows == 1 }
             try pressSearchControl(in: #require(resultTable(in: window.contentView)), row: 0)
         } else {
             let delegate = try #require(field.delegate as? CatalogSearchField.Coordinator)
@@ -76,10 +77,12 @@ struct MusicBrowserTests {
         panel.isReleasedWhenClosed = false
         panel.setContentSize(controller.layout.contentSize)
         defer { panel.close() }
+        let presentation = SearchPopoverPresentation(panel: panel)
+        defer { presentation.stop() }
         panel.makeKeyAndOrderFront(nil)
         environment.showSearch()
-        try await waitUntil { searchWindow() != nil }
-        let window = try #require(searchWindow())
+        try await waitUntil { searchWindow(attachedTo: panel) != nil }
+        let window = try #require(searchWindow(attachedTo: panel))
         #expect(!window.styleMask.contains(.titled) && window.frame.width <= 330)
         let field = try #require(searchField(in: window.contentView))
         #expect(field.accessibilitySubrole() == .searchField)
@@ -104,10 +107,14 @@ struct MusicBrowserTests {
         try await waitUntil { table.selectedRow > firstRow }
         #expect(window.firstResponder === editor)
         #expect(delegate.control(field, textView: editor, doCommandBy: #selector(NSResponder.cancelOperation(_:))))
+        try await waitUntil { !window.isVisible }
+        let showRevision = presentation.revision
         environment.showSearch()
-        try await waitUntil { searchWindow().flatMap { resultTable(in: $0.contentView) }?.selectedRow == firstRow + 1 }
-        let reopened = try #require(searchWindow())
+        try await waitUntil { searchWindow(attachedTo: panel).flatMap { resultTable(in: $0.contentView) }?.selectedRow == firstRow + 1 }
+        let reopened = try #require(searchWindow(attachedTo: panel))
         let reopenedTable = try #require(resultTable(in: reopened.contentView))
+        // A visible popover can still be animating and unable to accept a pointer click.
+        try await waitUntil { presentation.revision > showRevision && presentation.shownWindow === reopened }
         #expect(searchField(in: reopened.contentView)?.stringValue == "Mira")
         let rect = reopenedTable.rect(ofRow: firstRow)
         let point = reopenedTable.convert(CGPoint(x: rect.midX, y: rect.midY), to: nil)
@@ -143,9 +150,10 @@ struct MusicBrowserTests {
         #expect(environment.search.selectedURI == tracks[9].uri)
         #expect(table.visibleRect.intersects(table.rect(ofRow: firstRow)))
         environment.searchPopover.close()
+        try await waitUntil { !window.isVisible }
         environment.showSearch()
-        try await waitUntil { searchWindow().flatMap { resultTable(in: $0.contentView) }?.selectedRow == selectedRow }
-        let reopened = try #require(searchWindow())
+        try await waitUntil { searchWindow(attachedTo: panel).flatMap { resultTable(in: $0.contentView) }?.selectedRow == selectedRow }
+        let reopened = try #require(searchWindow(attachedTo: panel))
         let reopenedTable = try #require(resultTable(in: reopened.contentView))
         try await waitUntil { reopenedTable.visibleRect.intersects(reopenedTable.rect(ofRow: selectedRow)) }
         #expect(environment.search.results == tracks.map(CatalogSearchResult.song))
@@ -273,19 +281,21 @@ struct MusicBrowserTests {
         #expect(window.frame.height < 100)
         #expect(resultTable(in: window.contentView) == nil && environment.search.hasSearched)
         environment.searchPopover.close()
+        try await waitUntil { !window.isVisible }
         environment.showSearch()
-        try await waitUntil { searchWindow() != nil }
+        try await waitUntil { searchWindow(attachedTo: panel) != nil }
         #expect(environment.search.hasSearched && !environment.search.isLoading)
     }
 
     @Test func cancelledInitialSearchRestartsWhenReopened() async throws {
         let service = PagingSearchService()
         await service.holdNextPage()
-        let (environment, panel, _) = try await openSearch(service, preload: false)
+        let (environment, panel, window) = try await openSearch(service, preload: false)
         defer { environment.searchPopover.close(); panel.close(); Task { await service.releasePage() } }
         await service.waitUntilHeld()
         environment.searchPopover.close()
         await service.releasePage()
+        try await waitUntil { !window.isVisible }
         environment.showSearch()
         try await waitUntil { environment.search.hasSearched }
         #expect(await service.requests.count == 2)
@@ -306,6 +316,7 @@ struct MusicBrowserTests {
         await service.holdNextPage(.song)
         table.scrollRowToVisible(table.numberOfRows - 1)
         try await waitUntil { environment.search.groups.first { $0.kind == .song }?.isLoading == true }
+        await service.waitUntilHeld()
         table.scrollRowToVisible(table.numberOfRows - 1)
         #expect(await service.requests.count == 2)
         #expect(environment.search.groups.first { $0.kind == .song }?.isLoading == true)
@@ -336,11 +347,12 @@ struct MusicBrowserTests {
         await service.waitUntilHeld()
         environment.searchPopover.close()
         await service.releasePage()
+        try await waitUntil { !window.isVisible }
         for _ in 0..<10 { await Task.yield() }
         #expect(environment.search.results == original)
         #expect(environment.search.groups.first { $0.kind == .song }?.nextOffset == 10)
         environment.showSearch()
-        try await waitUntil { searchWindow() != nil }
+        try await waitUntil { searchWindow(attachedTo: panel) != nil }
         #expect(await service.requests.count == 3)
         #expect(await service.requests.last == BrowserRequest(kinds: [.song], offset: 10, limit: 10))
     }
@@ -398,7 +410,8 @@ struct MusicBrowserTests {
 
     private func openSearch(_ service: any CatalogSearchService, preload: Bool = true,
                             player: PlayerModel = PlayerModel()) async throws -> (AppEnvironment, StatusPanel, NSWindow) {
-        let environment = AppEnvironment(previewPlayer: player, favoriteService: BrowserServices(), searchService: service)
+        let environment = AppEnvironment(previewPlayer: player, favoriteService: BrowserServices(), searchService: service,
+            artworkStore: makePreviewArtworkStore())
         environment.presentation.sendAttention(.visibility(true))
         environment.presentation.sendAttention(.keyboardFocus(true))
         let panel = StatusPanel(content: SearchButton(environment: environment))
@@ -407,8 +420,8 @@ struct MusicBrowserTests {
         environment.search.updateQuery("result")
         if preload { await environment.search.search() }
         environment.showSearch()
-        try await waitUntil { searchWindow() != nil }
-        return (environment, panel, try #require(searchWindow()))
+        try await waitUntil { searchWindow(attachedTo: panel) != nil }
+        return (environment, panel, try #require(searchWindow(attachedTo: panel)))
     }
 
     private func waitUntil(_ condition: () -> Bool, sourceLocation: SourceLocation = #_sourceLocation) async throws {
@@ -468,8 +481,30 @@ private nonisolated struct LinkedSearchService: CatalogSearchService {
     }
 }
 
-@MainActor private func searchWindow() -> NSWindow? {
-    NSApp.windows.first { $0.isVisible && searchField(in: $0.contentView) != nil }
+@MainActor private final class SearchPopoverPresentation: NSObject {
+    private weak var panel: NSWindow?
+    private(set) weak var shownWindow: NSWindow?
+    private(set) var revision = 0
+
+    init(panel: NSWindow) {
+        self.panel = panel
+        super.init()
+        NotificationCenter.default.addObserver(self, selector: #selector(didShow(_:)),
+            name: NSPopover.didShowNotification, object: nil)
+    }
+
+    func stop() { NotificationCenter.default.removeObserver(self) }
+
+    @objc private func didShow(_ notification: Notification) {
+        guard let popover = notification.object as? NSPopover,
+              let window = popover.contentViewController?.view.window, window.parent === panel else { return }
+        shownWindow = window
+        revision += 1
+    }
+}
+
+@MainActor private func searchWindow(attachedTo parent: NSWindow) -> NSWindow? {
+    NSApp.windows.first { $0.isVisible && $0.parent === parent && searchField(in: $0.contentView) != nil }
 }
 
 @MainActor private func searchField(in view: NSView?) -> NSTextField? {

@@ -42,6 +42,68 @@ struct FavoriteModelTests {
     private let a = SpotifyURI("spotify:track:a")!
     private let b = SpotifyURI("spotify:track:b")!
 
+    private func startSelection(_ uri: SpotifyURI?, on model: FavoriteModel) async -> Task<Void, Never> {
+        let (started, signal) = AsyncStream.makeStream(of: Void.self)
+        let task = Task {
+            signal.yield(())
+            await model.select(uri)
+        }
+        for await _ in started { break }
+        return task
+    }
+
+    @Test(arguments: [false, true])
+    func changingTracksLetsMutationInvalidateLikedSongs(initialSaved: Bool) async {
+        let service = ControlledLibrary()
+        let model = FavoriteModel(service: service)
+        let initial = Task { await model.select(a) }
+        _ = await service.nextRequest()
+        await service.resolveRead(a, .success(initialSaved))
+        await initial.value
+        let toggle = Task { await model.toggle() }
+        #expect(await service.nextRequest() == .init(method: initialSaved ? "DELETE" : "PUT", uri: a))
+        let selection = await startSelection(b, on: model)
+        await service.resolveMutation(.success(()))
+        let read = await service.nextRequest()
+        #expect(read == .init(method: "GET", uri: a))
+        await service.resolveRead(read.uri, .success(read.uri == a ? !initialSaved : false))
+        if read.uri == a {
+            #expect(await service.nextRequest() == .init(method: "GET", uri: b))
+            await service.resolveRead(b, .success(false))
+        }
+        await toggle.value
+        await selection.value
+        #expect(model.membershipRevision == 1)
+        #expect(model.uri == b && model.saved == false && !model.isPending)
+    }
+
+    @Test(arguments: [false, true])
+    func latestTrackSelectionWinsWhileMutationReconciles(returnsToOriginal: Bool) async {
+        let service = ControlledLibrary()
+        let model = FavoriteModel(service: service)
+        let initial = Task { await model.select(a) }
+        _ = await service.nextRequest()
+        await service.resolveRead(a, .success(false))
+        await initial.value
+        let toggle = Task { await model.toggle() }
+        _ = await service.nextRequest()
+        let older = await startSelection(b, on: model)
+        let selected = returnsToOriginal ? a : SpotifyURI("spotify:track:c")!
+        let latest = await startSelection(selected, on: model)
+        await service.resolveMutation(.success(()))
+        #expect(await service.nextRequest() == .init(method: "GET", uri: a))
+        await service.resolveRead(a, .success(true))
+        if !returnsToOriginal {
+            #expect(await service.nextRequest() == .init(method: "GET", uri: selected))
+            await service.resolveRead(selected, .success(false))
+        }
+        await toggle.value
+        await older.value
+        await latest.value
+        #expect(model.uri == selected && model.saved == returnsToOriginal && !model.isPending)
+        #expect(model.membershipRevision == 1)
+    }
+
     @Test func lateTrackAReadCannotReplaceTrackB() async {
         let service = ControlledLibrary()
         let model = FavoriteModel(service: service)
@@ -114,9 +176,11 @@ struct FavoriteModelTests {
         await read.value
         let toggle = Task { await model.toggle() }
         _ = await service.nextRequest()
+        let selection = await startSelection(b, on: model)
         model.clear()
         await service.resolveMutation(.success(()))
         await toggle.value
+        await selection.value
         #expect(model.uri == nil && model.saved == nil && !model.isPending)
         #expect(model.membershipRevision == 0)
     }

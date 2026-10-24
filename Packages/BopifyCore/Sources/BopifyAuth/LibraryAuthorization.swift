@@ -19,6 +19,7 @@ public actor LibraryAuthorization {
     private let logoutIntent: LogoutIntentStore?
     private var clientID: String?
     private var auth: SpotifyAuthService?
+    private var clientChange: (id: UUID, task: Task<String, Error>)?
 
     /// `suiteName` nil means `.standard`; the defaults are built here because `UserDefaults` is not `Sendable`.
     public init(suiteName: String? = nil, orphanedStore: (any TokenStoring)? = nil,
@@ -45,6 +46,19 @@ public actor LibraryAuthorization {
 
     public func setClientID(_ raw: String) async throws -> String {
         guard let id = Self.normalized(raw) else { throw LibraryClientIDError.invalid }
+        let previous = clientChange?.task
+        let changeID = UUID()
+        // Actor isolation does not serialize a change across credential-removal awaits.
+        let task = Task {
+            _ = await previous?.result
+            return try await replaceClientID(id)
+        }
+        clientChange = (changeID, task)
+        defer { if clientChange?.id == changeID { clientChange = nil } }
+        return try await task.value
+    }
+
+    private func replaceClientID(_ id: String) async throws -> String {
         if id == clientID { return id }
         // Detach before awaiting: requests arriving mid-swap fail instead of reaching either client.
         let previous = auth, previousID = clientID

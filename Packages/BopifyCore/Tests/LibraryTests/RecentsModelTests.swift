@@ -92,4 +92,32 @@ struct RecentsModelTests {
         #expect(model.tracks.isEmpty && model.selectedURI == nil)
         #expect(model.playRequest(for: testTrack("a")) == PlayRequest(contextURI: testTrack("a").uri))
     }
+
+    @Test(arguments: [false, true])
+    func inFlightLoadSurvivesViewCancellationButNotLibraryClear(clear: Bool) async {
+        let history = FakeHistory()
+        await history.setPlays(.success([play("a")]))
+        await history.holdNextRecent()
+        let model = RecentsModel(service: history)
+        let loading = Task { await model.reveal(at: Date()) }
+        await history.waitUntilRecentHeld()
+        loading.cancel()
+        model.hide(at: Date())
+        if clear {
+            model.clear()
+            await history.setPlays(.success([play("b")]))
+            await model.reveal(at: Date())
+        }
+        let reopened = clear ? nil : await startLibraryReveal { await model.reveal(at: Date()) }
+        await history.releaseRecent()
+        await loading.value
+        await reopened?.value
+        let expected = [testTrack(clear ? "b" : "a")]
+        #expect(model.tracks == expected)
+        #expect(!model.isLoading && model.error == nil)
+        #expect(await history.recentCalls == (clear ? 2 : 1))
+        await model.reveal(at: Date())
+        #expect(model.tracks == expected)
+        #expect(await history.recentCalls == (clear ? 2 : 1))
+    }
 }

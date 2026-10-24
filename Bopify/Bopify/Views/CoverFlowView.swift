@@ -258,7 +258,8 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
             Text("librarySetup.accessExpired").font(.caption).foregroundStyle(.secondary)
         } else if model.error != nil {
             TimelineView(.periodic(from: .now, by: 1)) { context in
-                let remaining = model.retryAfter.map { max(0, Int(ceil($0.timeIntervalSince(context.date)))) } ?? 0
+                let delay = model.retryAfter.map { ceil($0.timeIntervalSince(context.date)) } ?? 0
+                let remaining = max(0, Int(exactly: delay) ?? Int.max)
                 VStack(spacing: 8) {
                     if case .some(.quotaExceeded) = model.error {
                         Text("library.quotaExceeded")

@@ -164,6 +164,41 @@ struct PlayerVolumeTests {
         await engine.resolve()
     }
 
+    @Test func rapidMuteToggleRestoresTheConfirmedVolumeBeforeAcknowledgement() async {
+        let engine = ControlledVolumeEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        engine.stub.emit(.playing(positionMs: 0))
+        engine.stub.emit(.volumeChanged(volume: 0.6))
+        await waitUntil { model.state.isActiveDevice && model.state.volume == 0.6 }
+        model.toggleMute()
+        await waitUntil { engine.stub.recordedCommands.count == 1 }
+        model.toggleMute()
+        #expect(model.displayVolume == 0.6)
+        #expect(model.state.volume == 0.6)
+        await engine.resolve()
+        await waitUntil { engine.stub.recordedCommands.count == 2 }
+        #expect(engine.stub.recordedCommands == ["setVolume:0.0", "setVolume:0.6"])
+        #expect(await engine.maxConcurrent == 1)
+        if engine.stub.recordedCommands.count == 2 { await engine.resolve() }
+    }
+
+    @Test(arguments: [(0.6, 0.0, 0.6), (0.0, 0.7, 0.0)])
+    func muteToggleFollowsTheDisplayedSliderValue(confirmed: Double, draft: Double, expected: Double) async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        engine.emit(.playing(positionMs: 0))
+        engine.emit(.volumeChanged(volume: confirmed))
+        await waitUntil { model.state.isActiveDevice && model.state.volume == confirmed }
+        model.beginVolumeEditing()
+        model.setVolume(draft)
+        model.toggleMute()
+        #expect(model.displayVolume == expected)
+    }
+
     @Test(arguments: [false, true])
     func obsoleteCompletionCannotResendAfterReactivation(stop: Bool) async {
         let engine = ControlledVolumeEngine()

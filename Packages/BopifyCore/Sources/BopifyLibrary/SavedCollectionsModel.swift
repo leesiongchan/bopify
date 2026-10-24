@@ -13,6 +13,7 @@ public final class SavedCollectionsModel: CoverFlowSource {
     public var hasMore: Bool { !nextCursors.isEmpty }
     @ObservationIgnored private let service: any LibraryCollectionsService
     @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var pending: Task<Void, Never>?
     @ObservationIgnored private var reveals = 0
     @ObservationIgnored private var loaded = false
     @ObservationIgnored private var nextCursors: [LibraryCollectionKind: LibraryCollectionCursor] = [.playlists: .offset(0), .albums: .offset(0), .artists: .after(nil)]
@@ -22,6 +23,7 @@ public final class SavedCollectionsModel: CoverFlowSource {
 
     public func reveal(at date: Date) async {
         reveals += 1
+        if let pending { await pending.value; return }
         guard !loaded, !isLoading, error == nil else { return }
         await load()
     }
@@ -46,6 +48,8 @@ public final class SavedCollectionsModel: CoverFlowSource {
     }
     public func clear() {
         generation += 1
+        pending?.cancel()
+        pending = nil
         items = []
         selectedURI = nil
         isLoading = false
@@ -63,13 +67,25 @@ public final class SavedCollectionsModel: CoverFlowSource {
         isLoading = true
         error = nil
         retryAfter = nil
+        // One shared load survives tab changes; clearing library access explicitly cancels it.
+        let task = Task { await receive(generation: current) }
+        pending = task
+        await task.value
+    }
+
+    private func receive(generation current: Int) async {
         defer {
             if generation == current {
                 isLoading = false
-                if pendingKinds.isEmpty { pendingKinds = LibraryCollectionKind.allCases.filter { nextCursors[$0] != nil } }
+                pending = nil
+                if pendingKinds.isEmpty {
+                    loaded = true
+                    pendingKinds = LibraryCollectionKind.allCases.filter { nextCursors[$0] != nil }
+                }
                 if !items.contains(where: { $0.uri == selectedURI }) { selectedURI = items.first?.uri }
             }
         }
+        guard generation == current, !Task.isCancelled else { return }
         for kind in pendingKinds {
             do {
                 guard let cursor = nextCursors[kind] else { continue }
@@ -84,13 +100,12 @@ public final class SavedCollectionsModel: CoverFlowSource {
                     default: throw LibraryError.invalidResponse
                     }
                 }
-                var replacement = loaded ? items : []
+                var replacement = items
                 var seen = Set(replacement.map(\.uri))
                 replacement.append(contentsOf: page.items.filter { seen.insert($0.uri).inserted })
                 items = replacement
                 nextCursors[kind] = page.nextCursor
                 pendingKinds.removeAll { $0 == kind }
-                loaded = true
             } catch is CancellationError {
                 return
             } catch {

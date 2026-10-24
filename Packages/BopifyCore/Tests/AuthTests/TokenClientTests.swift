@@ -125,6 +125,8 @@ struct TokenClientTests {
     @Test(arguments: [
         #"{"access_token":"","expires_in":3600}"#,
         #"{"access_token":"AT","expires_in":3600,"token_type":"Other"}"#,
+        #"{"access_token":"AT","expires_in":3600,"refresh_token":""}"#,
+        #"{"access_token":"AT","expires_in":-1}"#,
     ]) func rejectsUnusableTokenResponses(_ body: String) async {
         StubProtocol.handler = { _ in (200, Data(body.utf8)) }
         await #expect(throws: PlayerError.unknown) { _ = try await makeClient().refresh(refreshToken: "RT") }

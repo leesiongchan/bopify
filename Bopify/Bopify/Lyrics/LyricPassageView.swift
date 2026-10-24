@@ -371,6 +371,7 @@ private final class LyricReadingScroller: NSScroller {
 final class LyricReadingTextView: NSTextView {
     var onSeek: ((Int64) -> Void)?
     private var pendingSeek: (time: Int64, action: (Int64) -> Void)?
+    private var isHandlingMouseDown = false
 
     func visibleCharacter(at point: CGPoint) -> Int? {
         guard let manager = layoutManager, let container = textContainer, let storage = textStorage else { return nil }
@@ -392,20 +393,32 @@ final class LyricReadingTextView: NSTextView {
     }
 
     override func clicked(onLink link: Any, at charIndex: Int) {
-        guard let time = (link as? String).flatMap(Int64.init), let pendingSeek, pendingSeek.time == time else { return }
-        pendingSeek.action(time)
+        guard let time = (link as? String).flatMap(Int64.init) else { return }
+        if isHandlingMouseDown {
+            guard let pendingSeek, pendingSeek.time == time else { return }
+            pendingSeek.action(time)
+        } else {
+            // Accessibility can activate a link without entering the mouse tracking loop.
+            guard let storage = textStorage, charIndex >= 0, charIndex < storage.length,
+                  storage.attribute(LyricRibbonLayout.cueTimeAttribute, at: charIndex, effectiveRange: nil) as? Int64 == time else { return }
+            let color = (layoutManager?.temporaryAttribute(.foregroundColor, atCharacterIndex: charIndex, effectiveRange: nil)
+                ?? storage.attribute(.foregroundColor, at: charIndex, effectiveRange: nil)) as? NSColor
+            guard color?.alphaComponent != 0 else { return }
+            onSeek?(time)
+        }
     }
     var onBeginReading: (() -> Void)?
     override var acceptsFirstResponder: Bool { window?.canBecomeKey ?? false }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func mouseDown(with event: NSEvent) {
+        isHandlingMouseDown = true
         pendingSeek = nil
         if event.clickCount == 1, event.modifierFlags.intersection([.shift, .command, .option, .control]).isEmpty,
            let time = seekTimestamp(at: convert(event.locationInWindow, from: nil)), let onSeek {
             pendingSeek = (time, onSeek)
         }
         onBeginReading?()
-        defer { pendingSeek = nil }
+        defer { pendingSeek = nil; isHandlingMouseDown = false }
         super.mouseDown(with: event)
     }
     override func cancelOperation(_ sender: Any?) { window?.cancelOperation(sender) }

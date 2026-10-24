@@ -48,6 +48,8 @@ public struct TokenClient: Sendable {
         case 200:
             guard let decoded = try? JSONDecoder().decode(Response.self, from: data),
                   !decoded.access_token.isEmpty,
+                  decoded.refresh_token?.isEmpty != true,
+                  decoded.expires_in >= 0,
                   decoded.token_type == nil || decoded.token_type?.caseInsensitiveCompare("Bearer") == .orderedSame else {
                 throw PlayerError.unknown
             }

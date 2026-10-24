@@ -284,6 +284,45 @@ struct LibraryAuthorizationTests {
         }
     }
 
+    @Test(.timeLimit(.minutes(1))) func overlappingClientChangesCannotDeleteTheNewerConsent() async throws {
+        try await withSuite { suite, defaults in
+            defaults.set(id, forKey: LibraryAuthorization.defaultsKey)
+            let store = BlockingClientChangeStore()
+            let latest = "fedcba9876543210fedcba9876543210"
+            let library = LibraryAuthorization(suiteName: suite) { clientID in
+                let config = URLSessionConfiguration.ephemeral
+                config.protocolClasses = [LibraryConsentStubProtocol.self]
+                return SpotifyAuthService(clientID: clientID,
+                    client: TokenClient(clientID: clientID, session: URLSession(configuration: config)),
+                    store: store, callbackPath: "/callback", openURL: { url in
+                        let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!
+                            .queryItems!.map { ($0.name, $0.value!) })
+                        let callback = URL(string: query["redirect_uri"]! + "?code=NEW&state=" + query["state"]!)!
+                        Task { _ = try? await URLSession.shared.data(from: callback) }
+                    })
+            }
+            let first = Task { try await library.setClientID(other) }
+            var clearing = store.started.stream.makeAsyncIterator()
+            _ = await clearing.next()
+            // Serialized changes need the first clear released before they can finish.
+            let deadline = Task {
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                store.release.signal()
+            }
+            defer { deadline.cancel(); store.release.signal() }
+            let second = Task {
+                _ = try await library.setClientID(latest)
+                try await library.authorize()
+                store.release.signal()
+            }
+            _ = try await first.value
+            try await second.value
+            #expect(defaults.string(forKey: LibraryAuthorization.defaultsKey) == latest)
+            #expect(store.load()?.accessToken == "NEW_LIBRARY")
+            #expect(try await library.validAccessToken(requiredScopes: ["user-library-read"]) == "NEW_LIBRARY")
+        }
+    }
+
     @Test func invalidIDLeavesStateUntouched() async throws {
         try await withSuite { suite, defaults in
             defaults.set(id, forKey: LibraryAuthorization.defaultsKey)
@@ -294,6 +333,29 @@ struct LibraryAuthorizationTests {
             #expect(defaults.string(forKey: LibraryAuthorization.defaultsKey) == id)
             #expect(store.load() != nil)
         }
+    }
+}
+
+private final class BlockingClientChangeStore: TokenStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private var tokens: TokenSet?
+    private var blockNextClear = true
+    let started = AsyncStream<Void>.makeStream()
+    let release = DispatchSemaphore(value: 0)
+
+    func load() -> TokenSet? { lock.withLock { tokens } }
+    func save(_ tokens: TokenSet) { lock.withLock { self.tokens = tokens } }
+    func clear() {
+        let block = lock.withLock {
+            let block = blockNextClear
+            blockNextClear = false
+            return block
+        }
+        if block {
+            started.continuation.yield(())
+            release.wait()
+        }
+        lock.withLock { tokens = nil }
     }
 }
 

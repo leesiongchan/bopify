@@ -1,5 +1,5 @@
 diff --git a/Cargo.lock b/Cargo.lock
-index 0d2d841..4db7713 100644
+index 0d2d841..5f41594 100644
 --- a/Cargo.lock
 +++ b/Cargo.lock
 @@ -159,7 +159,7 @@ checksum = "3b43422f69d8ff38f95f1b2bb76517c91589a924d1559a0e935d7c8ce0274c11"
@@ -89,12 +89,30 @@ index 0d2d841..4db7713 100644
  ]
  
  [[package]]
+@@ -669,7 +666,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
+ dependencies = [
+  "libc",
+- "windows-sys 0.61.2",
++ "windows-sys 0.52.0",
+ ]
+ 
+ [[package]]
 @@ -820,7 +817,7 @@ checksum = "162ee34ebcb7c64a8abebc059ce0fee27c2262618d7b60ed8faf72fef13c3650"
  dependencies = [
   "proc-macro2",
   "quote",
 - "syn",
 + "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -915,7 +912,7 @@ dependencies = [
+  "gobject-sys",
+  "libc",
+  "system-deps",
+- "windows-sys 0.61.2",
++ "windows-sys 0.52.0",
  ]
  
  [[package]]
@@ -116,6 +134,30 @@ index 0d2d841..4db7713 100644
  ]
  
  [[package]]
+@@ -1709,9 +1706,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "libc"
+-version = "0.2.177"
++version = "0.2.191"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "2874a2af47a2325c2001a6e6fad9b16a53b802102b528163885171cf92b15976"
++checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
+ 
+ [[package]]
+ name = "libloading"
+@@ -2094,9 +2091,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "mio"
+-version = "1.1.0"
++version = "1.2.4"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "69d83b0086dc8ecf3ce9ae2874b2d1290252e2a30720bea58a5c6639b0092873"
++checksum = "1788edb87fdc09c7e26304471e2f5be8cdefb1b6930d6e3985fc02ff53bf86ee"
+ dependencies = [
+  "libc",
+  "wasi",
 @@ -2217,9 +2214,9 @@ dependencies = [
  
  [[package]]
@@ -167,7 +209,13 @@ index 0d2d841..4db7713 100644
  dependencies = [
   "memchr",
   "serde",
-@@ -2824,9 +2821,9 @@ dependencies = [
+@@ -2819,14 +2816,14 @@ dependencies = [
+  "once_cell",
+  "socket2",
+  "tracing",
+- "windows-sys 0.60.2",
++ "windows-sys 0.52.0",
+ ]
  
  [[package]]
  name = "quote"
@@ -179,6 +227,15 @@ index 0d2d841..4db7713 100644
  dependencies = [
   "proc-macro2",
  ]
+@@ -3062,7 +3059,7 @@ dependencies = [
+  "errno",
+  "libc",
+  "linux-raw-sys 0.11.0",
+- "windows-sys 0.61.2",
++ "windows-sys 0.52.0",
+ ]
+ 
+ [[package]]
 @@ -3281,7 +3278,7 @@ checksum = "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79"
  dependencies = [
   "proc-macro2",
@@ -194,6 +251,22 @@ index 0d2d841..4db7713 100644
   "quote",
 - "syn",
 + "syn 2.0.109",
+ ]
+ 
+ [[package]]
+@@ -3422,12 +3419,12 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
+ 
+ [[package]]
+ name = "socket2"
+-version = "0.6.1"
++version = "0.6.5"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "17129e116933cf371d018bb80ae557e889637989d8638274fb25622827b03881"
++checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
+ dependencies = [
+  "libc",
+- "windows-sys 0.60.2",
++ "windows-sys 0.61.2",
  ]
  
  [[package]]
@@ -232,6 +305,15 @@ index 0d2d841..4db7713 100644
 + "proc-macro2",
 + "quote",
 + "syn 3.0.9",
+ ]
+ 
+ [[package]]
+@@ -3671,7 +3690,7 @@ dependencies = [
+  "getrandom 0.3.4",
+  "once_cell",
+  "rustix 1.1.2",
+- "windows-sys 0.61.2",
++ "windows-sys 0.52.0",
  ]
  
  [[package]]
@@ -290,12 +372,32 @@ index 0d2d841..4db7713 100644
  dependencies = [
   "num-conv",
   "time-core",
-@@ -3797,7 +3815,7 @@ checksum = "af407857209536a95c8e56f8231ef2c2e2aff839b22e07a1ffcbc617e9db9fa5"
+@@ -3774,9 +3792,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
+ 
+ [[package]]
+ name = "tokio"
+-version = "1.48.0"
++version = "1.54.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "ff360e02eab121e0bc37a2d3b4d4dc622e6eda3a8e5253d5435ecf5bd4c68408"
++checksum = "b52fd3255258d26fac7264ab5a76b53c13367136dc011d3d6ad4f8ed070396a3"
+ dependencies = [
+  "bytes",
+  "libc",
+@@ -3791,13 +3809,13 @@ dependencies = [
+ 
+ [[package]]
+ name = "tokio-macros"
+-version = "2.6.0"
++version = "2.7.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "af407857209536a95c8e56f8231ef2c2e2aff839b22e07a1ffcbc617e9db9fa5"
++checksum = "78773a2a397f451582ce068015985c33193cf6dea8b74d2a639fe457b2f07b0e"
  dependencies = [
   "proc-macro2",
   "quote",
 - "syn",
-+ "syn 2.0.109",
++ "syn 3.0.9",
  ]
  
  [[package]]
@@ -317,6 +419,15 @@ index 0d2d841..4db7713 100644
   "wasm-bindgen-shared",
  ]
  
+@@ -4340,7 +4358,7 @@ version = "0.1.11"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
+ dependencies = [
+- "windows-sys 0.61.2",
++ "windows-sys 0.52.0",
+ ]
+ 
+ [[package]]
 @@ -4436,7 +4454,7 @@ checksum = "053e2e040ab57b9dc951b72c264860db7eb3b0200ba345b4e4c3b14f67855ddf"
  dependencies = [
   "proc-macro2",
@@ -436,7 +547,7 @@ index bc5267f..650640d 100644
  uuid = { version = "1.18", default-features = false, features = ["v4"] }
  
 diff --git a/connect/src/context_resolver.rs b/connect/src/context_resolver.rs
-index ce3ecda..065b73a 100644
+index ce3ecda..134525d 100644
 --- a/connect/src/context_resolver.rs
 +++ b/connect/src/context_resolver.rs
 @@ -4,7 +4,7 @@ use crate::{
@@ -597,7 +708,7 @@ index ce3ecda..065b73a 100644
          }
  
          match (next.update, state.active_context) {
-@@ -311,36 +373,391 @@ impl ContextResolver {
+@@ -311,36 +373,478 @@ impl ContextResolver {
              }
              (ContextType::Default, _) => {
                  debug!("skipped finishing default, because it isn't the active context");
@@ -721,6 +832,93 @@ index ce3ecda..065b73a 100644
 +            ContextAction::Replace,
 +        ));
 +        resolver.apply_next_context(state, context).unwrap();
++    }
++
++    #[tokio::test]
++    async fn context_update_preserves_duplicate_occurrences_before_transfer_completion() {
++        let (mut state, mut resolver, mut transfer) = fixture(false);
++        let current = track("next");
++        transfer
++            .as_mut()
++            .unwrap()
++            .playback
++            .mut_or_insert_default()
++            .current_track = MessageField::some(current.clone());
++        state.set_track(
++            state
++                .current_track_from_transfer(transfer.as_ref().unwrap())
++                .unwrap(),
++        );
++        let context = context();
++        resolver.add(ResolveContext::from_context(
++            context.clone(),
++            ContextType::Default,
++            ContextAction::Replace,
++        ));
++        resolver.apply_next_context(&mut state, context).unwrap();
++        let uids: Vec<_> = state
++            .get_context(ContextType::Default)
++            .unwrap()
++            .tracks
++            .iter()
++            .map(|track| track.uid.as_str())
++            .collect();
++        assert_eq!(uids, ["first", "current", "next"]);
++        assert!(resolver.try_finish(&mut state, &mut transfer).unwrap());
++        assert_eq!(state.player().track.uid, "next");
++        assert_eq!(state.player().index.track, 2);
++    }
++
++    #[tokio::test]
++    async fn context_updates_match_uids_then_distinct_uri_occurrences() {
++        for (incoming, expected) in [
++            (
++                [Some("next"), Some("current"), Some("first")],
++                ["first", "current", "next"],
++            ),
++            (
++                [Some("new-first"), Some("new-current"), Some("new-next")],
++                ["new-first", "new-current", "new-next"],
++            ),
++            ([Some(""), None, Some("next")], ["first", "current", "next"]),
++            (
++                [Some("new-first"), Some("first"), Some("next")],
++                ["first", "new-first", "next"],
++            ),
++        ] {
++            let (mut state, mut resolver, _) = fixture(false);
++            let mut update = context();
++            for (track, uid) in update.pages[0].tracks.iter_mut().zip(incoming) {
++                let label = uid
++                    .filter(|uid| !uid.is_empty())
++                    .or(track.uid.as_deref())
++                    .unwrap();
++                track.metadata.insert("merged_uid".into(), label.into());
++                track.uid = uid.map(str::to_owned);
++            }
++            resolver.add(ResolveContext::from_context(
++                update,
++                ContextType::Default,
++                ContextAction::Replace,
++            ));
++            resolver.apply_next_context(&mut state, context()).unwrap();
++            let uids: Vec<_> = state
++                .get_context(ContextType::Default)
++                .unwrap()
++                .tracks
++                .iter()
++                .map(|track| track.uid.as_str())
++                .collect();
++            assert_eq!(uids, expected);
++            let labels: Vec<_> = state
++                .get_context(ContextType::Default)
++                .unwrap()
++                .tracks
++                .iter()
++                .map(|track| track.metadata["merged_uid"].as_str())
++                .collect();
++            assert_eq!(labels, expected);
++        }
 +    }
 +
 +    #[tokio::test]
@@ -4533,10 +4731,17 @@ index f810d85..e73b1a7 100644
  
      /// Notifies the remote server about a new device
 diff --git a/connect/src/state/context.rs b/connect/src/state/context.rs
-index 5913022..7eaff8d 100644
+index 5913022..0e3b334 100644
 --- a/connect/src/state/context.rs
 +++ b/connect/src/state/context.rs
-@@ -21,7 +21,7 @@ use uuid::Uuid;
+@@ -15,13 +15,13 @@ use crate::{
+     },
+ };
+ use protobuf::MessageField;
+-use std::collections::HashMap;
++use std::collections::{HashMap, HashSet};
+ use uuid::Uuid;
+ 
  const LOCAL_FILES_IDENTIFIER: &str = "spotify:local-files";
  const SEARCH_IDENTIFIER: &str = "spotify:search";
  
@@ -4569,6 +4774,71 @@ index 5913022..7eaff8d 100644
 +        self.preserve_recovery_queue = false;
          if matches!(reset_as, ResetContext::WhenDifferent(ctx) if self.different_context_uri(ctx)) {
              reset_as = ResetContext::Completely
+         }
+@@ -398,16 +409,47 @@ impl ConnectState {
+ 
+     pub fn merge_context(&mut self, new_page: Option<ContextPage>) -> Option<()> {
+         let current_context = self.get_context_mut(ContextType::Default).ok()?;
++        let new_page = new_page?;
++        let incoming_uids: HashSet<_> = new_page
++            .tracks
++            .iter()
++            .filter_map(|track| track.uid.as_ref().filter(|uid| !uid.is_empty()))
++            .cloned()
++            .collect();
++        let mut matched = HashSet::new();
+ 
+-        for new_track in new_page?.tracks {
++        for new_track in new_page.tracks {
+             if new_track.uri.is_none() || matches!(new_track.uri, Some(ref uri) if uri.is_empty()) {
+                 continue;
+             }
+ 
+             let new_track_uri = new_track.uri.unwrap_or_default();
+-            if let Ok(position) =
+-                Self::find_index_in_context(current_context, |t| t.uri == new_track_uri)
+-            {
++            let position = current_context
++                .tracks
++                .iter()
++                .enumerate()
++                .position(|(index, track)| {
++                    !matched.contains(&index)
++                        && track.uri == new_track_uri
++                        && new_track
++                            .uid
++                            .as_ref()
++                            .is_some_and(|uid| !uid.is_empty() && track.uid == *uid)
++                })
++                .or_else(|| {
++                    current_context
++                        .tracks
++                        .iter()
++                        .enumerate()
++                        .position(|(index, track)| {
++                            !matched.contains(&index)
++                                && track.uri == new_track_uri
++                                && !incoming_uids.contains(&track.uid)
++                        })
++                });
++            if let Some(position) = position {
++                // Repeated URIs identify different occurrences; reserve known UIDs before ordered fallback.
++                matched.insert(position);
+                 let context_track = current_context.tracks.get_mut(position)?;
+ 
+                 for (key, value) in new_track.metadata {
+@@ -415,10 +457,8 @@ impl ConnectState {
+                 }
+ 
+                 // the uid provided from another context might be actual uid of an item
+-                if new_track.uid.is_some()
+-                    || matches!(new_track.uid, Some(ref uid) if uid.is_empty())
+-                {
+-                    context_track.uid = new_track.uid.unwrap_or_default();
++                if let Some(uid) = new_track.uid.filter(|uid| !uid.is_empty()) {
++                    context_track.uid = uid;
+                 }
+             }
          }
 diff --git a/connect/src/state/options.rs b/connect/src/state/options.rs
 index efb8376..dd526dd 100644

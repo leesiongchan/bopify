@@ -329,7 +329,7 @@ public final class PlayerModel {
     }
 
     public func toggleMute() {
-        setVolume(state.volume > 0 ? 0 : (lastPositiveVolume ?? 0.5))
+        setVolume(displayVolume > 0 ? 0 : (lastPositiveVolume ?? 0.5))
         endVolumeEditing()
     }
 

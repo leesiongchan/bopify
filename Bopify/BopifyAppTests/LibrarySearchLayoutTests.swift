@@ -30,7 +30,12 @@ struct LibrarySearchLayoutTests {
         #expect(environment.collections.selectedURI == next)
         #expect(requests.isEmpty)
         try await waitUntil { input.input?.isAnimating == true }
-        try await waitUntil { input.input?.isAnimating == false }
+        // Drive the spring directly: hostless tests cannot rely on display-link delivery.
+        for _ in 0..<120 where input.input?.isAnimating == true {
+            input.input?.onFrame(1.0 / 60)
+            await Task.yield()
+        }
+        try #require(input.input?.isAnimating == false)
         try click(input, x: input.bounds.midX)
         #expect(requests.count == 1)
         #expect(requests.first?.contextURI == next)

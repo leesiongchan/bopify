@@ -20,6 +20,7 @@ public final class RecentsModel: CoverFlowSource {
     // Counted, not a flag: on a quick tab round trip the old view's hide can land after the new view's reveal.
     @ObservationIgnored private var reveals = 0
     @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var pending: Task<Void, Never>?
 
     public convenience init(service: any ListeningHistoryService) { self.init(service: service, now: Date.init) }
     init(service: any ListeningHistoryService, now: @escaping () -> Date) {
@@ -29,6 +30,7 @@ public final class RecentsModel: CoverFlowSource {
 
     public func reveal(at date: Date) async {
         reveals += 1
+        if let pending { await pending.value; return }
         guard !isLoading, retryAfter.map({ $0 <= date }) ?? true else { return }
         if error == nil, let loadedAt, date.timeIntervalSince(loadedAt) < 60 {
             BopifyLog.library.debug("recents cache hit")
@@ -54,6 +56,8 @@ public final class RecentsModel: CoverFlowSource {
 
     public func clear() {
         generation += 1
+        pending?.cancel()
+        pending = nil
         tracks = []
         selectedURI = nil
         contexts = [:]
@@ -76,7 +80,15 @@ public final class RecentsModel: CoverFlowSource {
         isLoading = true
         error = nil
         retryAfter = nil
-        defer { if generation == current { isLoading = false } }
+        // A shelf fetch belongs to the cache, so replacing its view must not discard the in-flight result.
+        let task = Task { await receive(generation: current) }
+        pending = task
+        await task.value
+    }
+
+    private func receive(generation current: Int) async {
+        defer { if generation == current { isLoading = false; pending = nil } }
+        guard generation == current, !Task.isCancelled else { return }
         BopifyLog.library.debug("recents cache miss, loading")
         do {
             let plays = try await service.recentlyPlayed()

@@ -12,12 +12,14 @@ public final class FavoriteModel {
     public private(set) var error: LibraryError?
     @ObservationIgnored private let service: any LibraryService
     @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var selectionGeneration = 0
     @ObservationIgnored private var pending: Task<Void, Never>?
 
     public init(service: any LibraryService) { self.service = service }
 
     public func clear() {
         generation += 1
+        selectionGeneration += 1
         pending?.cancel()
         pending = nil
         uri = nil
@@ -28,7 +30,15 @@ public final class FavoriteModel {
     }
 
     public func select(_ selected: SpotifyURI?) async {
+        selectionGeneration += 1
+        let selection = selectionGeneration
         if selected == uri && isPending { return }
+        // A mutation must reconcile before changing tracks so Liked Songs receives its membership revision.
+        if let mutation = pending, saved != nil {
+            BopifyLog.library.debug("favorite selection waiting for mutation")
+            await mutation.value
+            guard selectionGeneration == selection, !Task.isCancelled else { return }
+        }
         clear()
         guard let selected else { return }
         uri = selected

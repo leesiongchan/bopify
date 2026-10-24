@@ -24,6 +24,7 @@ public final class ExploreModel: CoverFlowSource {
     @ObservationIgnored private var reveals = 0
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var station: Task<Void, Never>?
+    @ObservationIgnored private var chipsRequest: Task<Void, Never>?
 
     public var isLoading: Bool { isLoadingChips || loadingSeed != nil }
     public var hasMore: Bool { false }
@@ -46,6 +47,7 @@ public final class ExploreModel: CoverFlowSource {
 
     public func reveal(at date: Date) async {
         reveals += 1
+        if let chipsRequest { await chipsRequest.value; return }
         guard !isLoadingChips, retryAfter.map({ $0 <= date }) ?? true else { return }
         if error == nil, let chipsLoadedAt, date.timeIntervalSince(chipsLoadedAt) < 6 * 60 * 60 {
             BopifyLog.library.debug("explore chips cache hit")
@@ -85,6 +87,8 @@ public final class ExploreModel: CoverFlowSource {
 
     public func clear() {
         generation += 1
+        chipsRequest?.cancel()
+        chipsRequest = nil
         station?.cancel()
         station = nil
         chips = []
@@ -123,11 +127,21 @@ public final class ExploreModel: CoverFlowSource {
         isLoadingChips = true
         error = nil
         retryAfter = nil
-        // Covers the cancelled and superseded early returns; the flag is also cleared before the station step.
-        defer { if generation == current { isLoadingChips = false } }
+        // Top items are shared cache data; a disappearing view must not cancel the next view's load.
+        let task = Task { await receiveChips(generation: current) }
+        chipsRequest = task
+        await task.value
+    }
+
+    private func receiveChips(generation current: Int) async {
+        defer { if generation == current { isLoadingChips = false; chipsRequest = nil } }
+        guard generation == current, !Task.isCancelled else { return }
         BopifyLog.library.debug("explore chips cache miss, loading")
         do {
-            var seeds = Self.interleave(try await history.topItems(.tracks), try await history.topItems(.artists))
+            let tracks = try await history.topItems(.tracks)
+            try Task.checkCancellation()
+            var seeds = Self.interleave(tracks, try await history.topItems(.artists))
+            try Task.checkCancellation()
             if seeds.isEmpty {
                 let liked = try await savedTracks.savedTracks(offset: 0, limit: 5).tracks
                 seeds = liked.map { StationSeed(uri: $0.uri, name: $0.title) }

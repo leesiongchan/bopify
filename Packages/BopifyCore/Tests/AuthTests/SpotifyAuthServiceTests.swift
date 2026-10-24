@@ -449,7 +449,7 @@ struct SpotifyAuthServiceTests {
     @Test func expiredPendingRefreshIsSavedThenRenewedUsingTheRotatedGrant() async throws {
         let store = FaultTokenStore(expired: true)
         store.failSave = true
-        AuthFlowStubProtocol.handler = { _ in (200, Data(#"{"access_token":"EXPIRED","refresh_token":"ROTATED","expires_in":-1}"#.utf8)) }
+        AuthFlowStubProtocol.handler = { _ in (200, Data(#"{"access_token":"EXPIRED","refresh_token":"ROTATED","expires_in":0}"#.utf8)) }
         let service = SpotifyAuthService(clientID: "test", client: makeClient(), store: store)
         await #expect(throws: PlayerError.credentialSaveFailed) { try await service.validAccessToken() }
         store.failSave = false
