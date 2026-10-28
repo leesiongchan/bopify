@@ -3,8 +3,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-if [[ $# != 1 ]]; then
-  echo "Usage: scripts/release.sh <version>" >&2
+if [[ $# != 1 && $# != 2 ]] || [[ $# == 2 && $2 != --skip-rust-build ]]; then
+  echo "Usage: scripts/release.sh <version> [--skip-rust-build]" >&2
   exit 1
 fi
 
@@ -42,7 +42,18 @@ app="$staging_dir/Bopify.app"
 staged_dmg="$work_dir/Bopify-$version.dmg"
 printf 'Release evidence: %s\n' "$work_dir"
 
-./scripts/build-rust.sh
+if [[ ${2:-} == --skip-rust-build ]]; then
+  framework="$PWD/artifacts/BopifyCoreFFI.xcframework"
+  for file in Info.plist macos-arm64/libbopify_core.a macos-arm64/Headers/bopify_core.h; do
+    if [[ ! -s "$framework/$file" ]]; then
+      echo "Missing prebuilt Rust framework component: $framework/$file" >&2
+      exit 1
+    fi
+  done
+  echo "Reusing the prepared Rust framework."
+else
+  ./scripts/build-rust.sh
+fi
 
 resources_dir="$PWD/Bopify/Bopify/Resources"
 mkdir -p "$resources_dir"

@@ -22,6 +22,7 @@ jobs:
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
       MACOSX_DEPLOYMENT_TARGET: '26.0'
+      XCODE_XCCONFIG_FILE: ${{ github.workspace }}/.github/ci.xcconfig
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -68,18 +69,34 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-${{ steps.build-env.outputs.xcode }}-${{ hashFiles('scripts/build-rust.sh', 'scripts/test-native.sh', '.cargo/config.toml') }}
           env-vars: CARGO CC CFLAGS CXX CMAKE RUST MACOSX_DEPLOYMENT_TARGET
           cache-bin: false
-      - name: Package ad-hoc DMG
-        env:
-          RELEASE_VERSION: ${{ steps.version.outputs.version }}
-        run: ./scripts/release.sh "$RELEASE_VERSION"
+      - name: Cache native framework
+        id: native-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: artifacts/BopifyCoreFFI.xcframework
+          key: native-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.MACOSX_DEPLOYMENT_TARGET }}-${{ steps.build-env.outputs.xcode }}-${{ hashFiles('rust/Cargo.toml', 'rust/Cargo.lock', 'rust/cbindgen.toml', 'rust/crates/**', 'rust-toolchain.toml', '.cargo/config.toml', 'mise.toml', 'scripts/build-rust.sh') }}
+      - name: Cache Xcode compilations
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
+          key: xcode-cas-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.build-env.outputs.xcode }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            xcode-cas-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.build-env.outputs.xcode }}-
       - name: Test native playback
         run: ./scripts/test-native.sh
+      - name: Build native framework
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        run: ./scripts/build-rust.sh
       - name: Test Swift packages
         run: swift test --package-path Packages/BopifyCore
       - name: Test macOS app
         run: >-
           xcodebuild -project Bopify/Bopify.xcodeproj -scheme BopifyAppTests
           -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO test
+      - name: Package ad-hoc DMG
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: ./scripts/release.sh "$RELEASE_VERSION" --skip-rust-build
       - name: Upload verified DMG
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

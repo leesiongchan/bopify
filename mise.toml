@@ -1,4 +1,4 @@
 [tools]
 "cargo:cbindgen" = "0.29.4"
-"cargo:cargo-about" = { version = "0.9.3", features = "cli" }
-"cargo:git-cliff" = { version = "2.14.2", default-features = false, bin = "git-cliff" }
+"github:EmbarkStudios/cargo-about" = "0.9.3"
+"aqua:orhun/git-cliff" = "2.14.2"
