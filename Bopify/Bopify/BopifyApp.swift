@@ -13,25 +13,8 @@ struct BopifyApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItemController: StatusItemController?
     private var shortcutTasks: [Task<Void, Never>] = []
-    #if DEBUG
-    private var lyricPreview: LyricPanelPreviewSession?
-    #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--lyrics-preview") {
-            let preview = LyricPanelPreviewSession()
-            lyricPreview = preview
-            preview.showControls()
-            preview.show()
-            registerShortcut(.toggleLiveLyrics) { [weak preview] in
-                guard let preview else { return }
-                if preview.model.isVisible { preview.hide() }
-                else { preview.show() }
-            }
-            return
-        }
-        #endif
         let environment = AppEnvironment()
         let controller = StatusItemController(content: PlayerRootView(environment: environment), environment: environment)
         statusItemController = controller
@@ -57,8 +40,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         shortcutTasks.forEach { $0.cancel() }
         shortcutTasks.removeAll()
-        #if DEBUG
-        lyricPreview?.shutdown()
-        #endif
     }
 }

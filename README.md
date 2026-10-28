@@ -89,24 +89,6 @@ The compact lyrics stay above other windows.
 In lyrics-only mode, swipe left to skip to the next track or right for the previous
 track. Vertical scrolling continues to browse the lyrics.
 
-### Lyrics development preview
-
-The native player lyrics study is available only in Debug builds. It uses
-original sample words and a simulated clock, with no sign-in or Spotify connection.
-
-```sh
-xcodebuild -project Bopify/Bopify.xcodeproj -scheme Bopify \
-  -configuration Debug -destination 'platform=macOS,arch=arm64' \
-  -derivedDataPath build/lyrics-study CODE_SIGNING_ALLOWED=NO build
-open -n build/lyrics-study/Build/Products/Debug/Bopify.app \
-  --args --lyrics-preview
-```
-
-Use the study window to change samples, advance or pause the clock and enter
-explicit keyboard interaction with **Focus Lyrics**. Scroll to browse the full
-sample, then use **Sync** to follow again. Previous/next sample controls
-exercise the record and song transitions.
-
 ### Test suites
 
 Build the Rust library first, then run from the repository root:
