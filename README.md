@@ -62,10 +62,14 @@ does not need your Client secret. Sign-in credentials are stored in macOS Keycha
 
 ## Build
 
-Install Xcode 27 and Rust through [rustup](https://rustup.rs/). The repository pins
-Rust 1.99.0. Run these commands from the repository root:
+Install Xcode 27.1, Rust through [rustup](https://rustup.rs/), and
+[mise](https://mise.jdx.dev/). The repository pins Rust 1.99.1 in
+`rust-toolchain.toml` and the build tools in `mise.toml`.
+Run these commands from the repository root:
 
 ```sh
+mise trust
+mise install
 xcodebuild -downloadComponent MetalToolchain
 ./scripts/build-rust.sh
 xcodebuild -project Bopify/Bopify.xcodeproj -scheme Bopify \
@@ -111,7 +115,26 @@ live Spotify sign-in, audio hardware, or Gatekeeper acceptance.
 This is a solo project: commit and push directly to `main`. Every push builds a
 DMG and publishes a GitHub Release. Use Conventional Commit messages: `feat:`
 bumps minor, `feat!:` or a `BREAKING CHANGE:` footer bumps major, and other commits
-bump patch. Tags and release notes are automatic.
+bump patch. Tags and release notes are automatic; no changelog needs maintaining.
+
+Release notes use pinned [git-cliff](https://git-cliff.org/) to group commits since
+the previous release into features, fixes, performance improvements, and breaking
+changes. Routine chores, CI, build, documentation, style, test, and refactor commits
+are omitted unless they are breaking changes. Other commit types are included
+under Other changes. Internal-only releases get an explicit maintenance summary.
+Installation instructions follow the changes.
+
+Write commit subjects in terms of user impact. The first paragraph of a commit's
+body supplies extra context; `BREAKING CHANGE:` footers supply upgrade instructions.
+Mise installs the pinned tools locally; the workflow installs and caches them
+automatically.
+
+To check the notes locally:
+
+```sh
+mise exec -- git-cliff --config cliff.toml --unreleased --tag v0.20.0 \
+  --use-branch-tags --topo-order --no-exec --offline
+```
 
 To package locally from a clean, committed checkout:
 

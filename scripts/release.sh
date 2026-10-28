@@ -46,9 +46,8 @@ printf 'Release evidence: %s\n' "$work_dir"
 
 resources_dir="$PWD/Bopify/Bopify/Resources"
 mkdir -p "$resources_dir"
-notice_tool=$(./scripts/release-tool.sh cargo-about)
 notices="$work_dir/Third-Party Licenses.html"
-"$notice_tool" generate \
+mise exec -- cargo-about generate \
   --locked \
   --fail \
   --config "$PWD/rust/about.toml" \

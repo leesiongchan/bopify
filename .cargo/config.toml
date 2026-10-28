@@ -1,0 +1,4 @@
+# Match the app's deployment target for Cargo commands run from the repository
+# root or its subdirectories, including the patched librespot workspace.
+[env]
+MACOSX_DEPLOYMENT_TARGET = { value = "26.0", force = true }

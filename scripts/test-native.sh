@@ -3,7 +3,6 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 ./scripts/prepare-librespot.sh
-export MACOSX_DEPLOYMENT_TARGET=26.0
 export CARGO_TARGET_DIR="$PWD/rust/target"
 
 # Test Connect and playback against the same lock as the shipping wrapper.

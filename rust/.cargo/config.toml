@@ -1,6 +1,0 @@
-# The Rust staticlib is linked into a macOS 14 app, so every cargo invocation
-# has to agree with the Xcode deployment target -- including a bare
-# `cargo clippy` run by hand, which would otherwise build against the host's
-# default and only fail at link time.
-[env]
-MACOSX_DEPLOYMENT_TARGET = "14.0"

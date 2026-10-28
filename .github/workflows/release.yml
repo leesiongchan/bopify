@@ -20,7 +20,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.version_tag }}
     env:
-      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
       MACOSX_DEPLOYMENT_TARGET: '26.0'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -44,11 +44,23 @@ jobs:
       - name: Identify build environment
         id: build-env
         run: echo "xcode=$(xcodebuild -version | shasum -a 256 | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
-      - name: Cache release tools
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Install build tools
+        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
         with:
-          path: .build/release-tools
-          key: release-tools-${{ runner.os }}-${{ runner.arch }}-${{ steps.build-env.outputs.xcode }}-${{ hashFiles('rust-toolchain.toml', 'scripts/release-tool.sh') }}
+          version: '2026.10.21'
+          cache_key: "{{default}}-${{ steps.build-env.outputs.xcode }}-${{ hashFiles('rust-toolchain.toml') }}"
+      - name: Prepare release notes
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.version_tag }}
+        run: |
+          mkdir -p build/release
+          mode=--unreleased
+          if [[ -n "$(git tag --points-at HEAD --list "$RELEASE_TAG")" ]]; then
+            mode=--current
+          fi
+          mise exec -- git-cliff --config cliff.toml "$mode" --tag "$RELEASE_TAG" \
+            --use-branch-tags --topo-order --no-exec --offline \
+            --output build/release/notes.md
       - name: Cache pinned librespot source
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -57,12 +69,12 @@ jobs:
       - name: Verify pinned librespot source
         run: ./scripts/prepare-librespot.sh
       - name: Cache Cargo builds
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: |
             rust -> target
             .build/librespot-939dc5e -> ../librespot-target
-          key: ${{ runner.os }}-${{ runner.arch }}-${{ steps.build-env.outputs.xcode }}-${{ hashFiles('scripts/build-rust.sh', 'scripts/test-native.sh', 'scripts/prepare-librespot.sh', 'rust/patches/librespot-queue-selection.patch', 'rust/.cargo/config.toml') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-${{ steps.build-env.outputs.xcode }}-${{ hashFiles('scripts/build-rust.sh', 'scripts/test-native.sh', 'scripts/prepare-librespot.sh', 'rust/patches/librespot-queue-selection.patch', '.cargo/config.toml') }}
           env-vars: CARGO CC CFLAGS CXX CMAKE RUST MACOSX_DEPLOYMENT_TARGET
           cache-bin: false
       - name: Package ad-hoc DMG
@@ -81,14 +93,16 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: verified-dmg
-          path: build/release/Bopify-${{ steps.version.outputs.version }}.dmg
+          path: |
+            build/release/Bopify-${{ steps.version.outputs.version }}.dmg
+            build/release/notes.md
           if-no-files-found: error
           retention-days: 14
           overwrite: true
 
   publish:
     needs: build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     permissions:
       contents: write
@@ -111,13 +125,7 @@ jobs:
           skipIfReleaseExists: true
           replacesArtifacts: true
           makeLatest: 'false'
-          generateReleaseNotes: true
-          body: |
-            This release is ad-hoc signed and is not notarized by Apple.
-
-            After copying Bopify to Applications, try opening it. If macOS blocks it and you trust this download, use System Settings > Privacy & Security > Open Anyway.
-
-            [Apple installation instructions](https://support.apple.com/en-us/102445)
+          bodyFile: release/notes.md
       - name: Publish release
         uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
         with:

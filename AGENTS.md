@@ -34,6 +34,7 @@ These rules override everything else in this file when in conflict:
 **Goal: the minimum code that solves the stated problem. Nothing speculative.**
 
 - No features beyond what was asked.
+- Release notes are generated from Conventional Commits; do not maintain a separate changelog. For user-facing changes, describe user impact in the commit subject and first body paragraph. Put required upgrade steps in a `BREAKING CHANGE:` footer. Routine internal commit types are omitted unless breaking.
 - No abstractions for single-use code. No configurability, flexibility, or hooks that were not requested.
 - No error handling for impossible scenarios. Handle the failures that can actually happen.
 - If the solution runs 200 lines and could be 50, rewrite it before showing it.
