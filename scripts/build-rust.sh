@@ -5,8 +5,6 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-./scripts/prepare-librespot.sh
-
 TARGET=aarch64-apple-darwin            # arm64 only; for universal, build
                                        # x86_64-apple-darwin too and lipo them
 

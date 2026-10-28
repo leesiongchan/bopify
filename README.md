@@ -65,6 +65,11 @@ does not need your Client secret. Sign-in credentials are stored in macOS Keycha
 Install Xcode 27.1, Rust through [rustup](https://rustup.rs/), and
 [mise](https://mise.jdx.dev/). The repository pins Rust 1.99.1 in
 `rust-toolchain.toml` and the build tools in `mise.toml`.
+
+The librespot dependency comes from the [Bopify fork](https://github.com/leesiongchan/librespot/tree/bopify),
+pinned to a commit in `rust/Cargo.toml`. Maintain librespot changes in that fork;
+Cargo fetches the source automatically.
+
 Run these commands from the repository root:
 
 ```sh
@@ -106,6 +111,7 @@ xcodebuild -project Bopify/Bopify.xcodeproj -scheme BopifyAppTests \
 
 The Debug app test scheme runs without an app host. Authentication and artwork
 tests use injected services and local network fixtures.
+The fork's CI also runs librespot Core, Connect, and playback regression tests.
 Every push to `main` runs these checks and verifies the mounted DMG and a copied
 installation before uploading it for publication. These checks do not exercise
 live Spotify sign-in, audio hardware, or Gatekeeper acceptance.

@@ -61,20 +61,11 @@ jobs:
           mise exec -- git-cliff --config cliff.toml "$mode" --tag "$RELEASE_TAG" \
             --use-branch-tags --topo-order --no-exec --offline \
             --output build/release/notes.md
-      - name: Cache pinned librespot source
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .build/librespot-939dc5e
-          key: librespot-${{ hashFiles('scripts/prepare-librespot.sh', 'rust/patches/librespot-queue-selection.patch') }}
-      - name: Verify pinned librespot source
-        run: ./scripts/prepare-librespot.sh
       - name: Cache Cargo builds
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          workspaces: |
-            rust -> target
-            .build/librespot-939dc5e -> ../librespot-target
-          key: ${{ runner.os }}-${{ runner.arch }}-${{ steps.build-env.outputs.xcode }}-${{ hashFiles('scripts/build-rust.sh', 'scripts/test-native.sh', 'scripts/prepare-librespot.sh', 'rust/patches/librespot-queue-selection.patch', '.cargo/config.toml') }}
+          workspaces: rust -> target
+          key: ${{ runner.os }}-${{ runner.arch }}-${{ steps.build-env.outputs.xcode }}-${{ hashFiles('scripts/build-rust.sh', 'scripts/test-native.sh', '.cargo/config.toml') }}
           env-vars: CARGO CC CFLAGS CXX CMAKE RUST MACOSX_DEPLOYMENT_TARGET
           cache-bin: false
       - name: Package ad-hoc DMG
