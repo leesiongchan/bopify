@@ -6,6 +6,8 @@
 
 <p align="center">A Spotify player for your Mac, tucked into the menu bar.</p>
 
+<p align="center"><a href="https://leesiongchan.github.io/bopify/">Website</a></p>
+
 Play music with a spinning record, browse your library and queue, search Spotify, and follow along with lyrics. Bopify also supports Spotify Connect and keyboard shortcuts.
 
 <p align="center">
