@@ -48,9 +48,6 @@ jobs:
     if: needs.plan.outputs.release == 'true'
     runs-on: xcode-27
     timeout-minutes: 90
-    outputs:
-      version: ${{ needs.plan.outputs.version }}
-      tag: ${{ needs.plan.outputs.tag }}
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
       MACOSX_DEPLOYMENT_TARGET: '26.0'
@@ -60,11 +57,6 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Download release notes
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: release-notes
-          path: build/release
       - name: Install Metal toolchain
         run: xcodebuild -downloadComponent MetalToolchain
       - name: Identify build environment
@@ -114,49 +106,29 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: verified-dmg
-          path: |
-            build/release/Bopify-${{ needs.plan.outputs.version }}.dmg
-            build/release/notes.md
+          path: build/release/Bopify-${{ needs.plan.outputs.version }}.dmg
           if-no-files-found: error
           retention-days: 14
           overwrite: true
 
   publish:
-    needs: build
+    needs: [plan, build]
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     permissions:
       contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.plan.outputs.tag }}
+      VERSION: ${{ needs.plan.outputs.version }}
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: verified-dmg
           path: release
-      - name: Upload release draft
-        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
-        with:
-          tag: ${{ needs.build.outputs.tag }}
-          commit: ${{ github.sha }}
-          name: Bopify ${{ needs.build.outputs.version }}
-          artifacts: release/Bopify-${{ needs.build.outputs.version }}.dmg
-          artifactErrorsFailBuild: true
-          draft: true
-          allowUpdates: true
-          updateOnlyUnreleased: true
-          skipIfReleaseExists: true
-          replacesArtifacts: true
-          makeLatest: 'false'
-          bodyFile: release/notes.md
+          merge-multiple: true
       - name: Publish release
-        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
-        with:
-          tag: ${{ needs.build.outputs.tag }}
-          commit: ${{ github.sha }}
-          draft: false
-          allowUpdates: true
-          updateOnlyUnreleased: true
-          skipIfReleaseExists: true
-          omitBody: true
-          omitName: true
-          omitPrereleaseDuringUpdate: true
-          makeLatest: legacy
+        # gh drafts the release, uploads the DMG, then publishes; it deletes the draft on failure.
+        run: >-
+          gh release create "$TAG" "release/Bopify-$VERSION.dmg"
+          --target "$GITHUB_SHA" --title "Bopify $VERSION" --notes-file release/notes.md
