@@ -8,6 +8,8 @@ Every push to `main` releases Bopify automatically when, and only when, it bring
 
 A push releases only if git-cliff finds at least one unreleased `feat`, `fix`, `perf`, `revert` or breaking commit touching a path in `cliff.toml`'s `include_paths`. Other commit types on app paths (`chore`, `refactor`, `build`, `test`, …) do not release on their own; they ship with the next qualifying release but are omitted from its notes. A dependency bump that should ship on its own is committed as `fix(deps):`.
 
+The decision is made per commit, not per diff. A `feat` that is later reverted still releases, and both appear in the notes; the old path-diff check skipped that case.
+
 Version bumps are unchanged: breaking gives major, `feat` gives minor, anything else gives patch.
 
 ## What is removed
@@ -27,9 +29,11 @@ Version bumps are unchanged: breaking gives major, `feat` gives minor, anything 
 
 ### `scripts/plan-release.sh <notes-path>`
 
-1. `git-cliff --unreleased --bump --context` yields the next version, the previous version and the unreleased user-facing commits.
-2. If there are 0 commits: log `No user-facing app changes since <previous>; skipping.`, write `release=false` to `$GITHUB_OUTPUT`, exit 0.
-3. Otherwise run `git-cliff --unreleased --tag <next> -o <notes-path>`, log the version and the notes length, and write `release=true`, `tag=vX.Y.Z` and `version=X.Y.Z` to `$GITHUB_OUTPUT`.
+1. `git-cliff --offline --unreleased --bump --body '{{ commits | length }} {{ version }}'` prints the number of unreleased user-facing commits and the next version. This replaces parsing the `--context` JSON, so the script needs no `jq`, which isn't installed locally. When the count is 0, the version printed is the previous release.
+2. If there are 0 commits: log `No user-facing app changes since <previous>; skipping release.`, write `release=false` to `$GITHUB_OUTPUT`, exit 0.
+3. Otherwise run `git-cliff --offline --unreleased --bump --output <notes-path>`, log the version, commit count and notes size, and write `release=true`, `tag=vX.Y.Z` and `version=X.Y.Z` to `$GITHUB_OUTPUT`.
+
+Do not use `git-cliff --bumped-version` on its own. It drops tags on commits outside `include_paths`; the real `v1.0.0` is one of these. The next fix would then be numbered `v1.0.0` or `v1.0.1` again (checked against 2.14.2). `--unreleased` keeps those tags.
 
 The previous release is the latest tag matching `tag_pattern`. Every such tag belongs to a published release, because `gh` creates the tag only when the release is published. git-cliff finds a tag even when it sits on a commit that `include_paths` filters out (checked on the real repo at `v1.0.0` and in a fixture).
 
