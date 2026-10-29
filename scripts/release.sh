@@ -70,6 +70,16 @@ if [[ ! -s "$notices" ]]; then
   exit 1
 fi
 
+# about.hbs lists Swift packages by hand, so fail when it misses a pinned package version.
+jq -r '.pins[] | "\(.location | sub("\\.git$"; ""))/releases/tag/\(.state.version)"' \
+  Bopify/Bopify.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved |
+  while read -r release; do
+    if ! grep -qF "$release" "$notices"; then
+      echo "Third-party notices lack $release; add it to rust/about.hbs." >&2
+      exit 1
+    fi
+  done
+
 chmod 0644 "$notices"
 mv "$notices" "$resources_dir/Third-Party Licenses.html"
 install -m 0644 LICENSE "$resources_dir/LICENSE.txt"
