@@ -60,8 +60,9 @@ jobs:
             mode=--current
           fi
           mise exec -- git-cliff --config cliff.toml "$mode" --tag "$RELEASE_TAG" \
-            --use-branch-tags --topo-order --no-exec --offline \
+            --use-branch-tags --no-exec --offline \
             --output build/release/notes.md
+          wc -m build/release/notes.md
       - name: Cache Cargo builds
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:

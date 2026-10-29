@@ -7,7 +7,7 @@ Maintenance release; no user-facing changes.
 {% for entry in commits | commit_groups(groups=commit_parsers_groups) %}
 ### {{ entry.group }}
 {% for commit in entry.commits %}
-- {{ commit.message | upper_first }} ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/leesiongchan/bopify/commit/{{ commit.id }}))
+- {{ commit.message | split(pat="\n") | first | upper_first }} ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/leesiongchan/bopify/commit/{{ commit.id }}))
 {% if commit.body %}
   {{ commit.body | trim | split(pat="\n\n") | first | replace(from="\n", to="\n  ") }}
 {% endif %}
