@@ -37,6 +37,12 @@ open Bopify/Bopify.xcodeproj
 
 Select the Bopify scheme in Xcode and run it. The build script creates the Rust library required by the Swift package.
 
+## Releases
+
+Pushes to `main` release automatically when shipped app inputs listed in `cliff.toml` differ from the last published release. Website, documentation, agent instructions, and test-only changes do not release the app. Automatic stable releases start at version 1.0.0.
+
+Use Conventional Commits describing user impact: `feat:` bumps the minor version, `fix:` and `perf:` bump the patch, and `!` or a `BREAKING CHANGE:` footer bumps the major. Other shipped-input changes receive a patch release with maintenance notes. Release notes include app changes since the last published release; internal commit types and commit-body paragraphs are omitted, while breaking upgrade instructions are retained.
+
 ## License
 
 [MIT](LICENSE)
