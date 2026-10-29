@@ -19,7 +19,8 @@
 - No `jq` in scripts (it isn't installed on the maintainer's machine).
 - Commit messages follow Conventional Commits and end with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. These are `ci:`/`docs:` commits, so they don't appear in app release notes.
 - Work on a branch in an isolated worktree. The main checkout has the user's uncommitted Swift edits plus edits to `scripts/prepare-release.py` and its test. Never touch, stage or discard them.
-- Run git-cliff-dependent commands through `mise exec --` locally. The fixture repos live outside the project, so mise shims can't resolve the tool version there.
+- Run git-cliff-dependent commands through `mise exec --` locally. The fixture repos live outside the project, so mise shims can't resolve the tool version there. In a fresh worktree, run `mise trust` first if `mise exec` reports an untrusted config.
+- The `publish` job has no checkout on purpose. `gh release create` only calls local git through `gitTagInfo`, whose error it discards (cli/cli `create.go:296-299`), and `GH_REPO` supplies the repository.
 
 ## File map
 
@@ -134,6 +135,7 @@ class PlanReleaseTests(unittest.TestCase):
         for message, version in [("fix: retain artwork", "1.0.1"),
                                  ("perf: load artwork faster", "1.0.1"),
                                  ("fix(deps): patch librespot", "1.0.1"),
+                                 ("revert: restore artwork", "1.0.1"),
                                  ("feat: search music", "1.1.0"),
                                  ("feat!: change setup", "2.0.0"),
                                  ("fix: change setup\n\nBREAKING CHANGE: Sign in again.", "2.0.0")]:
@@ -166,6 +168,17 @@ class PlanReleaseTests(unittest.TestCase):
         self.assertEqual(values["tag"], "v1.0.2")
         self.assertIn("v1.0.1...v1.0.2", notes)
 
+    def test_only_release_on_filtered_commit_is_the_boundary(self):
+        # Mirrors production: v1.0.0 was tagged on a commit outside include_paths.
+        self.git("tag", "-d", "v1.0.0")
+        self.commit("site/index.html", "site", "docs: product page")
+        self.git("tag", "v1.0.0")
+        self.assert_skips()
+        self.commit("Bopify/Bopify/App.swift", "fixed", "fix: retain artwork")
+        values, notes = self.plan()
+        self.assertEqual(values["tag"], "v1.0.1")
+        self.assertIn("v1.0.0...v1.0.1", notes)
+
     def test_prerelease_tags_are_ignored(self):
         self.commit("Bopify/Bopify/App.swift", "fixed", "fix: retain artwork")
         self.git("tag", "v1.0.1-rc1")
@@ -191,7 +204,7 @@ git rm -f scripts/prepare-release.py scripts/tests/test_prepare_release.py
 - [ ] **Step 3: Run the tests to verify they fail**
 
 Run: `mise exec -- python3 -B -m unittest discover -s scripts/tests -v`
-Expected: all 7 tests ERROR with `FileNotFoundError` for `scripts/plan-release.sh`.
+Expected: all 8 tests ERROR with `FileNotFoundError` for `scripts/plan-release.sh`.
 
 - [ ] **Step 4: Write the planning script**
 
@@ -227,7 +240,7 @@ printf 'release=true\ntag=%s\nversion=%s\n' "$tag" "${tag#v}" >> "$GITHUB_OUTPUT
 - [ ] **Step 5: Run the tests; only the prerelease test should fail**
 
 Run: `mise exec -- python3 -B -m unittest discover -s scripts/tests -v`
-Expected: 6 pass. `test_prerelease_tags_are_ignored` FAILS (`'v1.0.1-rc1.1' != 'v1.0.1'` or similar), because `cliff.toml` still accepts prerelease tags.
+Expected: 7 pass. `test_prerelease_tags_are_ignored` FAILS (`'v1.0.1-rc1.1' != 'v1.0.1'` or similar), because `cliff.toml` still accepts prerelease tags.
 
 - [ ] **Step 6: Update `cliff.toml`**
 
@@ -284,7 +297,7 @@ Leave everything else in `cliff.toml` unchanged.
 - [ ] **Step 7: Run the tests to verify they pass**
 
 Run: `mise exec -- python3 -B -m unittest discover -s scripts/tests -v`
-Expected: `Ran 7 tests` … `OK`.
+Expected: `Ran 8 tests` … `OK`.
 
 - [ ] **Step 8: Dry-run against the real history**
 
@@ -479,7 +492,7 @@ rg -n 'ncipollo|needs\.build\.outputs|prepare' .github/workflows/release.yml
 mise exec -- python3 -B -m unittest discover -s scripts/tests -v
 ```
 
-Expected: `rg` prints nothing; actionlint exits 0; `Ran 7 tests` … `OK`.
+Expected: `rg` prints nothing; actionlint exits 0; `Ran 8 tests` … `OK`.
 
 - [ ] **Step 4: Commit**
 
@@ -502,3 +515,5 @@ EOF
 ## After the tasks
 
 The workflow can only be proved end to end on GitHub. Merging the branch into `main` is itself a push with only `ci:`/`docs:` commits, so `plan` should log `No user-facing app changes since v1.0.0; skipping release.` and `build`/`publish` should be skipped. Check with `gh run list --workflow release.yml --limit 1` and `gh run view <id> --log | rg 'No user-facing'`. The first `feat:`/`fix:` app commit afterwards is the real publish test: expect a `v1.0.1` or `v1.1.0` release with the DMG attached (`gh release view`). Merging and pushing are the user's call. Use superpowers:finishing-a-development-branch.
+
+Before merging: the main checkout has uncommitted edits to `scripts/prepare-release.py` and `scripts/tests/test_prepare_release.py`, and this branch deletes both files, so `git merge` will refuse with "local changes would be overwritten". The user agreed those edits are superseded, but discarding them is still their action (`git restore scripts/prepare-release.py scripts/tests/test_prepare_release.py`). Ask before running it. The uncommitted Swift edits are unaffected.
