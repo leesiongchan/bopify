@@ -1,8 +1,5 @@
 [changelog]
 body = """
-{% if commits | length == 0 %}
-Maintenance release; no user-facing changes.
-{% else %}
 {% for entry in commits | commit_groups(groups=commit_parsers_groups) %}
 ### {{ entry.group }}
 {% for commit in entry.commits %}
@@ -12,7 +9,6 @@ Maintenance release; no user-facing changes.
 {% endif %}
 {% endfor %}
 {% endfor %}
-{% endif %}
 ## Installation
 
 This release is ad-hoc signed and is not notarized by Apple.
@@ -28,7 +24,6 @@ After copying Bopify to Applications, try opening it. If macOS blocks it and you
 {% endif %}
 """
 trim = true
-render_always = true
 postprocessors = [{ pattern = '\n{3,}', replace = "\n\n" }]
 
 [git]
@@ -37,7 +32,7 @@ filter_unconventional = true
 split_commits = false
 protect_breaking_commits = true
 sort_commits = "oldest"
-tag_pattern = '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
+tag_pattern = '^v[0-9]+\.[0-9]+\.[0-9]+$'
 include_paths = [
   "Bopify/Bopify/**",
   "Bopify/Bopify.xcodeproj/project.pbxproj",

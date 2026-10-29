@@ -39,9 +39,9 @@ Select the Bopify scheme in Xcode and run it. The build script creates the Rust 
 
 ## Releases
 
-Pushes to `main` release automatically when shipped app inputs listed in `cliff.toml` differ from the last published release. Website, documentation, agent instructions, and test-only changes do not release the app. Automatic stable releases start at version 1.0.0.
+Pushes to `main` release automatically when they bring user-facing app changes: a `feat:`, `fix:`, `perf:`, `revert:`, or breaking Conventional Commit touching the shipped app inputs listed in `cliff.toml`. Website, documentation, agent instructions, and test-only changes never release the app, and other commit types such as `chore:`, `refactor:`, and `build:` wait for the next release.
 
-Use Conventional Commits describing user impact: `feat:` bumps the minor version, `fix:` and `perf:` bump the patch, and `!` or a `BREAKING CHANGE:` footer bumps the major. Other shipped-input changes receive a patch release with maintenance notes. Release notes include app changes since the last published release; internal commit types and commit-body paragraphs are omitted, while breaking upgrade instructions are retained.
+`feat:` bumps the minor version, `fix:`, `perf:`, and `revert:` bump the patch, and `!` or a `BREAKING CHANGE:` footer bumps the major. To ship a dependency update on its own, commit it as `fix(deps):`. Release notes list user-facing commit subjects since the last release and keep breaking upgrade instructions.
 
 ## License
 

@@ -13,13 +13,13 @@ concurrency:
   queue: max
 
 jobs:
-  prepare:
+  plan:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
-      release: ${{ steps.release.outputs.release }}
-      version: ${{ steps.release.outputs.version }}
-      tag: ${{ steps.release.outputs.tag }}
+      release: ${{ steps.plan.outputs.release }}
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -32,16 +32,11 @@ jobs:
           install_args: aqua:orhun/git-cliff
       - name: Test release policy
         run: python3 -B -m unittest discover -s scripts/tests -v
-      - name: Prepare app release
-        id: release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          previous_tag=$(gh release list --exclude-drafts --exclude-pre-releases --limit 1 \
-            --json tagName --jq '.[0].tagName')
-          python3 scripts/prepare-release.py "$previous_tag" build/release/notes.md
+      - name: Plan app release
+        id: plan
+        run: ./scripts/plan-release.sh build/release/notes.md
       - name: Upload release notes
-        if: steps.release.outputs.release == 'true'
+        if: steps.plan.outputs.release == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-notes
@@ -49,13 +44,13 @@ jobs:
           if-no-files-found: error
 
   build:
-    needs: prepare
-    if: needs.prepare.outputs.release == 'true'
+    needs: plan
+    if: needs.plan.outputs.release == 'true'
     runs-on: xcode-27
     timeout-minutes: 90
     outputs:
-      version: ${{ needs.prepare.outputs.version }}
-      tag: ${{ needs.prepare.outputs.tag }}
+      version: ${{ needs.plan.outputs.version }}
+      tag: ${{ needs.plan.outputs.tag }}
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
       MACOSX_DEPLOYMENT_TARGET: '26.0'
@@ -113,14 +108,14 @@ jobs:
           -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO test
       - name: Package ad-hoc DMG
         env:
-          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          RELEASE_VERSION: ${{ needs.plan.outputs.version }}
         run: ./scripts/release.sh "$RELEASE_VERSION" --skip-rust-build
       - name: Upload verified DMG
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: verified-dmg
           path: |
-            build/release/Bopify-${{ needs.prepare.outputs.version }}.dmg
+            build/release/Bopify-${{ needs.plan.outputs.version }}.dmg
             build/release/notes.md
           if-no-files-found: error
           retention-days: 14
