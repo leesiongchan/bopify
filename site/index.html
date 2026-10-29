@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#11120f">
-  <meta name="description" content="A little record. A lot of feeling. Bopify is a native Spotify player for your Mac, tucked into the menu bar. Free and open source.">
-  <meta property="og:title" content="Bopify — A little record. A lot of feeling.">
+  <meta name="description" content="Your Spotify player. Right in the menu bar. Bopify brings marbled vinyl, Cover Flow, lyrics and native playback to your Mac. Free and open source.">
+  <meta property="og:title" content="Bopify — Spotify, right in your menu bar.">
   <meta property="og:description" content="Your Spotify favorites, back in rotation. A little record player for your Mac’s menu bar.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://leesiongchan.github.io/bopify/">
   <meta property="og:image" content="https://leesiongchan.github.io/bopify/assets/player.png">
-  <title>Bopify — A little record. A lot of feeling.</title>
+  <title>Bopify — Spotify, right in your menu bar.</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -25,22 +25,22 @@
   <main id="main">
     <section class="hero" id="experience" aria-labelledby="hero-title">
       <div class="wrap hero-topline"><p class="eyebrow"><span class="status-light" aria-hidden="true"></span> SPOTIFY. WITH A SOFT SPOT FOR VINYL.</p><span class="catalog">BOP—001 / MACOS</span></div>
-      <h1 class="masthead wrap" id="hero-title">BOPIFY</h1>
       <div class="hero-stage wrap">
         <div class="hero-copy">
-          <h2>A little record.<br>A lot of feeling.</h2>
-          <p>Your favorite songs, back in rotation. A native Spotify player that keeps the music close and the rest of your Mac yours.</p>
+          <h1 id="hero-title">Your Spotify.<br>Right in the<br><span>menu bar.</span></h1>
+          <p>A native player for your Mac. Browse your library, follow the lyrics, and keep a favorite record turning while you get on with your day.</p>
           <a class="button button-mint" href="https://github.com/leesiongchan/bopify/releases/latest">Download for Mac <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg></a>
-          <p class="requirements">Free & open source<br>macOS 26+ · Apple silicon · Spotify Premium<br><a href="#setup">A little setup before your first spin ↗</a></p>
+          <p class="requirements">Free & open source<br>macOS 26+ · Apple silicon · Spotify Premium<br><a href="#setup">Read the setup guide ↗</a></p>
         </div>
-        <div class="player-composition">
-          <img class="player-image" src="assets/player.png" alt="The actual Bopify player: a marbled record emerging from a glass panel, with Spotify playback controls and a Cover Flow library." width="968" height="720" fetchpriority="high">
-          <div class="hero-record record-window" aria-hidden="true"><div class="record-face"><img src="assets/player.png" alt="" width="968" height="720"></div></div>
-          <span class="player-caption">THE ACTUAL APP. ALL IN YOUR MENU BAR.</span>
+        <div class="player-stage">
+          <div class="player-composition">
+            <img class="player-image" src="assets/player.png" alt="The actual Bopify player: a marbled record emerging from a glass panel, with Spotify playback controls and a Cover Flow library." width="968" height="720" fetchpriority="high">
+            <div class="hero-record record-window" aria-hidden="true"><div class="record-face"><img src="assets/player.png" alt="" width="968" height="720"></div></div>
+            <span class="player-caption">THE ACTUAL APP / COVER FLOW VIEW</span>
+          </div>
         </div>
-        <div class="speed-mark" aria-hidden="true"><span>33⅓</span><span>LONG PLAY<br>GOOD COMPANY</span></div>
       </div>
-      <div class="hero-footer wrap"><span>01 / PUT SOMETHING GOOD ON</span><span class="live-status"><span class="status-light" aria-hidden="true"></span> NATIVE TO YOUR MAC</span><a href="#collection">KEEP DIGGING <span aria-hidden="true">↓</span></a></div>
+      <nav class="hero-footer wrap" aria-label="Explore Bopify"><a href="#collection">Browse your library <span aria-hidden="true">↓</span></a><a href="#record">Meet your next record <span aria-hidden="true">↓</span></a><a href="#features">Lyrics, search & more <span aria-hidden="true">↓</span></a></nav>
     </section>
 
     <section class="collection" id="collection" aria-labelledby="collection-title">
@@ -53,29 +53,27 @@
             <div class="coverflow-crop"><img src="assets/player.png" alt="Bopify’s Cover Flow library, with Recents, Explore, Liked and Library tabs above a fan of album covers." width="968" height="720" loading="lazy"></div>
             <div class="sleeve-title"><span>YOUR DAILY<br>ROTATION.</span><span>VOL.<br>001</span></div>
           </div>
-          <div class="collection-copy"><h3>A little crate digging. <br>Without the dusty fingers.</h3><p>Flip through your Spotify library in Cover Flow. Revisit recent listens, browse your liked songs, or dig for something new.</p></div>
+          <div class="collection-copy"><h3>Your collection. <br>A new way to browse.</h3><p>Flip through recent listens, liked songs, albums, artists, and playlists in Cover Flow. Find something good and make it your next listen.</p></div>
         </div>
       </div>
-      <div class="collection-index wrap"><span>RECENTS</span><span aria-hidden="true">✳</span><span>EXPLORE</span><span aria-hidden="true">✳</span><span>LIKED SONGS</span><span aria-hidden="true">✳</span><span>YOUR LIBRARY</span></div>
+      <dl class="collection-index wrap"><div><dt>Recents</dt><dd>Back to your last good find.</dd></div><div><dt>Explore</dt><dd>Something new for the rotation.</dd></div><div><dt>Liked songs</dt><dd>All the ones worth keeping.</dd></div><div><dt>Your library</dt><dd>Albums, artists, and playlists.</dd></div></dl>
     </section>
 
-    <section class="pressing" aria-labelledby="pressing-title">
+    <section class="pressing" id="record" aria-labelledby="pressing-title">
       <div class="section-rail wrap"><span>03 / A FRESH PRESSING</span><span>COLOR COMES FROM THE COVER.</span></div>
       <div class="pressing-layout">
         <div class="pressing-visual" aria-hidden="true"><div class="pressing-record record-window"><div class="record-face"><img src="assets/player.png" alt="" width="968" height="720" loading="lazy"></div></div><span class="pressing-orbit">BOPIFY / IN CONSTANT ROTATION</span></div>
-        <div class="pressing-copy"><svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2"/><path d="M6 12a6 6 0 0 1 6-6m0 12a6 6 0 0 0 6-6"/></svg><h2 id="pressing-title">Every track. <br>A different<br><span>pressing.</span></h2><p>Album artwork becomes marbled vinyl. A record with its own colors, its own character, and that part you always come back to.</p><div class="scrub-note"><span aria-hidden="true">↺</span><span>IN THE APP<br><strong>Drag the record to cue your favorite part.</strong></span></div></div>
+        <div class="pressing-copy"><svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2"/><path d="M6 12a6 6 0 0 1 6-6m0 12a6 6 0 0 0 6-6"/></svg><h2 id="pressing-title">Every track.<br>Its own <span>record.</span></h2><p>Your album artwork becomes marbled vinyl, bringing the colors of each cover into the player. A familiar song with a little more character.</p><div class="scrub-note"><span aria-hidden="true">↺</span><span>MORE THAN A PRETTY RECORD<br><strong>Drag it in the app to find your favorite part.</strong></span></div></div>
       </div>
       <div class="pressing-bottom wrap"><span>THE RECORD TURNS. THE DAY FINDS ITS GROOVE.</span><span>MADE TO BE PLAYED.</span></div>
     </section>
 
-    <section class="lyrics" aria-labelledby="lyrics-title">
+    <section class="lyrics" id="features" aria-labelledby="lyrics-title">
       <div class="lyrics-layout wrap">
-        <div class="lyrics-intro"><p class="eyebrow">04 / THE INNER SLEEVE</p><svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h12M3 10h8M3 15h5m12 1V7l-5 1.5"/><ellipse cx="17.5" cy="17" rx="2.5" ry="2"/></svg><p>Live lyrics, when available.<br>For the verses you know by heart,<br>and the ones you’re still learning.</p></div>
-        <div class="lyrics-type"><h2 id="lyrics-title">YOU KNOW<br>THE <span>WORDS.</span></h2><p>Go on. Sing the good bit.</p></div>
+        <div class="lyrics-intro"><p class="eyebrow">04 / THE LITTLE THINGS</p><svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h12M3 10h8M3 15h5m12 1V7l-5 1.5"/><ellipse cx="17.5" cy="17" rx="2.5" ry="2"/></svg><h2 id="lyrics-title">Stay with <br>the <span>song.</span></h2><p>The words, the next track, that album you’ve been meaning to play. All close at hand.</p></div>
+        <dl class="feature-list"><div><dt>Follow the words</dt><dd>Lyrics for the track playing on your Mac, when available. For the verses you know and the ones you’re still learning.</dd></div><div><dt>Find your next listen</dt><dd>Search Spotify for songs, albums, artists, and playlists without leaving the player.</dd></div><div><dt>See what’s up next</dt><dd>Browse your queue and jump to the track you want.</dd></div><div><dt>Keep your hands on the keys</dt><dd>Play, seek, skip, and search with keyboard shortcuts. Bopify also works with Spotify Connect.</dd></div></dl>
       </div>
     </section>
-
-    <section class="controls" aria-label="More ways to keep the music playing"><div class="wrap controls-layout"><p class="eyebrow">ALSO ON THE RECORD</p><p>Search Spotify. Shape your queue.<br>Stay in your flow with keyboard shortcuts<br>and Spotify Connect.</p><svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3m4 0h11M3 17h11m4 0h3"/><circle cx="8" cy="7" r="2"/><circle cx="16" cy="17" r="2"/></svg></div></section>
 
     <section class="liner-notes" id="liner-notes" aria-labelledby="notes-title">
       <div class="section-rail wrap"><span>05 / THE LINER NOTES</span><span>KEEP THIS SLEEVE FOR REFERENCE.</span></div>
@@ -90,7 +88,7 @@
       </div>
     </section>
 
-    <section class="outro" aria-labelledby="outro-title"><div class="wrap"><div class="outro-rail"><p class="eyebrow">END OF SIDE A</p><span>THERE’S ALWAYS ANOTHER GOOD RECORD.</span></div><h2 id="outro-title">ONE MORE<br>SIDE<span aria-hidden="true">?</span></h2><div class="outro-bottom"><p>A little player.<br>A lot left to listen to.</p><a class="button button-ink" href="https://github.com/leesiongchan/bopify/releases/latest">Take Bopify for a spin <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg></a><span class="outro-speed" aria-hidden="true">33⅓</span></div></div></section>
+    <section class="outro" aria-labelledby="outro-title"><div class="wrap"><div class="outro-rail"><p class="eyebrow">ONE MORE THING</p><span>FREE & OPEN SOURCE. ALWAYS IN ROTATION.</span></div><div class="outro-layout"><h2 id="outro-title">Good music.<br>Close at hand.</h2><div class="outro-bottom"><p>Make a little room for your next favorite record.</p><a class="button button-ink" href="https://github.com/leesiongchan/bopify/releases/latest">Download for Mac <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg></a><p class="outro-requirements">macOS 26+ · Apple silicon · Spotify Premium<br><a href="#setup">Read the setup guide ↗</a></p></div></div></div></section>
   </main>
 
   <footer class="site-footer wrap"><a class="wordmark" href="#" aria-label="Bopify home"><span class="record-mark" aria-hidden="true"></span>bopify</a><span>LONG PLAY. GOOD COMPANY.</span><div><a href="https://github.com/leesiongchan/bopify">GitHub ↗</a><a href="https://github.com/leesiongchan/bopify/blob/main/LICENSE">MIT license ↗</a></div></footer>
