@@ -17,8 +17,8 @@ fi
 
 marketing_version=${version%%-*}
 build_number=${BUILD_NUMBER:-$(git rev-list --count HEAD)}
-if [[ ! "$build_number" =~ ^[1-9][0-9]{0,3}$ ]]; then
-  echo "BUILD_NUMBER must be an integer from 1 to 9999." >&2
+if [[ ! "$build_number" =~ ^[1-9][0-9]*$ ]]; then
+  echo "BUILD_NUMBER must be a positive integer." >&2
   exit 1
 fi
 
@@ -105,7 +105,7 @@ hdiutil create \
   -quiet \
   -volname Bopify \
   -srcfolder "$staging_dir" \
-  -format UDZO \
+  -format ULFO \
   "$staged_dmg"
 
 codesign --sign - --timestamp=none "$staged_dmg"

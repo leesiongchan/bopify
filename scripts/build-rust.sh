@@ -5,6 +5,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# xcodebuild below reads the library from rust/target, so pin it there.
+export CARGO_TARGET_DIR="$PWD/rust/target"
+
 TARGET=aarch64-apple-darwin            # arm64 only; for universal, build
                                        # x86_64-apple-darwin too and lipo them
 
