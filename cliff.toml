@@ -28,7 +28,7 @@ postprocessors = [{ pattern = '\n{3,}', replace = "\n\n" }]
 
 [git]
 conventional_commits = true
-filter_unconventional = true
+filter_unconventional = false
 split_commits = false
 protect_breaking_commits = true
 sort_commits = "oldest"
@@ -62,6 +62,7 @@ commit_parsers = [
   { message = "^fix", group = "Fixes" },
   { message = "^perf", group = "Performance" },
   { message = "^revert", group = "Changes" },
+  { message = '^Revert "(feat|fix|perf|revert)', group = "Changes" },
   { message = "^(chore|ci|build|docs|style|test|refactor)(\\([^\\n]*\\))?:", skip = true },
   { message = ".*", skip = true },
 ]

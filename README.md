@@ -41,7 +41,7 @@ Select the Bopify scheme in Xcode and run it. The build script creates the Rust 
 
 Pushes to `main` release automatically when they bring user-facing app changes: a `feat:`, `fix:`, `perf:`, `revert:`, or breaking Conventional Commit touching the shipped app inputs listed in `cliff.toml`. Website, documentation, agent instructions, and test-only changes never release the app, and other commit types such as `chore:`, `refactor:`, and `build:` wait for the next release.
 
-`feat:` bumps the minor version, `fix:`, `perf:`, and `revert:` bump the patch, and `!` or a `BREAKING CHANGE:` footer bumps the major. To ship a dependency update on its own, commit it as `fix(deps):`. Release notes list user-facing commit subjects since the last release and keep breaking upgrade instructions.
+`feat:` bumps the minor version, `fix:`, `perf:`, and `revert:` (including git's default `Revert "…"` message of a user-facing commit) bump the patch, and `!` or a `BREAKING CHANGE:` footer bumps the major. To ship a dependency update on its own, commit it as `fix(deps):`. Release notes list user-facing commit subjects since the last release and keep breaking upgrade instructions.
 
 ## License
 

@@ -42,6 +42,7 @@ jobs:
           name: release-notes
           path: build/release/notes.md
           if-no-files-found: error
+          overwrite: true
 
   build:
     needs: plan
@@ -128,7 +129,13 @@ jobs:
           path: release
           merge-multiple: true
       - name: Publish release
+        # A stale re-run must not publish: a newer release already contains these commits.
         # gh drafts the release, uploads the DMG, then publishes; it deletes the draft on failure.
-        run: >-
-          gh release create "$TAG" "release/Bopify-$VERSION.dmg"
-          --target "$GITHUB_SHA" --title "Bopify $VERSION" --notes-file release/notes.md
+        run: |
+          latest=$(gh release view --json tagName --jq .tagName)
+          if [[ $(printf '%s\n' "$latest" "$TAG" | sort -V | tail -n 1) != "$TAG" ]]; then
+            echo "$latest is newer than $TAG; refusing to publish a stale release." >&2
+            exit 1
+          fi
+          gh release create "$TAG" "release/Bopify-$VERSION.dmg" \
+            --target "$GITHUB_SHA" --title "Bopify $VERSION" --notes-file release/notes.md

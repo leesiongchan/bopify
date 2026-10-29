@@ -39,11 +39,12 @@ class PlanReleaseTests(unittest.TestCase):
         output.unlink(missing_ok=True)
         notes = self.repo / "build/release/notes.md"
         notes.unlink(missing_ok=True)
-        subprocess.run(
+        result = subprocess.run(
             [str(ROOT / "scripts/plan-release.sh"), str(notes)],
             cwd=self.repo, env=dict(self.env, GITHUB_OUTPUT=str(output)),
-            check=True, capture_output=True, text=True,
+            capture_output=True, text=True,
         )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         values = dict(line.split("=", 1) for line in output.read_text().splitlines())
         return values, notes.read_text() if notes.exists() else ""
 
@@ -64,7 +65,8 @@ class PlanReleaseTests(unittest.TestCase):
 
     def test_internal_app_commits_skip(self):
         for message in ["chore: tidy player", "refactor: split player",
-                        "build(deps): bump librespot", "Update internal implementation"]:
+                        "build(deps): bump librespot", "Update internal implementation",
+                        'Revert "chore: tidy player"']:
             with self.subTest(message=message):
                 self.commit("Bopify/Bopify/App.swift", message, message)
                 self.assert_skips()
@@ -79,6 +81,7 @@ class PlanReleaseTests(unittest.TestCase):
                                  ("perf: load artwork faster", "1.0.1"),
                                  ("fix(deps): patch librespot", "1.0.1"),
                                  ("revert: restore artwork", "1.0.1"),
+                                 ('Revert "feat: search music"', "1.0.1"),
                                  ("feat: search music", "1.1.0"),
                                  ("feat!: change setup", "2.0.0"),
                                  ("fix: change setup\n\nBREAKING CHANGE: Sign in again.", "2.0.0")]:
@@ -102,6 +105,14 @@ class PlanReleaseTests(unittest.TestCase):
         self.assertNotIn("Tidy player", notes)
         self.assertNotIn("implementation diary", notes)
         self.assertIn("v1.0.0...v2.0.0", notes)
+
+    def test_git_default_revert_of_a_feature_is_in_the_notes(self):
+        self.commit("Bopify/Bopify/App.swift", "search", "feat: search music")
+        self.commit("Bopify/Bopify/App.swift", "reverted", 'Revert "feat: search music"')
+        values, notes = self.plan()
+        self.assertEqual(values["tag"], "v1.1.0")
+        self.assertIn("Search music", notes)
+        self.assertIn('Revert "feat: search music"', notes)
 
     def test_release_on_filtered_commit_is_the_boundary(self):
         self.commit("site/index.html", "site", "docs: product page")
