@@ -66,7 +66,9 @@ class PlanReleaseTests(unittest.TestCase):
     def test_internal_app_commits_skip(self):
         for message in ["chore: tidy player", "refactor: split player",
                         "build(deps): bump librespot", "Update internal implementation",
-                        'Revert "chore: tidy player"']:
+                        'Revert "chore: tidy player"', "fix typo in player",
+                        "fixup! feat: search music", "performance tweak",
+                        "feature flag cleanup", "reverting experiment"]:
             with self.subTest(message=message):
                 self.commit("Bopify/Bopify/App.swift", message, message)
                 self.assert_skips()

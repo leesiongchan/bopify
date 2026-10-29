@@ -58,10 +58,10 @@ include_paths = [
 ]
 commit_parsers = [
   { field = "breaking", pattern = "true", group = "Breaking changes" },
-  { message = "^feat", group = "Features" },
-  { message = "^fix", group = "Fixes" },
-  { message = "^perf", group = "Performance" },
-  { message = "^revert", group = "Changes" },
+  { message = '^feat(\([^)]*\))?!?:', group = "Features" },
+  { message = '^fix(\([^)]*\))?!?:', group = "Fixes" },
+  { message = '^perf(\([^)]*\))?!?:', group = "Performance" },
+  { message = '^revert(\([^)]*\))?!?:', group = "Changes" },
   { message = '^Revert "(feat|fix|perf|revert)', group = "Changes" },
   { message = "^(chore|ci|build|docs|style|test|refactor)(\\([^\\n]*\\))?:", skip = true },
   { message = ".*", skip = true },
