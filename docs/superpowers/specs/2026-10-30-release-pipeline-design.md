@@ -6,7 +6,7 @@ Every push to `main` releases Bopify automatically when, and only when, it bring
 
 ## Release policy (C1)
 
-A push releases only if git-cliff finds at least one unreleased `feat`, `fix`, `perf`, `revert` or breaking commit touching a path in `cliff.toml`'s `include_paths`. Other commit types on app paths (`chore`, `refactor`, `build`, `test`, …) do not release on their own; they ship with the next qualifying release but are omitted from its notes. A dependency bump that should ship on its own is committed as `fix(deps):`.
+A push releases only if git-cliff finds at least one unreleased `feat`, `fix`, `perf`, `revert` or breaking commit (git's default `Revert "feat: …"` message of a user-facing commit counts as a `revert`) touching a path in `cliff.toml`'s `include_paths`. Other commit types on app paths (`chore`, `refactor`, `build`, `test`, …) do not release on their own; they ship with the next qualifying release but are omitted from its notes. A dependency bump that should ship on its own is committed as `fix(deps):`.
 
 The decision is made per commit, not per diff. A `feat` that is later reverted still releases, and both appear in the notes; the old path-diff check skipped that case.
 
@@ -46,11 +46,16 @@ The trigger (`push` to `main`), top-level `permissions: contents: read`, and the
 - **`publish`** (`ubuntu-26.04`, `contents: write`, no checkout): `needs: [plan, build]`; env `GH_TOKEN`, `GH_REPO: ${{ github.repository }}`, `TAG`, `VERSION` from `needs.plan.outputs`; download both artifacts into `release/` with `merge-multiple: true`; then:
 
   ```sh
+  latest=$(gh release view --json tagName --jq .tagName)
+  if [[ $(printf '%s\n' "$latest" "$TAG" | sort -V | tail -n 1) != "$TAG" ]]; then
+    echo "$latest is newer than $TAG; refusing to publish a stale release." >&2
+    exit 1
+  fi
   gh release create "$TAG" "release/Bopify-$VERSION.dmg" \
     --target "$GITHUB_SHA" --title "Bopify $VERSION" --notes-file release/notes.md
   ```
 
-  When an asset is attached, `gh release create` creates a draft, uploads, publishes, and deletes the draft on failure (cli/cli `pkg/cmd/release/create/create.go`). The release becomes Latest by the API default. `gh` is the one preinstalled on GitHub-hosted runners and is not pinned.
+  The guard refuses to publish when the latest release is newer than `$TAG`: a stale "Re-run failed jobs" on an older run would otherwise publish its old tag as Latest. When an asset is attached, `gh release create` creates a draft, uploads, publishes, and deletes the draft on failure (cli/cli `pkg/cmd/release/create/create.go`). The release becomes Latest by the API default. `gh` is the one preinstalled on GitHub-hosted runners and is not pinned.
 
 Only `publish` holds a write token. Pushes that don't release never start a macOS runner.
 
@@ -63,7 +68,8 @@ Rewrite the Releases section (currently lines 42–44) to describe C1: which com
 | Failure | State left behind | Recovery |
 |---|---|---|
 | `plan` or `build` fails | No release, no tag | Re-run, or the next qualifying push includes the pending commits |
-| `publish` fails | gh deleted the draft; no tag | Re-run the failed job (artifacts kept 14 days) |
+| `publish` fails | gh deleted the draft; no tag | Re-run the failed job (artifacts kept 14 days), unless a later run has already released (the publish job then refuses as stale; nothing to do, since the later release contains these commits) |
+| `publish` reports failure after GitHub actually published (lost response) | gh deletes the release; the tag remains | A whole-workflow re-run skips (HEAD is tagged); recover with `gh release create "$TAG" <dmg> --verify-tag --title ... --notes-file ...` from the run's artifacts |
 | Successful run re-run | Tag on HEAD | `plan` finds 0 commits and skips |
 | Only `publish` re-run after success | Release exists | `gh` fails with "already exists"; nothing overwritten |
 
