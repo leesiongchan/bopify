@@ -17,11 +17,7 @@ After copying Bopify to Applications, try opening it. If macOS blocks it and you
 
 [Apple installation instructions](https://support.apple.com/en-us/102445)
 
-{% if previous.version %}
 [Full changelog](https://github.com/leesiongchan/bopify/compare/{{ previous.version }}...{{ version }})
-{% else %}
-[Release source](https://github.com/leesiongchan/bopify/releases/tag/{{ version }})
-{% endif %}
 """
 trim = true
 postprocessors = [{ pattern = '\n{3,}', replace = "\n\n" }]
@@ -29,9 +25,6 @@ postprocessors = [{ pattern = '\n{3,}', replace = "\n\n" }]
 [git]
 conventional_commits = true
 filter_unconventional = false
-split_commits = false
-protect_breaking_commits = true
-sort_commits = "oldest"
 tag_pattern = '^v[0-9]+\.[0-9]+\.[0-9]+$'
 include_paths = [
   "Bopify/Bopify/**",
@@ -66,8 +59,3 @@ commit_parsers = [
   { message = "^(chore|ci|build|docs|style|test|refactor)(\\([^\\n]*\\))?:", skip = true },
   { message = ".*", skip = true },
 ]
-
-[bump]
-initial_tag = "v1.0.0"
-features_always_bump_minor = true
-breaking_always_bump_major = true
