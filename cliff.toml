@@ -1,14 +1,15 @@
 [changelog]
 body = """
-{% for entry in commits | commit_groups(groups=commit_parsers_groups) %}
-### {{ entry.group }}
-{% for commit in entry.commits %}
+{% for entry in commits | commit_groups(groups=commit_parsers_groups) -%}
+## {{ entry.group }}
+
+{% for commit in entry.commits -%}
 - {{ commit.message | split(pat="\n") | first | upper_first }} ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/leesiongchan/bopify/commit/{{ commit.id }}))
-{% if commit.breaking_description %}
-  **Upgrade:** {{ commit.breaking_description | replace(from="\n", to="\n  ") }}
-{% endif %}
+{% if commit.breaking_description and commit.breaking_description != commit.message -%}
+{{ "  " }}- **Upgrade:** {{ commit.breaking_description | replace(from="\n", to="\n" ~ "    ") }}
+{% endif -%}
 {% endfor %}
-{% endfor %}
+{% endfor -%}
 ## Installation
 
 This release is ad-hoc signed and is not notarized by Apple.
@@ -19,8 +20,8 @@ After copying Bopify to Applications, try opening it. If macOS blocks it and you
 
 [Full changelog](https://github.com/leesiongchan/bopify/compare/{{ previous.version }}...{{ version }})
 """
+# trim also strips each template line's indentation, so nested indents are emitted as strings.
 trim = true
-postprocessors = [{ pattern = '\n{3,}', replace = "\n\n" }]
 
 [git]
 conventional_commits = true
