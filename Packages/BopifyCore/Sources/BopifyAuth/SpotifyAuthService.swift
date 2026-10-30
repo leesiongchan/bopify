@@ -26,6 +26,7 @@ public actor SpotifyAuthService {
     private var refresh: (id: UUID, generation: Int, task: Task<TokenSet, Error>)?
     private var pendingRefresh: (generation: Int, tokens: TokenSet)?
     private var activeListener: LoopbackCallbackListener?
+    private var preparedConsent: Consent?
 
     public init(
         clientID: String,
@@ -59,28 +60,70 @@ public actor SpotifyAuthService {
         return tokens
     }
 
-    public func signIn() async throws -> TokenSet {
+    /// `next` is a consent the browser continues to once Spotify returns this grant.
+    public func signIn(continuingTo next: URL? = nil) async throws -> TokenSet {
         try Task.checkCancellation()
         try await prepareForConsent()
-        return try await authorize(scopes: ["streaming"], validateGrant: false)
+        let consent = try await beginConsent(scopes: ["streaming"], successRedirect: next)
+        return try await openAndFinish(consent, validateGrant: false)
     }
 
     public func authorizeLibrary() async throws -> TokenSet {
+        if let consent = preparedConsent {
+            preparedConsent = nil
+            if consent.generation == generation, activeListener === consent.listener {
+                BopifyLog.auth.info("library consent continues in the sign-in browser tab")
+                return try await finish(consent, validateGrant: true)
+            }
+        }
+        try await prepareLibraryForConsent()
+        let consent = try await beginConsent(scopes: LibraryAuthorization.requiredScopes)
+        return try await openAndFinish(consent, validateGrant: true)
+    }
+
+    /// Readies library consent without opening it, for sign-in to send its browser tab on to;
+    /// the next `authorizeLibrary()` then waits for that tab instead of opening another.
+    public func prepareLibraryConsent() async throws -> URL {
+        try await prepareLibraryForConsent()
+        let consent = try await beginConsent(scopes: LibraryAuthorization.requiredScopes)
+        preparedConsent = consent
+        BopifyLog.auth.info("library consent prepared for the sign-in browser tab")
+        return consent.url
+    }
+
+    /// Frees the callback of a prepared consent that sign-in did not hand on.
+    public func discardPreparedConsent() async {
+        guard let consent = preparedConsent else { return }
+        preparedConsent = nil
+        await stopAuthorization(consent.listener)
+        BopifyLog.auth.debug("prepared library consent discarded")
+    }
+
+    private func prepareLibraryForConsent() async throws {
         try Task.checkCancellation()
         try await prepareForConsent()
         do { _ = try tokens ?? restore() }
         catch PlayerError.credentialCorrupt {
             BopifyLog.auth.notice("explicit library consent will replace a corrupt grant")
         }
-        return try await authorize(scopes: LibraryAuthorization.requiredScopes, validateGrant: true)
     }
 
-    private func authorize(scopes: Set<String>, validateGrant: Bool) async throws -> TokenSet {
+    private struct Consent {
+        let listener: LoopbackCallbackListener
+        let generation: Int
+        let pkce: PKCEPair
+        let redirectURI: String
+        let scopes: Set<String>
+        let url: URL
+    }
+
+    private func beginConsent(scopes: Set<String>, successRedirect: URL? = nil) async throws -> Consent {
         try Task.checkCancellation()
         refresh?.task.cancel()
         refresh = nil
         generation += 1
         pendingRefresh = nil
+        preparedConsent = nil
         let myGeneration = generation
         BopifyLog.auth.info("signIn starting generation=\(myGeneration, privacy: .public)")
         let previousListener = activeListener
@@ -89,9 +132,45 @@ public actor SpotifyAuthService {
         try Task.checkCancellation()
         guard generation == myGeneration else { throw PlayerError.authDenied }
         let state = UUID().uuidString
-        let listener = LoopbackCallbackListener(expectedState: state, expectedPath: callbackPath)
+        let listener = LoopbackCallbackListener(expectedState: state, expectedPath: callbackPath, successRedirect: successRedirect)
         return try await withTaskCancellationHandler {
-            do { return try await authorize(scopes: scopes, validateGrant: validateGrant, generation: myGeneration, listener: listener, state: state) }
+            do {
+                let pkce = PKCEPair.random()
+                activeListener = listener
+                let port: Int
+                do { port = try await listener.start(port: callbackPort) }
+                catch {
+                    if activeListener === listener { activeListener = nil }
+                    if generation != myGeneration { throw PlayerError.authDenied }
+                    throw error
+                }
+                try Task.checkCancellation()
+                guard generation == myGeneration else { throw PlayerError.authDenied }
+                let redirectURI = LoopbackCallbackListener.redirectURI(port: port, path: callbackPath)
+                let request = AuthorizationRequest(clientID: clientID, redirectURI: redirectURI,
+                                                   scopes: scopes.sorted(), pkce: pkce, state: state)
+                return Consent(listener: listener, generation: myGeneration, pkce: pkce,
+                               redirectURI: redirectURI, scopes: scopes, url: request.url)
+            } catch {
+                await stopAuthorization(listener)
+                if Task.isCancelled { throw CancellationError() }
+                throw error
+            }
+        } onCancel: {
+            Task { await listener.stop() }
+        }
+    }
+
+    private func openAndFinish(_ consent: Consent, validateGrant: Bool) async throws -> TokenSet {
+        openURL(consent.url)
+        BopifyLog.auth.info("opened system browser for authorization")
+        return try await finish(consent, validateGrant: validateGrant)
+    }
+
+    private func finish(_ consent: Consent, validateGrant: Bool) async throws -> TokenSet {
+        let listener = consent.listener
+        return try await withTaskCancellationHandler {
+            do { return try await exchange(consent, validateGrant: validateGrant) }
             catch {
                 await stopAuthorization(listener)
                 if Task.isCancelled { throw CancellationError() }
@@ -102,28 +181,8 @@ public actor SpotifyAuthService {
         }
     }
 
-    private func authorize(scopes: Set<String>, validateGrant: Bool, generation myGeneration: Int,
-                           listener: LoopbackCallbackListener, state: String) async throws -> TokenSet {
-        let pkce = PKCEPair.random()
-        activeListener = listener
-        let port: Int
-        do { port = try await listener.start(port: callbackPort) }
-        catch {
-            if activeListener === listener { activeListener = nil }
-            if generation != myGeneration { throw PlayerError.authDenied }
-            throw error
-        }
-        try Task.checkCancellation()
-        guard generation == myGeneration else {
-            await stopAuthorization(listener)
-            throw PlayerError.authDenied
-        }
-        let redirectURI = LoopbackCallbackListener.redirectURI(port: port, path: callbackPath)
-        let request = AuthorizationRequest(clientID: clientID, redirectURI: redirectURI,
-                                           scopes: scopes.sorted(), pkce: pkce, state: state)
-        openURL(request.url)
-        BopifyLog.auth.info("opened system browser for authorization")
-
+    private func exchange(_ consent: Consent, validateGrant: Bool) async throws -> TokenSet {
+        let listener = consent.listener, myGeneration = consent.generation, scopes = consent.scopes
         let code: String
         do { code = try await listener.waitForCallback() }
         catch CallbackError.accessDenied {
@@ -142,7 +201,7 @@ public actor SpotifyAuthService {
         await stopAuthorization(listener)
         try Task.checkCancellation()
 
-        let tokens = try await client.exchange(code: code, redirectURI: redirectURI, pkce: pkce)
+        let tokens = try await client.exchange(code: code, redirectURI: consent.redirectURI, pkce: consent.pkce)
         try Task.checkCancellation()
         BopifyLog.auth.info("token exchange succeeded")
         // A signOut() during any of the awaits above already cleared the

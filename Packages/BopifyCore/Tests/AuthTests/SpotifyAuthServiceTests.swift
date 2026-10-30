@@ -239,6 +239,54 @@ struct SpotifyAuthServiceTests {
         #expect(store.load()?.accessToken == "AT")
     }
 
+    @Test func preparedLibraryConsentCompletesWithoutOpeningAnotherTab() async throws {
+        AuthFlowStubProtocol.handler = { _ in (200, Data(self.librarySuccess.utf8)) }
+        let store = InMemoryTokenStore()
+        let service = SpotifyAuthService(clientID: "dashboard", client: makeClient(), store: store, callbackPath: "/callback",
+                                         openURL: { _ in Issue.record("A prepared consent continues in the sign-in tab") })
+        let url = try await service.prepareLibraryConsent()
+        let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
+        #expect(query["client_id"] == "dashboard")
+        #expect(Set(query["scope"]!.split(separator: " ").map(String.init)) == LibraryAuthorization.requiredScopes)
+        // Spotify passes an already-approved app straight back, possibly before Bopify starts waiting.
+        _ = try await URLSession.shared.data(from: URL(string: "\(query["redirect_uri"]!)?code=TESTCODE&state=\(query["state"]!)")!)
+        #expect(try await service.authorizeLibrary().accessToken == "LIBRARY")
+        #expect(store.load()?.accessToken == "LIBRARY")
+    }
+
+    @Test func cancelledPreparedConsentIsNotReused() async throws {
+        AuthFlowStubProtocol.handler = { _ in (200, Data(self.librarySuccess.utf8)) }
+        let opened = AuthOpenCounter()
+        let service = SpotifyAuthService(clientID: "dashboard", client: makeClient(), store: InMemoryTokenStore(), openURL: { url in
+            opened.increment()
+            let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
+            Task { _ = try? await URLSession.shared.data(from: URL(string: "\(query["redirect_uri"]!)?code=TESTCODE&state=\(query["state"]!)")!) }
+        })
+        let prepared = try await service.prepareLibraryConsent()
+        await service.cancelPendingWork()
+        let redirectURI = URLComponents(url: prepared, resolvingAgainstBaseURL: false)!.queryItems!.first { $0.name == "redirect_uri" }!.value!
+        await #expect(throws: (any Error).self) { _ = try await URLSession.shared.data(from: URL(string: redirectURI)!) }
+        #expect(try await service.authorizeLibrary().accessToken == "LIBRARY")
+        #expect(opened.count == 1)
+    }
+
+    @Test func signInContinuesTheBrowserToTheGivenConsent() async throws {
+        AuthFlowStubProtocol.handler = { _ in (200, Data(self.success.utf8)) }
+        let next = URL(string: "https://accounts.spotify.com/authorize?client_id=library")!
+        let locations = AsyncStream<String?>.makeStream()
+        let service = SpotifyAuthService(clientID: "client123", client: makeClient(), store: InMemoryTokenStore(), openURL: { url in
+            let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
+            let callback = URL(string: "\(query["redirect_uri"]!)?code=TESTCODE&state=\(query["state"]!)")!
+            Task {
+                let response = try? await URLSession.shared.data(from: callback, delegate: AuthRedirectBlocker()).1 as? HTTPURLResponse
+                locations.continuation.yield(response?.value(forHTTPHeaderField: "Location"))
+            }
+        })
+        #expect(try await service.signIn(continuingTo: next).accessToken == "AT")
+        var iterator = locations.stream.makeAsyncIterator()
+        #expect(await iterator.next() == next.absoluteString)
+    }
+
     /// Actors are reentrant across `await`: `signOut()` can run to completion
     /// while `signIn()` is suspended waiting for the browser callback. The
     /// opener awaits `signOut()` before firing that callback, so `signOut()`
@@ -616,4 +664,16 @@ private final class FaultTokenStore: TokenStoring, @unchecked Sendable {
         }
     }
     func clear() throws { lock.withLock { clears += 1; tokens = nil } }
+}
+
+final class AuthOpenCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+    func increment() { lock.withLock { value += 1 } }
+    var count: Int { lock.withLock { value } }
+}
+
+final class AuthRedirectBlocker: NSObject, URLSessionTaskDelegate {
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest) async -> URLRequest? { nil }
 }

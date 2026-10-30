@@ -48,7 +48,7 @@ struct PlaybackConnectionStatusView: View {
         case .needsReauthentication, .failed(.credentialCorrupt): "connection.reconnect"
         case let .failed(error) where error.canRetryCredentials: "connection.retryCredentials"
         case .ready where restorationUnavailable: "connection.retryRestoration"
-        case .connecting, .restoring, .reconnecting, .offline: "connection.retry"
+        // Recovery already retries with backoff and as soon as the network returns.
         default: nil
         }
     }

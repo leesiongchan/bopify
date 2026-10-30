@@ -15,6 +15,7 @@ public enum CallbackError: Error, Hashable, Sendable {
 public actor LoopbackCallbackListener {
     private let expectedState: String
     private let expectedPath: String
+    private let successRedirect: URL?
     private struct Request {
         let connection: NWConnection
         let deadline: Task<Void, Never>
@@ -32,9 +33,12 @@ public actor LoopbackCallbackListener {
         "http://127.0.0.1:\(port)\(path)"
     }
 
-    public init(expectedState: String, expectedPath: String = "/login") {
+    /// `successRedirect` sends the browser on to a further consent after an accepted grant, so a second
+    /// approval continues in the same tab; a declined or invalid callback still ends on Bopify's page.
+    public init(expectedState: String, expectedPath: String = "/login", successRedirect: URL? = nil) {
         self.expectedState = expectedState
         self.expectedPath = expectedPath
+        self.successRedirect = successRedirect
     }
 
     public func start(port: UInt16? = nil) async throws -> Int {
@@ -238,8 +242,14 @@ public actor LoopbackCallbackListener {
     private func respond(_ requestID: UUID, listenerID id: UUID, status: String,
                          result: Result<String, any Error>? = nil) {
         guard let request = requests[requestID] else { return }
-        let body = result == nil ? "Invalid callback." : "<html><body><h1>Bopify</h1><p>You can close this tab.</p></body></html>"
-        let response = "HTTP/1.1 \(status)\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n\(body)"
+        var status = status
+        var location = ""
+        if case .success = result, let successRedirect {
+            status = "303 See Other"
+            location = "Location: \(successRedirect.absoluteString)\r\n"
+        }
+        let body = result == nil ? "Invalid callback." : "<html><body><h1>Bopify</h1><p>You can close this tab and return to Bopify.</p></body></html>"
+        let response = "HTTP/1.1 \(status)\r\n\(location)Content-Type: text/html; charset=utf-8\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n\(body)"
         // Finish the browser response before waking consent, whose caller stops the listener.
         request.connection.send(content: Data(response.utf8), completion: .contentProcessed { [weak self] _ in
             Task { await self?.responseSent(requestID, listenerID: id, result: result) }

@@ -111,7 +111,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         panel.containsPlayerPoint = nil
         panel.containsLyricsPoint = nil
         panel.styleMask.insert(.resizable)
-        panel.hasShadow = true
+        // Like the record's halo, the startup glass would get a hard rectangular outline from the native shadow.
+        panel.hasShadow = false
         guard appliedMode != mode else { return }
         let compact = mode == .compact
         let oldFrame = panel.frame

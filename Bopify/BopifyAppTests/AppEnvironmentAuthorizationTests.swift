@@ -257,6 +257,65 @@ struct AppEnvironmentAuthorizationTests {
             #expect(fixture.libraryStore.load() == libraryGrant)
         }
     }
+
+    @Test func returningUserApprovesBothInOneBrowserVisit() async throws {
+        let fixture = AuthorizationFixture(libraryScopes: nil, startSignedOut: true, completesSignIn: true)
+        await fixture.environment.signIn()
+        #expect(fixture.environment.authState == .needsLibraryAuthorization, "A first sign-in stops to explain library access")
+        #expect(!fixture.environment.isAuthorizingLibrary)
+        await fixture.environment.completeLibrarySetup()
+        #expect(fixture.environment.authState == .signedIn)
+        #expect(fixture.browser.count == 1 && fixture.libraryBrowser.count == 1)
+
+        await fixture.environment.signOut()
+        #expect(fixture.environment.authState == .signedOut)
+        #expect(fixture.store.load() == nil && fixture.libraryStore.load() == nil, "Sign-out still removes every grant")
+
+        await fixture.environment.signIn()
+        try await eventually { fixture.environment.authState == .signedIn }
+        #expect(fixture.browser.count == 2)
+        #expect(fixture.libraryBrowser.count == 1, "Library consent continues in the sign-in tab instead of opening another")
+        #expect(fixture.libraryStore.load()?.grantedScopes == LibraryAuthorization.requiredScopes)
+        await fixture.stop()
+    }
+
+    @Test func abandonedReturningSignInFreesTheLibraryCallback() async throws {
+        let reserved = LoopbackCallbackListener(expectedState: "unused")
+        let port = UInt16(try await reserved.start())
+        await reserved.stop()
+        let fixture = AuthorizationFixture(libraryScopes: nil, startSignedOut: true, completesSignIn: true, libraryCallbackPort: port)
+        await fixture.environment.signIn()
+        await fixture.environment.completeLibrarySetup()
+        await fixture.environment.signOut()
+
+        fixture.pausedBrowser.increment()
+        let signIn = Task { await fixture.environment.signIn() }
+        try await eventually { fixture.browser.count == 2 }
+        fixture.environment.cancelPlaybackAuthorization()
+        await signIn.value
+
+        #expect(fixture.environment.authState == .signedOut)
+        let probe = LoopbackCallbackListener(expectedState: "probe")
+        #expect(try await probe.start(port: port) == Int(port), "The prepared library callback must not keep its port")
+        await probe.stop()
+        await fixture.stop()
+    }
+
+    @Test func launchNeverStartsLibraryConsentOnItsOwn() async throws {
+        let fixture = AuthorizationFixture(libraryScopes: nil, approvedScopes: allLibraryScopes,
+                                           startSignedOut: true, completesSignIn: true)
+        await fixture.environment.signIn()
+        await fixture.environment.completeLibrarySetup()
+        // A later launch finds the playback grant but not the library one.
+        fixture.libraryStore.clear()
+
+        await fixture.environment.restoreOrPromptSignIn()
+
+        #expect(fixture.environment.authState == .needsLibraryAuthorization)
+        #expect(!fixture.environment.isAuthorizingLibrary)
+        #expect(fixture.libraryConsents.count == 1)
+        await fixture.stop()
+    }
 }
 
 @MainActor
@@ -285,6 +344,9 @@ private struct AuthorizationFixture {
     let libraryStore: AuthorizationStore
     let browser = AuthorizationCounter()
     let libraryBrowser = AuthorizationCounter()
+    let libraryConsents = AuthorizationCounter()
+    /// Nonzero leaves consent waiting in the browser.
+    let pausedBrowser = AuthorizationCounter()
     let player = PlayerModel()
     let environment: AppEnvironment
     private let playbackAuth: SpotifyAuthService
@@ -292,20 +354,41 @@ private struct AuthorizationFixture {
 
     init(libraryScopes: Set<String>? = ["user-library-read"], approvedScopes: Set<String>? = nil,
          startSignedOut: Bool = false, libraryClientID: String? = String(repeating: "0", count: 32),
-         libraryRevoked: Bool = false) {
+         libraryRevoked: Bool = false, completesSignIn: Bool = false, libraryCallbackPort: UInt16? = nil) {
         libraryStore = AuthorizationStore(libraryScopes.map { TokenSet(accessToken: "LIBRARY", refreshToken: "REFRESH",
             expiresAt: .distantFuture, grantedScopes: $0) })
         let consentStore = libraryStore
-        let playback = SpotifyAuthService(clientID: "test", store: store,
-            openURL: { [browser] _ in browser.increment() })
-        let library = SpotifyAuthService(clientID: "test-library", store: libraryStore,
-            openURL: { [libraryBrowser] _ in libraryBrowser.increment() })
+        let consents = libraryConsents
+        func session(_ grant: AnyClass) -> URLSession {
+            let config = URLSessionConfiguration.ephemeral
+            config.protocolClasses = [grant]
+            return URLSession(configuration: config)
+        }
+        // Plays the browser's part, following redirects between Spotify and the loopback callbacks.
+        let browserSession = session(SpotifyApprovalProtocol.self)
+        let playback = SpotifyAuthService(clientID: "test",
+            client: completesSignIn ? TokenClient(clientID: "test", session: session(PlaybackGrantProtocol.self)) : nil,
+            store: store,
+            openURL: { [browser, pausedBrowser] url in
+                browser.increment()
+                guard completesSignIn, pausedBrowser.count == 0 else { return }
+                Task { _ = try? await browserSession.data(from: url) }
+            })
+        let library = SpotifyAuthService(clientID: "test-library",
+            client: completesSignIn ? TokenClient(clientID: "test-library", session: session(LibraryGrantProtocol.self)) : nil,
+            store: libraryStore, callbackPort: libraryCallbackPort, callbackPath: "/callback",
+            openURL: { [libraryBrowser] url in
+                libraryBrowser.increment()
+                guard completesSignIn else { return }
+                Task { _ = try? await browserSession.data(from: url) }
+            })
         playbackAuth = playback
         libraryAuth = library
         let services = AuthorizationLibrary(revoked: libraryRevoked)
         environment = AppEnvironment(previewPlayer: startSignedOut ? nil : player,
             favoriteService: services, searchService: services,
             authorizeLibrary: {
+                consents.increment()
                 let scopes = LibraryAuthorization.requiredScopes
                 if let approvedScopes {
                     guard scopes.isSubset(of: approvedScopes) else { throw PlayerError.authDenied }
@@ -327,6 +410,41 @@ private struct AuthorizationFixture {
         await playbackAuth.cancelPendingWork()
         await libraryAuth.cancelPendingWork()
         await environment.prepareForQuit()
+    }
+}
+
+/// Answers the token exchange with a playback grant.
+private nonisolated class PlaybackGrantProtocol: URLProtocol, @unchecked Sendable {
+    class var scope: String { "streaming" }
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func stopLoading() {}
+    override func startLoading() {
+        let body = #"{"access_token":"GRANT","token_type":"Bearer","expires_in":3600,"refresh_token":"REFRESH","scope":"\#(Self.scope)"}"#
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                            cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+}
+
+/// Answers the token exchange with a complete library grant.
+private nonisolated final class LibraryGrantProtocol: PlaybackGrantProtocol, @unchecked Sendable {
+    override class var scope: String { LibraryAuthorization.requiredScopes.sorted().joined(separator: " ") }
+}
+
+/// Spotify's consent page for an app the user already approved: it redirects straight back with a code.
+private nonisolated final class SpotifyApprovalProtocol: URLProtocol, @unchecked Sendable {
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "accounts.spotify.com" }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func stopLoading() {}
+    override func startLoading() {
+        let query = Dictionary(uniqueKeysWithValues: URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!
+            .queryItems!.map { ($0.name, $0.value ?? "") })
+        let callback = URL(string: "\(query["redirect_uri"]!)?code=CODE&state=\(query["state"]!)")!
+        let response = HTTPURLResponse(url: request.url!, statusCode: 302, httpVersion: nil,
+                                       headerFields: ["Location": callback.absoluteString])!
+        client?.urlProtocol(self, wasRedirectedTo: URLRequest(url: callback), redirectResponse: response)
     }
 }
 

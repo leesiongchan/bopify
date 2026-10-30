@@ -11,6 +11,5 @@ struct PlaybackConnectionStatusViewTests {
     func saysConnectingUntilTheFirstConnection(status: PlaybackConnectionStatus) {
         #expect(view(status, hasConnected: false).messageKey == "connection.connecting")
         #expect(view(status, hasConnected: true).messageKey == "connection.reconnecting")
-        #expect(view(status, hasConnected: false).actionKey == "connection.retry")
     }
 }

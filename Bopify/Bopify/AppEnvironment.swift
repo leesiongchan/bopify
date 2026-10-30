@@ -48,6 +48,10 @@ final class AppEnvironment {
     let librarySetupWindow = LibrarySetupWindowController()
     private(set) var librarySetupError: PlayerError?
     @ObservationIgnored private var libraryConsentRequired = false
+    /// Not a secret: it records only that library access was approved for this client, which outlives sign-out so
+    /// signing back in can go straight through Spotify's already-approved consent.
+    @ObservationIgnored private let consentDefaults: UserDefaults
+    private static let approvedLibraryClientKey = "library.approvedClientID"
     private(set) var recovery: PlaybackRecoveryCoordinator?
     var connectionStatus: PlaybackConnectionStatus { recovery?.status ?? .ready }
     var hasPlaybackConnected: Bool { recovery?.hasBeenReady ?? false }
@@ -127,6 +131,7 @@ final class AppEnvironment {
         self.auth = auth
         self.libraryAuth = libraryAuth
         libraryClientID = LibraryAuthorization.storedClientID(in: .standard)
+        consentDefaults = .standard
         artworkStore = ArtworkStore()
         let library = SpotifyLibraryClient { scopes in
             try await libraryAuth.validAccessToken(requiredScopes: scopes)
@@ -169,6 +174,7 @@ final class AppEnvironment {
             store: KeychainTokenStore(service: "com.leesiongchan.bopify.preview.library.\(UUID().uuidString)"))
         self.libraryAuth = LibraryAuthorization(suiteName: previewSuite) { _ in previewLibraryAuth }
         previewDefaults.removePersistentDomain(forName: previewSuite)
+        consentDefaults = previewDefaults
         libraryClientID = previewLibraryClientID
         self.artworkStore = artworkStore
         favorite = FavoriteModel(service: favoriteService)
@@ -229,12 +235,17 @@ final class AppEnvironment {
     }
 
     func completeLibrarySetup() async {
+        await startLibrarySetup()?.value
+    }
+
+    /// Synchronous until consent is underway, so sign-in can start it from inside `serialize` in the same update.
+    @discardableResult private func startLibrarySetup() -> Task<Void, Never>? {
         guard !isPreparingForQuit, !isRemovingCredentials, !isAuthorizingLibrary,
-              authState == .needsLibraryAuthorization else { return }
+              authState == .needsLibraryAuthorization else { return nil }
         guard libraryClientID != nil else {
             librarySetupWindow.show(environment: self)
             BopifyLog.library.info("library setup requested")
-            return
+            return nil
         }
         let generation = libraryGeneration
         let session = sessionGeneration
@@ -254,6 +265,7 @@ final class AppEnvironment {
                 try Task.checkCancellation()
                 guard session == sessionGeneration, generation == libraryGeneration else { return }
                 libraryConsentRequired = false
+                rememberLibraryApproval()
                 await serialize { [self] in
                     guard session == sessionGeneration, generation == libraryGeneration,
                           libraryAuthorization?.isCancelled == false else { return }
@@ -271,7 +283,15 @@ final class AppEnvironment {
         libraryAuthorizationNotice = nil
         librarySetupError = nil
         isAuthorizingLibrary = true
-        await task.value
+        return task
+    }
+
+    private var hasApprovedLibraryBefore: Bool {
+        libraryClientID != nil && consentDefaults.string(forKey: Self.approvedLibraryClientKey) == libraryClientID
+    }
+
+    private func rememberLibraryApproval() {
+        consentDefaults.set(libraryClientID, forKey: Self.approvedLibraryClientKey)
     }
 
     func cancelPlaybackAuthorization() {
@@ -394,7 +414,7 @@ final class AppEnvironment {
     }
 
     // Called inside serialize so playback cannot start before both grants are ready.
-    private func finishSetup(generation: Int) async {
+    private func finishSetup(generation: Int, continuingLibrarySetup: Bool = false) async {
         let libraryRevision = libraryGeneration
         var ready = false
         do {
@@ -411,9 +431,19 @@ final class AppEnvironment {
             }
         }
         guard generation == sessionGeneration else { return }
-        if ready, libraryRevision == libraryGeneration { connect(); return }
+        if ready, libraryRevision == libraryGeneration {
+            rememberLibraryApproval()
+            connect()
+            return
+        }
         authState = .needsLibraryAuthorization
         BopifyLog.auth.info("full library access required before playback")
+        // Spotify skips its consent page for an app the user already approved, so a returning user need not stop
+        // here. Only after an interactive sign-in: a launch must never open the browser on its own.
+        if continuingLibrarySetup, librarySetupError == nil, hasApprovedLibraryBefore {
+            BopifyLog.library.info("library approved before; continuing setup after sign-in")
+            startLibrarySetup()
+        }
     }
 
     func restoreOrPromptSignIn() async {
@@ -445,23 +475,44 @@ final class AppEnvironment {
         let task = serialize { [self] in
             defer { isAuthorizingPlayback = false; playbackAuthorization = nil }
             guard generation == sessionGeneration else { return }
+            var continuesToLibrary = false
             do {
                 try Task.checkCancellation()
                 authState = .authenticating
-                _ = try await auth.signIn()
+                let next = await libraryConsentToContinue()
+                continuesToLibrary = next != nil
+                _ = try await auth.signIn(continuingTo: next)
                 guard generation == sessionGeneration else { return }
-                await finishSetup(generation: generation)
+                await finishSetup(generation: generation, continuingLibrarySetup: true)
+                // Library setup takes the prepared consent over synchronously; otherwise nothing will wait on it.
+                if continuesToLibrary, !isAuthorizingLibrary { await libraryAuth.discardPreparedConsent() }
             } catch is CancellationError {
+                if continuesToLibrary { await libraryAuth.discardPreparedConsent() }
                 guard generation == sessionGeneration else { return }
                 authState = .signedOut
                 BopifyLog.auth.info("sign-in cancelled")
             } catch {
+                if continuesToLibrary { await libraryAuth.discardPreparedConsent() }
                 guard generation == sessionGeneration else { return }
                 authState = .error(error as? PlayerError ?? .unknown)
             }
         }
         playbackAuthorization = task
         await task.value
+    }
+
+    /// Spotify passes an app the user approved before straight through, so a returning user's sign-in tab can go
+    /// on to library consent. A first sign-in instead stops in Bopify to explain library access.
+    private func libraryConsentToContinue() async -> URL? {
+        guard hasApprovedLibraryBefore, (try? await hasCompleteLibraryAccess()) == false else { return nil }
+        do {
+            let url = try await libraryAuth.prepareConsent()
+            BopifyLog.library.info("library consent will continue in the sign-in tab")
+            return url
+        } catch {
+            BopifyLog.library.notice("library consent could not be prepared; it will open separately")
+            return nil
+        }
     }
 
     func retryPlaybackConnection() { recovery?.retryNow() }

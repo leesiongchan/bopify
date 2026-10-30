@@ -201,4 +201,32 @@ struct LoopbackCallbackListenerTests {
         #expect(try await listener.waitForCallback() == "FIRST")
     }
 
+    @Test func acceptedCallbackSendsTheBrowserOnToTheNextConsent() async throws {
+        let next = URL(string: "https://accounts.spotify.com/authorize?client_id=library")!
+        let listener = LoopbackCallbackListener(expectedState: "s", expectedPath: "/login", successRedirect: next)
+        let port = try await listener.start()
+        let result = Task { try await listener.waitForCallback() }
+        let response = try await responseWithoutFollowingRedirects(URL(string: "http://127.0.0.1:\(port)/login?code=CODE&state=s")!)
+        #expect(response.statusCode == 303)
+        #expect(response.value(forHTTPHeaderField: "Location") == next.absoluteString)
+        #expect(try await result.value == "CODE")
+        await listener.stop()
+    }
+
+    @Test func declinedConsentNeverContinuesToTheNextOne() async throws {
+        let next = URL(string: "https://accounts.spotify.com/authorize?client_id=library")!
+        let listener = LoopbackCallbackListener(expectedState: "s", expectedPath: "/login", successRedirect: next)
+        let port = try await listener.start()
+        let result = Task { try await listener.waitForCallback() }
+        let response = try await responseWithoutFollowingRedirects(URL(string: "http://127.0.0.1:\(port)/login?error=access_denied&state=s")!)
+        #expect(response.statusCode == 200)
+        #expect(response.value(forHTTPHeaderField: "Location") == nil)
+        await #expect(throws: CallbackError.accessDenied) { try await result.value }
+        await listener.stop()
+    }
+
+    private func responseWithoutFollowingRedirects(_ url: URL) async throws -> HTTPURLResponse {
+        let (_, response) = try await URLSession.shared.data(from: url, delegate: AuthRedirectBlocker())
+        return try #require(response as? HTTPURLResponse)
+    }
 }

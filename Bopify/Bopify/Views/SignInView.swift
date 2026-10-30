@@ -1,7 +1,7 @@
 import SwiftUI
 import BopifyDomain
 
-enum SignInStatus {
+enum SignInStatus: Hashable {
     case idle
     case authenticating
     case restoring
@@ -12,83 +12,48 @@ enum SignInStatus {
 struct SignInView: View {
     let status: SignInStatus
     let onSignIn: () -> Void
-    var onCancel: () -> Void = {}
+    /// Nil when there's no sign-in to cancel, such as while the player starts after one succeeds.
+    var onCancel: (() -> Void)?
     var onRetryCredentials: () -> Void = {}
     var onRetryCleanup: () -> Void = {}
 
     var body: some View {
-        VStack(spacing: 18) {
-            ArtworkView(image: nil, diameter: 156)
-            VStack(spacing: 6) {
-                Group {
-                    if case let .error(error) = status {
-                        Text(LocalizedStringKey((error == .credentialCleanupRequired || error == .credentialCleanupNotRecorded) ? "signIn.cleanupError" :
-                                                error.canRetryCredentials || error == .credentialCorrupt ? "signIn.credentialError" : "signIn.error"))
-                    } else {
-                        Text("signIn.title")
-                    }
-                }
-                    .font(.system(size: 23, weight: .regular))
-                Text("signIn.subtitle")
-                    .font(.callout)
-                    .foregroundStyle(.primary.opacity(0.7))
-                    .multilineTextAlignment(.center)
-            }
-
+        VStack(spacing: 0) {
             switch status {
             case .idle:
-                signInButton
+                StartupHeading(title: Text("signIn.title"), message: Text("signIn.subtitle"))
+                StartupButton(key: "signIn.button", action: onSignIn).padding(.top, 20)
                 Text("signIn.premium")
                     .font(.caption)
                     .foregroundStyle(.primary.opacity(0.7))
+                    .padding(.top, 12)
             case .authenticating:
-                ProgressView { Text("signIn.authenticating") }
-                    .controlSize(.small)
-                    .font(.callout)
-                Text("signIn.browser")
-                    .font(.caption)
-                    .foregroundStyle(.primary.opacity(0.7))
-                Button("signIn.cancel", action: onCancel)
-                    .buttonStyle(.link)
-            case .removingCredentials:
-                ProgressView { Text("signIn.removingCredentials") }
-                    .controlSize(.small)
-                    .font(.callout)
-            case .restoring:
-                ProgressView { Text("signIn.restoring") }
-                    .controlSize(.small)
-                    .font(.callout)
-            case let .error(error):
-                error.localizedText
-                    .font(.caption)
-                    .foregroundStyle(.primary.opacity(0.7))
-                    .multilineTextAlignment(.center)
-                if error == .credentialCleanupRequired || error == .credentialCleanupNotRecorded {
-                    actionButton("signIn.retryRemoval", action: onRetryCleanup)
-                } else if error == .credentialUnavailable || error == .credentialAccessDenied {
-                    actionButton("connection.retryCredentials", action: onRetryCredentials)
-                } else if error == .credentialCorrupt || error == .credentialSaveFailed {
-                    actionButton("signIn.again", action: onSignIn)
-                } else {
-                    signInButton
+                StartupHeading(title: Text("onboarding.signingIn"), message: Text("signIn.browser"))
+                if let onCancel {
+                    StartupButton(key: "onboarding.cancel", isSecondary: true, action: onCancel).padding(.top, 16)
                 }
+            case .removingCredentials:
+                StartupHeading(title: Text("signIn.removingCredentials"))
+            case .restoring:
+                StartupHeading(title: Text("signIn.restoring"))
+            case let .error(error):
+                let isCleanup = error == .credentialCleanupRequired || error == .credentialCleanupNotRecorded
+                StartupHeading(title: Text(LocalizedStringKey(isCleanup ? "signIn.cleanupError" :
+                                                                 error.canRetryCredentials || error == .credentialCorrupt ? "signIn.credentialError" : "signIn.error")),
+                                  message: error.localizedText)
+                Group {
+                    if isCleanup {
+                        StartupButton(key: "signIn.retryRemoval", action: onRetryCleanup)
+                    } else if error == .credentialUnavailable || error == .credentialAccessDenied {
+                        StartupButton(key: "connection.retryCredentials", action: onRetryCredentials)
+                    } else if error == .credentialCorrupt || error == .credentialSaveFailed {
+                        StartupButton(key: "signIn.again", action: onSignIn)
+                    } else {
+                        StartupButton(key: "signIn.retry", action: onSignIn)
+                    }
+                }
+                .padding(.top, 20)
             }
         }
-        .frame(maxHeight: .infinity)
-    }
-
-    private var signInButton: some View {
-        actionButton("signIn.button", action: onSignIn)
-    }
-
-    private func actionButton(_ key: LocalizedStringKey, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(key)
-                .font(.system(size: 13, weight: .semibold))
-                .padding(.horizontal, 24)
-                .frame(height: 44)
-        }
-        .buttonStyle(.plain)
-        .playerGlass()
     }
 }
