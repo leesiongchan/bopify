@@ -10,7 +10,12 @@ final class LibrarySetupWindowController {
         if window == nil {
             let window = NSWindow(contentViewController: NSHostingController(rootView: LibrarySetupView(environment: environment)))
             window.title = String(localized: "librarySetup.title")
-            window.styleMask = [.titled, .closable]
+            window.styleMask = [.titled, .closable, .fullSizeContentView]
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
+            window.backgroundColor = .clear
+            window.isOpaque = false
+            window.isMovableByWindowBackground = true
             window.isReleasedWhenClosed = false
             self.window = window
         }

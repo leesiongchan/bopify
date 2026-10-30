@@ -11,6 +11,7 @@ struct LibrarySetupView: View {
     var body: some View {
         let isValid = LibraryAuthorization.normalized(clientID) != nil
         VStack(alignment: .leading, spacing: 14) {
+            Text("librarySetup.title").font(.title2.weight(.semibold))
             Text("librarySetup.intro").fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 8) {
                 Text("librarySetup.step1")
@@ -47,7 +48,12 @@ struct LibrarySetupView: View {
             }
         }
         .padding(20)
+        .padding(.top, 24)
         .frame(width: 440)
+        .fixedSize(horizontal: false, vertical: true)
+        .background { PlayerSurface(cornerRadius: 22) { Color.clear } }
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .ignoresSafeArea()
         .onAppear { clientID = environment.libraryClientID ?? "" }
     }
 }
