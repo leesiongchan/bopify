@@ -54,7 +54,7 @@ private actor PagedSavedTracks: SavedTracksService {
 
     func savedTracks(offset: Int, limit: Int) async throws -> SavedTracksPage {
         offsets.append(offset)
-        return pages[offset] ?? SavedTracksPage(tracks: [], nextOffset: nil, total: 0)
+        return pages[offset] ?? SavedTracksPage(tracks: [], nextOffset: nil)
     }
 }
 
@@ -66,7 +66,7 @@ struct LikedSongsModelTests {
               albumTitle: nil, artwork: nil, durationMs: 100_000)
     }
     private func page(_ ids: [Int], next: Int? = nil) -> SavedTracksPage {
-        SavedTracksPage(tracks: ids.map(track), nextOffset: next, total: 200)
+        SavedTracksPage(tracks: ids.map(track), nextOffset: next)
     }
     @Test func revealPaginationDeduplicationAndHide() async {
         let service = ControlledSavedTracks()

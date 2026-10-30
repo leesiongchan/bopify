@@ -14,7 +14,6 @@ struct LyricPresentationTests {
         #expect(document.groups[1].text == "The lamps return")
         #expect(value.source.provider == "fixture")
         #expect(value.source.providerDisplayName == "Fixture provider")
-        #expect(value.source.language == "ar")
         #expect(value.source.isRightToLeft)
     }
 
@@ -80,5 +79,5 @@ nonisolated func presentationLyrics(sync: LyricSynchronization = .lineSynced,
         TrackLyricLine(text: "", startTimeMs: 1000), TrackLyricLine(text: "The lamps return", startTimeMs: 2000)],
     provider: String = "fixture", displayName: String = "Fixture provider") -> TrackLyrics {
     TrackLyrics(trackURI: SpotifyURI("spotify:track:11dFghVXANMlKmJXsNCbNl")!, synchronization: sync,
-                lines: lines, provider: provider, providerDisplayName: displayName, language: "ar", isRightToLeft: true)
+                lines: lines, provider: provider, providerDisplayName: displayName, isRightToLeft: true)
 }

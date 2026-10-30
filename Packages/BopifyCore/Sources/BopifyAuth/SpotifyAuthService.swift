@@ -118,7 +118,7 @@ public actor SpotifyAuthService {
             await stopAuthorization(listener)
             throw PlayerError.authDenied
         }
-        let redirectURI = "http://127.0.0.1:\(port)\(callbackPath)"
+        let redirectURI = LoopbackCallbackListener.redirectURI(port: port, path: callbackPath)
         let request = AuthorizationRequest(clientID: clientID, redirectURI: redirectURI,
                                            scopes: scopes.sorted(), pkce: pkce, state: state)
         openURL(request.url)

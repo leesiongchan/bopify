@@ -37,7 +37,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             if player.state.isActiveDevice {
                 guard player.state.phase == .playing || player.state.phase == .paused else { return }
             } else {
-                guard player.canPlayHere, player.state.phase != .loading, player.state.phase != .buffering else { return }
+                guard player.canPlayHere, player.state.phase != .loading else { return }
             }
             player.togglePlayPause()
         }

@@ -10,7 +10,7 @@ enum RecordMotorRequest: String {
     static func resolve(phase: PlaybackPhase, ready: Bool, active: Bool, visible: Bool, reduced: Bool, pressed: Bool) -> Self {
         guard ready, visible, !reduced, !pressed else { return .snap }
         switch phase {
-        case .loading, .buffering: return .snap
+        case .loading: return .snap
         case .idle: return active ? .snap : .brake
         case .playing: return active ? .drive : .brake
         case .paused, .ended, .error: return .brake
@@ -461,8 +461,8 @@ struct RecordPlayerView: View {
         else if let notice = player.commandNotice { Text(notice) }
         else {
             switch player.state.phase {
-            case .loading, .buffering:
-                HStack(spacing: 5) { ProgressView().controlSize(.mini); Text(player.state.phase == .loading ? "player.loading" : "player.buffering") }
+            case .loading:
+                HStack(spacing: 5) { ProgressView().controlSize(.mini); Text("player.loading") }
             case let .error(error): error.localizedText
             case .idle: player.state.localizedStatusText
             case .ended: Text("player.ended")

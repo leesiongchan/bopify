@@ -13,7 +13,6 @@ struct LyricReplyTests {
             return
         }
         #expect(id == 42)
-        #expect(reply.requestID == 42)
         #expect(reply.trackURI == track)
         #expect(lyrics.trackURI == track)
         #expect(lyrics.synchronization == .lineSynced)
@@ -21,7 +20,6 @@ struct LyricReplyTests {
         #expect(lyrics.lines.map(\.text) == ["A quiet street", "", "The lamps return"])
         #expect(lyrics.provider == "fixture")
         #expect(lyrics.providerDisplayName == "Fixture provider")
-        #expect(lyrics.language == "ar")
         #expect(lyrics.isRightToLeft)
     }
 
@@ -48,7 +46,7 @@ struct LyricReplyTests {
     }
 
     @Test(arguments: ["nonTrack", "unknownSync", "missingProvider", "missingDisplayName",
-                      "missingLanguage", "missingRTL", "negativeStart", "missingStart",
+                      "missingRTL", "negativeStart", "missingStart",
                       "nullTimedStart", "unsyncedStart", "wrongRequestID", "wrongText"])
     func rejectsMalformedReplies(defect: String) throws {
         var json = lyricJSON()
@@ -57,7 +55,6 @@ struct LyricReplyTests {
         case "unknownSync": json["synchronization"] = "wordSynced"
         case "missingProvider": json.removeValue(forKey: "provider")
         case "missingDisplayName": json.removeValue(forKey: "providerDisplayName")
-        case "missingLanguage": json.removeValue(forKey: "language")
         case "missingRTL": json.removeValue(forKey: "isRightToLeft")
         case "negativeStart": json["lines"] = [["text": "A quiet street", "startTimeMs": -1]]
         case "missingStart": json["lines"] = [["text": "A quiet street"]]
@@ -81,6 +78,6 @@ struct LyricReplyTests {
                    ["text": "", "startTimeMs": 1000],
                    ["text": "The lamps return", "startTimeMs": 2000]],
          "provider": "fixture", "providerDisplayName": "Fixture provider",
-         "language": "ar", "isRightToLeft": true]
+         "isRightToLeft": true]
     }
 }

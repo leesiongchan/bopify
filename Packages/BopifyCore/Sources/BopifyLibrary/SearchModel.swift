@@ -10,7 +10,6 @@ public struct CatalogSearchGroup: Equatable, Sendable {
     public fileprivate(set) var nextOffset: Int?
     public fileprivate(set) var isLoading = false
     public fileprivate(set) var error: LibraryError?
-    public fileprivate(set) var retryAfter: Date?
     public var hasMore: Bool { nextOffset != nil }
 }
 
@@ -169,7 +168,6 @@ public final class SearchModel {
         if let index {
             groups[index].isLoading = true
             groups[index].error = nil
-            groups[index].retryAfter = nil
         } else {
             isLoading = true
             error = nil
@@ -223,7 +221,6 @@ public final class SearchModel {
             }
             if let index {
                 groups[index].error = failure
-                groups[index].retryAfter = retryAfter
             } else {
                 self.error = failure
             }

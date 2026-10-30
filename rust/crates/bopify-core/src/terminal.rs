@@ -14,7 +14,10 @@ pub enum SessionLossReason {
     AudioOutputFailed,
     ForwarderPanicked,
     CommandFailed,
-    Legacy,
+    /// librespot invalidated the session; a preceding `transport_failed` log names the cause.
+    SessionInvalidated,
+    /// Spirc reported the Connect session as lost, e.g. a cluster with no active device.
+    SessionDisconnected,
 }
 
 #[derive(Clone)]
@@ -40,9 +43,6 @@ impl EngineReporter {
     pub fn event(&self, event: WireEvent) {
         if let WireEvent::SessionLost { reason } = event {
             return self.session_lost(reason);
-        }
-        if matches!(event, WireEvent::Failed { code: -2, .. }) {
-            return self.session_lost(SessionLossReason::Legacy);
         }
         let mut live = self.live.lock().unwrap_or_else(PoisonError::into_inner);
         if *live {
@@ -78,6 +78,46 @@ impl EngineReporter {
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn loss_reasons_match_the_shared_wire_contract() {
+        use SessionLossReason::*;
+        let all = [
+            SpircEnded,
+            SpircPanicked,
+            PlayerChannelClosed,
+            AudioOutputFailed,
+            ForwarderPanicked,
+            CommandFailed,
+            SessionInvalidated,
+            SessionDisconnected,
+        ];
+        // A new variant stops this compiling until it is listed in `all`, and so in the fixture.
+        for reason in all {
+            match reason {
+                SpircEnded | SpircPanicked | PlayerChannelClosed | AudioOutputFailed
+                | ForwarderPanicked | CommandFailed | SessionInvalidated | SessionDisconnected => {}
+            }
+        }
+        let mut names: Vec<String> = all
+            .iter()
+            .map(|reason| {
+                serde_json::to_value(reason)
+                    .unwrap()
+                    .as_str()
+                    .unwrap()
+                    .to_owned()
+            })
+            .collect();
+        let mut contract: Vec<String> = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../contracts/session-loss-reasons.json"
+        )))
+        .unwrap();
+        names.sort();
+        contract.sort();
+        assert_eq!(names, contract);
+    }
 
     #[test]
     fn terminal_reports_once_and_suppresses_late_events() {

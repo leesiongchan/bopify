@@ -17,7 +17,7 @@ struct PlayerRootView: View {
                     VStack(spacing: 8) {
                         header
                         switch environment.authState {
-                        case .signedOut, .needsReauthentication:
+                        case .signedOut:
                             SignInView(status: environment.isRemovingCredentials ? .removingCredentials : .idle, onSignIn: requestSignIn)
                         case .authenticating:
                             SignInView(status: .authenticating, onSignIn: requestSignIn, onCancel: environment.cancelPlaybackAuthorization)

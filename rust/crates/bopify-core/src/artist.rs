@@ -16,18 +16,12 @@ pub enum ArtistTopTracksFailure {
     Network,
 }
 
-pub(crate) struct ArtistTracks {
-    uri: String,
-    name: String,
-    tracks: Vec<SpotifyUri>,
-}
-
 pub(crate) trait ArtistSource: Clone + Send + Sync + 'static {
-    fn artist(
+    fn top_tracks(
         &self,
         track: &SpotifyUri,
         artist_index: u32,
-    ) -> impl Future<Output = Result<ArtistTracks, ArtistTopTracksFailure>> + Send;
+    ) -> impl Future<Output = Result<Vec<SpotifyUri>, ArtistTopTracksFailure>> + Send;
     fn track(&self, uri: String) -> impl Future<Output = Option<WireTrack>> + Send;
 }
 
@@ -35,19 +29,18 @@ pub(crate) trait ArtistSource: Clone + Send + Sync + 'static {
 pub(crate) struct SessionArtist(pub Session);
 
 impl ArtistSource for SessionArtist {
-    async fn artist(
+    async fn top_tracks(
         &self,
         track: &SpotifyUri,
         artist_index: u32,
-    ) -> Result<ArtistTracks, ArtistTopTracksFailure> {
+    ) -> Result<Vec<SpotifyUri>, ArtistTopTracksFailure> {
         let track = Track::get(&self.0, track).await.map_err(classify)?;
         let artist_uri = selected_artist_uri(&track.artists_with_role, artist_index)?;
         let artist = Artist::get(&self.0, artist_uri).await.map_err(classify)?;
-        Ok(ArtistTracks {
-            uri: artist.id.to_uri(),
-            name: artist.name,
-            tracks: crate::radio::pick_top_tracks(&artist.top_tracks, &self.0.country()),
-        })
+        Ok(crate::radio::pick_top_tracks(
+            &artist.top_tracks,
+            &self.0.country(),
+        ))
     }
 
     async fn track(&self, uri: String) -> Option<WireTrack> {
@@ -87,7 +80,7 @@ pub(crate) async fn resolve<S: ArtistSource>(
         track,
         artist_index,
         request_id,
-        Duration::from_secs(30),
+        crate::event::REPLY_DEADLINE,
     )
     .await
 }
@@ -103,13 +96,11 @@ async fn resolve_within<S: ArtistSource>(
         .await
         .unwrap_or(Err(ArtistTopTracksFailure::Network));
     match result {
-        Ok((artist, tracks)) => {
+        Ok(tracks) => {
             log::info!("artist songs: resolved tracks={}", tracks.len());
             WireEvent::ArtistTopTracks {
                 request_id,
                 track_uri: track.to_uri(),
-                artist_uri: artist.uri,
-                artist_name: artist.name,
                 tracks,
             }
         }
@@ -128,11 +119,11 @@ async fn songs<S: ArtistSource>(
     source: &S,
     track: &SpotifyUri,
     artist_index: u32,
-) -> Result<(ArtistTracks, Vec<WireTrack>), ArtistTopTracksFailure> {
-    let mut artist = source.artist(track, artist_index).await?;
-    let has_top_tracks = !artist.tracks.is_empty();
+) -> Result<Vec<WireTrack>, ArtistTopTracksFailure> {
+    let top_tracks = source.top_tracks(track, artist_index).await?;
+    let has_top_tracks = !top_tracks.is_empty();
     let mut seen = HashSet::new();
-    let mut pending = std::mem::take(&mut artist.tracks)
+    let mut pending = top_tracks
         .into_iter()
         .filter(|uri| matches!(uri, SpotifyUri::Track { .. }) && seen.insert(uri.to_uri()))
         .take(10)
@@ -140,7 +131,7 @@ async fn songs<S: ArtistSource>(
     let mut jobs = JoinSet::new();
     let mut tracks = Vec::new();
     loop {
-        while jobs.len() < 4 {
+        while jobs.len() < crate::queue::CONCURRENT_LOOKUPS {
             let Some((index, uri)) = pending.next() else {
                 break;
             };
@@ -157,7 +148,7 @@ async fn songs<S: ArtistSource>(
         return Err(ArtistTopTracksFailure::Unavailable);
     }
     tracks.sort_unstable_by_key(|(index, _)| *index);
-    Ok((artist, tracks.into_iter().map(|(_, track)| track).collect()))
+    Ok(tracks.into_iter().map(|(_, track)| track).collect())
 }
 
 #[cfg(test)]
@@ -177,11 +168,11 @@ mod tests {
     }
 
     impl ArtistSource for Fake {
-        async fn artist(
+        async fn top_tracks(
             &self,
             _: &SpotifyUri,
             artist_index: u32,
-        ) -> Result<ArtistTracks, ArtistTopTracksFailure> {
+        ) -> Result<Vec<SpotifyUri>, ArtistTopTracksFailure> {
             if artist_index != self.artist_index {
                 return Err(ArtistTopTracksFailure::Unavailable);
             }
@@ -191,11 +182,7 @@ mod tests {
             if let Some(failure) = self.failure {
                 return Err(failure);
             }
-            Ok(ArtistTracks {
-                uri: "spotify:artist:6rqhFgbbKwnb9MLmUQDhG6".into(),
-                name: "Singer".into(),
-                tracks: self.tracks.clone(),
-            })
+            Ok(self.tracks.clone())
         }
         async fn track(&self, uri: String) -> Option<WireTrack> {
             if self.missing_metadata {
@@ -276,16 +263,13 @@ mod tests {
         let WireEvent::ArtistTopTracks {
             request_id,
             track_uri,
-            artist_name,
             tracks,
-            ..
         } = result
         else {
             panic!("expected songs")
         };
         assert_eq!(request_id, 7);
         assert_eq!(track_uri, SOURCE);
-        assert_eq!(artist_name, "Singer");
         assert_eq!(
             tracks
                 .iter()

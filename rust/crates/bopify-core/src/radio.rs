@@ -15,8 +15,6 @@ use crate::event::{RadioFailure, WireEvent, WireTrack};
 
 /// Spotify's mixes run to about 50 tracks; Cover Flow shows at most that many.
 const MAX_TRACKS: usize = 50;
-/// Matches the queue metadata worker's lookup bound.
-const CONCURRENT_LOOKUPS: usize = 4;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Seed {
@@ -106,7 +104,7 @@ impl RadioSource for SessionRadio {
 }
 
 pub(crate) async fn resolve<S: RadioSource>(source: &S, seed: Seed, request_id: u64) -> WireEvent {
-    resolve_within(source, seed, request_id, Duration::from_secs(30)).await
+    resolve_within(source, seed, request_id, crate::event::REPLY_DEADLINE).await
 }
 
 async fn resolve_within<S: RadioSource>(
@@ -189,7 +187,7 @@ pub(crate) fn pick_top_tracks(top: &CountryTopTracks, country: &str) -> Vec<Spot
         .unwrap_or_default()
 }
 
-/// Looks up to four tracks at once and keeps the mix's order; unresolvable tracks are dropped.
+/// Looks tracks up concurrently and keeps the mix's order; unresolvable tracks are dropped.
 async fn resolve_tracks<S: RadioSource>(source: &S, uris: Vec<String>) -> Vec<WireTrack> {
     let mut pending = uris
         .into_iter()
@@ -199,7 +197,7 @@ async fn resolve_tracks<S: RadioSource>(source: &S, uris: Vec<String>) -> Vec<Wi
     let mut jobs = JoinSet::new();
     let mut found = Vec::new();
     loop {
-        while jobs.len() < CONCURRENT_LOOKUPS {
+        while jobs.len() < crate::queue::CONCURRENT_LOOKUPS {
             let Some((index, uri)) = pending.next() else {
                 break;
             };

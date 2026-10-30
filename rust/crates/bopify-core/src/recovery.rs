@@ -43,7 +43,7 @@ impl EngineCreateOptions {
         options.validate()?;
         Ok(options)
     }
-    pub fn validate(&self) -> Result<(), BopifyError> {
+    fn validate(&self) -> Result<(), BopifyError> {
         if self
             .initial_volume
             .is_some_and(|volume| !volume.is_finite() || !(0.0..=1.0).contains(&volume))

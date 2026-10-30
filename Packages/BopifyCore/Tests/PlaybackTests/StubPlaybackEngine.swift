@@ -1,7 +1,6 @@
 import Foundation
 import BopifyDomain
 
-/// Carries the entire automated test suite for everything above the seam.
 public final class StubPlaybackEngine: PlaybackEngine, @unchecked Sendable {
     public let events: AsyncStream<PlaybackEvent>
     private let continuation: AsyncStream<PlaybackEvent>.Continuation
@@ -55,6 +54,11 @@ public final class StubPlaybackEngine: PlaybackEngine, @unchecked Sendable {
     public func requestLyrics(for track: SpotifyURI) async throws -> TrackLyrics {
         await record("lyrics:\(track.rawValue)")
         throw LyricFailure.unavailable
+    }
+
+    public func requestArtistTopTracks(for track: SpotifyURI, artistIndex: Int) async throws -> ArtistTopTracks {
+        await record("artistTopTracks:\(track.rawValue):\(artistIndex)")
+        throw ArtistTopTracksFailure.unavailable
     }
 
 }

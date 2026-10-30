@@ -6,10 +6,9 @@ import BopifyDomain
 @Suite("Artist songs model", .timeLimit(.minutes(1))) @MainActor
 struct ArtistSongsModelTests {
     private let source = SpotifyURI("spotify:track:source")!
-    private let artist = SpotifyURI("spotify:artist:singer")!
 
     private func response(_ source: SpotifyURI) -> ArtistTopTracks {
-        ArtistTopTracks(trackURI: source, artistURI: artist, artistName: "Singer", tracks: [testTrack("song")])
+        ArtistTopTracks(trackURI: source, tracks: [testTrack("song")])
     }
 
     @Test func dismissingDropsAnUncooperativeLateReply() async {
@@ -58,13 +57,11 @@ struct ArtistSongsModelTests {
             }
         }
         for await _ in started { break }
-        let featuredArtist = SpotifyURI("spotify:artist:featured")!
         await model.load(for: source) {
-            ArtistTopTracks(trackURI: $0, artistURI: featuredArtist, artistName: "Featured singer", tracks: [testTrack("other")])
+            ArtistTopTracks(trackURI: $0, tracks: [testTrack("other")])
         }
         finish?.resume(returning: response(source))
         await first.value
-        #expect(model.result?.artistURI == featuredArtist)
         #expect(model.playRequest(for: testTrack("other")) == PlayRequest(contextURI: testTrack("other").uri))
         #expect(model.playRequest(for: testTrack("song")) == nil)
     }

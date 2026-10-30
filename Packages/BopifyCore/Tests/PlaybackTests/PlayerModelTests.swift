@@ -340,7 +340,7 @@ struct PlayerModelTests {
         #expect(model.displayPositionMs(at: model.positionUpdatedAt.addingTimeInterval(20)) == 4000)
     }
 
-    @Test(arguments: [PlaybackEvent.activeDeviceChanged(isActive: false), .loading, .failed(.networkUnavailable)])
+    @Test(arguments: [PlaybackEvent.activeDeviceChanged(isActive: false), .loading, .sessionLost(.spircEnded)])
     func interruptionFreezesTheDisplayedPositionUntilAnAuthoritativeUpdate(_ event: PlaybackEvent) async {
         let engine = StubPlaybackEngine()
         let model = PlayerModel(engine: engine)
@@ -422,7 +422,7 @@ struct PlayerModelTests {
         await settle(model, engine, [.playing(positionMs: 0), .paused(positionMs: 900)])
 
         #expect(model.state.phase == .paused)
-        #expect(engine.recordedCommands.isEmpty)  // nobody pressed anything here
+        #expect(engine.recordedCommands.isEmpty)
     }
 
     @Test func loadSendsTheContextURIToTheEngine() async {
@@ -441,9 +441,9 @@ struct PlayerModelTests {
         let engine = StubPlaybackEngine()
         let model = PlayerModel(engine: engine)
         model.start()
-        await settle(model, engine, [.failed(.networkUnavailable)])
+        await settle(model, engine, [.sessionLost(.spircEnded)])
 
-        #expect(model.state.phase == .error(.networkUnavailable))
+        #expect(model.state.phase == .error(.playbackSessionLost))
 
         await settle(model, engine, [.paused(positionMs: 900)])
         #expect(model.state.phase == .paused)
@@ -453,10 +453,10 @@ struct PlayerModelTests {
         let engine = StubPlaybackEngine()
         let model = PlayerModel(engine: engine)
         model.start()
-        await settle(model, engine, [.failed(.networkUnavailable)])
+        await settle(model, engine, [.sessionLost(.spircEnded)])
         await settle(model, engine, [.trackChanged(makeTrack())])
 
-        #expect(model.state.phase == .error(.networkUnavailable))
+        #expect(model.state.phase == .error(.playbackSessionLost))
         #expect(model.state.currentTrack?.title == "Title")
     }
 
@@ -485,7 +485,6 @@ struct PlayerModelTests {
         #expect(model.state.mirror == makeRemote())
         await settle(model, engine, [.remotePlayback(nil)])
         #expect(model.state.remote == nil)
-        // The stopped device's last state stays on the record, no longer playing.
         #expect(model.state.staleRemote == makeRemote(isPlaying: false))
         #expect(model.state.mirror == makeRemote(isPlaying: false))
         await settle(model, engine, [.remotePlayback(makeRemote()), takeover])
@@ -504,7 +503,7 @@ struct PlayerModelTests {
         model.start()
         defer { model.stop() }
         await settle(model, engine, [.activeDeviceChanged(isActive: false), .remotePlayback(makeRemote())])
-        await settle(model, engine, [.failed(.playbackSessionLost)])
+        await settle(model, engine, [.sessionLost(.spircEnded)])
         #expect(model.state.remote == nil)
         #expect(model.state.staleRemote == makeRemote(isPlaying: false))
         #expect(!model.isPositionAdvancing)
@@ -518,7 +517,7 @@ struct PlayerModelTests {
         await settle(model, engine, [.trackChanged(makeTrack()), .playing(positionMs: 0)])
         #expect(model.state.isActiveDevice)
         #expect(nowPlayingInfo(for: model.state, positionMs: 0) != nil)
-        await settle(model, engine, [.failed(.playbackSessionLost)])
+        await settle(model, engine, [.sessionLost(.spircEnded)])
         #expect(!model.state.isActiveDevice)
         #expect(nowPlayingInfo(for: model.state, positionMs: 0) == nil)
     }
@@ -566,7 +565,7 @@ struct PlayerModelTests {
         model.playHere()
         await waitUntil { engine.recordedCommands == ["playHere"] }
         #expect(engine.recordedCommands == ["playHere"])
-        await settle(model, engine, [.failed(.playbackSessionLost)])
+        await settle(model, engine, [.sessionLost(.spircEnded)])
         #expect(!model.canPlayHere)
     }
 
@@ -620,6 +619,7 @@ private struct FailingSelectionEngine: PlaybackEngine {
     func setRepeat(_ mode: RepeatMode) async throws { try await stub.setRepeat(mode) }
     func requestRadio(seed: SpotifyURI) async throws -> RadioMix { throw RadioFailure.unavailable }
     func requestLyrics(for track: SpotifyURI) async throws -> TrackLyrics { throw LyricFailure.unavailable }
+    func requestArtistTopTracks(for track: SpotifyURI, artistIndex: Int) async throws -> ArtistTopTracks { throw ArtistTopTracksFailure.unavailable }
 }
 
 private actor SelectionFailureGate {

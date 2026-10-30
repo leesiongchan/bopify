@@ -332,6 +332,7 @@ private actor ControlledVolumeEngine: PlaybackEngine {
     func setRepeat(_ mode: RepeatMode) async throws { try await stub.setRepeat(mode) }
     func requestRadio(seed: SpotifyURI) async throws -> RadioMix { throw RadioFailure.unavailable }
     func requestLyrics(for track: SpotifyURI) async throws -> TrackLyrics { throw LyricFailure.unavailable }
+    func requestArtistTopTracks(for track: SpotifyURI, artistIndex: Int) async throws -> ArtistTopTracks { throw ArtistTopTracksFailure.unavailable }
 }
 
 @MainActor private final class VolumeClock {

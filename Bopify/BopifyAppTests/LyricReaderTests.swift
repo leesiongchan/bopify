@@ -361,7 +361,7 @@ struct LyricReaderTests {
 
     @Test func horizontalWheelCallbacksAreLimitedToCompactPanelAndPreserveReaderState() async throws {
         let model = LyricRibbonModel(snapshot: LyricPlaybackSnapshot(sessionID: "test", occurrenceID: "one",
-            recordingID: "song", title: "Song", artist: "Artist", positionMs: 3_000,
+            recordingID: "song", positionMs: 3_000,
             durationMs: 7_000, isPlaying: true, seekRevision: 0))
         model.show()
         model.completeLoad(.timed(try lyricTestDocument()), token: model.beginLoad())

@@ -54,6 +54,19 @@ struct EventBridgeTests {
         #expect(event == .playing(positionMs: 4200))
     }
 
+    @Test(arguments: [
+        (#"{"type":"playing"}"#, "positionMs"),
+        (#"{"type":"trackChanged","trackUri":"spotify:local:a:b:c:1","title":"T","artists":[],"durationMs":1}"#, "trackUri"),
+        (#"{"type":"teleported"}"#, "type"),
+        ("not json", "root"),
+    ])
+    func decodeFailuresNameTheFieldWithoutItsValue(json: String, field: String) throws {
+        let error = try #require(throws: DecodingError.self) {
+            try JSONDecoder().decode(PlaybackEvent.self, from: Data(json.utf8))
+        }
+        #expect(error.fieldPath == field)
+    }
+
     @Test func dropsMalformedPayloadsInsteadOfCrashing() async throws {
         let bridge = EventBridge()
         let bad = Array("not json".utf8)
@@ -119,7 +132,9 @@ struct FFISmokeTests {
     /// before any network work, so this does not block.
     @Test func rejectsANullTokenWithInvalidArgument() {
         var err: Int32 = 0
-        let handle = bopify_engine_create(nil, "Bopify Test", bopifyEventTrampoline, nil, &err)
+        // Valid options isolate the null-token check from options parsing.
+        let handle = bopify_engine_create(nil, "Bopify Test", #"{"deviceId":"test-device","startup":"coldLaunch"}"#,
+                                          bopifyEventTrampoline, nil, &err)
         #expect(handle == nil)
         #expect(err == -1)
     }
@@ -137,15 +152,17 @@ private func push(_ payloads: [String], into bridge: EventBridge) {
     }
 }
 
-private func mixJSON(_ id: UInt64, context: String = "spotify:playlist:m") -> String {
-    #"{"type":"radio","requestID":\#(id),"seedURI":"spotify:track:s","contextURI":"\#(context)","tracks":[{"trackUri":"spotify:track:a","title":"A","artists":["X"],"albumTitle":null,"artworkUrl":null,"durationMs":1000}]}"#
+private let radioSeed = SpotifyURI("spotify:track:s")!
+
+private func mixJSON(_ id: UInt64, context: String = "spotify:playlist:m", seed: String = "spotify:track:s") -> String {
+    #"{"type":"radio","requestID":\#(id),"seedURI":"\#(seed)","contextURI":"\#(context)","tracks":[{"trackUri":"spotify:track:a","title":"A","artists":["X"],"albumTitle":null,"artworkUrl":null,"durationMs":1000}]}"#
 }
 
 @Suite("EventBridge radio")
 struct EventBridgeRadioTests {
     @Test func sessionLossFailsWaitersAndStillDeliversTheTerminalEvent() async {
         let bridge = EventBridge()
-        let waiting = Task { try await bridge.radio { _ in
+        let waiting = Task { try await bridge.radio(seed: radioSeed) { _ in
             push([#"{"type":"sessionLost","reason":"spircEnded"}"#, #"{"type":"sessionLost","reason":"spircEnded"}"#], into: bridge)
         } }
         await #expect(throws: PlayerError.playbackSessionLost) { _ = try await waiting.value }
@@ -155,7 +172,7 @@ struct EventBridgeRadioTests {
     }
     @Test func aReplyResumesTheRequestWithItsID() async throws {
         let bridge = EventBridge()
-        let mix = try await bridge.radio { id in push([mixJSON(id)], into: bridge) }
+        let mix = try await bridge.radio(seed: radioSeed) { id in push([mixJSON(id)], into: bridge) }
         #expect(mix.contextURI.rawValue == "spotify:playlist:m")
         #expect(mix.tracks.map(\.uri.rawValue) == ["spotify:track:a"])
     }
@@ -164,8 +181,8 @@ struct EventBridgeRadioTests {
     @Test func concurrentRequestsEachGetTheReplyCarryingTheirID() async throws {
         let bridge = EventBridge()
         let (sent, sender) = AsyncStream.makeStream(of: (String, UInt64).self)
-        let first = Task { try await bridge.radio { sender.yield(("first", $0)) } }
-        let second = Task { try await bridge.radio { sender.yield(("second", $0)) } }
+        let first = Task { try await bridge.radio(seed: radioSeed) { sender.yield(("first", $0)) } }
+        let second = Task { try await bridge.radio(seed: radioSeed) { sender.yield(("second", $0)) } }
         // The waiter is registered before `send` runs, so two IDs here means both callers are waiting.
         var ids: [String: UInt64] = [:]
         for await (label, id) in sent {
@@ -178,10 +195,46 @@ struct EventBridgeRadioTests {
         #expect(try await second.value.contextURI.rawValue == "spotify:playlist:second")
     }
 
+    @Test @MainActor func aMissingReplyExpiresAndReleasesItsTimer() async {
+        let clock = RecoveryTestClock()
+        let bridge = EventBridge(lyricSleep: { try await Task.sleep(for: $0) },
+                                 radioSleep: { try await clock.sleep(for: $0) })
+        let pending = Task { try await bridge.radio(seed: radioSeed) { @Sendable _ in } }
+        for _ in 0..<1000 {
+            if !clock.pendingDelays.isEmpty { break }
+            await Task.yield()
+        }
+        #expect(clock.pendingDelays == [.seconds(35)])
+        clock.advance(by: .seconds(35))
+        await #expect(throws: RadioFailure.network) { _ = try await pending.value }
+        #expect(clock.pendingDelays.isEmpty)
+        bridge.finish()
+    }
+
+    @Test @MainActor func aReplyCancelsItsTimer() async throws {
+        let clock = RecoveryTestClock()
+        let bridge = EventBridge(lyricSleep: { try await Task.sleep(for: $0) },
+                                 radioSleep: { try await clock.sleep(for: $0) })
+        _ = try await bridge.radio(seed: radioSeed) { @Sendable id in push([mixJSON(id)], into: bridge) }
+        for _ in 0..<1000 {
+            if clock.pendingDelays.isEmpty { break }
+            await Task.yield()
+        }
+        #expect(clock.pendingDelays.isEmpty)
+        bridge.finish()
+    }
+
+    @Test func aReplyForAnotherSeedFailsTheRequest() async {
+        let bridge = EventBridge()
+        await #expect(throws: RadioFailure.unavailable) {
+            _ = try await bridge.radio(seed: radioSeed) { id in push([mixJSON(id, seed: "spotify:track:other")], into: bridge) }
+        }
+    }
+
     @Test func aFailedReplyThrowsItsReason() async {
         let bridge = EventBridge()
         await #expect(throws: RadioFailure.noMix) {
-            _ = try await bridge.radio { id in
+            _ = try await bridge.radio(seed: radioSeed) { id in
                 push([#"{"type":"radioFailed","requestID":\#(id),"seedURI":"spotify:track:s","reason":"noMix"}"#], into: bridge)
             }
         }
@@ -190,13 +243,13 @@ struct EventBridgeRadioTests {
     @Test func aRejectedSendThrowsWithoutWaiting() async {
         let bridge = EventBridge()
         await #expect(throws: PlayerError.playbackSessionLost) {
-            _ = try await bridge.radio { _ in throw PlayerError.playbackSessionLost }
+            _ = try await bridge.radio(seed: radioSeed) { _ in throw PlayerError.playbackSessionLost }
         }
     }
 
     @Test func cancellingTheCallerStopsItsWait() async {
         let bridge = EventBridge()
-        let waiting = Task { try await bridge.radio { _ in } }
+        let waiting = Task { try await bridge.radio(seed: radioSeed) { _ in } }
         try? await Task.sleep(for: .milliseconds(20))
         waiting.cancel()
         await #expect(throws: CancellationError.self) { _ = try await waiting.value }

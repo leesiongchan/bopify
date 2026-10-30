@@ -16,7 +16,6 @@ extension PlaybackState {
             case .notPlaying: Text("player.notPlaying")
             }
         case .loading: Text("player.loading")
-        case .buffering: Text("player.buffering")
         case .ended: Text("player.ended")
         case .playing: Text("transport.state.playing")
         case .paused: Text("transport.state.paused")

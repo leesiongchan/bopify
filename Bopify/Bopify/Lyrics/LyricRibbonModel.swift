@@ -8,13 +8,10 @@ nonisolated struct LyricPlaybackSnapshot: Equatable, Sendable {
     var sessionID: String
     var occurrenceID: String
     var recordingID: String
-    var title: String
-    var artist: String
     var positionMs: Int64
     var durationMs: Int64
     var isPlaying: Bool
     var seekRevision: UInt64
-    var artworkURL: URL? = nil
     var direction: CarouselDirection = .fade
 }
 

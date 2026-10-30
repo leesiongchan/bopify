@@ -120,7 +120,8 @@ final class AppEnvironment {
         let libraryAuth = LibraryAuthorization(orphanedStore: libraryStore, logoutIntent: intent) { clientID in
             SpotifyAuthService(clientID: clientID, store: libraryStore,
                                logoutIntent: intent, credentialNamespace: .library,
-                               callbackPort: 8898, callbackPath: "/callback")
+                               callbackPort: LibraryAuthorization.callbackPort,
+                               callbackPath: LibraryAuthorization.callbackPath)
         }
         self.auth = auth
         self.libraryAuth = libraryAuth

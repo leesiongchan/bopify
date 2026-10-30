@@ -1,10 +1,10 @@
 //! C-ABI wrapper around librespot's Spirc for the Bopify macOS app.
 
 mod artist;
-pub mod engine;
-pub mod error;
-pub mod event;
-pub mod ffi;
+mod engine;
+mod error;
+mod event;
+mod ffi;
 /// cbindgen:ignore
 // Imports C symbols without exporting ABI types.
 mod logging;

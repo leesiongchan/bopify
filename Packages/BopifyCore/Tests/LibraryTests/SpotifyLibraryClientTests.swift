@@ -600,7 +600,7 @@ struct SpotifyLibraryClientTests {
             return "TEST_TOKEN"
         }
         let page = try await client.savedTracks(offset: 0, limit: limit)
-        #expect(page == SavedTracksPage(tracks: [], nextOffset: nil, total: 0))
+        #expect(page == SavedTracksPage(tracks: [], nextOffset: nil))
         let request = try #require(LibraryProtocol.fixture.requests.first)
         #expect(request.httpMethod == "GET")
         #expect(request.url?.scheme == "https" && request.url?.host == "api.spotify.com")
@@ -631,7 +631,6 @@ struct SpotifyLibraryClientTests {
         let page = try await client().savedTracks(offset: 0, limit: 50)
         #expect(page.tracks.count == 2)
         #expect(page.nextOffset == 3)
-        #expect(page.total == 7)
         #expect(page.tracks.map(\.uri.rawValue) == ["spotify:track:a", "spotify:track:b"])
         #expect(page.tracks[0].artwork == page.tracks[1].artwork)
     }

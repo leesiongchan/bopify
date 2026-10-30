@@ -4,17 +4,17 @@ import Testing
 struct LyricDocumentTests {
     @Test func projectsTimestampBoundariesWithoutInventingAnEnd() throws {
         let doc = try lyricTestDocument()
-        #expect(doc.project(positionMs: 9_999, durationMs: 100_000).interval == .beforeFirst)
+        #expect(doc.project(positionMs: 9_999, durationMs: 100_000) == LyricProjection(next: doc.groups.first))
         #expect(doc.project(positionMs: 10_000, durationMs: 100_000).current?.occurrenceIDs == ["a"])
         let simultaneous = doc.project(positionMs: 20_000, durationMs: 100_000)
         #expect(simultaneous.current?.occurrenceIDs == ["b", "c"])
         #expect(simultaneous.current?.text == "Let the quiet settle in\nThere is light along the sill")
         #expect(simultaneous.previous?.startMs == 10_000)
-        #expect(doc.project(positionMs: 30_000, durationMs: 100_000).interval == .gap)
+        #expect(doc.project(positionMs: 30_000, durationMs: 100_000).current == nil)
         #expect(doc.project(positionMs: 69_999, durationMs: 100_000).current == nil)
         #expect(doc.project(positionMs: 70_000, durationMs: 100_000).current?.occurrenceIDs == ["repeat"])
         #expect(doc.project(positionMs: 99_999, durationMs: 100_000).current?.startMs == 80_000)
-        #expect(doc.project(positionMs: 100_000, durationMs: 100_000).interval == .ended)
+        #expect(doc.project(positionMs: 100_000, durationMs: 100_000) == LyricProjection(previous: doc.groups.last))
         #expect(doc.project(positionMs: 200_000, durationMs: 0).current?.startMs == 80_000)
     }
 
@@ -42,7 +42,7 @@ struct LyricDocumentTests {
     @Test func emptyDocumentAndWhitespaceCueHaveNoCurrentWords() throws {
         #expect(try LyricDocument(cues: []).project(positionMs: 0, durationMs: 0).current == nil)
         let doc = try LyricDocument(cues: [LyricCue(id: "gap", startMs: 0, text: " \n ")])
-        #expect(doc.project(positionMs: 10, durationMs: 100).interval == .gap)
+        #expect(doc.project(positionMs: 10, durationMs: 100) == LyricProjection())
     }
 
     @Test func upcomingCueUsesAdjacentSourceGroups() throws {

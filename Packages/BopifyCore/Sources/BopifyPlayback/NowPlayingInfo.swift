@@ -1,7 +1,6 @@
 import Foundation
 import BopifyDomain
 
-/// What macOS's Now Playing shows for Bopify's current track.
 public struct NowPlayingInfo: Equatable, Sendable {
     public let title: String
     public let artist: String

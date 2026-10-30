@@ -57,12 +57,11 @@ struct LyricRibbonModelTests {
         model.beginReading()
         var input = lyricTestSnapshot(position: 0)
         input.occurrenceID = "second"
-        input.title = "Next occurrence"
         model.update(input)
         #expect(!model.isReading)
         #expect(model.content == .loading)
         #expect(model.projection == nil)
-        #expect(model.snapshot.title == "Next occurrence")
+        #expect(model.snapshot.occurrenceID == "second")
     }
 
     @Test func newSessionClearsReading() throws {
@@ -105,12 +104,12 @@ struct LyricRibbonModelTests {
         input.isPlaying = false
         model.update(input)
         #expect(model.isReading)
-        #expect(model.projection?.interval == .ended)
+        #expect(model.projection.map { $0.current == nil && $0.next == nil } == true)
         #expect(model.scrollResetRevision == revision)
         model.backToLive()
         #expect(!model.isReading)
         #expect(model.scrollResetRevision > revision)
-        #expect(model.projection?.interval == .ended)
+        #expect(model.projection.map { $0.current == nil && $0.next == nil } == true)
     }
 
     @Test func plainAndUnavailableContentDisableReading() throws {
@@ -187,6 +186,6 @@ struct LyricRibbonModelTests {
 
 nonisolated func lyricTestSnapshot(position: Int64 = 72_000) -> LyricPlaybackSnapshot {
     LyricPlaybackSnapshot(sessionID: "session", occurrenceID: "first", recordingID: "original-sample",
-        title: "Window Seat", artist: "Soft Weather", positionMs: position, durationMs: 100_000,
+        positionMs: position, durationMs: 100_000,
         isPlaying: true, seekRevision: 0)
 }

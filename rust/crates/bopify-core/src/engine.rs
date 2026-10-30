@@ -28,6 +28,27 @@ use crate::{
 /// side must be safe to invoke from a non-main thread.
 pub type EventSink = Arc<dyn Fn(WireEvent) + Send + Sync>;
 
+/// Parsed once at the FFI boundary, so the engine never sees an out-of-range mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RepeatMode {
+    Off,
+    Context,
+    Track,
+}
+
+impl TryFrom<u8> for RepeatMode {
+    type Error = BopifyError;
+
+    fn try_from(mode: u8) -> Result<Self, Self::Error> {
+        match mode {
+            0 => Ok(Self::Off),
+            1 => Ok(Self::Context),
+            2 => Ok(Self::Track),
+            _ => Err(BopifyError::InvalidArgument),
+        }
+    }
+}
+
 /// A live Connect device whose runtime joins workers before its other fields drop.
 /// Never use timeout or background shutdown: callbacks must finish before Swift releases ctx.
 pub struct Engine {
@@ -44,25 +65,7 @@ impl Engine {
     pub fn new(
         access_token: &str,
         device_name: &str,
-        sink: EventSink,
-    ) -> Result<Self, BopifyError> {
-        Self::create(access_token, device_name, None, sink)
-    }
-
-    pub fn new_with_options(
-        access_token: &str,
-        device_name: &str,
         options: crate::recovery::EngineCreateOptions,
-        sink: EventSink,
-    ) -> Result<Self, BopifyError> {
-        options.validate()?;
-        Self::create(access_token, device_name, Some(options), sink)
-    }
-
-    fn create(
-        access_token: &str,
-        device_name: &str,
-        options: Option<crate::recovery::EngineCreateOptions>,
         sink: EventSink,
     ) -> Result<Self, BopifyError> {
         log::info!("engine: creating Connect device requested_bitrate_kbps=320");
@@ -83,10 +86,10 @@ impl Engine {
             // SessionConfig::default() supplies librespot's own client id.
             // A Spotify Developer Dashboard id is rejected by login5 with a
             // raw HTTP 400, so it must not be overridden here.
-            let mut session_config = SessionConfig::default();
-            if let Some(options) = &options {
-                session_config.device_id = options.device_id.clone();
-            }
+            let session_config = SessionConfig {
+                device_id: options.device_id.clone(),
+                ..SessionConfig::default()
+            };
             let session = Session::new(session_config, None);
             let credentials = Credentials::with_access_token(access_token);
 
@@ -121,17 +124,11 @@ impl Engine {
                 ConnectConfig {
                     name: device_name.to_string(),
                     emit_set_queue_events: true,
+                    initial_volume: options.initial_volume(),
                     // Decides from the first connect cluster what to load, so the
-                    // device is never active without content (see the startup-restore spec).
-                    initial_volume: options
-                        .as_ref()
-                        .map_or(u16::MAX / 2, |options| options.initial_volume()),
+                    // device is never active without content.
                     startup_restore: true,
-                    startup_mode: options
-                        .as_ref()
-                        .map_or(librespot_connect::StartupMode::ColdLaunch, |o| {
-                            o.native_startup()
-                        }),
+                    startup_mode: options.native_startup(),
                     ..Default::default()
                 },
                 session.clone(),
@@ -141,9 +138,9 @@ impl Engine {
             ))
             .await?;
 
+            supervise_audio_output(reporter.output_error_signal(), reporter.clone());
             // The returned future is the event loop. Commands issued before
             // it is driven are queued, so spawning it here is correct.
-            supervise_audio_output(reporter.output_error_signal(), reporter.clone());
             supervise_spirc(task, session.clone(), reporter.clone());
             let radio_session = session.clone();
             supervise_forwarder(events, sink.clone(), session, reporter.clone());
@@ -222,12 +219,13 @@ impl Engine {
         self.spirc.shuffle(enabled).map_err(command_failed)
     }
 
-    pub fn set_repeat(&self, mode: u8) -> Result<(), BopifyError> {
-        if mode > 2 {
-            return Err(BopifyError::InvalidArgument);
-        }
-        self.spirc.repeat(mode == 1).map_err(command_failed)?;
-        self.spirc.repeat_track(mode == 2).map_err(command_failed)
+    pub fn set_repeat(&self, mode: RepeatMode) -> Result<(), BopifyError> {
+        self.spirc
+            .repeat(mode == RepeatMode::Context)
+            .map_err(command_failed)?;
+        self.spirc
+            .repeat_track(mode == RepeatMode::Track)
+            .map_err(command_failed)
     }
 
     pub fn load(
@@ -259,7 +257,8 @@ impl Engine {
         Ok(())
     }
 
-    /// Queues a lyric lookup on this engine's runtime and callback sink.
+    /// Queues a lyric lookup. The answer arrives on the sink as `Lyrics` or
+    /// `LyricsFailed` carrying `request_id`, and the work ends with the runtime.
     pub fn request_lyrics(&self, track_uri: &str, request_id: u64) -> Result<(), BopifyError> {
         let track = crate::lyrics::parse_track(track_uri).ok_or(BopifyError::InvalidArgument)?;
         let source = crate::lyrics::SessionLyrics(self.session.clone());
@@ -269,7 +268,8 @@ impl Engine {
         Ok(())
     }
 
-    /// Queues a displayed track artist's popular songs.
+    /// Queues a displayed artist's popular songs. The answer arrives on the sink as
+    /// `ArtistTopTracks` or `ArtistTopTracksFailed` carrying `request_id`.
     pub fn request_artist_top_tracks(
         &self,
         track_uri: &str,
@@ -310,7 +310,6 @@ fn supervise_forwarder(
     });
 }
 
-/// Drains librespot's player events onto the sink until the player goes away.
 async fn forward_events(
     mut events: PlayerEventChannel,
     sink: EventSink,
@@ -365,10 +364,13 @@ fn classify_connect_error(err: librespot_core::Error) -> BopifyError {
     error
 }
 
+/// librespot's login has no timeout of its own; past this the attempt counts as a network failure.
+const LOGIN_DEADLINE: std::time::Duration = std::time::Duration::from_secs(30);
+
 async fn with_connect_deadline<T>(
     operation: impl std::future::Future<Output = Result<T, librespot_core::Error>>,
 ) -> Result<T, BopifyError> {
-    match tokio::time::timeout(std::time::Duration::from_secs(30), operation).await {
+    match tokio::time::timeout(LOGIN_DEADLINE, operation).await {
         Ok(result) => result.map_err(classify_connect_error),
         Err(_) => {
             log::error!("engine: login deadline expired");
@@ -387,7 +389,7 @@ fn supervise_spirc(
         tokio::select! {
             _ = session.invalidated() => {
                 log::info!("engine: session invalidated, reporting loss before Connect cleanup");
-                reporter.session_lost(SessionLossReason::Legacy);
+                reporter.session_lost(SessionLossReason::SessionInvalidated);
             },
             result = task => match result {
                 Ok(()) => reporter.session_lost(SessionLossReason::SpircEnded),
@@ -458,7 +460,10 @@ mod tests {
                 .await
                 .expect("session invalidation must report without waiting for Spirc HTTP cleanup")
                 .unwrap();
-            assert!(matches!(event, WireEvent::SessionLost { .. }));
+            assert_eq!(
+                serde_json::to_value(&event).unwrap(),
+                serde_json::json!({"type": "sessionLost", "reason": "sessionInvalidated"})
+            );
             assert!(received.recv().await.is_none());
         }
     }

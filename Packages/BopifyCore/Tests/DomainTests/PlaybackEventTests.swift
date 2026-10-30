@@ -3,12 +3,26 @@ import Foundation
 
 @Suite("Playback session loss")
 struct SessionLossEventTests {
-    @Test func decodesTerminalReasonsAndLegacyFailure() throws {
-        for reason in ["audioOutputFailed", "spircEnded", "spircPanicked", "playerChannelClosed", "forwarderPanicked", "commandFailed", "eventStreamEnded", "readinessTimeout", "legacy"] {
-            let event = try JSONDecoder().decode(PlaybackEvent.self, from: Data("{\"type\":\"sessionLost\",\"reason\":\"\(reason)\"}".utf8))
-            #expect(event == .sessionLost(SessionLossReason(rawValue: reason)!))
+    /// Raised by Swift itself, so never on the wire.
+    private let swiftOnly: Set<SessionLossReason> = [.eventStreamEnded, .readinessTimeout, .unrecognized]
+
+    private func decodeLoss(_ reason: String) throws -> PlaybackEvent {
+        try JSONDecoder().decode(PlaybackEvent.self, from: Data("{\"type\":\"sessionLost\",\"reason\":\"\(reason)\"}".utf8))
+    }
+
+    @Test func matchesTheReasonsRustSends() throws {
+        // Rust's terminal.rs tests read the same fixture.
+        let fixture = URL(filePath: #filePath).deletingLastPathComponent()
+            .appending(path: "../../../../contracts/session-loss-reasons.json").standardized
+        let wire = try JSONDecoder().decode([String].self, from: Data(contentsOf: fixture))
+        for reason in wire {
+            #expect(try decodeLoss(reason) != .sessionLost(.unrecognized), "\(reason)")
         }
-        #expect(try JSONDecoder().decode(PlaybackEvent.self, from: Data(#"{"type":"failed","code":-2}"#.utf8)) == .failed(.playbackSessionLost))
+        #expect(Set(wire) == Set(SessionLossReason.allCases.filter { !swiftOnly.contains($0) }.map(\.rawValue)))
+    }
+
+    @Test func anUnknownReasonStillReportsTheLoss() throws {
+        #expect(try decodeLoss("teleported") == .sessionLost(.unrecognized))
     }
 }
 @testable import BopifyDomain
@@ -36,19 +50,6 @@ struct PlaybackEventTests {
 
     @Test func decodesActiveDeviceChanged() throws {
         #expect(try decode(#"{"type":"activeDeviceChanged","isActive":false}"#) == .activeDeviceChanged(isActive: false))
-    }
-
-    @Test func decodesFailureIntoTheErrorTaxonomy() throws {
-        let json = #"{"type":"failed","code":-4,"message":"Spotify Premium is required"}"#
-        #expect(try decode(json) == .failed(.premiumRequired))
-    }
-
-    @Test func mapsUnrecognisedCodesToUnknownRatherThanThrowing() throws {
-        #expect(try decode(#"{"type":"failed","code":-12345,"message":"?"}"#) == .failed(.unknown))
-    }
-
-    @Test func throwsOnAnUnrecognisedEventType() {
-        #expect(throws: (any Error).self) { try decode(#"{"type":"teleported"}"#) }
     }
 
     @Test func normalisesVolumeAgainstUInt16Max() throws {

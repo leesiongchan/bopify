@@ -306,7 +306,7 @@ struct PlayerLyricsTests {
             LyricCue(id: "next", startMs: 80_000, text: "Upcoming words"),
         ])), token: model.beginLoad(), source: LyricSourceMetadata(lyrics: TrackLyrics(
             trackURI: previewTracks[0].uri, synchronization: .lineSynced, lines: [],
-            provider: "fixture", providerDisplayName: "Fixture provider", language: "en", isRightToLeft: false)))
+            provider: "fixture", providerDisplayName: "Fixture provider", isRightToLeft: false)))
         environment.presentation.isVisible = true
         controller.apply(mode: expanded ? .expanded : .compact, reduceMotion: true, showsLyrics: true)
         panel.orderFrontRegardless()

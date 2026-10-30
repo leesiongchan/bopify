@@ -47,7 +47,6 @@ impl MetadataRequest {
     }
 }
 
-/// Looks a track or episode up for display; `None` when it cannot be resolved.
 pub(crate) async fn lookup(session: Session, raw: String) -> Option<WireTrack> {
     let uri = SpotifyUri::from_uri(&raw).ok()?;
     if !matches!(uri, SpotifyUri::Track { .. } | SpotifyUri::Episode { .. }) || uri.to_uri() != raw
@@ -66,10 +65,14 @@ pub(crate) fn start(session: Session, sink: EventSink) -> watch::Sender<Option<M
     sender
 }
 
+pub(crate) const CONCURRENT_LOOKUPS: usize = 4;
+/// librespot sets no HTTP timeout, so a stalled lookup must not hold a queue slot forever.
+const METADATA_DEADLINE: std::time::Duration = std::time::Duration::from_secs(30);
+
 pub(crate) async fn with_metadata_deadline(
     lookup: impl Future<Output = Option<WireTrack>>,
 ) -> Option<WireTrack> {
-    match tokio::time::timeout(std::time::Duration::from_secs(30), lookup).await {
+    match tokio::time::timeout(METADATA_DEADLINE, lookup).await {
         Ok(track) => track,
         Err(_) => {
             log::debug!("metadata: lookup deadline expired");
@@ -93,7 +96,7 @@ async fn run<F, Fut>(
     let mut recent: VecDeque<String> = VecDeque::new();
     let mut generation = 0;
     loop {
-        while jobs.len() < 4 {
+        while jobs.len() < CONCURRENT_LOOKUPS {
             let Some((entry_ids, uri)) = pending.pop_front() else {
                 break;
             };

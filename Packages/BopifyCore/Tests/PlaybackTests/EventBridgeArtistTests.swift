@@ -13,7 +13,6 @@ struct EventBridgeArtistTests {
             emit(reply(id: id), into: bridge)
         }
         #expect(result.trackURI == track)
-        #expect(result.artistName == "Singer")
         bridge.finish()
     }
 
@@ -25,10 +24,10 @@ struct EventBridgeArtistTests {
         let firstID = try #require(await ids.next())
         let second = Task { try await bridge.artistTopTracks(for: track) { sent.yield($0) } }
         let secondID = try #require(await ids.next())
-        emit(reply(id: secondID).replacingOccurrences(of: "Singer", with: "Featured"), into: bridge)
-        emit(reply(id: firstID), into: bridge)
-        #expect(try await first.value.artistName == "Singer")
-        #expect(try await second.value.artistName == "Featured")
+        emit(reply(id: secondID, song: "spotify:track:featured"), into: bridge)
+        emit(reply(id: firstID, song: "spotify:track:main"), into: bridge)
+        #expect(try await first.value.tracks.map(\.uri.rawValue) == ["spotify:track:main"])
+        #expect(try await second.value.tracks.map(\.uri.rawValue) == ["spotify:track:featured"])
         bridge.finish()
     }
 
@@ -93,8 +92,9 @@ struct EventBridgeArtistTests {
         bridge.finish()
     }
 
-    private func reply(id: UInt64, source: String = "spotify:track:source") -> String {
-        #"{"type":"artistTopTracks","requestID":\#(id),"trackURI":"\#(source)","artistURI":"spotify:artist:singer","artistName":"Singer","tracks":[]}"#
+    private func reply(id: UInt64, source: String = "spotify:track:source", song: String? = nil) -> String {
+        let tracks = song.map { #"[{"trackUri":"\#($0)","title":"Song","artists":[],"durationMs":1}]"# } ?? "[]"
+        return #"{"type":"artistTopTracks","requestID":\#(id),"trackURI":"\#(source)","tracks":\#(tracks)}"#
     }
 
     private func emit(_ json: String, into bridge: EventBridge) {

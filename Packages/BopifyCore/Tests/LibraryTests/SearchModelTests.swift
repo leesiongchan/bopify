@@ -407,7 +407,6 @@ struct SearchModelTests {
         await service.failHeld(.rateLimited(retryAfterSeconds: 1), kinds: [.album])
         await album.value
         #expect(model.retryAfter == Date(timeIntervalSince1970: 1012))
-        #expect(searchGroup(model, .song).retryAfter == searchGroup(model, .album).retryAfter)
         await model.retry(.song, at: clock.now())
         await model.loadMore(.playlist)
         #expect(await service.requests.count == 3)

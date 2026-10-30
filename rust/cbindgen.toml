@@ -28,9 +28,9 @@ header = """
  *    the event to your own queue and issue commands from somewhere else.
  *  - Every command returns 0 on success or a negative BopifyError code.
  *    Success means "enqueued", not "took effect": observe the events.
- *  - bopify_engine_create_with_options shares all create/lifetime rules.
- *    options_json contains deviceId, startup (coldLaunch/recovery), and optional
- *    snapshot; malformed options fail with InvalidArgument before login.
+ *  - bopify_engine_create's options_json contains deviceId, startup
+ *    (coldLaunch/recovery), and optional snapshot and initialVolume;
+ *    malformed options fail with InvalidArgument before login.
  *  - String arguments are borrowed for the duration of the call only.
  */
 """

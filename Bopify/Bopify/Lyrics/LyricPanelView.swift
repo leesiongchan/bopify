@@ -153,7 +153,7 @@ private struct LyricPanelDragOverlay: NSViewRepresentable {
 #if DEBUG
 private func previewLyricPanel(_ kind: String) -> some View {
     let model = LyricRibbonModel(snapshot: LyricPlaybackSnapshot(sessionID: "preview", occurrenceID: "one",
-        recordingID: "original", title: "Window Seat", artist: "Soft Weather", positionMs: 72_000,
+        recordingID: "original", positionMs: 72_000,
         durationMs: 100_000, isPlaying: true, seekRevision: 0))
     let words = switch kind {
     case "long": String(repeating: "Leave a little room for the rain, and a little room for the light. ", count: 16)

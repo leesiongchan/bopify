@@ -126,7 +126,7 @@ final class NowPlayingController {
         Int64(exactly: (seconds * 1000).rounded(.towardZero))
     }
 
-    /// Mirrors Bopify's own button and the Space key, which ignore loading and buffering.
+    /// Mirrors Bopify's own button and the Space key, which ignore loading.
     private static func toggle(_ player: PlayerModel, whenPhaseIs phases: PlaybackPhase...) {
         guard phases.contains(player.state.phase) else { return }
         player.togglePlayPause()

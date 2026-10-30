@@ -330,17 +330,6 @@ struct ArtworkStoreTests {
         }
     }
 
-    @Test func smallImagesStayWithinTheEntryLimit() async throws {
-        let fixture = ArtworkFixture()
-        defer { fixture.store.clear() }
-        let urls = (0..<120).map { _ in fixture.url() }
-        for url in urls {
-            ArtworkProtocol.plan(url, status: 200, data: ArtworkFixture.png(size: 16))
-            await fixture.store.load(url)
-        }
-        #expect(urls.filter { fixture.store.image(for: $0) != nil }.count == 112)
-    }
-
     @Test func transientFailureWakesConsumersAfterCooldown() async throws {
         let clock = ArtworkRetryClock()
         let configuration = URLSessionConfiguration.ephemeral

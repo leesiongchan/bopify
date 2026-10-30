@@ -948,16 +948,6 @@
     "Open player" : {
 
     },
-    "player.buffering" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Buffering…"
-          }
-        }
-      }
-    },
     "player.ended" : {
       "localizations" : {
         "en" : {

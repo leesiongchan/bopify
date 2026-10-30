@@ -8,6 +8,11 @@ public enum LibraryClientIDError: Error, Equatable { case invalid }
 /// Development Mode app at five users, so every user registers one; the ID is public, not a secret.
 public actor LibraryAuthorization {
     public static let defaultsKey = "library.clientID"
+    /// Each user registers the resulting redirect URI with their own Spotify app, so changing
+    /// the port or path breaks every existing library sign-in.
+    public static let callbackPort: UInt16 = 8898
+    public static let callbackPath = "/callback"
+    public static let redirectURI = LoopbackCallbackListener.redirectURI(port: Int(callbackPort), path: callbackPath)
     public static let requiredScopes: Set<String> = [
         "user-library-read", "user-library-modify", "user-read-recently-played", "user-top-read",
         "playlist-read-private", "playlist-read-collaborative", "user-follow-read"

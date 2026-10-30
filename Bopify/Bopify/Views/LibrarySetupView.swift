@@ -7,7 +7,6 @@ struct LibrarySetupView: View {
     let environment: AppEnvironment
     @State private var clientID = ""
     @State private var isSaving = false
-    private static let redirectURI = "http://127.0.0.1:8898/callback"
 
     var body: some View {
         let isValid = LibraryAuthorization.normalized(clientID) != nil
@@ -18,10 +17,10 @@ struct LibrarySetupView: View {
                 Link("librarySetup.openDashboard", destination: URL(string: "https://developer.spotify.com/dashboard")!)
                 Text("librarySetup.step2")
                 HStack {
-                    Text(verbatim: Self.redirectURI).font(.system(.body, design: .monospaced)).textSelection(.enabled)
+                    Text(verbatim: LibraryAuthorization.redirectURI).font(.system(.body, design: .monospaced)).textSelection(.enabled)
                     Button("librarySetup.copy") {
                         NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(Self.redirectURI, forType: .string)
+                        NSPasteboard.general.setString(LibraryAuthorization.redirectURI, forType: .string)
                     }
                 }
                 Text("librarySetup.step3").fixedSize(horizontal: false, vertical: true)

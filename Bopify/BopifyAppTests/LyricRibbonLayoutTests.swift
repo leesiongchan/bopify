@@ -58,7 +58,7 @@ struct LyricRibbonLayoutTests {
             width: 180, height: 1)
         #expect(manager.measurements == 4)
         #expect(storage.string == "New cue")
-        #expect(view.frame.height == LyricRibbonLayout.textHeight(storage, width: 180))
+        #expect(view.frame.height == textHeight(storage, width: 180))
     }
 
     @Test func longPreviousCueCannotObscureTheCurrentLine() throws {
@@ -149,6 +149,18 @@ struct LyricRibbonLayoutTests {
         #expect(scroll.documentVisibleRect.intersects(rect))
         #expect(rect.minY - scroll.documentVisibleRect.minY < 40)
     }
+}
+
+/// Lays the text out independently of `LyricPassageView`, so the test checks its sizing against AppKit directly.
+private func textHeight(_ text: NSAttributedString, width: CGFloat) -> CGFloat {
+    let storage = NSTextStorage(attributedString: text)
+    let manager = NSLayoutManager()
+    let container = NSTextContainer(size: CGSize(width: max(1, width), height: .greatestFiniteMagnitude))
+    container.lineFragmentPadding = 0
+    manager.addTextContainer(container)
+    storage.addLayoutManager(manager)
+    manager.ensureLayout(for: container)
+    return ceil(manager.usedRect(for: container).height)
 }
 
 nonisolated private final class LyricLayoutManagerSpy: NSLayoutManager {

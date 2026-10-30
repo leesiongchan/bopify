@@ -2,14 +2,8 @@ import Foundation
 import BopifyDomain
 import os
 
-/// Bridges the Rust event callback onto an `AsyncStream`.
-///
-/// The callback arrives on a Rust runtime thread and can fire before
-/// `bopify_engine_create` returns, so the bridge is fully usable the moment
-/// it is constructed and never reaches back for the engine handle. It only
-/// buffers: the header forbids issuing a command from inside the callback,
-/// and handing the event to a stream is what keeps the consumer off that
-/// thread.
+/// Usable from construction and never reaches for the engine handle, because the callback can fire on a Rust thread
+/// before `bopify_engine_create` returns. It only buffers, since the header forbids issuing commands from the callback.
 public final class EventBridge: Sendable {
     public let events: AsyncStream<PlaybackEvent>
     private let continuation: AsyncStream<PlaybackEvent>.Continuation
@@ -18,6 +12,11 @@ public final class EventBridge: Sendable {
     private let artistWaiters = OSAllocatedUnfairLock(initialState: ArtistWaiters())
     private let lyricSleep: @Sendable (Duration) async throws -> Void
     private let artistSleep: @Sendable (Duration) async throws -> Void
+    private let radioSleep: @Sendable (Duration) async throws -> Void
+
+    /// How long a reply waiter lives. It must exceed Rust's `REPLY_DEADLINE` (30 s), so
+    /// the engine's own failure reply arrives first and this only catches a lost reply.
+    static let replyWatchdog: Duration = .seconds(35)
 
     private struct ArtistWaiter: Sendable {
         let track: SpotifyURI
@@ -43,9 +42,15 @@ public final class EventBridge: Sendable {
         var finished = false
     }
 
+    private struct RadioWaiter: Sendable {
+        let seed: SpotifyURI
+        let continuation: CheckedContinuation<RadioMix, any Error>
+        let watchdog: Task<Void, Never>
+    }
+
     private struct RadioWaiters: Sendable {
         var lastID: UInt64 = 0
-        var waiting: [UInt64: CheckedContinuation<RadioMix, any Error>] = [:]
+        var waiting: [UInt64: RadioWaiter] = [:]
         var finished = false
     }
 
@@ -71,21 +76,19 @@ public final class EventBridge: Sendable {
     }
 
     init(lyricSleep: @escaping @Sendable (Duration) async throws -> Void,
-         artistSleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }) {
+         artistSleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+         radioSleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }) {
         self.lyricSleep = lyricSleep
         self.artistSleep = artistSleep
+        self.radioSleep = radioSleep
         var escaped: AsyncStream<PlaybackEvent>.Continuation!
         // Queue metadata bursts must not evict readiness or playback transitions.
         self.events = AsyncStream(bufferingPolicy: .unbounded) { escaped = $0 }
         self.continuation = escaped
     }
 
-    /// Hands Rust an owning (+1) reference to pass back as `ctx`.
-    ///
-    /// `ctx` must stay alive until `bopify_engine_destroy` has returned, and
-    /// that is the one obligation the Rust side cannot enforce. Retaining
-    /// here makes an owner that lets go too early a leak rather than a
-    /// use-after-free on a runtime thread.
+    /// Hands Rust an owning (+1) reference as `ctx`, which must outlive `bopify_engine_destroy`. Retaining makes an
+    /// owner that lets go too early leak instead of causing a use-after-free on a runtime thread.
     public func retainedContext() -> UnsafeMutableRawPointer {
         Unmanaged.passRetained(self).toOpaque()
     }
@@ -94,7 +97,7 @@ public final class EventBridge: Sendable {
     ///
     /// The waiter is registered before `send` runs: the reply can arrive on a
     /// Rust thread before `send` has even returned.
-    func radio(_ send: (UInt64) throws -> Void) async throws -> RadioMix {
+    func radio(seed: SpotifyURI, _ send: (UInt64) throws -> Void) async throws -> RadioMix {
         let id = radioWaiters.withLock { state in
             state.lastID += 1
             return state.lastID
@@ -103,7 +106,14 @@ public final class EventBridge: Sendable {
             try await withCheckedThrowingContinuation { continuation in
                 let registered = radioWaiters.withLock { state in
                     guard !state.finished else { return false }
-                    state.waiting[id] = continuation
+                    let sleep = radioSleep
+                    // Attach the timer before send: even a synchronous callback can cancel it.
+                    let watchdog = Task { [weak self] in
+                        do { try await sleep(Self.replyWatchdog) } catch { return }
+                        guard !Task.isCancelled else { return }
+                        self?.resolveRadio(id, with: .failure(RadioFailure.network))
+                    }
+                    state.waiting[id] = RadioWaiter(seed: seed, continuation: continuation, watchdog: watchdog)
                     return true
                 }
                 guard registered else { return continuation.resume(throwing: PlayerError.playbackSessionLost) }
@@ -116,8 +126,14 @@ public final class EventBridge: Sendable {
     }
 
     /// Resumes a waiter at most once; a reply for an ID nobody waits on is dropped.
-    private func resolveRadio(_ id: UInt64, with result: Result<RadioMix, any Error>) {
-        radioWaiters.withLock { $0.waiting.removeValue(forKey: id) }?.resume(with: result)
+    private func resolveRadio(_ id: UInt64, seed: SpotifyURI? = nil, with result: Result<RadioMix, any Error>) {
+        guard let waiter = radioWaiters.withLock({ $0.waiting.removeValue(forKey: id) }) else { return }
+        waiter.watchdog.cancel()
+        guard seed.map({ $0 != waiter.seed }) != true else {
+            BopifyLog.playback.error("radio reply seed mismatch id=\(id, privacy: .public)")
+            return waiter.continuation.resume(throwing: RadioFailure.unavailable)
+        }
+        waiter.continuation.resume(with: result)
     }
 
     private func deliverRadio(_ data: Data, requestID: UInt64?) {
@@ -127,8 +143,8 @@ public final class EventBridge: Sendable {
             return
         }
         switch reply {
-        case let .mix(id, mix): resolveRadio(id, with: .success(mix))
-        case let .failed(id, reason): resolveRadio(id, with: .failure(reason))
+        case let .mix(id, seed, mix): resolveRadio(id, seed: seed, with: .success(mix))
+        case let .failed(id, seed, reason): resolveRadio(id, seed: seed, with: .failure(reason))
         }
     }
 
@@ -144,7 +160,7 @@ public final class EventBridge: Sendable {
                     let sleep = lyricSleep
                     // Attach the timer before send: even a synchronous callback can cancel it.
                     let watchdog = Task { [weak self] in
-                        do { try await sleep(.seconds(35)) } catch { return }
+                        do { try await sleep(Self.replyWatchdog) } catch { return }
                         guard !Task.isCancelled else { return }
                         self?.resolveLyrics(id, with: .failure(LyricFailure.network))
                     }
@@ -197,7 +213,7 @@ public final class EventBridge: Sendable {
                     guard !state.finished else { return false }
                     let sleep = artistSleep
                     let watchdog = Task { [weak self] in
-                        do { try await sleep(.seconds(35)) } catch { return }
+                        do { try await sleep(Self.replyWatchdog) } catch { return }
                         guard !Task.isCancelled else { return }
                         self?.resolveArtist(id, with: .failure(ArtistTopTracksFailure.network))
                     }
@@ -232,13 +248,8 @@ public final class EventBridge: Sendable {
         }
     }
 
-    /// Balances exactly one `retainedContext()`, and takes that same pointer
-    /// so the pairing is visible at the call site.
-    ///
-    /// Safe only once `bopify_engine_destroy` has returned, or once
-    /// `bopify_engine_create` has returned null — which it only does after
-    /// dropping the runtime, so no callback can follow either. That ordering
-    /// is the one part of this the signature cannot enforce.
+    /// Balances exactly one `retainedContext()`, taking the same pointer so the pairing is visible at the call site.
+    /// Call it only after `bopify_engine_destroy` returns or `bopify_engine_create` returns null, as no callback can follow either.
     public static func releaseContext(_ ctx: UnsafeMutableRawPointer) {
         Unmanaged<EventBridge>.fromOpaque(ctx).release()
     }
@@ -247,7 +258,8 @@ public final class EventBridge: Sendable {
     func yield(rawJSON: UnsafeRawBufferPointer) {
         guard let base = rawJSON.baseAddress, !rawJSON.isEmpty else { return }
         let data = Data(bytes: base, count: rawJSON.count)
-        if let envelope = try? JSONDecoder().decode(ReplyEnvelope.self, from: data) {
+        let envelope = try? JSONDecoder().decode(ReplyEnvelope.self, from: data)
+        if let envelope {
             if ArtistTopTracksReply.eventTypes.contains(envelope.type) {
                 deliverArtist(data, requestID: envelope.requestID)
                 return
@@ -265,15 +277,19 @@ public final class EventBridge: Sendable {
         }
         // A malformed payload is a bug in the wire contract, not a user-facing
         // failure. Drop it rather than tearing down playback.
-        guard let event = try? JSONDecoder().decode(PlaybackEvent.self, from: data) else {
+        let event: PlaybackEvent
+        do {
+            event = try JSONDecoder().decode(PlaybackEvent.self, from: data)
+        } catch {
             // The payload carries the track title and artwork URL, so it is
-            // user content and never logged at .public.
+            // user content and never logged at .public. Type and field names are not.
             let payload = String(decoding: data, as: UTF8.self)
-            BopifyLog.playback.error("event decode failed payload=\(payload, privacy: .private)")
+            let type = envelope?.type ?? "unreadable"
+            let field = (error as? DecodingError)?.fieldPath ?? "unknown"
+            BopifyLog.playback.error("event decode failed type=\(type, privacy: .public) field=\(field, privacy: .public) payload=\(payload, privacy: .private)")
             return
         }
         if case .sessionLost = event { failRadioWaiters(); failLyricWaiters(); failArtistWaiters() }
-        if case .failed(.playbackSessionLost) = event { failRadioWaiters(); failLyricWaiters(); failArtistWaiters() }
         continuation.yield(event)
     }
 
@@ -293,7 +309,10 @@ public final class EventBridge: Sendable {
             defer { state.waiting = [:] }
             return Array(state.waiting.values)
         }
-        for waiter in waiting { waiter.resume(throwing: PlayerError.playbackSessionLost) }
+        for waiter in waiting {
+            waiter.watchdog.cancel()
+            waiter.continuation.resume(throwing: PlayerError.playbackSessionLost)
+        }
     }
 
     private func failLyricWaiters() {
@@ -325,12 +344,8 @@ public final class EventBridge: Sendable {
     deinit { continuation.finish() }
 }
 
-/// Matches the callback in `bopify_core.h` exactly. Must be a top-level
-/// function: a C function pointer cannot capture, so the bridge arrives as
-/// `ctx`.
-///
-/// Runs on a Rust runtime thread, so it must not issue a command on the
-/// engine: per the header that can deadlock against a concurrent destroy.
+/// Top-level because a C function pointer cannot capture, so the bridge arrives as `ctx`.
+/// It runs on a Rust runtime thread and must not issue engine commands, which can deadlock against a concurrent destroy.
 func bopifyEventTrampoline(
     _ json: UnsafePointer<UInt8>?,
     _ len: UInt,
@@ -339,4 +354,16 @@ func bopifyEventTrampoline(
     guard let json, let ctx else { return }
     let bridge = Unmanaged<EventBridge>.fromOpaque(ctx).takeUnretainedValue()
     bridge.yield(rawJSON: UnsafeRawBufferPointer(start: json, count: Int(len)))
+}
+
+extension DecodingError {
+    /// Keys name fields and never carry values, so the path is safe to log publicly.
+    var fieldPath: String {
+        let keys: [any CodingKey] = switch self {
+        case let .keyNotFound(key, context): context.codingPath + [key]
+        case let .typeMismatch(_, context), let .valueNotFound(_, context), let .dataCorrupted(context): context.codingPath
+        @unknown default: []
+        }
+        return keys.isEmpty ? "root" : keys.map(\.stringValue).joined(separator: ".")
+    }
 }

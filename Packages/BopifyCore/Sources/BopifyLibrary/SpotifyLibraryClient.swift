@@ -36,7 +36,7 @@ public struct SpotifyLibraryClient: LibraryService, SavedTracksService, Listenin
         ], scopes: ["user-library-read"])
         guard let page = try? JSONDecoder().decode(APIPage<SavedItem>.self, from: data) else { throw LibraryError.invalidResponse }
         return SavedTracksPage(tracks: page.items.compactMap { $0.value?.track.domain },
-                               nextOffset: try page.nextOffset(offset: offset, limit: limit), total: page.total)
+                               nextOffset: try page.nextOffset(offset: offset, limit: limit))
     }
 
     public func recentlyPlayed() async throws -> [RecentPlay] {

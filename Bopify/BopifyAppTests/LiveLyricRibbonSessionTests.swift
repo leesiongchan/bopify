@@ -43,22 +43,6 @@ struct LiveLyricRibbonSessionTests {
         #expect(f.engine.commands.isEmpty)
     }
 
-    @Test func artworkMetadataUpdatesPresentationWithoutRefetchingOrLeavingReading() async throws {
-        let f = LiveLyricFixture(); defer { f.stop() }
-        try await f.load()
-        f.session.model.beginReading()
-        let revision = f.session.model.scrollResetRevision
-        let url = URL(string: "https://fixture.invalid/original-cover")!
-        let track = Track(uri: liveLyricURI, title: "Window Seat", artists: [ArtistSummary(name: "Soft Weather")],
-                          albumTitle: nil, artwork: Artwork(url: url), durationMs: 240_000)
-        f.engine.emit(.queueMetadata(generation: 1, entryID: "one", track: track))
-        try await liveLyricEventually { f.session.model.snapshot.artworkURL == url }
-        #expect(f.gate.requests.count == 1)
-        #expect(f.session.model.isReading && f.session.model.scrollResetRevision == revision)
-        #expect(f.session.model.source?.attribution == "Fixture provider")
-        #expect(f.engine.commands.isEmpty)
-    }
-
     @Test(arguments: ["hidden", "notReady", "remote", "unsupported", "loading", "mismatch", "noTrack"])
     func ineligibleInputsNeverRequest(kind: String) async throws {
         let f = LiveLyricFixture(); defer { f.stop() }
@@ -295,7 +279,7 @@ struct LiveLyricRibbonSessionTests {
         try await liveLyricEventually { f.session.model.snapshot.positionMs == 240_000 && !f.session.model.snapshot.isPlaying }
         #expect(f.session.model.isReading)
         f.session.model.backToLive()
-        #expect(f.session.model.projection?.interval == .ended)
+        #expect(f.session.model.projection.map { $0.current == nil && $0.next == nil } == true)
     }
 }
 

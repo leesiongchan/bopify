@@ -1,0 +1,10 @@
+[
+  "spircEnded",
+  "spircPanicked",
+  "playerChannelClosed",
+  "audioOutputFailed",
+  "forwarderPanicked",
+  "commandFailed",
+  "sessionInvalidated",
+  "sessionDisconnected"
+]

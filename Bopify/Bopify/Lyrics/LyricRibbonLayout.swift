@@ -38,17 +38,6 @@ struct LyricRibbonLayout {
         return result
     }
 
-    static func textHeight(_ text: NSAttributedString, width: CGFloat) -> CGFloat {
-        let storage = NSTextStorage(attributedString: text)
-        let manager = NSLayoutManager()
-        let container = NSTextContainer(size: CGSize(width: max(1, width), height: .greatestFiniteMagnitude))
-        container.lineFragmentPadding = 0
-        manager.addTextContainer(container)
-        storage.addLayoutManager(manager)
-        manager.ensureLayout(for: container)
-        return ceil(manager.usedRect(for: container).height)
-    }
-
     static func reader(content: LyricContent, projection: LyricProjection?, isReading: Bool,
                        scale: CGFloat, isRightToLeft: Bool = false) -> NSAttributedString {
         guard case let .timed(document) = content else {

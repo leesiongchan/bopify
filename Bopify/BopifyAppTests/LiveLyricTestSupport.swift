@@ -56,6 +56,7 @@ import BopifyPlayback
     func setRepeat(_ mode: RepeatMode) async throws { commands.append("repeat") }
     func requestRadio(seed: SpotifyURI) async throws -> RadioMix { throw RadioFailure.unavailable }
     func requestLyrics(for track: SpotifyURI) async throws -> TrackLyrics { try await lyricRequest(track) }
+    func requestArtistTopTracks(for track: SpotifyURI, artistIndex: Int) async throws -> ArtistTopTracks { throw ArtistTopTracksFailure.unavailable }
 }
 
 @MainActor final class LiveLyricTestClock {
@@ -99,5 +100,5 @@ nonisolated func liveLyricQueue(_ uri: SpotifyURI = liveLyricURI, id: String = "
 nonisolated func liveLyrics(_ uri: SpotifyURI = liveLyricURI, displayName: String = "Fixture provider") -> TrackLyrics {
     TrackLyrics(trackURI: uri, synchronization: .lineSynced,
         lines: [TrackLyricLine(text: "A quiet street", startTimeMs: 1000), TrackLyricLine(text: "The lamps return", startTimeMs: 2000)],
-        provider: "fixture", providerDisplayName: displayName, language: "en", isRightToLeft: false)
+        provider: "fixture", providerDisplayName: displayName, isRightToLeft: false)
 }

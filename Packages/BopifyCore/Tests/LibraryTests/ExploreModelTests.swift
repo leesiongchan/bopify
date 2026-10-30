@@ -49,7 +49,7 @@ private actor FailingSavedTracks: SavedTracksService {
     func succeed() { failure = nil }
     func savedTracks(offset: Int, limit: Int) async throws -> SavedTracksPage {
         if let failure { throw failure }
-        return SavedTracksPage(tracks: Array(tracks.prefix(limit)), nextOffset: nil, total: tracks.count)
+        return SavedTracksPage(tracks: Array(tracks.prefix(limit)), nextOffset: nil)
     }
 }
 

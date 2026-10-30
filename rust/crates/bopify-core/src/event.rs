@@ -1,6 +1,11 @@
 use librespot_metadata::audio::{AudioItem, UniqueFields};
 use librespot_playback::player::{PlayerEvent, RemoteState, StartupOutcome};
 use serde::Serialize;
+use std::time::Duration;
+
+/// How long radio, lyrics and artist lookups may take before failing their reply.
+/// Swift's `EventBridge.replyWatchdog` must stay longer, so it only catches lost replies.
+pub(crate) const REPLY_DEADLINE: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -117,11 +122,6 @@ pub enum WireEvent {
         is_active: bool,
     },
     #[serde(rename_all = "camelCase")]
-    Failed {
-        code: i32,
-        message: String,
-    },
-    #[serde(rename_all = "camelCase")]
     StartupResolved {
         outcome: &'static str,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -165,10 +165,6 @@ pub enum WireEvent {
         request_id: u64,
         #[serde(rename = "trackURI")]
         track_uri: String,
-        #[serde(rename = "artistURI")]
-        artist_uri: String,
-        #[serde(rename = "artistName")]
-        artist_name: String,
         tracks: Vec<WireTrack>,
     },
     ArtistTopTracksFailed {
@@ -214,7 +210,7 @@ pub fn translate(event: PlayerEvent) -> Option<WireEvent> {
             log::info!("event: session disconnected connection_lost={connection_lost}");
             if connection_lost {
                 Some(WireEvent::SessionLost {
-                    reason: crate::terminal::SessionLossReason::Legacy,
+                    reason: crate::terminal::SessionLossReason::SessionDisconnected,
                 })
             } else {
                 Some(WireEvent::ActiveDeviceChanged { is_active: false })
@@ -499,12 +495,10 @@ mod tests {
         reporter.session_lost(SessionLossReason::PlayerChannelClosed);
         let events = events.lock().unwrap();
         assert_eq!(events.len(), 1);
-        assert!(matches!(
-            events[0],
-            WireEvent::SessionLost {
-                reason: SessionLossReason::Legacy
-            }
-        ));
+        assert_eq!(
+            serde_json::to_value(&events[0]).unwrap(),
+            serde_json::json!({"type": "sessionLost", "reason": "sessionDisconnected"})
+        );
     }
 
     #[test]

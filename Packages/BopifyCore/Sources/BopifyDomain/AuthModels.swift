@@ -1,7 +1,7 @@
 import Foundation
 
 public enum AuthState: Hashable, Sendable {
-    case signedOut, authenticating, signedIn, refreshing, needsReauthentication, needsLibraryAuthorization
+    case signedOut, authenticating, signedIn, refreshing, needsLibraryAuthorization
     case error(PlayerError)
 }
 

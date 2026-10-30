@@ -4,7 +4,7 @@ import os
 import BopifyDomain
 
 public enum CallbackError: Error, Hashable, Sendable {
-    case invalidCallback, accessDenied, stateMismatch, listenerFailed, cancelled
+    case invalidCallback, accessDenied, listenerFailed, cancelled
 }
 
 /// A single-shot HTTP listener on 127.0.0.1 with an assigned or fixed port.
@@ -27,6 +27,10 @@ public actor LoopbackCallbackListener {
     private var stopWaiters: [CheckedContinuation<Void, Never>] = []
     private var continuation: CheckedContinuation<String, any Error>?
     private var pendingResult: Result<String, any Error>?
+
+    public static func redirectURI(port: Int, path: String) -> String {
+        "http://127.0.0.1:\(port)\(path)"
+    }
 
     public init(expectedState: String, expectedPath: String = "/login") {
         self.expectedState = expectedState

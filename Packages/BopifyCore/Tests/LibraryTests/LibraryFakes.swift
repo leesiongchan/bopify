@@ -56,6 +56,6 @@ actor FakeSavedTracks: SavedTracksService {
     init(_ tracks: [Track]) { self.tracks = tracks }
     func savedTracks(offset: Int, limit: Int) async throws -> SavedTracksPage {
         requests.append([offset, limit])
-        return SavedTracksPage(tracks: Array(tracks.prefix(limit)), nextOffset: nil, total: tracks.count)
+        return SavedTracksPage(tracks: Array(tracks.prefix(limit)), nextOffset: nil)
     }
 }

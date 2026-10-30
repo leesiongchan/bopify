@@ -33,7 +33,7 @@ struct NowPlayingInfoTests {
                                        elapsedMs: 64_000, isPlaying: true, canNext: true, canPrevious: true, canSeek: true))
     }
 
-    @Test(arguments: [PlaybackPhase.paused, .loading, .buffering, .ended, .error(.networkUnavailable)])
+    @Test(arguments: [PlaybackPhase.paused, .loading, .ended, .error(.networkUnavailable)])
     func otherPhasesOnThisDeviceReportPausedAndKeepTheTrack(_ phase: PlaybackPhase) {
         let info = nowPlayingInfo(for: state(phase, track: track), positionMs: 1_000)
         #expect(info?.isPlaying == false)

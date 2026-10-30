@@ -20,7 +20,6 @@ pub struct WireLyrics {
     pub lines: Vec<WireLyricLine>,
     pub provider: String,
     pub provider_display_name: String,
-    pub language: String,
     pub is_right_to_left: bool,
 }
 
@@ -94,7 +93,6 @@ fn normalize(track_uri: String, lyrics: Lyrics) -> Result<WireLyrics, LyricFailu
         lines,
         provider: lyrics.provider,
         provider_display_name: lyrics.provider_display_name,
-        language: lyrics.language,
         is_right_to_left: lyrics.is_rtl_language,
     })
 }
@@ -119,7 +117,7 @@ pub(crate) async fn resolve<S: LyricSource>(
     track: SpotifyUri,
     request_id: u64,
 ) -> WireEvent {
-    resolve_within(source, track, request_id, Duration::from_secs(30)).await
+    resolve_within(source, track, request_id, crate::event::REPLY_DEADLINE).await
 }
 
 async fn resolve_within<S: LyricSource>(
@@ -239,7 +237,6 @@ mod tests {
         assert_eq!(result.synchronization, LyricSynchronization::LineSynced);
         assert_eq!(result.provider, "fixture");
         assert_eq!(result.provider_display_name, "Fixture provider");
-        assert_eq!(result.language, "ar");
         assert!(result.is_right_to_left);
     }
 
@@ -271,7 +268,7 @@ mod tests {
             json!({
                 "type": "lyrics", "requestID": 42, "trackURI": TRACK, "synchronization": "unsynced",
                 "lines": [{"text":"A quiet street", "startTimeMs":null}, {"text":"The lamps return", "startTimeMs":null}],
-                "provider":"fixture", "providerDisplayName":"Fixture provider", "language":"ar", "isRightToLeft":true
+                "provider":"fixture", "providerDisplayName":"Fixture provider", "isRightToLeft":true
             })
         );
     }
@@ -386,7 +383,7 @@ mod tests {
             json!({
                 "type":"lyrics", "requestID":42, "trackURI":TRACK, "synchronization":"lineSynced",
                 "lines":[{"text":"A quiet street","startTimeMs":1000}],
-                "provider":"fixture", "providerDisplayName":"Fixture provider", "language":"ar", "isRightToLeft":true
+                "provider":"fixture", "providerDisplayName":"Fixture provider", "isRightToLeft":true
             })
         );
     }

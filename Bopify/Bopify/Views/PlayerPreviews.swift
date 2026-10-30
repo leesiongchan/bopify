@@ -50,7 +50,6 @@ enum PreviewScenario {
     case playing, paused, loading, playbackError, mirroring, nothingPlaying
 }
 
-/// What the library services answer: sample tracks and stations, nothing, or one error for every request.
 enum PreviewLibrary {
     case samples, empty, failing(LibraryError)
 }
@@ -63,7 +62,7 @@ func makePreviewEnvironment(_ scenario: PreviewScenario = .playing, library: Pre
     case .playing: engine.restoredSession(at: 1, positionMs: 64_000, playing: true)
     case .paused: engine.restoredSession(at: 1, positionMs: 64_000, playing: false)
     case .loading: engine.restoredSession(at: 1, positionMs: 0, playing: false) + [.loading]
-    case .playbackError: engine.restoredSession(at: 1, positionMs: 64_000, playing: false) + [.failed(.networkUnavailable)]
+    case .playbackError: engine.restoredSession(at: 1, positionMs: 64_000, playing: false) + [.sessionLost(.spircEnded)]
     case .mirroring:
         [.startupResolved(.remote(deviceName: "Kitchen Speaker")),
          .remotePlayback(RemotePlayback(deviceName: "Kitchen Speaker", trackURI: previewTracks[2].uri, track: previewTracks[2],
@@ -116,8 +115,8 @@ private nonisolated struct PreviewLibraryServices: LibraryService, SavedTracksSe
 
     func savedTracks(offset: Int, limit: Int) async throws -> SavedTracksPage {
         let page = Array(previewTracks.dropFirst(offset).prefix(limit))
-        return try answer(SavedTracksPage(tracks: page, nextOffset: nil, total: previewTracks.count),
-                          empty: SavedTracksPage(tracks: [], nextOffset: nil, total: 0))
+        return try answer(SavedTracksPage(tracks: page, nextOffset: nil),
+                          empty: SavedTracksPage(tracks: [], nextOffset: nil))
     }
 
     func recentlyPlayed() async throws -> [RecentPlay] {

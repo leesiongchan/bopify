@@ -30,7 +30,7 @@ public struct RemotePlayback: Hashable, Sendable {
 }
 
 public enum PlaybackPhase: Hashable, Sendable {
-    case idle, loading, buffering, playing, paused, ended
+    case idle, loading, playing, paused, ended
     case error(PlayerError)
 }
 
@@ -52,8 +52,7 @@ public struct PlaybackState: Hashable, Sendable {
     public var startup: StartupPhase = .pending
     /// Another device's live playback. Always nil while Bopify is the active device.
     public var remote: RemotePlayback?
-    /// The last live mirror, no longer playing, once its device stopped. The record
-    /// keeps it because Play resumes that session. Always nil while Bopify is active.
+    /// The last mirror after its device stopped, kept because Play resumes that session. Always nil while Bopify is active.
     public var staleRemote: RemotePlayback?
     /// What the record shows while Bopify is inactive, if another device was mirrored.
     public var mirror: RemotePlayback? { remote ?? staleRemote }

@@ -12,12 +12,7 @@ nonisolated struct LyricCueGroup: Equatable, Sendable {
     var text: String
 }
 
-nonisolated enum LyricInterval: Equatable, Sendable {
-    case beforeFirst, cue, gap, ended
-}
-
 nonisolated struct LyricProjection: Equatable, Sendable {
-    let interval: LyricInterval
     var current: LyricCueGroup?
     var previous: LyricCueGroup?
     var next: LyricCueGroup?
@@ -50,17 +45,17 @@ nonisolated struct LyricDocument: Equatable, Sendable {
 
     func project(positionMs: Int64, durationMs: Int64) -> LyricProjection {
         let position = max(0, positionMs)
-        if durationMs > 0, position >= durationMs { return LyricProjection(interval: .ended, previous: groups.last) }
+        if durationMs > 0, position >= durationMs { return LyricProjection(previous: groups.last) }
         guard let index = groups.lastIndex(where: { $0.startMs <= position }) else {
             let next = groups.first.flatMap { $0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
-            return LyricProjection(interval: .beforeFirst, next: next)
+            return LyricProjection(next: next)
         }
         let previous = index > 0 ? groups[index - 1] : nil
         let next = index + 1 < groups.count ? groups[index + 1] : nil
         let group = groups[index]
         guard !group.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return LyricProjection(interval: .gap, previous: previous, next: next)
+            return LyricProjection(previous: previous, next: next)
         }
-        return LyricProjection(interval: .cue, current: group, previous: previous, next: next)
+        return LyricProjection(current: group, previous: previous, next: next)
     }
 }

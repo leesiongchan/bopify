@@ -19,13 +19,11 @@ nonisolated enum LyricIdleReason: Equatable, Sendable {
 nonisolated struct LyricSourceMetadata: Equatable, Sendable {
     let provider: String
     let providerDisplayName: String
-    let language: String
     let isRightToLeft: Bool
 
     init(lyrics: TrackLyrics) {
         provider = lyrics.provider
         providerDisplayName = lyrics.providerDisplayName
-        language = lyrics.language
         isRightToLeft = lyrics.isRightToLeft
     }
 

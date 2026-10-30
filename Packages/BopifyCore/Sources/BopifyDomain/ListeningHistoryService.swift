@@ -1,4 +1,3 @@
-/// One play from the user's recently played list, newest first.
 public struct RecentPlay: Hashable, Sendable {
     public let track: Track
     /// What the track was played from, when Spotify says and the URI is one Bopify can load.

@@ -1,11 +1,14 @@
 //! C ABI for Swift; the caller contract is defined in `rust/cbindgen.toml`.
-//! Destroy retains the handle shell so late calls return SessionLost safely.
 
 use std::ffi::{CStr, c_char, c_void};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, PoisonError, RwLock};
 
-use crate::{engine::Engine, error::BopifyError, event::WireEvent};
+use crate::{
+    engine::{Engine, RepeatMode},
+    error::BopifyError,
+    event::WireEvent,
+};
 
 /// Opaque handle retained after destroy to keep concurrent and late calls safe.
 pub struct BopifyEngine {
@@ -51,8 +54,6 @@ unsafe fn str_from<'a>(ptr: *const c_char) -> Option<&'a str> {
     unsafe { CStr::from_ptr(ptr) }.to_str().ok()
 }
 
-/// Writes an error code into an optional out-parameter.
-///
 /// # Safety
 /// `out_err` must be null or a writable, caller-owned `int32_t`.
 unsafe fn write_err(out_err: *mut i32, code: i32) {
@@ -67,29 +68,14 @@ unsafe fn write_err(out_err: *mut i32, code: i32) {
 // cbindgen needs the literal Option<fn> type to generate a nullable function pointer.
 ///
 /// # Safety
-/// `access_token` and `device_name` must each be a NUL-terminated UTF-8
-/// string that stays valid for the call, `out_err` must be null or a
-/// writable `int32_t`, and `ctx` must satisfy the contract at the top of
-/// this header. The returned handle must be shut down with
+/// `access_token`, `device_name` and `options_json` must each be a
+/// NUL-terminated UTF-8 string that stays valid for the call, `out_err` must
+/// be null or a writable `int32_t`, and `ctx` must satisfy the contract at the
+/// top of this header. The returned handle must be shut down with
 /// `bopify_engine_destroy`; it stays safe to pass to any entry point after
 /// that, so the caller may keep or discard the pointer as it likes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn bopify_engine_create(
-    access_token: *const c_char,
-    device_name: *const c_char,
-    callback: Option<extern "C" fn(json: *const u8, len: usize, ctx: *mut c_void)>,
-    ctx: *mut c_void,
-    out_err: *mut i32,
-) -> *mut BopifyEngine {
-    // SAFETY: forwards the legacy creator's borrowed pointer contract.
-    unsafe { create_engine(access_token, device_name, None, callback, ctx, out_err) }
-}
-
-/// Creates a device with validated JSON startup options. String storage is borrowed only during this call.
-/// # Safety
-/// Pointers and callback context obey the same contract as `bopify_engine_create`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn bopify_engine_create_with_options(
     access_token: *const c_char,
     device_name: *const c_char,
     options_json: *const c_char,
@@ -97,46 +83,17 @@ pub unsafe extern "C" fn bopify_engine_create_with_options(
     ctx: *mut c_void,
     out_err: *mut i32,
 ) -> *mut BopifyEngine {
-    // SAFETY: options_json is a borrowed NUL-terminated string for this call.
-    let options = unsafe { str_from(options_json) }
-        .ok_or(BopifyError::InvalidArgument)
-        .and_then(crate::recovery::EngineCreateOptions::parse);
-    match options {
-        // SAFETY: remaining arguments forward the creator's contract.
-        Ok(options) => unsafe {
-            create_engine(
-                access_token,
-                device_name,
-                Some(options),
-                callback,
-                ctx,
-                out_err,
-            )
-        },
-        Err(error) => {
-            unsafe { write_err(out_err, error.code()) };
-            std::ptr::null_mut()
-        }
-    }
-}
-
-unsafe fn create_engine(
-    access_token: *const c_char,
-    device_name: *const c_char,
-    options: Option<crate::recovery::EngineCreateOptions>,
-    callback: Option<extern "C" fn(json: *const u8, len: usize, ctx: *mut c_void)>,
-    ctx: *mut c_void,
-    out_err: *mut i32,
-) -> *mut BopifyEngine {
     crate::logging::install();
     log::info!("ffi: bopify_engine_create");
 
-    // SAFETY: both pointers satisfy `str_from`'s contract per the header, and
-    // the borrows are consumed inside this call.
-    let (Some(token), Some(name)) = (unsafe { str_from(access_token) }, unsafe {
-        str_from(device_name)
-    }) else {
-        log::error!("ffi: bopify_engine_create rejected, missing token or device name");
+    // SAFETY: all three pointers satisfy `str_from`'s contract per the header,
+    // and the borrows are consumed inside this call.
+    let (Some(token), Some(name), Some(options)) = (
+        unsafe { str_from(access_token) },
+        unsafe { str_from(device_name) },
+        unsafe { str_from(options_json) },
+    ) else {
+        log::error!("ffi: bopify_engine_create rejected, missing token, device name or options");
         // SAFETY: `out_err` satisfies `write_err`'s contract per the header.
         unsafe { write_err(out_err, BopifyError::InvalidArgument.code()) };
         return std::ptr::null_mut();
@@ -151,6 +108,16 @@ unsafe fn create_engine(
         return std::ptr::null_mut();
     };
 
+    let options = match crate::recovery::EngineCreateOptions::parse(options) {
+        Ok(options) => options,
+        Err(error) => {
+            log::error!("ffi: bopify_engine_create rejected, malformed options");
+            // SAFETY: as above.
+            unsafe { write_err(out_err, error.code()) };
+            return std::ptr::null_mut();
+        }
+    };
+
     let ctx = SendCtx(ctx);
     let sink: crate::engine::EventSink = Arc::new(move |event: WireEvent| {
         let Ok(json) = serde_json::to_vec(&event) else {
@@ -160,11 +127,7 @@ unsafe fn create_engine(
         callback(json.as_ptr(), json.len(), ctx.as_ptr());
     });
 
-    let result = match options {
-        Some(options) => Engine::new_with_options(token, name, options, sink),
-        None => Engine::new(token, name, sink),
-    };
-    match result {
+    match Engine::new(token, name, options, sink) {
         Ok(inner) => {
             // SAFETY: as above.
             unsafe { write_err(out_err, 0) };
@@ -350,9 +313,9 @@ pub unsafe extern "C" fn bopify_set_shuffle(handle: *mut BopifyEngine, enabled: 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn bopify_set_repeat(handle: *mut BopifyEngine, mode: u8) -> i32 {
     log::debug!("ffi: bopify_set_repeat mode={mode}");
-    if mode > 2 {
+    let Ok(mode) = RepeatMode::try_from(mode) else {
         return BopifyError::InvalidArgument.code();
-    }
+    };
     // SAFETY: forwards this function's own contract to `with_engine`.
     unsafe { with_engine(handle, |engine| engine.set_repeat(mode)) }
 }
@@ -432,7 +395,8 @@ pub unsafe extern "C" fn bopify_request_lyrics(
     unsafe { with_engine(handle, |engine| engine.request_lyrics(track, request_id)) }
 }
 
-/// Queues a displayed artist's popular songs for a canonical track URI.
+/// Queues a displayed artist's popular songs for a canonical track URI. The callback
+/// carries `artistTopTracks` or `artistTopTracksFailed` with the same `request_id`.
 ///
 /// # Safety
 /// `handle` must be null or live, and `track_uri` must satisfy `str_from`'s contract.
@@ -456,33 +420,6 @@ pub unsafe extern "C" fn bopify_request_artist_top_tracks(
             engine.request_artist_top_tracks(track, artist_index, request_id)
         })
     }
-}
-
-/// Valid calls return `SessionLost`: librespot cannot swap credentials in place.
-///
-/// # Safety
-/// `handle` must be null or a live handle from `bopify_engine_create`, and
-/// `access_token` must be a NUL-terminated UTF-8 string valid for the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn bopify_update_token(
-    handle: *mut BopifyEngine,
-    access_token: *const c_char,
-) -> i32 {
-    log::debug!("ffi: bopify_update_token");
-    // Reject malformed input before SessionLost can trigger an unnecessary rebuild.
-    // SAFETY: satisfies `str_from`'s contract per the header; the borrow is
-    // consumed before returning.
-    let Some(_token) = (unsafe { str_from(access_token) }) else {
-        return BopifyError::InvalidArgument.code();
-    };
-    // SAFETY: the handle satisfies with_engine's contract.
-    let looked_up = unsafe { with_engine(handle, |_| Ok(())) };
-    if looked_up != 0 {
-        return looked_up;
-    }
-    // Spirc consumes credentials at creation; SessionLost asks Swift to rebuild.
-    log::info!("ffi: bopify_update_token unsupported, asking Swift to rebuild the engine");
-    BopifyError::SessionLost.code()
 }
 
 #[cfg(test)]
@@ -567,21 +504,6 @@ mod tests {
             assert_eq!(
                 bopify_load(ptr, c"spotify:album:x".as_ptr(), std::ptr::null(), 0),
                 lost
-            );
-            assert_eq!(bopify_update_token(ptr, c"token".as_ptr()), lost);
-            release(ptr);
-        }
-    }
-
-    #[test]
-    fn update_token_validates_its_argument_before_the_handle_state() {
-        let ptr = handle_without_an_engine(false);
-        // SAFETY: `ptr` is a live handle and a null token is explicitly
-        // allowed as an input to be rejected.
-        unsafe {
-            assert_eq!(
-                bopify_update_token(ptr, std::ptr::null()),
-                BopifyError::InvalidArgument.code()
             );
             release(ptr);
         }
@@ -706,30 +628,41 @@ mod tests {
     }
 
     #[test]
-    fn create_rejects_null_arguments_without_touching_out_err_when_absent() {
+    fn create_rejects_missing_or_malformed_arguments_before_login() {
         extern "C" fn never_called(_json: *const u8, _len: usize, _ctx: *mut c_void) {
             unreachable!("no events can be emitted before the engine exists");
         }
-        let mut code = 0i32;
-        // SAFETY: null string pointers are explicitly allowed, `code` is a
-        // live writable i32, and the callback pointer is valid.
-        let handle = unsafe {
-            bopify_engine_create(
-                std::ptr::null(),
-                c"Bopify".as_ptr(),
-                Some(never_called),
-                std::ptr::null_mut(),
-                &mut code,
-            )
-        };
-        assert!(handle.is_null());
-        assert_eq!(code, BopifyError::InvalidArgument.code());
+        let valid = c"{\"deviceId\":\"test-device\",\"startup\":\"coldLaunch\"}";
+        let cases: [(Option<&CStr>, Option<&CStr>); 3] = [
+            // Valid options isolate the null-token check.
+            (None, Some(valid)),
+            (Some(c"token"), None),
+            (Some(c"token"), Some(c"{\"startup\":\"coldLaunch\"}")),
+        ];
+        for (token, options) in cases {
+            let mut code = 0i32;
+            // SAFETY: null string pointers are explicitly allowed, `code` is a
+            // live writable i32, and the callback pointer is valid.
+            let handle = unsafe {
+                bopify_engine_create(
+                    token.map_or(std::ptr::null(), CStr::as_ptr),
+                    c"Bopify".as_ptr(),
+                    options.map_or(std::ptr::null(), CStr::as_ptr),
+                    Some(never_called),
+                    std::ptr::null_mut(),
+                    &mut code,
+                )
+            };
+            assert!(handle.is_null());
+            assert_eq!(code, BopifyError::InvalidArgument.code());
+        }
 
-        // SAFETY: as above, with a null out-parameter, which is allowed.
+        // SAFETY: as above, with a null callback and out-parameter, which are allowed.
         let handle = unsafe {
             bopify_engine_create(
                 c"token".as_ptr(),
                 c"Bopify".as_ptr(),
+                valid.as_ptr(),
                 None,
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),

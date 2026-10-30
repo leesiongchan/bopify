@@ -1,8 +1,20 @@
 import Foundation
 
-public enum SessionLossReason: String, Codable, Hashable, Sendable {
+public enum SessionLossReason: String, Codable, CaseIterable, Hashable, Sendable {
     case spircEnded, spircPanicked, playerChannelClosed, forwarderPanicked
-    case audioOutputFailed, commandFailed, eventStreamEnded, readinessTimeout, legacy
+    case audioOutputFailed, commandFailed, sessionInvalidated, sessionDisconnected, eventStreamEnded, readinessTimeout
+    case unrecognized
+
+    /// The reason only labels the loss, so an unknown one must not stop the loss reaching recovery.
+    public init(from decoder: any Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        guard let reason = Self(rawValue: raw) else {
+            BopifyLog.playback.error("unrecognized session loss reason=\(raw, privacy: .public)")
+            self = .unrecognized
+            return
+        }
+        self = reason
+    }
 }
 
 public struct PlaybackIdentity: Codable, Hashable, Sendable {

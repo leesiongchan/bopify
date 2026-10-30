@@ -145,7 +145,7 @@ public enum PlayerContent: Equatable, Sendable {
         guard state.currentTrack == nil else { self = .player; return }
         switch state.phase {
         case .error: self = .player
-        case .loading, .buffering: self = .loading
+        case .loading: self = .loading
         default:
             switch state.startup {
             case .pending, .resolved(.restored), .resolved(.likedSongs): self = .loading

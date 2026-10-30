@@ -35,4 +35,5 @@ final class RecoveryStubEngine: ManagedPlaybackEngine, @unchecked Sendable {
     func setRepeat(_ mode: RepeatMode) async throws { try await record("repeat") }
     func requestRadio(seed: SpotifyURI) async throws -> RadioMix { try await record("radio"); throw RadioFailure.unavailable }
     func requestLyrics(for track: SpotifyURI) async throws -> TrackLyrics { try await record("lyrics"); throw LyricFailure.unavailable }
+    func requestArtistTopTracks(for track: SpotifyURI, artistIndex: Int) async throws -> ArtistTopTracks { try await record("artistTopTracks"); throw ArtistTopTracksFailure.unavailable }
 }

@@ -35,9 +35,3 @@ public protocol PlaybackEngine: Sendable {
     /// A displayed artist's popular songs for one track, ordered by Spotify.
     func requestArtistTopTracks(for track: SpotifyURI, artistIndex: Int) async throws -> ArtistTopTracks
 }
-
-extension PlaybackEngine {
-    public func requestArtistTopTracks(for track: SpotifyURI, artistIndex: Int) async throws -> ArtistTopTracks {
-        throw ArtistTopTracksFailure.unavailable
-    }
-}

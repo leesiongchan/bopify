@@ -18,14 +18,13 @@ public enum PlaybackEvent: Hashable, Sendable {
     case recoveryIdentity(PlaybackIdentity)
     case connectionReady(PlaybackBootstrapOutcome)
     case sessionLost(SessionLossReason)
-    case failed(PlayerError)
     case startupResolved(StartupOutcome)
     case remotePlayback(RemotePlayback?)
 }
 
 extension PlaybackEvent: Decodable {
     private enum CodingKeys: String, CodingKey {
-        case type, positionMs, volume, isActive, code
+        case type, positionMs, volume, isActive
         case generation, entryID, track, enabled, mode, reason
         case trackUri, title, artists, albumTitle, artworkUrl, durationMs
         case outcome, deviceName, remote, isPlaying, identity
@@ -59,7 +58,6 @@ extension PlaybackEvent: Decodable {
             default: throw DecodingError.dataCorruptedError(forKey: .outcome, in: c, debugDescription: "invalid connection outcome")
             }
         case "sessionLost": self = .sessionLost(try c.decode(SessionLossReason.self, forKey: .reason))
-        case "failed":             self = .failed(PlayerError(ffiCode: try c.decode(Int32.self, forKey: .code)))
         case "volumeChanged":
             // librespot uses a u16 volume scale; the domain uses 0...1.
             let raw = try c.decode(Double.self, forKey: .volume)

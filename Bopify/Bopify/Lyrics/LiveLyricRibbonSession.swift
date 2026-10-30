@@ -41,7 +41,7 @@ final class LiveLyricRibbonSession {
         self.now = now
         self.sleep = sleep
         model = LyricRibbonModel(snapshot: LyricPlaybackSnapshot(sessionID: "none", occurrenceID: "none",
-            recordingID: "", title: "Lyrics", artist: "", positionMs: 0, durationMs: 0, isPlaying: false, seekRevision: 0))
+            recordingID: "", positionMs: 0, durationMs: 0, isPlaying: false, seekRevision: 0))
         model.setIdle(.noTrack)
     }
 
@@ -104,7 +104,7 @@ final class LiveLyricRibbonSession {
     private func readState() -> State {
         let state = player.state
         let neutral = LyricPlaybackSnapshot(sessionID: String(player.engineEpoch), occurrenceID: "none",
-            recordingID: "", title: "Lyrics", artist: "", positionMs: 0, durationMs: 0,
+            recordingID: "", positionMs: 0, durationMs: 0,
             isPlaying: false, seekRevision: player.seekRevision)
         func idle(_ reason: LyricIdleReason) -> State { .idle(reason, neutral) }
         guard player.isEngineReady else { return idle(.connecting) }
@@ -117,20 +117,18 @@ final class LiveLyricRibbonSession {
             guard uri == track.uri else { return idle(.loadingTrack) }
         }
         switch state.phase {
-        case .loading, .buffering: return idle(.loadingTrack)
+        case .loading: return idle(.loadingTrack)
         case .idle: return idle(.noTrack)
         case .error: return idle(.playbackUnavailable)
         case .playing, .paused, .ended: break
         }
-        let displayedTrack = state.queue?.current?.track ?? track
         let input = Input(epoch: player.engineEpoch, playbackRevision: player.playbackRevision,
                           queueEntryID: state.queue?.current?.id, trackURI: track.uri)
         let snapshot = LyricPlaybackSnapshot(sessionID: String(input.epoch),
             occurrenceID: "\(input.playbackRevision):\(input.queueEntryID ?? "")", recordingID: track.uri.rawValue,
-            title: displayedTrack.title, artist: displayedTrack.artists.map(\.name).joined(separator: ", "),
             positionMs: player.displayPositionMs(at: now()), durationMs: player.displayDurationMs,
             isPlaying: player.isPositionAdvancing, seekRevision: player.seekRevision,
-            artworkURL: displayedTrack.artwork?.url, direction: player.queueDirection)
+            direction: player.queueDirection)
         return .local(input, snapshot)
     }
 

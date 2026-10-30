@@ -45,7 +45,7 @@ struct PlayerRecoveryTests {
         model.start()
         engine.emit(.trackChanged(track())); engine.emit(.playing(positionMs: 3200)); engine.emit(.recoveryIdentity(identity)); engine.emit(.loading)
         await settle()
-        engine.emit(.sessionLost(.spircEnded)); engine.emit(.failed(.playbackSessionLost)); engine.finishEvents()
+        engine.emit(.sessionLost(.spircEnded)); engine.emit(.sessionLost(.playerChannelClosed)); engine.finishEvents()
         await settle()
         #expect(snapshots.count == 1)
         #expect(snapshots.first?.shouldResume == true)

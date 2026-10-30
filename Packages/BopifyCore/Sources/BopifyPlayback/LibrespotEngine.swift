@@ -2,26 +2,10 @@ import Foundation
 import BopifyDomain
 import CBopifyCore
 
-/// The real engine: owns the Rust handle, the event bridge, and the one
-/// lifetime obligation Rust cannot enforce.
-///
-/// Teardown is explicit, `shutdown()`, and never happens in `deinit`:
-/// `bopify_engine_destroy` blocks on the Rust runtime join and then on
-/// librespot's audio thread, while `deinit` runs wherever the last reference
-/// is dropped — including the main actor. An engine dropped without
-/// `shutdown()` therefore leaks the runtime and the event context rather than
-/// freeing them from the wrong thread; that trade is why `EventBridge` hands
-/// out a retained context in the first place.
-///
-/// A token refresh is a destroy-and-recreate, not an update:
-/// `bopify_update_token` always reports `SessionLost` because librespot
-/// cannot swap credentials in place. Call `shutdown()` and build a new
-/// `LibrespotEngine`; the old handle stays safe to call and answers every
-/// command with `.playbackSessionLost`.
-///
-/// `@unchecked Sendable`: the two pointers are immutable after `init`, Rust
-/// synchronises every entry point internally, and the only mutable state
-/// here — the release claim — is lock-guarded.
+/// Only `shutdown()` frees the Rust handle, never `deinit`: `bopify_engine_destroy` blocks on the runtime and audio
+/// threads and `deinit` can run on the main actor, so an engine dropped without `shutdown()` leaks instead.
+/// Librespot consumes credentials at creation, so a token refresh is `shutdown()` plus a new engine; it is
+/// `@unchecked Sendable` because the pointers never change, Rust synchronises every entry point, and the release claim is locked.
 public final class LibrespotEngine: ManagedPlaybackEngine, @unchecked Sendable {
     public var events: AsyncStream<PlaybackEvent> { bridge.events }
 
@@ -36,26 +20,19 @@ public final class LibrespotEngine: ManagedPlaybackEngine, @unchecked Sendable {
     /// Blocks for the whole network login, so it runs on the global executor
     /// rather than the caller's actor.
     @concurrent
-    public init(accessToken: String, deviceName: String, configuration: PlaybackEngineConfiguration? = nil) async throws {
-        let options = try configuration.map { String(decoding: try JSONEncoder().encode($0), as: UTF8.self) }
+    public init(accessToken: String, deviceName: String, configuration: PlaybackEngineConfiguration) async throws {
+        let options = String(decoding: try JSONEncoder().encode(configuration), as: UTF8.self)
         let bridge = EventBridge()
         // The +1 is taken before the pointer can reach Rust: the callback may
         // fire during login, before this call returns.
         let ctx = bridge.retainedContext()
         var code: Int32 = 0
         BopifyLog.playback.info("engine create starting")
-        let created: OpaquePointer?
-        if let options {
-            created = options.withCString { bopify_engine_create_with_options(accessToken, deviceName, $0, bopifyEventTrampoline, ctx, &code) }
-        } else {
-            created = bopify_engine_create(accessToken, deviceName, bopifyEventTrampoline, ctx, &code)
-        }
+        let created = options.withCString { bopify_engine_create(accessToken, deviceName, $0, bopifyEventTrampoline, ctx, &code) }
         guard let handle = created else {
-            // A null return means `Engine::new` failed, and it only fails
-            // after its `Runtime` local has been dropped — which joins every
-            // worker thread — so no callback has fired and none can. The +1
-            // is safe to give back here, and this is the only release that
-            // does not follow a destroy.
+            // A null return comes before any runtime existed or after `Engine::new`
+            // dropped its `Runtime`, which joins every worker, so no callback can
+            // fire. That makes this the one release of the +1 that needs no destroy.
             bridge.finish()
             EventBridge.releaseContext(ctx)
             let error = PlayerError(ffiCode: code)
@@ -120,13 +97,8 @@ public final class LibrespotEngine: ManagedPlaybackEngine, @unchecked Sendable {
         }
     }
 
-    // Every command is `@concurrent` because a command can block: Rust reads
-    // the `alive` flag before taking the read lock, so one that passes that
-    // check just as `bopify_engine_destroy` takes the write lock waits out the
-    // whole teardown. None of them may issue from the event callback.
-    // Logged under the domain's name, not the C function's, so a log grep
-    // matches PlayerModel's line for the same action; the Rust side logs
-    // `ffi: bopify_play` for the other half.
+    // Commands are `@concurrent` because one racing `bopify_engine_destroy` waits out the whole teardown, and none may
+    // be issued from the event callback. They log the domain's action name so a grep also matches PlayerModel's line.
     @concurrent public func resume() async throws { try perform("resume") { bopify_play(handle) } }
     @concurrent public func playHere() async throws { try perform("playHere") { bopify_play_here(handle) } }
     @concurrent public func pause() async throws { try perform("pause") { bopify_pause(handle) } }
@@ -181,7 +153,7 @@ public final class LibrespotEngine: ManagedPlaybackEngine, @unchecked Sendable {
     @concurrent
     public func requestRadio(seed: SpotifyURI) async throws -> RadioMix {
         let raw = seed.rawValue
-        return try await bridge.radio { id in
+        return try await bridge.radio(seed: seed) { id in
             try perform("requestRadio") { raw.withCString { bopify_request_radio(handle, $0, id) } }
         }
     }

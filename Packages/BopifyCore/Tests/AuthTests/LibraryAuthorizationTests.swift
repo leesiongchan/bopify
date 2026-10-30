@@ -8,6 +8,11 @@ struct LibraryAuthorizationTests {
     private let id = "25bbd3bacca4412b80f17b892072af71"
     private let other = "0123456789abcdef0123456789abcdef"
 
+    /// Users have registered this exact URI with their own Spotify apps; a change must be deliberate.
+    @Test func redirectURIMatchesWhatUsersRegistered() {
+        #expect(LibraryAuthorization.redirectURI == "http://127.0.0.1:8898/callback")
+    }
+
     /// Runs `body` against a throwaway suite named by a temp path: `removePersistentDomain` alone still
     /// leaves an empty plist in ~/Library/Preferences.
     private func withSuite(_ body: (String, UserDefaults) async throws -> Void) async rethrows {

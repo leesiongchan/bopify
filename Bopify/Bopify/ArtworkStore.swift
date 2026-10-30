@@ -75,8 +75,6 @@ final class ArtworkStore {
         return configuration
     }
 
-    convenience init(session: URLSession) { self.init(configuration: session.configuration) }
-
     #if DEBUG
     @ObservationIgnored private var paletteExtractor: (@Sendable (CGImage) async -> ArtworkPalette?)?
     convenience init(configuration: URLSessionConfiguration, imageCache: ImageCache, paletteExtractor: @escaping @Sendable (CGImage) async -> ArtworkPalette?) {

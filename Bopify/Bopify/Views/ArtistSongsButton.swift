@@ -158,8 +158,7 @@ func previewArtistSongs() -> some View {
     presentation.presentPopover(.artist)
     return ArtistSongsPopover(track: track, player: environment.player!, artworkStore: environment.artworkStore,
                               presentation: presentation) { source in
-        ArtistTopTracks(trackURI: source, artistURI: SpotifyURI("spotify:artist:preview")!,
-                        artistName: track.artists.first!.name, tracks: previewTracks)
+        ArtistTopTracks(trackURI: source, tracks: previewTracks)
     }
 }
 

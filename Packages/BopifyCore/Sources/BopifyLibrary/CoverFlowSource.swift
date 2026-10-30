@@ -31,12 +31,11 @@ public protocol CoverFlowSource: AnyObject, Observable {
     func loadMore() async
     func loadMoreIfNeeded(near uri: SpotifyURI) async
     func retry(at date: Date) async
-    func playRequest(for item: Item) -> PlayRequest
 }
 
 extension LikedSongsModel: CoverFlowSource {
     public var items: [Track] { tracks }
-    /// A liked song plays on its own, as Cover Flow always has.
+    /// A liked song plays on its own: the engine cannot load the Liked Songs collection at a start track.
     public func playRequest(for track: Track) -> PlayRequest { PlayRequest(contextURI: track.uri) }
 }
 

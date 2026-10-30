@@ -1,12 +1,10 @@
 public struct SavedTracksPage: Equatable, Sendable {
     public let tracks: [Track]
     public let nextOffset: Int?
-    public let total: Int
 
-    public init(tracks: [Track], nextOffset: Int?, total: Int) {
+    public init(tracks: [Track], nextOffset: Int?) {
         self.tracks = tracks
         self.nextOffset = nextOffset
-        self.total = total
     }
 }
 

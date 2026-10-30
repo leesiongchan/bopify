@@ -10,13 +10,8 @@ public enum QueueSelectionStatus: Equatable, Sendable {
     case failed
 }
 
-/// Folds engine events into observable state on the main actor.
-///
-/// Deliberately not an actor: this folds events into state that SwiftUI
-/// observes, so it belongs on the main actor. Blocking FFI work stays off
-/// it because `LibrespotEngine`'s methods are nonisolated and this package
-/// does not enable NonisolatedNonsendingByDefault, so awaiting them hops to
-/// the global executor.
+/// Lives on the main actor rather than being an actor because SwiftUI observes its state.
+/// Blocking FFI work stays off the main actor because `LibrespotEngine`'s methods are `@concurrent`.
 @MainActor
 @Observable
 public final class PlayerModel {
@@ -116,7 +111,7 @@ public final class PlayerModel {
                 if reportedLoss && (managedAttachment || onSessionLost != nil) { continue }
                 if managedAttachment && !isEngineReady {
                     switch event {
-                    case .sessionLost, .failed(.playbackSessionLost), .connectionReady, .recoveryIdentity: apply(event)
+                    case .sessionLost, .connectionReady, .recoveryIdentity: apply(event)
                     default: stagedEvents.append(event)
                     }
                 } else { apply(event) }
@@ -182,7 +177,17 @@ public final class PlayerModel {
         commandGeneration &+= 1
         pendingCommand?.cancel()
         cancelVolumeEditing()
-        apply(.failed(.playbackSessionLost))
+        let oldPhase = state.phase
+        let wasMirroring = state.mirror != nil
+        freezeDisplayPosition()
+        state.phase = .error(.playbackSessionLost)
+        state.isActiveDevice = false
+        // A live mirror must stop advancing under the error, same as a device that stopped.
+        if let remote = state.remote {
+            state.staleRemote = stalled(remote)
+            state.remote = nil
+        }
+        finishTransition(from: oldPhase, wasMirroring: wasMirroring)
         BopifyLog.playback.error("player session lost reason=\(reason.rawValue, privacy: .public) epoch=\(self.engineEpoch, privacy: .public)")
         onSessionLost?(reason, snapshot)
     }
@@ -546,18 +551,6 @@ public final class PlayerModel {
         case let .recoveryIdentity(identity): recoveryIdentity = identity
         case let .connectionReady(outcome): setConnectionReady(outcome)
         case let .sessionLost(reason): reportSessionLoss(reason)
-        case let .failed(error):
-            if error == .playbackSessionLost && !reportedLoss { reportSessionLoss(.legacy); return }
-            freezeDisplayPosition()
-            state.phase = .error(error)
-            let description = String(describing: error)
-            BopifyLog.playback.error("playback failed error=\(description, privacy: .public)")
-            if error == .playbackSessionLost { state.isActiveDevice = false; cancelVolumeEditing() }
-            // A live mirror must stop advancing under the error, same as a device that stopped.
-            if let remote = state.remote {
-                state.staleRemote = stalled(remote)
-                state.remote = nil
-            }
         case let .startupResolved(outcome):
             state.startup = .resolved(outcome)
             let kind = switch outcome {
@@ -576,6 +569,11 @@ public final class PlayerModel {
             state.remote = remote
             remoteUpdatedAt = .now
         }
+        finishTransition(from: oldPhase, wasMirroring: wasMirroring)
+    }
+
+    /// Bookkeeping every state change shares, whether it came from the engine or from a session loss.
+    private func finishTransition(from oldPhase: PlaybackPhase, wasMirroring: Bool) {
         if wasMirroring && state.mirror == nil { queueDirection = .fade }
         if state.phase != oldPhase {
             let old = String(describing: oldPhase)

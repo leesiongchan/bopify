@@ -25,7 +25,6 @@ public enum CoverFlowMotion {
         return Int(min(Double(count - 1), max(0, projected)))
     }
 
-    /// Resists travel past the first or last cover.
     public static func rubberBanded(_ position: Double, count: Int, resistance: Double = 0.3) -> Double {
         let upper = Double(max(0, count - 1))
         if position < 0 { return position * resistance }
@@ -33,7 +32,7 @@ public enum CoverFlowMotion {
         return position
     }
 
-    /// One wheel notch moves exactly one cover; a negative delta advances, matching the previous wheel mapping.
+    /// One wheel notch moves exactly one cover; a negative delta advances.
     public static func wheelTarget(from index: Int, delta: Double, count: Int) -> Int {
         guard delta != 0, count > 0 else { return index }
         return min(count - 1, max(0, index + (delta < 0 ? 1 : -1)))

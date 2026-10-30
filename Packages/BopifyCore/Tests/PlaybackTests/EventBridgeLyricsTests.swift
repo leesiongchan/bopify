@@ -52,7 +52,7 @@ struct EventBridgeLyricsTests {
         let clock = RecoveryTestClock()
         let bridge = EventBridge(lyricSleep: { try await clock.sleep(for: $0) })
         let (ids, sent) = AsyncStream.makeStream(of: (String, UInt64).self)
-        let radio = Task { try await bridge.radio { @Sendable id in sent.yield(("radio", id)) } }
+        let radio = Task { try await bridge.radio(seed: SpotifyURI("spotify:track:s")!) { @Sendable id in sent.yield(("radio", id)) } }
         let lyrics = Task { try await bridge.lyrics(for: track) { @Sendable id in sent.yield(("lyrics", id)) } }
         var requests: [String: UInt64] = [:]
         for await (kind, id) in ids {
@@ -62,7 +62,7 @@ struct EventBridgeLyricsTests {
         let id = try #require(requests["lyrics"])
         #expect(requests["radio"] == id)
         emit(reply(id, track), into: bridge)
-        emit(#"{"type":"radio","requestID":\#(id),"contextURI":"spotify:playlist:fixture","tracks":[]}"#, into: bridge)
+        emit(#"{"type":"radio","requestID":\#(id),"seedURI":"spotify:track:s","contextURI":"spotify:playlist:fixture","tracks":[]}"#, into: bridge)
         #expect(try await lyrics.value.trackURI == track)
         #expect(try await radio.value.contextURI.rawValue == "spotify:playlist:fixture")
         try await assertClean(clock, bridge: bridge)
@@ -137,19 +137,19 @@ struct EventBridgeLyricsTests {
         try await assertClean(clock, bridge: bridge)
     }
 
-    @Test(arguments: ["finish", "sessionLost", "failed"])
+    @Test(arguments: ["finish", "sessionLost", "unknownReason"])
     func terminalPathsFailBothChannelsAndRejectNewRequests(path: String) async throws {
         let clock = RecoveryTestClock()
         let bridge = EventBridge(lyricSleep: { try await clock.sleep(for: $0) })
         let (sent, sender) = AsyncStream.makeStream(of: Void.self)
-        let radio = Task { try await bridge.radio { @Sendable _ in sender.yield(()) } }
+        let radio = Task { try await bridge.radio(seed: SpotifyURI("spotify:track:s")!) { @Sendable _ in sender.yield(()) } }
         let lyrics = Task { try await bridge.lyrics(for: track) { @Sendable _ in sender.yield(()) } }
         var count = 0
         for await _ in sent { count += 1; if count == 2 { break } }
         switch path {
         case "finish": bridge.finish()
-        case "sessionLost": emit(#"{"type":"sessionLost","reason":"spircEnded"}"#, into: bridge)
-        default: emit(#"{"type":"failed","code":-2}"#, into: bridge)
+        case "unknownReason": emit(#"{"type":"sessionLost","reason":"teleported"}"#, into: bridge)
+        default: emit(#"{"type":"sessionLost","reason":"spircEnded"}"#, into: bridge)
         }
         await #expect(throws: PlayerError.playbackSessionLost) { _ = try await lyrics.value }
         await #expect(throws: PlayerError.playbackSessionLost) { _ = try await radio.value }
@@ -187,7 +187,7 @@ struct EventBridgeLyricsTests {
     }
 
     nonisolated private func reply(_ id: UInt64, _ uri: SpotifyURI) -> String {
-        #"{"type":"lyrics","requestID":\#(id),"trackURI":"\#(uri.rawValue)","synchronization":"lineSynced","lines":[{"text":"A quiet street","startTimeMs":1000}],"provider":"fixture","providerDisplayName":"Fixture provider","language":"en","isRightToLeft":false}"#
+        #"{"type":"lyrics","requestID":\#(id),"trackURI":"\#(uri.rawValue)","synchronization":"lineSynced","lines":[{"text":"A quiet street","startTimeMs":1000}],"provider":"fixture","providerDisplayName":"Fixture provider","isRightToLeft":false}"#
     }
 
     nonisolated private func emit(_ json: String, into bridge: EventBridge) {
