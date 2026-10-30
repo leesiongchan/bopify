@@ -1521,7 +1521,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "While reading lyrics, Space scrolls the words. Use Sync to return to the current line."
+            "value" : "While reading lyrics, Space plays or pauses, ← / → seek 5 seconds, and ⌘← / ⌘→ change tracks. Use ↑ / ↓, Page Up / Down, or Home / End to scroll. Tab to Sync and press Return to return to the current line without changing playback."
           }
         }
       }

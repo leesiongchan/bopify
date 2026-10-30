@@ -134,6 +134,7 @@ struct RecordPlayerView: View {
                     .background(PlayerBackgroundDragRegion())
             }
             .scrollIndicators(.never)
+            .scrollBounceBehavior(.basedOnSize, axes: [.horizontal, .vertical])
             .frame(width: layout.controlsFrame.width, height: layout.controlsFrame.height)
             .offset(x: layout.controlsFrame.minX, y: layout.controlsFrame.minY)
             .allowsHitTesting(isEngaged)

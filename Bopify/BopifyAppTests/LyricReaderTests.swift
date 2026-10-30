@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import BopifyPlayback
 import CoreGraphics
 import QuartzCore
@@ -199,6 +200,94 @@ struct LyricReaderTests {
 
         #expect(readingRequests == 1)
         #expect(reader.scroll.contentView.bounds.minY < before)
+    }
+
+    @Test func focusedReaderForwardsPlaybackKeysWithoutScrollingOrChangingSelection() throws {
+        _ = NSApplication.shared
+        let reader = try LyricReaderFixture()
+        reader.update(position: 3_000, reading: true)
+        let panel = StatusPanel(content: EmptyView())
+        panel.isReleasedWhenClosed = false
+        panel.contentView = reader.scroll
+        defer { panel.orderOut(nil); panel.close() }
+        panel.focusLyrics(keepingPlayerExpanded: false)
+        try #require(panel.firstResponder === reader.view)
+        reader.view.setSelectedRange(NSRange(location: 2, length: 4))
+        let selection = reader.view.selectedRange()
+        let origin = reader.scroll.contentView.bounds.origin
+        var playback = 0, previous = 0, next = 0, reading = 0
+        var seeks: [Int64] = []
+        panel.onTogglePlayback = { playback += 1 }
+        panel.onSeek = { seeks.append($0) }
+        panel.onPrevious = { previous += 1 }
+        panel.onNext = { next += 1 }
+        reader.view.onBeginReading = { reading += 1 }
+        func event(_ key: Int, modifiers: NSEvent.ModifierFlags = [], repeat repeating: Bool = false) throws -> NSEvent {
+            try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: modifiers,
+                timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: "",
+                charactersIgnoringModifiers: "", isARepeat: repeating, keyCode: UInt16(key)))
+        }
+
+        reader.view.keyDown(with: try event(kVK_Space))
+        reader.view.keyDown(with: try event(kVK_Space, repeat: true))
+
+        reader.view.keyDown(with: try event(kVK_LeftArrow))
+        reader.view.keyDown(with: try event(kVK_LeftArrow, repeat: true))
+        reader.view.keyDown(with: try event(kVK_RightArrow, modifiers: [.numericPad, .function]))
+        #expect(reader.view.performKeyEquivalent(with: try event(kVK_LeftArrow, modifiers: .command)))
+        #expect(reader.view.performKeyEquivalent(with: try event(kVK_LeftArrow, modifiers: .command, repeat: true)))
+        reader.view.keyDown(with: try event(kVK_RightArrow, modifiers: .command))
+        reader.view.keyDown(with: try event(kVK_RightArrow, modifiers: .command, repeat: true))
+
+        #expect(playback == 1 && previous == 1 && next == 1)
+        #expect(seeks == [-5000, -5000, 5000])
+        #expect(reading == 0)
+        #expect(reader.view.selectedRange() == selection)
+        #expect(reader.scroll.contentView.bounds.origin == origin)
+        for modifiers: NSEvent.ModifierFlags in [.shift, .option, .control, [.command, .shift]] {
+            reader.view.keyDown(with: try event(kVK_Space, modifiers: modifiers))
+            reader.view.keyDown(with: try event(kVK_LeftArrow, modifiers: modifiers))
+            reader.view.keyDown(with: try event(kVK_RightArrow, modifiers: modifiers))
+        }
+        #expect(playback == 1 && previous == 1 && next == 1)
+        #expect(seeks == [-5000, -5000, 5000])
+    }
+
+    @Test func lyricTabAndReturnRespectModifiersRepeatsAndTextEditing() throws {
+        _ = NSApplication.shared
+        let reader = try LyricReaderFixture()
+        reader.update(position: 3_000, reading: true)
+        let panel = StatusPanel(content: EmptyView())
+        panel.isReleasedWhenClosed = false
+        panel.contentView = reader.scroll
+        defer { panel.orderOut(nil); panel.close() }
+        panel.focusLyrics(keepingPlayerExpanded: false)
+        var tabs = 0, activations = 0, playback = 0
+        panel.onLyricTab = { tabs += 1 }
+        panel.onLyricActivate = { activations += 1 }
+        panel.onTogglePlayback = { playback += 1 }
+        func event(_ key: Int, modifiers: NSEvent.ModifierFlags = [], repeat repeating: Bool = false) throws -> NSEvent {
+            try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: modifiers,
+                timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: "",
+                charactersIgnoringModifiers: "", isARepeat: repeating, keyCode: UInt16(key)))
+        }
+
+        reader.view.keyDown(with: try event(kVK_Tab))
+        reader.view.keyDown(with: try event(kVK_Tab, modifiers: .shift))
+        reader.view.keyDown(with: try event(kVK_Return))
+        reader.view.keyDown(with: try event(kVK_Return, repeat: true))
+        panel.keyDown(with: try event(kVK_Return, modifiers: .command))
+        panel.keyDown(with: try event(kVK_Tab, modifiers: .command))
+        #expect(tabs == 2 && activations == 1 && playback == 0)
+
+        let field = NSTextField(frame: CGRect(x: 0, y: 0, width: 200, height: 24))
+        panel.contentView?.addSubview(field)
+        panel.makeFirstResponder(field)
+        try #require(field.currentEditor() === panel.firstResponder)
+        for key in [kVK_Space, kVK_Return, kVK_Tab] {
+            panel.keyDown(with: try event(key))
+        }
+        #expect(tabs == 2 && activations == 1 && playback == 0)
     }
 
     @Test func cueEmphasisUsesOneGlyphLayerAndRetainsNativeTextAndSelection() throws {

@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import SwiftUI
 import QuartzCore
 import BopifyPlayback
@@ -422,7 +423,21 @@ final class LyricReadingTextView: NSTextView {
         super.mouseDown(with: event)
     }
     override func cancelOperation(_ sender: Any?) { window?.cancelOperation(sender) }
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if !isEditable, let panel = window as? StatusPanel, panel.firstResponder === self,
+           panel.handlePlaybackShortcut(with: event) { return true }
+        return super.performKeyEquivalent(with: event)
+    }
     override func keyDown(with event: NSEvent) {
+        if !isEditable, let panel = window as? StatusPanel {
+            if panel.handlePlaybackShortcut(with: event) { return }
+            let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+            if (event.keyCode == kVK_Tab && (modifiers.isEmpty || modifiers == .shift))
+                || (event.keyCode == kVK_Return && modifiers.isEmpty) {
+                panel.keyDown(with: event)
+                return
+            }
+        }
         if event.keyCode == 53 { cancelOperation(nil); return }
         guard !event.modifierFlags.contains(.command), let scroll = enclosingScrollView else { super.keyDown(with: event); return }
         if event.keyCode == 48 {

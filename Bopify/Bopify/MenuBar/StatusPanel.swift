@@ -1,6 +1,8 @@
 import AppKit
+import BopifyDomain
 import Carbon.HIToolbox
 import SwiftUI
+import os
 
 protocol PlayerShortcutForwarding {}
 
@@ -34,7 +36,7 @@ final class StatusPanel: NSPanel {
                    backing: .buffered, defer: false)
         isFloatingPanel = false
         level = .normal
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        collectionBehavior = [.canJoinAllSpaces]
         hidesOnDeactivate = false
         isMovable = true
         backgroundColor = .clear
@@ -53,8 +55,19 @@ final class StatusPanel: NSPanel {
     }
 
     override var canBecomeKey: Bool { !isHandlingPassiveLyrics }
-    override func becomeKey() { super.becomeKey(); onKeyChanged?(!isFocusingLyrics || lyricFocusKeepsPlayerExpanded) }
-    override func resignKey() { super.resignKey(); endLyricsFocus(); onKeyChanged?(false) }
+    override func becomeKey() {
+        super.becomeKey()
+        collectionBehavior.insert(.fullScreenAuxiliary)
+        BopifyLog.playback.debug("player panel fullscreen eligibility enabled")
+        onKeyChanged?(!isFocusingLyrics || lyricFocusKeepsPlayerExpanded)
+    }
+    override func resignKey() {
+        super.resignKey()
+        collectionBehavior.remove(.fullScreenAuxiliary)
+        BopifyLog.playback.debug("player panel fullscreen eligibility disabled")
+        endLyricsFocus()
+        onKeyChanged?(false)
+    }
     override func animationResizeTime(_ newFrame: NSRect) -> TimeInterval { 0.36 }
 
     override func cancelOperation(_ sender: Any?) {
@@ -142,15 +155,27 @@ final class StatusPanel: NSPanel {
     }
 
     override func keyDown(with event: NSEvent) {
-        if isFocusingLyrics {
-            if event.keyCode == kVK_Tab { onLyricTab?(); return }
-            if event.keyCode == kVK_Space || event.keyCode == kVK_Return,
-               !(firstResponder is LyricReadingTextView) { onLyricActivate?(); return }
-        }
-        guard !(firstResponder is NSTextView), !(firstResponder is NSControl) || firstResponder is PlayerShortcutForwarding else {
+        let isLyricReader = (firstResponder as? LyricReadingTextView)?.isEditable == false
+        guard !(firstResponder is NSTextView) || isLyricReader else {
             super.keyDown(with: event)
             return
         }
+        let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        if isFocusingLyrics {
+            if event.keyCode == kVK_Tab, modifiers.isEmpty || modifiers == .shift { onLyricTab?(); return }
+            if event.keyCode == kVK_Return, modifiers.isEmpty {
+                if !event.isARepeat { onLyricActivate?() }
+                return
+            }
+        }
+        guard !(firstResponder is NSControl) || firstResponder is PlayerShortcutForwarding else {
+            super.keyDown(with: event)
+            return
+        }
+        if !handlePlaybackShortcut(with: event) { super.keyDown(with: event) }
+    }
+
+    func handlePlaybackShortcut(with event: NSEvent) -> Bool {
         let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
         switch (Int(event.keyCode), modifiers) {
         case (kVK_Space, []): if !event.isARepeat { onTogglePlayback?() }
@@ -158,8 +183,9 @@ final class StatusPanel: NSPanel {
         case (kVK_RightArrow, []): onSeek?(5000)
         case (kVK_LeftArrow, .command): if !event.isARepeat { onPrevious?() }
         case (kVK_RightArrow, .command): if !event.isARepeat { onNext?() }
-        default: super.keyDown(with: event)
+        default: return false
         }
+        return true
     }
 }
 

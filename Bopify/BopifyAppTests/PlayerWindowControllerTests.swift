@@ -5,6 +5,46 @@ import BopifyPlayback
 
 @MainActor @Suite("Player window", .serialized)
 struct PlayerWindowControllerTests {
+    @Test(arguments: [false, true])
+    func fullscreenEligibilityFollowsActualFocusWithoutChangingDesktopLevel(floating: Bool) throws {
+        _ = NSApplication.shared
+        let panel = StatusPanel(content: EmptyView())
+        panel.isReleasedWhenClosed = false
+        defer { panel.orderOut(nil); panel.close() }
+        let level: NSWindow.Level = floating ? .floating : .normal
+        panel.level = level
+        panel.orderFrontRegardless()
+        #expect(!panel.isKeyWindow)
+        #expect(!panel.collectionBehavior.contains(.fullScreenAuxiliary))
+
+        panel.makeKeyAndOrderFront(nil)
+        #expect(panel.isKeyWindow)
+        #expect(panel.collectionBehavior.contains(.fullScreenAuxiliary))
+        let other = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 200, height: 100),
+                             styleMask: [.titled], backing: .buffered, defer: false)
+        other.isReleasedWhenClosed = false
+        defer { other.close() }
+        other.makeKeyAndOrderFront(nil)
+        #expect(!panel.isKeyWindow)
+        #expect(!panel.collectionBehavior.contains(.fullScreenAuxiliary))
+        #expect(panel.level == level)
+        #expect(panel.collectionBehavior.contains(.canJoinAllSpaces))
+
+        var playerFocus: Bool?
+        panel.onKeyChanged = { playerFocus = $0 }
+        panel.focusLyrics(keepingPlayerExpanded: false)
+        #expect(panel.isKeyWindow)
+        #expect(playerFocus == false)
+        #expect(panel.collectionBehavior.contains(.fullScreenAuxiliary))
+        panel.orderOut(nil)
+        #expect(!panel.collectionBehavior.contains(.fullScreenAuxiliary))
+        panel.orderFrontRegardless()
+        #expect(!panel.collectionBehavior.contains(.fullScreenAuxiliary))
+        panel.focusPlayer()
+        #expect(panel.isKeyWindow)
+        #expect(panel.collectionBehavior.contains(.fullScreenAuxiliary))
+    }
+
     @Test func interruptedLyricTransitionsKeepTheNewestFrameAndAnchor() throws {
         _ = NSApplication.shared
         let suite = "lyrics-interrupt-\(UUID().uuidString)"

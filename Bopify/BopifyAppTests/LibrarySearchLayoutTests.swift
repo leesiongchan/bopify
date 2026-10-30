@@ -41,31 +41,41 @@ struct LibrarySearchLayoutTests {
         #expect(requests.first?.contextURI == next)
     }
 
-    @Test func narrowPlayerCanScrollToEveryControl() async throws {
+    @Test(arguments: [484.0, 350.0])
+    func controlsOnlyBounceWhenContentOverflows(width: CGFloat) async throws {
         let environment = makePreviewEnvironment(.paused)
         defer { environment.player?.stop() }
         let presentation = environment.presentation
         presentation.sendAttention(.visibility(true))
         presentation.sendAttention(.keyboardFocus(true))
-        let suite = "\(NSTemporaryDirectory())bopify-narrow-controls-\(UUID().uuidString)"
+        let suite = "\(NSTemporaryDirectory())bopify-controls-bounce-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let controller = PlayerWindowController(defaults: defaults)
         let content = RecordPlayerView(player: try #require(environment.player), artworkStore: environment.artworkStore,
                                       presentation: presentation, windowController: controller)
-            .environment(environment).frame(width: 350, height: 360)
+            .environment(environment).frame(width: width, height: 360)
         let panel = StatusPanel(content: content)
         panel.isReleasedWhenClosed = false
         defer { panel.close() }
         controller.attach(to: panel)
-        controller.apply(mode: .expanded, reduceMotion: true, visibleFrame: CGRect(x: 0, y: 0, width: 350, height: 360))
+        controller.apply(mode: .expanded, reduceMotion: true, visibleFrame: CGRect(x: 0, y: 0, width: width, height: 360))
         panel.makeKeyAndOrderFront(nil)
         try await Task.sleep(for: .milliseconds(200))
         panel.contentView?.layoutSubtreeIfNeeded()
-        let scroll = try #require(scrollViews(in: panel.contentView).first { abs($0.frame.width - 176) < 1 })
-        #expect((scroll.documentView?.frame.width ?? 0) >= 192)
+        let scroll = try #require(scrollViews(in: panel.contentView).first {
+            abs($0.frame.width - controller.layout.controlsFrame.width) < 1
+        })
+        #expect(scroll.verticalScrollElasticity == .none)
         #expect(scroll.horizontalScroller?.isHidden != false)
         #expect(scroll.verticalScroller?.isHidden != false)
+        if width == 484 {
+            #expect(scroll.horizontalScrollElasticity == .none)
+            #expect((scroll.documentView?.frame.height ?? 0) <= scroll.contentView.bounds.height + 1)
+        } else {
+            #expect((scroll.documentView?.frame.width ?? 0) >= 192)
+            #expect((scroll.documentView?.frame.width ?? 0) > scroll.contentView.bounds.width)
+        }
     }
 
     private func waitUntil(_ condition: () -> Bool) async throws {
