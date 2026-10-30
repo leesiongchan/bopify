@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Bopify/Bopify/AppIcon.icon/Assets/BopRecord.png" alt="Bopify record icon" width="160">
+  <img src="site/assets/icon.png" alt="Bopify record icon" width="160">
 </p>
 
 <h1 align="center">Bopify</h1>

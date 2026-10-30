@@ -1,6 +1,6 @@
 # Bopify product page
 
-Static HTML and CSS with a continuously spinning record that respects reduced-motion preferences. No JavaScript, install or build is required.
+Static HTML and CSS with olive corduroy, frosted sleeve surfaces, and the app’s native black vinyl artwork. Interactive transitions respect reduced-motion preferences. No JavaScript, install or build is required.
 
 Preview from the repository root:
 
@@ -16,4 +16,4 @@ The expected public address is `https://leesiongchan.github.io/bopify/`.
 The workflow publishes only the HTML, CSS and assets; this README is excluded.
 
 Download links use GitHub's latest release page so a new app release needs no website edit.
-The screenshot and icon are copied from the app; refresh these assets when the app's appearance changes.
+The icon and vinyl use the app’s artwork. The product image combines the existing player capture with its native black vinyl renderer; refresh these assets when the app’s appearance changes.

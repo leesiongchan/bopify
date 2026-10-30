@@ -1,17 +1,17 @@
 {
   "fill": {
-    "solid": "srgb:0.65000,0.85000,0.74000,1.00000"
+    "solid": "srgb:0.27000,0.30000,0.16000,1.00000"
   },
   "groups": [
     {
       "name": "Bop record",
       "layers": [
         {
-          "name": "Vinyl and frosted sleeve",
+          "name": "Onboarding vinyl on corduroy",
           "image-name": "BopRecord.png",
           "glass": false,
           "position": {
-            "scale": 1.28,
+            "scale": 1,
             "translation-in-points": [
               0,
               0

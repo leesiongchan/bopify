@@ -188,7 +188,6 @@ struct RecordPreviewScene: View {
     let fixture: RecordPreviewFixture
     @State private var rotation = RecordRotation()
     @State private var isCoasting = false
-    @State private var pressing = PressingAppearance.neutral
     private var motorRequest: RecordMotorRequest {
         !fixture.isVisible || fixture.reduceMotion ? .snap : fixture.isPlaying ? .drive : .brake
     }
@@ -197,7 +196,6 @@ struct RecordPreviewScene: View {
                         diameter: fixture.diameter,
                         isMoving: motorRequest != .snap && (fixture.isPlaying || isCoasting) && rotation.isMoving(at: ProcessInfo.processInfo.systemUptime),
                         isVisible: fixture.isVisible, rotation: rotation,
-                        pressingSeed: pressing.seed, palette: pressing.palette,
                         reduceMotionOverride: fixture.reduceMotion)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .onChange(of: motorRequest, initial: true) { _, request in
@@ -215,19 +213,6 @@ struct RecordPreviewScene: View {
             .onDisappear {
                 rotation.setRunning(false, at: ProcessInfo.processInfo.systemUptime, stopStyle: .snap)
                 isCoasting = false
-            }
-            .task(id: fixture.isArtworkMissing ? -1 : fixture.index) {
-                let index = fixture.index
-                let seed = PressingSeed.offset(previewTracks[index].uri.rawValue)
-                if fixture.isArtworkMissing {
-                    pressing = PressingAppearance(seed: seed, palette: .neutral)
-                    return
-                }
-                let url = previewArtworkURL(index)
-                await fixture.artworkStore.loadPalette(url)
-                guard !Task.isCancelled, index == fixture.index else { return }
-                pressing = PressingAppearance(seed: seed,
-                                              palette: fixture.artworkStore.palette(for: url) ?? .neutral)
             }
     }
 }

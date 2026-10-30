@@ -28,7 +28,6 @@ struct RecordPlayerView: View {
     @State private var rotation = RecordRotation()
     @State private var isCoasting = false
     @State private var appliedMotorRequest: RecordMotorRequest?
-    @State private var displayedPressing = PressingAppearance.neutral
     @State private var loadedArtwork: LoadedArtwork?
     @State private var loadedArtworkRequest: ArtworkLoadRequest?
     @State private var scrub: RecordScrub?
@@ -269,9 +268,6 @@ struct RecordPlayerView: View {
             loadedArtwork = artwork
             loadedArtworkRequest = ArtworkLoadRequest(url: request.artworkURL, retryRevision: request.retryRevision,
                                                      sessionRevision: request.sessionRevision)
-            let palette = artwork?.palette ?? .neutral
-            let ready = PressingAppearance(seed: request.uri.map(PressingSeed.offset) ?? 0, palette: palette)
-            displayedPressing = ready
         }
     }
 
@@ -279,7 +275,6 @@ struct RecordPlayerView: View {
         VinylRecordView(image: image, occurrenceID: occurrenceID, direction: direction, diameter: diameter,
                         isMoving: isMoving,
                         isVisible: presentation.isVisible, rotation: rotation,
-                        pressingSeed: displayedPressing.seed, palette: displayedPressing.palette,
                         rotationOverride: pressedAngle.map { $0 + (scrub?.angleDelta ?? 0) }, isScrubbing: pressedAngle != nil,
                         isEngaged: isEngaged, reduceMotionOverride: reduceMotion)
             .overlay {

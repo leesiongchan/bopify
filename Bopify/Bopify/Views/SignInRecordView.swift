@@ -204,9 +204,7 @@ private struct RecordDisc: View {
                 .offset(y: 2.5)
                 .shadow(color: .black.opacity(0.55), radius: 8, y: 8)
             // Lighting is fixed, so the grooves don't turn; only the label and dust reveal the spin.
-            Rectangle().fill(.black)
-                .colorEffect(ShaderLibrary.vinylDisc(.float2(Float(size), Float(size))))
-                .clipShape(Circle())
+            VinylPressingView(diameter: size)
             ZStack {
                 RecordDust()
                 RecordLabel(side: side, isSad: isSad).frame(width: label, height: label)
@@ -292,7 +290,7 @@ private struct RecordLabel: View {
 }
 
 /// Dust and hairline scratches: the only asymmetric marks on the disc, so they turn with the label.
-private struct RecordDust: View {
+struct RecordDust: View {
     private static func hash(_ n: Double) -> Double {
         let s = sin(n * 127.1) * 43758.5453
         return s - s.rounded(.down)
