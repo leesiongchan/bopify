@@ -50,6 +50,7 @@ final class AppEnvironment {
     @ObservationIgnored private var libraryConsentRequired = false
     private(set) var recovery: PlaybackRecoveryCoordinator?
     var connectionStatus: PlaybackConnectionStatus { recovery?.status ?? .ready }
+    var hasPlaybackConnected: Bool { recovery?.hasBeenReady ?? false }
     @ObservationIgnored private var connectionMonitor: PlaybackConnectionMonitor?
     @ObservationIgnored private var sessionGeneration = 0
     @ObservationIgnored private var makeRecoveryEngine: @Sendable (String, PlaybackEngineConfiguration) async throws -> any ManagedPlaybackEngine = { token, options in

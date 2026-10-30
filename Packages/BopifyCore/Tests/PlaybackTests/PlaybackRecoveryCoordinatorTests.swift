@@ -34,6 +34,22 @@ struct PlaybackRecoveryCoordinatorTests {
         #expect(recoveryRetryDelay(failureCount: 6, jitterUnit: 1) == .seconds(30))
         #expect(recoveryRetryDelay(failureCount: Int.max, jitterUnit: 0) == .seconds(15))
     }
+    @Test func hasBeenReadyDistinguishesFirstConnectionFromReconnection() async {
+        let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
+        let recovery = coordinator(gate, clock)
+        recovery.start(); await gate.waitForCreationCount(1)
+        gate.failNext(with: .networkUnavailable); await settle()
+        #expect(recovery.status == .reconnecting)
+        #expect(!recovery.hasBeenReady)
+        clock.advance(by: .seconds(1)); await gate.waitForCreationCount(2)
+        let engine = RecoveryStubEngine(); gate.succeedNext(with: engine); await settle()
+        engine.emit(.connectionReady(.remote)); await settle()
+        #expect(recovery.hasBeenReady)
+        recovery.reportSessionLoss(.sessionDisconnected, epoch: recovery.player.engineEpoch)
+        #expect(recovery.status == .reconnecting)
+        #expect(recovery.hasBeenReady)
+        await recovery.stop()
+    }
     @Test func lossImmediatelyAfterReadinessCannotLeaveADeadEngineReady() async {
         let gate = RecoveryFactoryGate(), clock = RecoveryTestClock(), engine = RecoveryStubEngine()
         let recovery = coordinator(gate, clock)

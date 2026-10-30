@@ -137,6 +137,17 @@
         }
       }
     },
+    "connection.connecting" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connecting…"
+          }
+        }
+      }
+    },
     "connection.offline" : {
       "extractionState" : "manual",
       "localizations" : {

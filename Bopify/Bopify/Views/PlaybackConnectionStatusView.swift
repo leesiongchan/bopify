@@ -5,6 +5,8 @@ import BopifyDomain
 struct PlaybackConnectionStatusView: View {
     let status: PlaybackConnectionStatus
     let restorationUnavailable: Bool
+    /// The coordinator reports `.reconnecting` even before the first connection, so wording keys off history.
+    let hasConnected: Bool
     let onRetry: () -> Void
     let onReconnect: () -> Void
     var isAuthorizing = false
@@ -34,7 +36,8 @@ struct PlaybackConnectionStatusView: View {
             case .credentialSaveFailed: "error.credentialSaveFailed"
             case .unknown: "error.unknown"
             }
-        default: "connection.reconnecting"
+        case .connecting, .restoring, .reconnecting, .stopped:
+            hasConnected ? "connection.reconnecting" : "connection.connecting"
         }
     }
     var messageString: String { String(localized: String.LocalizationValue(messageKey)) }

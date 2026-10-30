@@ -44,7 +44,7 @@ public final class PlaybackRecoveryCoordinator {
     private var active = false
     private var networkAvailable = true
     private var sleeping = false
-    private var hasBeenReady = false
+    public private(set) var hasBeenReady = false
     private var snapshot: PlaybackRecoverySnapshot?
     private var failureCount = 0
     private var immediateRecoveryUsed = false

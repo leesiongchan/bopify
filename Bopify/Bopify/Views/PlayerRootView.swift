@@ -31,7 +31,7 @@ struct PlayerRootView: View {
                         case .signedIn:
                             if let player = environment.player {
                                 if environment.connectionStatus != .ready || player.restorationUnavailable {
-                                    PlaybackConnectionStatusView(status: environment.connectionStatus, restorationUnavailable: player.restorationUnavailable, onRetry: environment.retryPlaybackConnection, onReconnect: { Task { await environment.reconnectSpotify() } }, isAuthorizing: environment.isAuthorizingPlayback, onCancel: environment.cancelPlaybackAuthorization)
+                                    PlaybackConnectionStatusView(status: environment.connectionStatus, restorationUnavailable: player.restorationUnavailable, hasConnected: environment.hasPlaybackConnected, onRetry: environment.retryPlaybackConnection, onReconnect: { Task { await environment.reconnectSpotify() } }, isAuthorizing: environment.isAuthorizingPlayback, onCancel: environment.cancelPlaybackAuthorization)
                                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                                 } else {
                                     StartupPlayerContent(player: player)
