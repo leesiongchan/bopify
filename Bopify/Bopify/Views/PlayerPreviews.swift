@@ -232,4 +232,27 @@ struct RecordPreviewScene: View {
 }
 
 #Preview("Vinyl record") { RecordPreviewScene(fixture: RecordPreviewFixture()).frame(width: 264, height: 264) }
+
+private struct VinylDesignPreview: View {
+    let palette: ArtworkPalette
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.fixed(160)), count: 3), spacing: 16) {
+            ForEach(VinylDesign.allCases, id: \.rawValue) { design in
+                VStack(spacing: 8) {
+                    VinylPressingView(seed: 42, palette: palette, design: design, diameter: 144)
+                    Text(LocalizedStringKey(design.nameKey)).font(.caption)
+                }
+            }
+        }.padding(20)
+    }
+}
+
+#Preview("Vinyl designs – warm") {
+    VinylDesignPreview(palette: .marble(ArtworkColor(red: 0.93, green: 0.51, blue: 0.45),
+        ArtworkColor(red: 0.73, green: 0.84, blue: 0.76), ArtworkColor(red: 0.96, green: 0.87, blue: 0.61)))
+}
+#Preview("Vinyl designs – cool") {
+    VinylDesignPreview(palette: .marble(ArtworkColor(red: 0.88, green: 0.51, blue: 0.70),
+        ArtworkColor(red: 0.45, green: 0.77, blue: 0.90), ArtworkColor(red: 0.85, green: 0.90, blue: 0.88)))
+}
 #endif

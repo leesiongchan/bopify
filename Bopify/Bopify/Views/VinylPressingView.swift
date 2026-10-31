@@ -41,8 +41,19 @@ struct VinylPressingView: View {
         case .undertow, .drift, .strata:
             let style: Float = design == .undertow ? 0 : design == .drift ? 1 : 2
             return library.vinylContours(size, .float(seed), .color(c0.color), .color(c1.color), .color(c2.color), .float(style))
-        case .original, .bloom, .rhapsody, .carnival:
+        case .original:
             return library.pressing(size, .float(seed), .color(c0.color), .color(c1.color), .color(c2.color))
+        case .bloom, .rhapsody, .carnival:
+            let colors = VinylDesignPalette.resolve(.marble(c0, c1, c2), design: design)!
+            let arguments: [Shader.Argument] = [size, .float(seed), .color(colors.primary.color),
+                .color(colors.secondary.color), .color(colors.accent.color), .color(colors.paper.color)]
+            let function: ShaderFunction
+            switch design {
+            case .bloom: function = library.vinylBloom
+            case .rhapsody: function = library.vinylRhapsody
+            default: function = library.vinylCarnival
+            }
+            return Shader(function: function, arguments: arguments)
         }
     }
 }
