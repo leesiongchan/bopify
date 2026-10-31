@@ -6,6 +6,10 @@ import Testing
 
 @MainActor enum VinylRenderingFixture {
     static let directory = URL(fileURLWithPath: "/tmp/bopify-vinyl-validation", isDirectory: true)
+    static let captureRequests = directory.appendingPathComponent("capture-requests", isDirectory: true)
+    static var canCapture: Bool {
+        CGPreflightScreenCaptureAccess() || FileManager.default.fileExists(atPath: captureRequests.appendingPathComponent("ready").path)
+    }
     static let warm = ArtworkPalette.marble(
         ArtworkColor(red: 0.9333, green: 0.5098, blue: 0.4510),
         ArtworkColor(red: 0.7255, green: 0.8392, blue: 0.7608),
@@ -24,15 +28,35 @@ import Testing
         window.contentView = NSHostingView(rootView: content.frame(width: size.width, height: size.height).background(.black))
         defer { window.close() }
         window.orderFrontRegardless()
+        return try await capture(window, to: url)
+    }
+
+    static func capture(_ window: NSWindow, to url: URL) async throws -> NSBitmapImageRep {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         window.contentView?.layoutSubtreeIfNeeded()
         window.displayIfNeeded()
         try await Task.sleep(for: .milliseconds(150))
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-        process.arguments = ["-x", "-o", "-l", String(window.windowNumber), url.path]
-        try process.run()
-        process.waitUntilExit()
-        try #require(process.terminationStatus == 0, "Window-server capture must succeed")
+        if FileManager.default.fileExists(atPath: captureRequests.appendingPathComponent("ready").path) {
+            let id = UUID().uuidString
+            let request = captureRequests.appendingPathComponent("\(id).request")
+            let response = captureRequests.appendingPathComponent("\(id).response")
+            defer { try? FileManager.default.removeItem(at: response) }
+            let payload: [String: Any] = ["window": window.windowNumber, "pid": ProcessInfo.processInfo.processIdentifier, "file": url.lastPathComponent]
+            try JSONSerialization.data(withJSONObject: payload).write(to: request, options: .atomic)
+            let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+            while !FileManager.default.fileExists(atPath: response.path), ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            let status = try String(contentsOf: response, encoding: .utf8)
+            try #require(status == "ok", "Host window capture failed: \(status)")
+        } else {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+            process.arguments = ["-x", "-o", "-l", String(window.windowNumber), url.path]
+            try process.run()
+            process.waitUntilExit()
+            try #require(process.terminationStatus == 0, "Window-server capture must succeed")
+        }
         return try #require(NSBitmapImageRep(data: Data(contentsOf: url)))
     }
 

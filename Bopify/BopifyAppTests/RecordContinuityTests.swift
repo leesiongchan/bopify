@@ -8,6 +8,58 @@ import BopifyPlayback
 
 @MainActor @Suite("Record continuity", .serialized)
 struct RecordContinuityTests {
+    @Test(.enabled("Requires screen capture or host capture helper") { @MainActor in VinylRenderingFixture.canCapture })
+    func globalStyleUpdatesWithoutChangingLabelOrPlayback() async throws {
+        let track = previewTracks[0]
+        let store = ArtworkStore(previewImages: [track.artwork!.url: artwork(.red)])
+        _ = await store.loadPalette(track.artwork!.url)
+        let engine = LiveLyricTestEngine()
+        let player = PlayerModel(engine: engine)
+        player.applyPreviewEvents([.trackChanged(track), .paused(positionMs: 0)])
+        player.start()
+        defer { player.stop() }
+        let service = ContinuityLibrary(track: previewTracks[1])
+        let environment = AppEnvironment(previewPlayer: player, favoriteService: service,
+            savedTracksService: service, artworkStore: store)
+        environment.presentation.sendAttention(.visibility(true))
+        environment.presentation.sendAttention(.keyboardFocus(true))
+        let suite = "bopify-style-player-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let controller = PlayerWindowController(defaults: defaults)
+        let panel = StatusPanel(content: RecordPlayerView(player: player, artworkStore: store,
+            presentation: environment.presentation, windowController: controller)
+            .environment(environment).defaultAppStorage(defaults))
+        panel.isReleasedWhenClosed = false
+        defer { panel.close() }
+        controller.attach(to: panel)
+        controller.apply(mode: .expanded, reduceMotion: true, visibleFrame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        panel.orderFrontRegardless()
+        try await Task.sleep(for: .milliseconds(800))
+        let beforeLabel = try samplePhoto(panel, layout: controller.layout)
+        let before = try await VinylRenderingFixture.capture(panel,
+            to: VinylRenderingFixture.directory.appendingPathComponent("player-original.png"))
+        defaults.set("carnival", forKey: VinylDesign.preferenceKey)
+        try await Task.sleep(for: .milliseconds(400))
+        let afterLabel = try samplePhoto(panel, layout: controller.layout)
+        let after = try await VinylRenderingFixture.capture(panel,
+            to: VinylRenderingFixture.directory.appendingPathComponent("player-carnival.png"))
+        #expect(abs(beforeLabel.redComponent - afterLabel.redComponent) < 0.01)
+        #expect(abs(beforeLabel.blueComponent - afterLabel.blueComponent) < 0.01)
+        #expect(player.state.currentTrack?.uri == track.uri)
+        #expect(engine.loadRequests.isEmpty)
+        let host = try #require(panel.contentView)
+        let scale = CGFloat(before.pixelsWide) / host.bounds.width
+        let layout = controller.layout
+        let rect = CGRect(x: layout.recordCenter.x - layout.recordDiameter / 2,
+            y: layout.recordCenter.y - layout.recordDiameter / 2,
+            width: layout.recordDiameter, height: layout.recordDiameter)
+            .applying(CGAffineTransform(scaleX: scale, y: scale))
+        let oldRecord = NSBitmapImageRep(cgImage: try #require(before.cgImage?.cropping(to: rect)))
+        let newRecord = NSBitmapImageRep(cgImage: try #require(after.cgImage?.cropping(to: rect)))
+        #expect(VinylRenderingFixture.differingAnnulusFraction(oldRecord, newRecord) > 0.10)
+    }
+
     @Test func collapsingDuringArrivalKeepsTheOldPhotoUnderneath() async throws {
         let old = previewTracks[1]
         let next = previewTracks[0]

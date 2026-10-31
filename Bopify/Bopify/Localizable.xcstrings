@@ -2012,6 +2012,146 @@
         }
       }
     },
+    "menu.vinylDesign": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vinyl Design…"
+          }
+        }
+      }
+    },
+    "vinyl.design.bloom": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bloom"
+          }
+        }
+      }
+    },
+    "vinyl.design.carnival": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carnival"
+          }
+        }
+      }
+    },
+    "vinyl.design.drift": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drift"
+          }
+        }
+      }
+    },
+    "vinyl.design.original": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Original"
+          }
+        }
+      }
+    },
+    "vinyl.design.rhapsody": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rhapsody"
+          }
+        }
+      }
+    },
+    "vinyl.design.strata": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Strata"
+          }
+        }
+      }
+    },
+    "vinyl.design.undertow": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Undertow"
+          }
+        }
+      }
+    },
+    "vinyl.mutedHelp": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muted covers keep a subtle tint."
+          }
+        }
+      }
+    },
+    "vinyl.notSelected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not selected"
+          }
+        }
+      }
+    },
+    "vinyl.originalHelp": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current appearance"
+          }
+        }
+      }
+    },
+    "vinyl.paletteHelp": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Colors adapt to each cover. Previews use a sample palette."
+          }
+        }
+      }
+    },
+    "vinyl.selected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected"
+          }
+        }
+      }
+    },
+    "vinyl.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vinyl Design"
+          }
+        }
+      }
+    },
     "window.keepOnTop" : {
       "localizations" : {
         "en" : {

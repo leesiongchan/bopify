@@ -7,7 +7,7 @@ import BopifyPlayback
 
 @MainActor @Suite("Vinyl native rendering", .serialized)
 struct VinylRenderingTests {
-    @Test(.enabled("Requires screen capture") { CGPreflightScreenCaptureAccess() })
+    @Test(.enabled("Requires screen capture or host capture helper") { @MainActor in VinylRenderingFixture.canCapture })
     func existingPressingsHaveNativeCaptures() async throws {
         for (name, palette) in [("warm", VinylRenderingFixture.warm), ("cool", VinylRenderingFixture.cool), ("muted", .neutral)] {
             let bitmap = try await VinylRenderingFixture.capture(
@@ -32,7 +32,7 @@ struct VinylRenderingTests {
         }
     }
 
-    @Test(.enabled("Requires screen capture") { CGPreflightScreenCaptureAccess() })
+    @Test(.enabled("Requires screen capture or host capture helper") { @MainActor in VinylRenderingFixture.canCapture })
     func artisticStylesRenderDistinctly() async throws {
         let images = try await [VinylDesign.bloom, .rhapsody, .carnival].asyncImages()
         for i in 0..<images.count {
@@ -42,7 +42,7 @@ struct VinylRenderingTests {
         }
     }
 
-    @Test(.enabled("Requires screen capture") { CGPreflightScreenCaptureAccess() })
+    @Test(.enabled("Requires screen capture or host capture helper") { @MainActor in VinylRenderingFixture.canCapture })
     func artisticStylesFollowCoverHues() async throws {
         for design in [VinylDesign.bloom, .rhapsody, .carnival] {
             let warm = try await capture(design, palette: VinylRenderingFixture.warm, name: "warm")
@@ -51,7 +51,7 @@ struct VinylRenderingTests {
         }
     }
 
-    @Test(.enabled("Requires screen capture") { CGPreflightScreenCaptureAccess() })
+    @Test(.enabled("Requires screen capture or host capture helper") { @MainActor in VinylRenderingFixture.canCapture })
     func artisticStylesFillMostOfTheAnnulusWithColor() async throws {
         for design in [VinylDesign.bloom, .rhapsody, .carnival] {
             for diameter in [182.0, 118.0] {
@@ -61,7 +61,7 @@ struct VinylRenderingTests {
         }
     }
 
-    @Test(.enabled("Requires screen capture") { CGPreflightScreenCaptureAccess() })
+    @Test(.enabled("Requires screen capture or host capture helper") { @MainActor in VinylRenderingFixture.canCapture })
     func sameSeedAndPaletteRenderStably() async throws {
         for design in [VinylDesign.bloom, .rhapsody, .carnival] {
             let first = try await capture(design, palette: VinylRenderingFixture.warm, name: "stable1")
@@ -70,7 +70,7 @@ struct VinylRenderingTests {
         }
     }
 
-    @Test(.enabled("Requires screen capture") { CGPreflightScreenCaptureAccess() })
+    @Test(.enabled("Requires screen capture or host capture helper") { @MainActor in VinylRenderingFixture.canCapture })
     func contourStylesRenderDistinctly() async throws {
         let images = try await [VinylDesign.undertow, .drift, .strata].asyncImages()
         for i in 0..<images.count {
@@ -80,7 +80,7 @@ struct VinylRenderingTests {
         }
     }
 
-    @Test(.enabled("Requires screen capture") { CGPreflightScreenCaptureAccess() })
+    @Test(.enabled("Requires screen capture or host capture helper") { @MainActor in VinylRenderingFixture.canCapture })
     func contoursFollowCoverColors() async throws {
         for design in [VinylDesign.undertow, .drift, .strata] {
             let warm = try await capture(design, palette: VinylRenderingFixture.warm, name: "warm")
@@ -89,7 +89,7 @@ struct VinylRenderingTests {
         }
     }
 
-    @Test(.enabled("Requires screen capture") { CGPreflightScreenCaptureAccess() })
+    @Test(.enabled("Requires screen capture or host capture helper") { @MainActor in VinylRenderingFixture.canCapture })
     func allDesignsKeepTheMutedBaseline() async throws {
         let baseline = try await capture(.original, palette: .neutral, name: "muted")
         for design in VinylDesign.allCases {
@@ -98,7 +98,7 @@ struct VinylRenderingTests {
         }
     }
 
-    @Test(.enabled("Requires screen capture") { CGPreflightScreenCaptureAccess() })
+    @Test(.enabled("Requires screen capture or host capture helper") { @MainActor in VinylRenderingFixture.canCapture })
     func defaultDesignMatchesExplicitOriginal() async throws {
         let baseline = try await VinylRenderingFixture.capture(
             VinylPressingView(seed: 42, palette: VinylRenderingFixture.warm, diameter: 182),
