@@ -415,6 +415,114 @@ struct PlayerModelTests {
         #expect(model.state.phase == .paused)
     }
 
+    @Test func aSecondToggleWaitsForConfirmationThenResumes() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        await settle(model, engine, [.playing(positionMs: 0)])
+        model.togglePlayPause()
+        await waitUntil { engine.recordedCommands == ["pause"] }
+        model.togglePlayPause()
+        await settle(model, engine, [.positionCorrection(positionMs: 100)])
+        #expect(engine.recordedCommands == ["pause"])
+        #expect(model.state.phase == .playing)
+        await settle(model, engine, [.paused(positionMs: 100)])
+        await waitUntil { engine.recordedCommands.contains("resume") }
+        #expect(engine.recordedCommands == ["pause", "resume"])
+        #expect(model.state.phase == .paused)
+        await settle(model, engine, [.playing(positionMs: 100)])
+        #expect(model.state.phase == .playing)
+    }
+
+    @Test func threeUnconfirmedTogglesCoalesceToOnePause() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        await settle(model, engine, [.playing(positionMs: 0)])
+        model.togglePlayPause()
+        await waitUntil { engine.recordedCommands == ["pause"] }
+        model.togglePlayPause()
+        model.togglePlayPause()
+        await settle(model, engine, [.paused(positionMs: 100)])
+        #expect(engine.recordedCommands == ["pause"])
+        #expect(model.state.phase == .paused)
+    }
+
+    @Test func rejectionDiscardsAnUnconfirmedReplacementToggle() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        await settle(model, engine, [.playing(positionMs: 0)])
+        model.togglePlayPause()
+        await waitUntil { engine.recordedCommands == ["pause"] }
+        model.togglePlayPause()
+        await settle(model, engine, [.commandRejected("unavailable"), .paused(positionMs: 100)])
+        #expect(engine.recordedCommands == ["pause"])
+        #expect(model.state.phase == .paused)
+    }
+
+    @Test func aQueuedPlaybackRequestIsDiscardedAfterExternalConfirmation() async throws {
+        let engine = RecoveryStubEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        let (release, continuation) = AsyncStream<Void>.makeStream()
+        defer { continuation.finish(); model.stop() }
+        engine.emit(.trackChanged(makeTrack()))
+        engine.emit(.playing(positionMs: 0))
+        await waitUntil { model.state.phase == .playing }
+        engine.commandGate = { for await _ in release { break } }
+        model.next()
+        await waitUntil { engine.recordedCommands == ["next"] }
+        model.togglePlayPause()
+        engine.emit(.paused(positionMs: 100))
+        await waitUntil { model.state.phase == .paused }
+        continuation.finish()
+        model.previous()
+        await waitUntil { engine.recordedCommands.last == "previous" }
+        #expect(engine.recordedCommands == ["next", "previous"])
+    }
+
+    @Test func identicalErrorsHaveDistinctFailureOccurrencesAndStopEndsTheSession() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        #expect(model.isRunning)
+        await settle(model, engine, [.commandRejected("unavailable")])
+        let notice = model.commandNotice
+        let firstFailure = model.commandFailureRevision
+        await settle(model, engine, [.commandRejected("unavailable")])
+        #expect(model.commandNotice == notice)
+        #expect(model.commandFailureRevision == firstFailure + 1)
+        model.stop()
+        #expect(!model.isRunning)
+    }
+
+    @Test func aConfirmedPlaybackIntentStillReportsALateSessionLoss() async throws {
+        let engine = RecoveryStubEngine()
+        let model = PlayerModel(engine: engine)
+        var losses = 0
+        model.onSessionLost = { _, _ in losses += 1 }
+        model.start()
+        let (release, continuation) = AsyncStream<Void>.makeStream()
+        defer { continuation.finish(); model.stop() }
+        engine.emit(.trackChanged(makeTrack()))
+        engine.emit(.playing(positionMs: 0))
+        await waitUntil { model.state.phase == .playing }
+        engine.commandGate = { for await _ in release { break } }
+        model.togglePlayPause()
+        await waitUntil { engine.recordedCommands == ["pause"] }
+        engine.emit(.paused(positionMs: 100))
+        await waitUntil { model.state.phase == .paused }
+        engine.commandError = .playbackSessionLost
+        continuation.finish()
+        await waitUntil { !model.isEngineReady }
+        #expect(losses == 1)
+        #expect(model.state.phase == .error(.playbackSessionLost))
+    }
+
     @Test func externalPauseFromAnotherDeviceIsReflected() async {
         let engine = StubPlaybackEngine()
         let model = PlayerModel(engine: engine)

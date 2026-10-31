@@ -7,10 +7,11 @@ import BopifyPlayback
 enum RecordMotorRequest: String {
     case drive, brake, snap
 
-    static func resolve(phase: PlaybackPhase, ready: Bool, active: Bool, visible: Bool, reduced: Bool, pressed: Bool) -> Self {
+    static func resolve(phase: PlaybackPhase, ready: Bool, active: Bool, visible: Bool, reduced: Bool, pressed: Bool,
+                        loadingFromPlaying: Bool = false) -> Self {
         guard ready, visible, !reduced, !pressed else { return .snap }
         switch phase {
-        case .loading: return .snap
+        case .loading: return loadingFromPlaying ? .drive : .snap
         case .idle: return active ? .snap : .brake
         case .playing: return active ? .drive : .brake
         case .paused, .ended, .error: return .brake
@@ -19,6 +20,14 @@ enum RecordMotorRequest: String {
 }
 
 struct RecordPlayerView: View {
+    private struct OutgoingRecordAppearance {
+        let image: Image?
+        let occurrenceID: String
+        let labelRatio: CGFloat
+        let pressing: PressingAppearance
+        let artworkRotationOffset: Double
+    }
+
     let player: PlayerModel
     let artworkStore: ArtworkStore
     let presentation: PlayerPresentation
@@ -30,6 +39,8 @@ struct RecordPlayerView: View {
     @State private var appliedMotorRequest: RecordMotorRequest?
     @State private var loadedArtwork: LoadedArtwork?
     @State private var loadedArtworkRequest: ArtworkLoadRequest?
+    @State private var displayedOccurrenceID = "missing"
+    @State private var displayedPressing = PressingAppearance.neutral
     @State private var scrub: RecordScrub?
     @State private var pressedAngle: Double?
     @State private var isScrubbing = false
@@ -38,6 +49,16 @@ struct RecordPlayerView: View {
     @AppStorage("player.artworkBackground") private var showsArtworkBackground = true
     @State private var pendingSelection: QueueSelectionStatus?
     @State private var controlsContentHeight: CGFloat?
+    @State private var coverLaunch: CoverFlowLaunch?
+    @State private var dockedCoverRatio: CGFloat = 0.43
+    @State private var artworkRotationOffset = 0.0
+    @State private var showsCoverFunnel = false
+    @State private var loadingFromPlaying = false
+    @State private var coverRotationOffset = 0.0
+    @State private var coverTiming: RecordLoadTiming?
+    @State private var coverStartRevision: UInt64 = 0
+    @State private var coverEngineEpoch: UInt64 = 0
+    @State private var outgoingRecord: OutgoingRecordAppearance?
     @AccessibilityFocusState private var accessibilityFocus: Bool
     @Environment(AppEnvironment.self) private var environment: AppEnvironment?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -45,7 +66,8 @@ struct RecordPlayerView: View {
     private var canScrub: Bool { player.isEngineReady && player.state.canSeek && player.state.isActiveDevice && player.displayDurationMs > 0 }
     private var motorRequest: RecordMotorRequest {
         .resolve(phase: player.state.phase, ready: player.isEngineReady, active: player.state.isActiveDevice,
-                 visible: presentation.isVisible, reduced: reduceMotion, pressed: pressedAngle != nil)
+                 visible: presentation.isVisible, reduced: reduceMotion, pressed: pressedAngle != nil,
+                 loadingFromPlaying: loadingFromPlaying)
     }
     private var isMoving: Bool {
         motorRequest != .snap && (motorRequest == .drive || isCoasting) && rotation.isMoving(at: ProcessInfo.processInfo.systemUptime)
@@ -67,11 +89,12 @@ struct RecordPlayerView: View {
         player.state.mirror?.trackURI.rawValue ?? player.state.queue?.current?.id ?? player.state.currentTrack?.uri.rawValue ?? "missing"
     }
     private var image: Image? {
-        if loadedArtworkRequest?.url == track?.artwork?.url,
-           loadedArtworkRequest?.sessionRevision == artworkStore.sessionRevision, let loadedArtwork {
+        if loadedArtworkRequest?.sessionRevision == artworkStore.sessionRevision, let loadedArtwork {
             return Image(nsImage: loadedArtwork.image)
         }
-        return track?.artwork.flatMap { artworkStore.image(for: $0.url) }.map { Image(nsImage: $0) }
+        return track?.artwork.flatMap {
+            artworkStore.image(for: $0.url) ?? artworkStore.image(for: $0.url, pixelSize: 160)
+        }.map { Image(nsImage: $0) }
     }
     private var backgroundImage: Image? {
         guard showsArtworkBackground, track?.artwork != nil else { return nil }
@@ -110,11 +133,11 @@ struct RecordPlayerView: View {
         return player.commandNotice != nil
     }
 
-    var body: some View {
+    private var playerContent: some View {
         let layout = windowController.layout
         let previous: (() -> Void)? = player.isEngineReady && player.state.isActiveDevice && player.state.canPrevious ? { player.previous() } : nil
         let next: (() -> Void)? = player.isEngineReady && player.state.isActiveDevice && player.state.canNext ? { player.next() } : nil
-        ZStack(alignment: .topLeading) {
+        return ZStack(alignment: .topLeading) {
             PlayerSurface(cornerRadius: layout.sleeveCornerRadius, artwork: backgroundImage) {
                 PlayerBackgroundDragRegion(takesKeyboardFocus: isEngaged, onDragChanged: dragLyrics)
             }
@@ -145,7 +168,7 @@ struct RecordPlayerView: View {
                 let top = controlsContentHeight.map { min(layout.lowerFrame.minY, layout.controlsFrame.minY + $0 + 4) } ?? layout.lowerFrame.minY
                 LibraryShelf(environment: environment, artworkStore: artworkStore,
                              tabsInset: layout.controlsFrame.minX - layout.lowerFrame.minX,
-                             coverBleed: layout.lowerFrame.minX - layout.sleeveFrame.minX, onPlay: { player.load($0) })
+                             coverBleed: layout.lowerFrame.minX - layout.sleeveFrame.minX, onPlay: loadFromShelf)
                     .frame(width: layout.lowerFrame.width, height: layout.lowerFrame.maxY - top)
                     .clipped()
                     .offset(x: layout.lowerFrame.minX, y: top)
@@ -215,28 +238,58 @@ struct RecordPlayerView: View {
                 .frame(width: layout.sleeveFrame.width, height: layout.sleeveFrame.height)
                 .offset(x: layout.sleeveFrame.minX, y: layout.sleeveFrame.minY)
         }
-        .overlay(alignment: .topLeading) {
-            record(diameter: layout.recordDiameter)
-                .position(layout.recordCenter)
-        }
+        .overlay(alignment: .topLeading) { recordStage(layout: layout) }
+        .coordinateSpace(name: CoverFlowLaunch.coordinateSpace)
         .offset(x: windowController.contentOffset.x, y: windowController.contentOffset.y)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var playbackContent: some View {
+        playerContent
         .onAppear { windowController.onCancelInteraction = cancelRecord }
         .onDisappear {
+            finishCoverLoad()
             _ = cancelRecord(); setMotor(.snap); windowController.onCancelInteraction = nil
             windowController.removeLyricsKeyboard()
+        }
+        .task(id: coverTiming?.readyAt == nil ? coverLaunch?.id : nil) {
+            guard let id = coverLaunch?.id, coverTiming?.readyAt == nil else { return }
+            do { try await Task.sleep(for: .seconds(12)) } catch { return }
+            guard coverLaunch?.id == id, coverTiming?.readyAt == nil else { return }
+            finishCoverLoad()
+            BopifyLog.playback.debug("cover preview ended while waiting for metadata")
+        }
+        .task(id: coverTiming?.finishedAt) {
+            await finishReveal()
+        }
+        .onChange(of: player.playbackRevision) { _, _ in confirmCoverArtwork() }
+        .onChange(of: player.recoveryIdentity) { _, _ in confirmCoverArtwork() }
+        .onChange(of: player.engineEpoch) { _, _ in finishCoverLoad() }
+        .onChange(of: player.isEngineReady) { _, ready in if !ready { finishCoverLoad() } }
+        .onChange(of: player.isRunning) { _, running in if !running { finishCoverLoad() } }
+        .onChange(of: windowController.layout) { _, _ in showsCoverFunnel = false }
+        .onChange(of: artworkStore.sessionRevision) { _, _ in
+            finishCoverLoad(); dockedCoverRatio = 0.43; loadingFromPlaying = false
+            displayedPressing = .neutral; displayedOccurrenceID = "missing"; artworkRotationOffset = 0
+        }
+        .onChange(of: reduceMotion) { _, reduced in if reduced { finishCoverLoad() } }
+        .onChange(of: player.commandFailureRevision) { _, _ in finishCoverLoad() }
+        .onChange(of: player.state.phase) { _, phase in
+            if phase != .loading { loadingFromPlaying = false }
+            if case .error = phase { finishCoverLoad() }
+            confirmCoverArtwork()
         }
         .onChange(of: showsLyrics) { _, visible in
             if !visible { windowController.removeLyricsKeyboard() }
         }
         .onChange(of: motorRequest, initial: true) { _, request in setMotor(request) }
         .task(id: rotation.stopTime) {
-            guard isCoasting, let deadline = rotation.stopTime else { return }
-            do { try await Task.sleep(for: .seconds(max(0, deadline - ProcessInfo.processInfo.systemUptime))) }
-            catch { return }
-            guard rotation.stopTime == deadline else { return }
-            isCoasting = false
+            await finishCoasting()
         }
+    }
+
+    var body: some View {
+        playbackContent
         .onChange(of: occurrenceID) { _, _ in _ = cancelRecord() }
         .onChange(of: player.displayDurationMs) { _, _ in _ = cancelRecord() }
         .onChange(of: canScrub) { _, allowed in if !allowed { _ = cancelRecord() } }
@@ -248,35 +301,144 @@ struct RecordPlayerView: View {
         }
         .onChange(of: presentation.mode) { _, mode in
             if mode != .queue { pendingSelection = nil }
+            if mode != .expanded { showsCoverFunnel = false }
         }
         .onChange(of: presentation.isVisible) { _, visible in
-            if !visible { pendingSelection = nil; accessibilityFocus = false; isRecordHovered = false; _ = cancelRecord() }
+            if !visible { loadingFromPlaying = false; finishCoverLoad(); pendingSelection = nil; accessibilityFocus = false; isRecordHovered = false; _ = cancelRecord() }
         }
         .onChange(of: accessibilityFocus) { _, focused in presentation.sendAttention(.accessibilityFocus(focused)) }
-        .task(id: pressingRequest) {
-            let request = pressingRequest
-            let artwork: LoadedArtwork?
-            if loadedArtworkRequest?.url == request.artworkURL,
-               loadedArtworkRequest?.sessionRevision == request.sessionRevision, let loadedArtwork {
-                artwork = loadedArtwork
-            } else if let url = request.artworkURL {
-                artwork = await artworkStore.loadPalette(url)
-            } else {
-                artwork = nil
-            }
-            guard !Task.isCancelled, request == pressingRequest else { return }
-            loadedArtwork = artwork
-            loadedArtworkRequest = ArtworkLoadRequest(url: request.artworkURL, retryRevision: request.retryRevision,
-                                                     sessionRevision: request.sessionRevision)
-        }
+        .task(id: pressingRequest) { await loadPressing() }
     }
 
-    private func record(diameter: CGFloat) -> some View {
-        VinylRecordView(image: image, occurrenceID: occurrenceID, direction: direction, diameter: diameter,
-                        isMoving: isMoving,
+    private func finishReveal() async {
+        guard let deadline = coverTiming?.finishedAt, let id = coverLaunch?.id else { return }
+        do { try await Task.sleep(until: deadline, clock: SuspendingClock()) } catch { return }
+        guard !Task.isCancelled, coverLaunch?.id == id, coverTiming?.finishedAt == deadline else { return }
+        finishCoverLoad()
+        BopifyLog.playback.debug("cover load reveal finished")
+    }
+
+    private func finishCoasting() async {
+        guard isCoasting, let deadline = rotation.stopTime else { return }
+        let remaining = max(0, deadline - ProcessInfo.processInfo.systemUptime)
+        do { try await Task.sleep(for: .seconds(remaining), clock: SuspendingClock()) } catch { return }
+        guard !Task.isCancelled, rotation.stopTime == deadline else { return }
+        isCoasting = false
+    }
+
+    private func recordStage(layout: RecordLayout) -> some View {
+        ZStack(alignment: .topLeading) {
+            if let outgoingRecord {
+                VinylRecordView(image: outgoingRecord.image, occurrenceID: outgoingRecord.occurrenceID,
+                    direction: .fade, diameter: layout.recordDiameter, isMoving: isMoving,
+                    isVisible: presentation.isVisible, rotation: rotation,
+                    pressingSeed: outgoingRecord.pressing.seed, palette: outgoingRecord.pressing.palette,
+                    artworkRotationOffset: outgoingRecord.artworkRotationOffset,
+                    rotationOverride: pressedAngle.map { $0 + (scrub?.angleDelta ?? 0) },
+                    isScrubbing: pressedAngle != nil, reduceMotionOverride: reduceMotion,
+                    labelRatio: outgoingRecord.labelRatio)
+                    .position(layout.recordCenter)
+                    .allowsHitTesting(false)
+            }
+            TimelineView(.animation(minimumInterval: 1.0 / 60, paused: coverLaunch == nil)) { _ in
+                let progress = coverLaunch == nil ? 1 : coverTiming?.progress(at: SuspendingClock.now) ?? 0
+                let angle = pressedAngle.map { $0 + (scrub?.angleDelta ?? 0) }
+                    ?? rotation.angle(at: ProcessInfo.processInfo.systemUptime)
+                ZStack(alignment: .topLeading) {
+                    recordFace(diameter: layout.recordDiameter, loadProgress: progress,
+                               angle: coverLaunch == nil ? nil : angle).position(layout.recordCenter)
+                    if showsCoverFunnel, let launch = coverLaunch {
+                        RecordLoadTransition(launch: launch,
+                            destination: CGRect(x: layout.recordCenter.x - layout.recordDiameter / 2,
+                                                y: layout.recordCenter.y - layout.recordDiameter / 2,
+                                                width: layout.recordDiameter, height: layout.recordDiameter),
+                            progress: progress, reduceMotion: reduceMotion,
+                            rotationAngle: angle + coverRotationOffset)
+                    }
+                }
+            }
+            recordControls(diameter: layout.recordDiameter).position(layout.recordCenter)
+        }
+        .frame(width: layout.contentSize.width, height: layout.contentSize.height, alignment: .topLeading)
+    }
+
+    private func loadPressing() async {
+        let request = pressingRequest
+        let artwork: LoadedArtwork?
+        if loadedArtworkRequest?.url == request.artworkURL,
+           loadedArtworkRequest?.sessionRevision == request.sessionRevision, let loadedArtwork {
+            artwork = loadedArtwork
+        } else if let url = request.artworkURL {
+            artwork = await artworkStore.loadPalette(url)
+        } else {
+            artwork = nil
+        }
+        guard !Task.isCancelled, request == pressingRequest else { return }
+        loadedArtwork = artwork
+        loadedArtworkRequest = ArtworkLoadRequest(url: request.artworkURL, retryRevision: request.retryRevision,
+                                                 sessionRevision: request.sessionRevision)
+        displayedOccurrenceID = occurrenceID
+        displayedPressing = PressingAppearance(seed: request.uri.map(PressingSeed.offset) ?? 0,
+                                               palette: artwork?.palette ?? .neutral)
+        confirmCoverArtwork()
+    }
+
+    private func loadFromShelf(_ request: PlayRequest, launch: CoverFlowLaunch) {
+        let revealed = coverTiming.map { RecordLoadStage(progress: $0.progress(at: SuspendingClock.now)).incomingOpacity >= 0.5 } ?? true
+        // Settle an already revealed song before replacing it; an abandoned flight never becomes the baseline.
+        let previous = (!revealed ? outgoingRecord : nil) ?? OutgoingRecordAppearance(image: image, occurrenceID: displayedOccurrenceID,
+            labelRatio: dockedCoverRatio, pressing: displayedPressing, artworkRotationOffset: artworkRotationOffset)
+        loadingFromPlaying = appliedMotorRequest == .drive
+        coverStartRevision = player.playbackRevision
+        coverEngineEpoch = player.engineEpoch
+        player.load(request)
+        guard player.isEngineReady, player.isRunning, presentation.isVisible, presentation.mode == .expanded,
+              !reduceMotion, launch.sourceFrame.width > 0, launch.artwork != nil else { finishCoverLoad(); return }
+        coverLaunch = launch
+        showsCoverFunnel = true
+        outgoingRecord = previous
+        coverTiming = RecordLoadTiming(startedAt: launch.startedAt)
+        let angle = rotation.angle(at: ProcessInfo.processInfo.systemUptime)
+        coverRotationOffset = -angle
+        artworkRotationOffset = coverRotationOffset
+        dockedCoverRatio = launch.sourceFrame.width / windowController.layout.recordDiameter
+        confirmCoverArtwork()
+        BopifyLog.playback.debug("cover flight started")
+    }
+
+    private func confirmCoverArtwork() {
+        guard let launch = coverLaunch, coverTiming?.readyAt == nil,
+              player.engineEpoch == coverEngineEpoch, player.playbackRevision > coverStartRevision,
+              player.state.phase == .playing || player.state.phase == .paused, let track,
+              launch.itemURI.kind == .track ? track.uri == launch.itemURI
+                : player.recoveryIdentity?.contextURI == launch.itemURI.rawValue && player.recoveryIdentity?.trackURI == track.uri,
+              loadedArtworkRequest?.url == track.artwork?.url,
+              loadedArtworkRequest?.sessionRevision == artworkStore.sessionRevision,
+              track.artwork == nil || image != nil else { return }
+        coverTiming?.confirm(at: SuspendingClock.now)
+    }
+
+    private func finishCoverLoad() {
+        coverLaunch = nil
+        coverTiming = nil
+        outgoingRecord = nil
+        showsCoverFunnel = false
+    }
+
+    private func recordFace(diameter: CGFloat, loadProgress: Double, angle: Double?) -> some View {
+        VinylRecordView(image: image, occurrenceID: displayedOccurrenceID, direction: coverLaunch == nil ? direction : .fade, diameter: diameter,
+                        isMoving: isMoving && coverLaunch == nil,
                         isVisible: presentation.isVisible, rotation: rotation,
-                        rotationOverride: pressedAngle.map { $0 + (scrub?.angleDelta ?? 0) }, isScrubbing: pressedAngle != nil,
-                        isEngaged: isEngaged, reduceMotionOverride: reduceMotion)
+                        pressingSeed: displayedPressing.seed, palette: displayedPressing.palette,
+                        artworkRotationOffset: artworkRotationOffset,
+                        rotationOverride: angle ?? pressedAngle.map { $0 + (scrub?.angleDelta ?? 0) }, isScrubbing: pressedAngle != nil,
+                        reduceMotionOverride: reduceMotion, loadProgress: loadProgress,
+                        labelRatio: dockedCoverRatio,
+                        isIncomingDuringLoad: coverLaunch != nil)
+    }
+
+    private func recordControls(diameter: CGFloat) -> some View {
+        Color.clear.frame(width: diameter, height: diameter)
             .overlay {
                 if showsLyrics && !isEngaged {
                     PlayerBackgroundDragRegion(takesKeyboardFocus: false,

@@ -25,7 +25,7 @@ struct LibraryShelf: View {
     let tabsInset: CGFloat
     /// How far the sleeve's glass reaches past each side of this shelf; Cover Flow runs out to it.
     let coverBleed: CGFloat
-    let onPlay: (PlayRequest) -> Void
+    let onPlay: (PlayRequest, CoverFlowLaunch) -> Void
     @AppStorage("library.tab") private var tab: LibraryTab = .liked
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -48,7 +48,7 @@ struct LibraryShelf: View {
         switch tab {
         case .recents:
             CoverFlowView(model: environment.recents, copy: .recents, artworkStore: artworkStore,
-                          onPlay: { onPlay(environment.recents.playRequest(for: $0)) })
+                          onPlay: { onPlay(environment.recents.playRequest(for: $0), $1) })
                 .id(LibraryTab.recents)
         case .explore:
             if environment.explore.stationFailure != nil {
@@ -64,18 +64,18 @@ struct LibraryShelf: View {
                 .modifier(RevealWhileShown(source: environment.explore))
             } else {
                 CoverFlowView(model: environment.explore, copy: .explore, artworkStore: artworkStore,
-                              onPlay: { onPlay(environment.explore.playRequest(for: $0)) }) {
+                              onPlay: { onPlay(environment.explore.playRequest(for: $0), $1) }) {
                     StationMenu(model: environment.explore)
                 }
                 .id(environment.explore.selectedSeed)
             }
         case .liked:
             CoverFlowView(model: environment.likedSongs, copy: .liked, artworkStore: artworkStore,
-                          onPlay: { onPlay(environment.likedSongs.playRequest(for: $0)) })
+                          onPlay: { onPlay(environment.likedSongs.playRequest(for: $0), $1) })
                 .id(LibraryTab.liked)
         case .library:
             CoverFlowView(model: environment.collections, copy: .collections, artworkStore: artworkStore,
-                          onPlay: { onPlay(environment.collections.playRequest(for: $0)) })
+                          onPlay: { onPlay(environment.collections.playRequest(for: $0), $1) })
                 .id(LibraryTab.library)
         }
     }
@@ -162,7 +162,7 @@ private struct StationMenu: View {
 private func previewShelf(_ library: PreviewLibrary) -> some View {
     let environment = makePreviewEnvironment(library: library)
     return LibraryShelf(environment: environment, artworkStore: environment.artworkStore, tabsInset: 100, coverBleed: 12,
-                        onPlay: { environment.player?.load($0) })
+                        onPlay: { request, _ in environment.player?.load(request) })
         .environment(environment)
         .frame(width: 332, height: 160)
         .padding(.horizontal, 12)

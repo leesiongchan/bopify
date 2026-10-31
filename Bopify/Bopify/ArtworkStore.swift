@@ -96,12 +96,12 @@ final class ArtworkStore {
         return request
     }
 
-    private func container(for url: URL) -> ImageContainer? {
+    private func container(for url: URL, pixelSize: Int = 640) -> ImageContainer? {
         _ = cacheRevision
-        return pipeline.cache[request(url)]
+        return pipeline.cache[request(url, pixelSize: pixelSize)]
     }
 
-    func image(for url: URL) -> NSImage? { container(for: url)?.image }
+    func image(for url: URL, pixelSize: Int = 640) -> NSImage? { container(for: url, pixelSize: pixelSize)?.image }
     func palette(for url: URL) -> ArtworkPalette? {
         container(for: url)?.userInfo["bopify.palette"] as? ArtworkPalette
     }

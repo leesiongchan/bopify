@@ -1,5 +1,33 @@
 import SwiftUI
 
+struct PlaybackButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        PlaybackButtonBody(configuration: configuration)
+    }
+}
+
+private struct PlaybackButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    @State private var isHovered = false
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var pressed: Bool { isEnabled && configuration.isPressed }
+    private var hovered: Bool { isEnabled && isHovered }
+
+    var body: some View {
+        configuration.label
+            .contentShape(Circle())
+            .background(.primary.opacity(pressed ? 0.22 : hovered ? 0.12 : 0), in: Circle())
+            .overlay(Circle().strokeBorder(.primary.opacity(pressed ? 0.22 : hovered ? 0.12 : 0), lineWidth: 0.75))
+            .scaleEffect(reduceMotion ? 1 : pressed ? 0.96 : 1)
+            .animation(reduceMotion ? nil : pressed ? .easeOut(duration: 0.06) : .spring(duration: 0.2, bounce: 0),
+                       value: pressed)
+            .animation(.easeOut(duration: 0.12), value: hovered)
+            .onHover { isHovered = $0 }
+    }
+}
+
 struct SongRowButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         SongRowButtonBody(configuration: configuration)

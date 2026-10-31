@@ -77,6 +77,10 @@ struct PlayerRootView: View {
                         .disabled(environment.authState != .signedIn && environment.authState != .needsLibraryAuthorization)
                     Divider()
                     Button("menu.quit") { Task { await environment.prepareForQuit(); NSApp.terminate(nil) } }
+                    if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String {
+                        Divider()
+                        Text(verbatim: "Bopify \(version)")
+                    }
                 } label: {
                     Image(systemName: "ellipsis").frame(width: 28, height: 24).contentShape(Rectangle())
                 }

@@ -39,7 +39,7 @@ struct RevealWhileShown<Source: CoverFlowSource>: ViewModifier {
 }
 
 extension CoverFlowView where Accessory == EmptyView {
-    init(model: Source, copy: CoverFlowCopy, artworkStore: ArtworkStore, onPlay: @escaping (Source.Item) -> Void) {
+    init(model: Source, copy: CoverFlowCopy, artworkStore: ArtworkStore, onPlay: @escaping (Source.Item, CoverFlowLaunch) -> Void) {
         self.init(model: model, copy: copy, artworkStore: artworkStore, onPlay: onPlay) { EmptyView() }
     }
 }
@@ -48,7 +48,7 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
     let model: Source
     let copy: CoverFlowCopy
     let artworkStore: ArtworkStore
-    let onPlay: (Source.Item) -> Void
+    let onPlay: (Source.Item, CoverFlowLaunch) -> Void
     /// Follows the artist line, or sits under an empty shelf's message, such as Explore's station menu.
     @ViewBuilder let accessory: () -> Accessory
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -58,6 +58,9 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
     @State private var gestureOrigin: Double?
     @State private var scrollTravel = 0.0
     @State private var velocity = CoverFlowVelocity()
+    @State private var selectedFrame = CGRect.zero
+    @State private var departingURI: SpotifyURI?
+    @State private var departureID = UUID()
     private var selectedIndex: Int { model.items.firstIndex { $0.uri == model.selectedURI } ?? 0 }
     private var selectedItem: Source.Item? { model.items.indices.contains(selectedIndex) ? model.items[selectedIndex] : nil }
 
@@ -81,13 +84,17 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
                                 .frame(width: 76, height: 76)
                                 .scaleEffect(placement.scale)
                                 .rotation3DEffect(.degrees(placement.rotation), axis: (x: 0, y: 1, z: 0), perspective: 0.6)
+                                .compositingGroup()
                                 .opacity(placement.opacity)
                                 .offset(x: placement.offset)
-                                .zIndex(placement.zIndex)
+                                .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(CoverFlowLaunch.coordinateSpace)) } action: { frame in
+                                    if index == selectedIndex { selectedFrame = frame }
+                                }
                                 .accessibilityLabel(Text(label(for: track)))
                                 .accessibilityValue(Text(index == selectedIndex ? "library.selected" : ""))
-                                .accessibilityAction(named: Text("library.play")) { onPlay(track) }
+                                .accessibilityAction(named: Text("library.play")) { play(track) }
                                 .help(label(for: track))
+                                .zIndex(placement.zIndex)
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -101,7 +108,7 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
                         onScroll: scroll, onFrame: { dt in
                             spring.step(dt: dt, reduceMotion: reduceMotion)
                             if spring.isSettled { isAnimating = false }
-                        }, onNavigate: { navigate(by: $0) }, onPlay: { if let selectedItem { onPlay(selectedItem) } })
+                        }, onNavigate: { navigate(by: $0) }, onPlay: { if let selectedItem { play(selectedItem) } })
                         .frame(width: min(geometry.size.width, Double(radius * 2) * CoverFlowMotion.spacing + 76))
                         .accessibilityHidden(true)
                     }
@@ -125,6 +132,13 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(PlayerBackgroundDragRegion())
         .modifier(RevealWhileShown(source: model))
+        .task(id: departureID) {
+            guard departingURI != nil else { return }
+            let id = departureID
+            do { try await Task.sleep(for: .seconds(CoverFlowLaunch.duration), clock: .suspending) } catch { return }
+            guard !Task.isCancelled, departureID == id else { return }
+            departingURI = nil
+        }
         .task(id: model.selectedURI) {
             if let uri = model.selectedURI { await model.loadMoreIfNeeded(near: uri) }
         }
@@ -149,8 +163,19 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
     }
     private func activate(_ index: Int) {
         guard model.items.indices.contains(index) else { return }
-        if index == selectedIndex && !isAnimating { onPlay(model.items[index]) }
+        if index == selectedIndex && !isAnimating { play(model.items[index]) }
         else { settle(on: index) }
+    }
+    private func play(_ item: Source.Item) {
+        let frame = item.uri == model.selectedURI && !isAnimating ? selectedFrame : .zero
+        let artwork = item.artwork.flatMap {
+            artworkStore.image(for: $0.url, pixelSize: 160) ?? artworkStore.image(for: $0.url)
+        }
+        if !reduceMotion, frame.width > 0, artwork != nil {
+            departingURI = item.uri
+            departureID = UUID()
+        }
+        onPlay(item, CoverFlowLaunch(itemURI: item.uri, sourceFrame: frame, artwork: artwork))
     }
     private func navigate(by delta: Int) {
         settle(on: Int(spring.target.rounded()) + delta)
@@ -230,6 +255,9 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
             }
         }
         .frame(width: 76, height: 76)
+        .opacity(departingURI == track.uri ? 0.2 : 1)
+        .animation(.easeOut(duration: 0.16), value: departingURI)
+        .background(Color(white: 0.08))
         .clipShape(RoundedRectangle(cornerRadius: 5))
         return face
         .shadow(color: .black.opacity(0.25), radius: 5, y: 4)

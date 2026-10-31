@@ -708,6 +708,14 @@ struct SpotifyLibraryClientTests {
     private func query(_ request: URLRequest?) -> [URLQueryItem]? {
         request?.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems }
     }
+    @Test func recentlyPlayedPreservesFiftyDistinctSongs() async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["items": (0..<50).map { savedTrack("song\($0)") }])
+        LibraryProtocol.fixture.reset(.init(data: body))
+        let plays = try await scopedClient(["user-read-recently-played"]).recentlyPlayed()
+        #expect(plays.count == 50)
+        #expect(plays.last?.track.uri.rawValue == "spotify:track:song49")
+    }
+
     @Test func recentlyPlayedKeepsLoadableContextsAndSkipsBadItems() async throws {
         var album = savedTrack("a")
         album["context"] = ["uri": "spotify:album:alb", "type": "album"]

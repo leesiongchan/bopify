@@ -18,10 +18,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let environment = AppEnvironment()
         let controller = StatusItemController(content: PlayerRootView(environment: environment), environment: environment)
         statusItemController = controller
+        controller.showPlayer()
         registerShortcut(.togglePlayer) { [weak controller] in controller?.togglePlayer() }
         registerShortcut(.searchMusic) { [weak controller] in controller?.showSearch() }
         registerShortcut(.toggleLiveLyrics) { [weak environment] in environment?.toggleLiveLyrics() }
         Task { await environment.restoreOrPromptSignIn() }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        statusItemController?.showPlayer()
+        return false
     }
 
     private func registerShortcut(_ name: KeyboardShortcuts.Name, action: @escaping @MainActor () -> Void) {

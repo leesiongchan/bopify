@@ -6,6 +6,8 @@ struct TransportControls: View {
     let player: PlayerModel
     @State private var previousTaps = 0
     @State private var nextTaps = 0
+    @State private var playbackTaps = 0
+    @State private var previousPlaying = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var state: PlaybackState { player.state }
@@ -36,14 +38,18 @@ struct TransportControls: View {
             .accessibilityLabel(Text("transport.previous"))
             .help(Text("transport.previous"))
 
-            Button(action: player.togglePlayPause) {
-                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 23, weight: .semibold))
-                    .contentTransition(.symbolEffect(.replace))
-                    .offset(x: isPlaying ? 0 : 2)
-                    .frame(width: 48, height: 48)
-                    .background(.primary.opacity(0.1), in: Circle())
+            Button {
+                player.togglePlayPause()
+            } label: {
+                KeyframeAnimator(initialValue: 1.0, trigger: playbackTaps) { progress in
+                    PlaybackButtonFace(isPlaying: isPlaying, previousPlaying: previousPlaying,
+                                       progress: progress, reduceMotion: reduceMotion)
+                } keyframes: { _ in
+                    MoveKeyframe(0)
+                    CubicKeyframe(1, duration: 0.42)
+                }
             }
+            .buttonStyle(PlaybackButtonStyle())
             .disabled(!(canControl || player.canPlayHere) || state.phase == .loading)
             .accessibilityLabel(Text(isPlaying ? "transport.pause" : "transport.play"))
             .accessibilityValue(state.localizedStatusText)
@@ -74,6 +80,11 @@ struct TransportControls: View {
                 .disabled(!player.isEngineReady || !state.isActiveDevice)
         }
         .buttonStyle(.playerControl)
+        .onChange(of: isPlaying) { old, _ in
+            guard state.phase == .playing || state.phase == .paused else { return }
+            previousPlaying = old
+            if !reduceMotion { playbackTaps += 1 }
+        }
     }
 }
 

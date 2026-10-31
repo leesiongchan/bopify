@@ -5,6 +5,36 @@ import BopifyPlayback
 
 @MainActor @Suite("Player window", .serialized)
 struct PlayerWindowControllerTests {
+    @Test func onboardingFloatsWithoutChangingTheSavedWindowPreference() async throws {
+        _ = NSApplication.shared
+        let defaults = UserDefaults.standard
+        let saved = defaults.object(forKey: "player.keepOnTop")
+        defer {
+            if let saved { defaults.set(saved, forKey: "player.keepOnTop") }
+            else { defaults.removeObject(forKey: "player.keepOnTop") }
+        }
+        defaults.set(false, forKey: "player.keepOnTop")
+        let existingWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
+        let environment = makePreviewEnvironment(.nothingPlaying)
+        defer { environment.player?.stop() }
+        let controller = StatusItemController(content: EmptyView(), environment: environment)
+        let panel = try #require(NSApp.windows.compactMap { $0 as? StatusPanel }
+            .first { !existingWindows.contains(ObjectIdentifier($0)) })
+        panel.isReleasedWhenClosed = false
+        defer { panel.orderOut(nil); panel.close() }
+        controller.togglePlayer()
+        #expect(panel.isVisible)
+        #expect(panel.level == .normal)
+
+        await environment.requireLibrarySetup()
+        // Presentation observation applies window changes on the next main-actor turn.
+        for _ in 0..<10 { await Task.yield() }
+
+        #expect(panel.level == .floating)
+        #expect(!environment.presentation.keepOnTop)
+        #expect(!defaults.bool(forKey: "player.keepOnTop"))
+    }
+
     @Test(arguments: [false, true])
     func fullscreenEligibilityFollowsActualFocusWithoutChangingDesktopLevel(floating: Bool) throws {
         _ = NSApplication.shared

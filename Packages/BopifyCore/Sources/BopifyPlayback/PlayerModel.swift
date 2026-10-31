@@ -19,6 +19,7 @@ public final class PlayerModel {
     public private(set) var playbackRevision: UInt64 = 0
     public private(set) var seekRevision: UInt64 = 0
     public private(set) var isEngineReady = false
+    public private(set) var isRunning = false
     public private(set) var restorationUnavailable = false
     @ObservationIgnored public var onSessionLost: (@MainActor (SessionLossReason, PlaybackRecoverySnapshot) -> Void)?
     @ObservationIgnored private var managedAttachment = false
@@ -30,6 +31,7 @@ public final class PlayerModel {
     @ObservationIgnored var onRestorationResolved: (@MainActor () -> Void)?
     public private(set) var state = PlaybackState()
     public private(set) var commandNotice: String?
+    public private(set) var commandFailureRevision: UInt64 = 0
     public private(set) var queueSelection: QueueSelectionStatus = .idle
     public private(set) var queueDirection: CarouselDirection = .fade
     private var lastPositiveVolume: Double?
@@ -44,6 +46,9 @@ public final class PlayerModel {
     @ObservationIgnored private var engine: (any PlaybackEngine)?
     @ObservationIgnored private var consumer: Task<Void, Never>?
     @ObservationIgnored private var pendingCommand: Task<Void, Never>?
+    @ObservationIgnored private var desiredPlaying: Bool?
+    @ObservationIgnored private var playbackCommandTarget: (id: UUID, playing: Bool)?
+    @ObservationIgnored private var playbackIntentTimeout: Task<Void, Never>?
     @ObservationIgnored private var commandGeneration: UInt64 = 0
     @ObservationIgnored private var volumeRequest: (value: Double, immediate: Bool)?
     @ObservationIgnored private var volumeTask: Task<Void, Never>?
@@ -103,6 +108,7 @@ public final class PlayerModel {
     /// resubscribe whenever view identity changed.
     public func start() {
         guard consumer == nil, let engine else { return }
+        isRunning = true
         let epoch = engineEpoch
         BopifyLog.playback.info("player model starting epoch=\(epoch, privacy: .public)")
         consumer = Task { [weak self] in
@@ -171,6 +177,7 @@ public final class PlayerModel {
 
     private func reportSessionLoss(_ reason: SessionLossReason) {
         guard !reportedLoss else { return }
+        cancelPlaybackIntent()
         let snapshot = captureRecoverySnapshot(at: .now)
         reportedLoss = true
         isEngineReady = false
@@ -198,6 +205,8 @@ public final class PlayerModel {
     #endif
 
     public func stop() {
+        isRunning = false
+        cancelPlaybackIntent()
         cancelVolumeEditing()
         queueSelection = .idle
         lastPositiveVolume = nil
@@ -224,12 +233,48 @@ public final class PlayerModel {
     }
 
     public func togglePlayPause() {
-        guard isEngineReady, let engine else { return; }
+        guard isEngineReady, consumer != nil else { return }
         guard state.isActiveDevice else { playHere(); return }
-        let shouldPause = state.phase == .playing
-        enqueue(shouldPause ? "pause" : "resume", requiresActive: true) { [engine] in
-            if shouldPause { try await engine.pause() } else { try await engine.resume() }
+        desiredPlaying = !(desiredPlaying ?? (state.phase == .playing))
+        sendPlaybackIntent()
+    }
+
+    private func sendPlaybackIntent() {
+        guard let desiredPlaying, playbackCommandTarget == nil, let engine else { return }
+        guard desiredPlaying != (state.phase == .playing) else { self.desiredPlaying = nil; return }
+        let id = UUID()
+        playbackCommandTarget = (id, desiredPlaying)
+        playbackIntentTimeout = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(12)) } catch { return }
+            guard !Task.isCancelled, let self, playbackCommandTarget?.id == id else { return }
+            cancelPlaybackIntent()
+            BopifyLog.playback.debug("playback intent expired without confirmation")
         }
+        enqueue(desiredPlaying ? "resume" : "pause", requiresActive: true) { @MainActor [weak self, engine] in
+            guard let self, playbackCommandTarget?.id == id else { return }
+            do {
+                if desiredPlaying { try await engine.resume() } else { try await engine.pause() }
+            } catch {
+                if error as? PlayerError == .playbackSessionLost { throw error }
+                guard playbackCommandTarget?.id == id else { return }
+                cancelPlaybackIntent()
+                throw error
+            }
+        }
+    }
+
+    private func confirmPlaybackIntent(_ playing: Bool) {
+        guard playbackCommandTarget?.playing == playing else { return }
+        playbackIntentTimeout?.cancel(); playbackIntentTimeout = nil
+        playbackCommandTarget = nil
+        if desiredPlaying == playing { desiredPlaying = nil }
+        else { sendPlaybackIntent() }
+    }
+
+    private func cancelPlaybackIntent() {
+        playbackIntentTimeout?.cancel(); playbackIntentTimeout = nil
+        desiredPlaying = nil
+        playbackCommandTarget = nil
     }
 
     public func next() {
@@ -246,6 +291,7 @@ public final class PlayerModel {
 
     public func load(_ request: PlayRequest) {
         guard isEngineReady, let engine else { return; }
+        cancelPlaybackIntent()
         enqueue("load") { [engine] in try await engine.load(request) }
     }
 
@@ -397,6 +443,7 @@ public final class PlayerModel {
             do { try await operation() }
             catch {
                 guard generation == commandGeneration, engineEpoch == epoch else { return }
+                commandFailureRevision &+= 1
                 if error as? PlayerError == .playbackSessionLost { reportSessionLoss(.commandFailed); return }
                 if let selection {
                     guard queueSelection == selection else { return }
@@ -471,12 +518,15 @@ public final class PlayerModel {
         case let .shuffleChanged(enabled): state.shuffleEnabled = enabled
         case let .repeatChanged(mode): state.repeatMode = mode
         case let .commandRejected(reason):
+            commandFailureRevision &+= 1
+            cancelPlaybackIntent()
             if case .pending = queueSelection { queueSelection = .failed }
             commandNotice = reason == "staleQueue"
                 ? String(localized: "queue.changed", defaultValue: "The queue changed. Choose the track again.")
                 : String(localized: "command.unavailable", defaultValue: "That action is unavailable.")
             BopifyLog.playback.debug("player command rejected")
         case let .trackChanged(track):
+            cancelPlaybackIntent()
             playbackRevision &+= 1
             frozenDisplayPositionMs = nil
             positionUpdatedAt = .now
@@ -495,6 +545,7 @@ public final class PlayerModel {
             state.phase = .playing; state.positionMs = position
             state.isActiveDevice = true
             state.remote = nil; state.staleRemote = nil
+            confirmPlaybackIntent(true)
             resolveUnavailableRestoration()
         case let .paused(position):
             BopifyLog.playback.info("player paused epoch=\(self.engineEpoch, privacy: .public)")
@@ -505,6 +556,7 @@ public final class PlayerModel {
             state.phase = .paused; state.positionMs = position
             state.isActiveDevice = true
             state.remote = nil; state.staleRemote = nil
+            confirmPlaybackIntent(false)
             resolveUnavailableRestoration()
         case let .seeked(position):
             seekRevision &+= 1
@@ -530,11 +582,13 @@ public final class PlayerModel {
             freezeDisplayPosition()
             state.phase = .loading
         case .endOfTrack:
+            cancelPlaybackIntent()
             BopifyLog.playback.info("player end of track epoch=\(self.engineEpoch, privacy: .public)")
             lastConfirmedPlaying = false
             frozenDisplayPositionMs = nil
             state.phase = .ended; state.positionMs = state.durationMs
         case let .activeDeviceChanged(isActive):
+            if !isActive { cancelPlaybackIntent() }
             BopifyLog.playback.info("player ownership active=\(isActive, privacy: .public) epoch=\(self.engineEpoch, privacy: .public)")
             state.isActiveDevice = isActive
             if !isActive {

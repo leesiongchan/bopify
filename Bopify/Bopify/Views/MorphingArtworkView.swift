@@ -21,9 +21,9 @@ struct MorphingArtworkView: View {
     }
 
     var body: some View {
-        TimelineView(.animation(paused: !isAnimating || !isVisible)) { context in
+        TimelineView(.animation(paused: !isAnimating || !isVisible)) { _ in
             ZStack {
-                ForEach(morph.frames(at: context.date)) { frame in
+                ForEach(morph.frames(at: SuspendingClock.now)) { frame in
                     ArtworkView(image: frame.image, diameter: diameter).opacity(frame.opacity)
                 }
             }
@@ -37,7 +37,7 @@ struct MorphingArtworkView: View {
         }
         .task(id: morph.generation) {
             guard isAnimating else { return }
-            do { try await Task.sleep(for: .seconds(morph.duration)) } catch { return }
+            do { try await Task.sleep(for: .seconds(morph.duration), clock: .suspending) } catch { return }
             morph.finish()
             isAnimating = false
         }
@@ -46,7 +46,7 @@ struct MorphingArtworkView: View {
 
     private func retarget() {
         morph.duration = reduceMotion ? 0.16 : 0.65
-        morph.transition(to: image, occurrenceID: occurrenceID, at: .now, diameter: diameter)
+        morph.transition(to: image, occurrenceID: occurrenceID, at: SuspendingClock.now, diameter: diameter)
         isAnimating = isVisible
         if !isVisible { morph.finish() }
     }

@@ -1,45 +1,69 @@
 import SwiftUI
 import BopifyPlayback
 
-struct VinylRecordView: View {
+struct VinylRecordView: View, Animatable {
     let image: Image?
     let occurrenceID: String
     let direction: CarouselDirection
-    let diameter: CGFloat
+    var diameter: CGFloat
     let isMoving: Bool
     let isVisible: Bool
     let rotation: RecordRotation
+    var pressingSeed: Float = 0
+    var palette: ArtworkPalette = .neutral
+    var artworkRotationOffset = 0.0
     var rotationOverride: Double? = nil
     var isScrubbing = false
-    var isEngaged = false
     var reduceMotionOverride = false
+    var loadProgress = 1.0
+    var labelRatio: CGFloat = 0.43
+    var isIncomingDuringLoad = false
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
     @State private var tilt = 0.0
     @State private var depth = 1.0
-    @State private var kick = 0.0
     private var reduceMotion: Bool { systemReduceMotion || reduceMotionOverride }
+    var animatableData: CGFloat {
+        get { diameter }
+        set { diameter = newValue }
+    }
+    private var labelSize: CGFloat { min(diameter - 8, diameter * labelRatio) }
+    private var revealedDiameter: CGFloat {
+        isIncomingDuringLoad ? labelSize + (diameter - labelSize) * RecordLoadStage(progress: loadProgress).expansion : diameter
+    }
+    private var revealMask: some View {
+        Circle().frame(width: revealedDiameter, height: revealedDiameter)
+            .blur(radius: isIncomingDuringLoad ? sin(.pi * RecordLoadStage(progress: loadProgress).expansion) * 1.5 : 0)
+    }
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isMoving || !isVisible || reduceMotion || isScrubbing)) { _ in
             ZStack {
                 Circle().fill(Color(white: 0.016))
                     .offset(y: diameter * 0.0125)
-                VinylPressingView(diameter: diameter)
+                    .mask(revealMask)
                 ZStack {
-                    RecordDust()
-                    MorphingArtworkView(image: image, diameter: diameter * 0.43,
-                                        occurrenceID: occurrenceID, isVisible: isVisible, reduceMotionOverride: reduceMotion)
+                    VinylPressingView(seed: pressingSeed, palette: palette, diameter: diameter)
+                        .id(PressingAppearance(seed: pressingSeed, palette: palette))
+                        .transition(.opacity)
+                        .animation(isVisible && !isIncomingDuringLoad ? .easeInOut(duration: reduceMotion ? 0.16 : 0.65) : nil,
+                                   value: PressingAppearance(seed: pressingSeed, palette: palette))
+                        .mask(revealMask)
+                    RecordDust().mask(revealMask)
+                    MorphingArtworkView(image: image, diameter: labelSize,
+                                        occurrenceID: occurrenceID, isVisible: isVisible,
+                                        reduceMotionOverride: reduceMotion || loadProgress < 1)
                         .overlay(Circle().stroke(.black.opacity(0.4), lineWidth: 1))
+                        .rotationEffect(.radians(artworkRotationOffset))
                 }
                 .rotationEffect(.radians(rotationOverride ?? rotation.angle(at: ProcessInfo.processInfo.systemUptime)))
-                // A separate layer so the animated kick never fights the clock-driven spin or scrubbing.
-                .rotationEffect(.degrees(kick))
                 Circle().fill(.black.opacity(0.7)).frame(width: 3, height: 3)
                 Circle().strokeBorder(.white.opacity(contrast == .increased ? 0.75 : 0.3), lineWidth: 0.75)
+                    .frame(width: revealedDiameter, height: revealedDiameter)
             }
         }
         .frame(width: diameter, height: diameter)
+        .opacity(isIncomingDuringLoad ? RecordLoadStage(progress: loadProgress).incomingOpacity : 1)
         .scaleEffect(depth)
         .rotation3DEffect(.degrees(tilt), axis: (x: 0.3, y: 1, z: 0), perspective: 0.3)
         .shadow(color: .black.opacity(0.28), radius: 9, x: 0, y: 6)
@@ -56,11 +80,6 @@ struct VinylRecordView: View {
                 tilt = 0
                 depth = 1
             }
-        }
-        .onChange(of: isEngaged) { _, engaged in
-            // Only forward: a record doesn't unwind when the sleeve closes.
-            guard engaged, isVisible, !reduceMotion else { return }
-            withAnimation(.easeOut(duration: 0.9)) { kick += 220 }
         }
         .onChange(of: isVisible) { _, visible in if !visible { tilt = 0; depth = 1 } }
         .onChange(of: reduceMotion) { _, reduced in if reduced { tilt = 0; depth = 1 } }

@@ -17,6 +17,7 @@ final class LibrarySetupWindowController {
             window.isOpaque = false
             window.isMovableByWindowBackground = true
             window.isReleasedWhenClosed = false
+            window.level = .floating
             self.window = window
         }
         window?.center()

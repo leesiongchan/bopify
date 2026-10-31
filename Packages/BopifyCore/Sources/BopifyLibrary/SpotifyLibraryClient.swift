@@ -43,9 +43,11 @@ public struct SpotifyLibraryClient: LibraryService, SavedTracksService, Listenin
         let data = try await request(method: "GET", path: "/v1/me/player/recently-played",
                                      query: [URLQueryItem(name: "limit", value: "50")], scopes: ["user-read-recently-played"])
         guard let page = try? JSONDecoder().decode(RecentPage.self, from: data) else { throw LibraryError.invalidResponse }
-        return page.items.compactMap { item in
+        let plays = page.items.compactMap { item in
             item.track?.domain.map { RecentPlay(track: $0, contextURI: item.loadableContext) }
         }
+        BopifyLog.library.info("recents response items=\(page.items.count, privacy: .public) validTracks=\(plays.count, privacy: .public) filtered=\(page.items.count - plays.count, privacy: .public)")
+        return plays
     }
 
     public func topItems(_ kind: TopItemKind) async throws -> [StationSeed] {

@@ -78,7 +78,13 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     private func configure(mode: PlayerMode, keepOnTop: Bool) {
         guard !environment.isPreparingForQuit, let panel else { return }
         let floatingLyrics = environment.isLiveLyricsVisible && environment.presentation.mode == .compact
-        panel.level = keepOnTop || floatingLyrics ? .floating : .normal
+        let onboarding = environment.authState != .signedIn
+            || (!environment.hasPlaybackConnected && environment.connectionStatus != .ready)
+        let level: NSWindow.Level = keepOnTop || floatingLyrics || onboarding ? .floating : .normal
+        if panel.level != level {
+            panel.level = level
+            BopifyLog.playback.debug("player window level changed floating=\(level == .floating, privacy: .public)")
+        }
         UserDefaults.standard.set(keepOnTop, forKey: "player.keepOnTop")
         if environment.isListening || environment.isLiveLyricsVisible {
             if !isWindowControllerAttached {
@@ -193,8 +199,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         environment.showSearch()
     }
 
-    private func showPlayer() {
-        guard let panel, let button = statusItem.button else { return }
+    func showPlayer() {
+        guard !environment.isPreparingForQuit, let panel, let button = statusItem.button else { return }
 
         if isWindowControllerAttached {
             hasPosition = true
@@ -267,6 +273,11 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                                    action: #selector(quit(_:)), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
+
+        if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String {
+            menu.addItem(.separator())
+            menu.addItem(NSMenuItem(title: "Bopify \(version)", action: nil, keyEquivalent: ""))
+        }
 
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height), in: button)
     }

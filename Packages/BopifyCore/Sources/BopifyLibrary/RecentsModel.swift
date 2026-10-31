@@ -99,7 +99,7 @@ public final class RecentsModel: CoverFlowSource {
             tracks = newest.map(\.track)
             if !tracks.contains(where: { $0.uri == selectedURI }) { selectedURI = tracks.first?.uri }
             loadedAt = now()
-            BopifyLog.library.debug("recents ready count=\(self.tracks.count, privacy: .public)")
+            BopifyLog.library.info("recents ready received=\(plays.count, privacy: .public) distinct=\(self.tracks.count, privacy: .public) repeats=\(plays.count - newest.count, privacy: .public)")
         } catch {
             guard generation == current, !Task.isCancelled else { return }
             let failure = error as? LibraryError ?? .unavailable

@@ -11,6 +11,22 @@ struct RecentsModelTests {
         RecentPlay(track: testTrack(id), contextURI: context)
     }
 
+    @Test func fiftyDistinctPlaysRemainAvailableAndRepeatsCanProduceTwelveSongs() async {
+        let history = FakeHistory()
+        let clock = TestClock()
+        await history.setPlays(.success((0..<50).map { play("song\($0)") }))
+        let model = RecentsModel(service: history, now: { clock.date })
+        await model.reveal(at: clock.date)
+        #expect(model.tracks.count == 50)
+        model.select(testTrack("song49").uri)
+        #expect(model.selectedURI == testTrack("song49").uri)
+
+        clock.advance(60)
+        await history.setPlays(.success((0..<50).map { play("song\($0 % 12)") }))
+        await model.reveal(at: clock.date)
+        #expect(model.tracks.count == 12)
+    }
+
     @Test func collapsesRepeatsToTheNewestPlayAndItsContext() async {
         let history = FakeHistory()
         await history.setPlays(.success([play("a", album), play("b"), play("a", playlist), play("c")]))
