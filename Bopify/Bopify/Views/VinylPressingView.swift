@@ -5,6 +5,7 @@ struct PressingAppearance: Hashable {
     let seed: Float
     let palette: ArtworkPalette
     var design: VinylDesign = .original
+    var recordDesign: RecordDesign = .classic
     static let neutral = Self(seed: 0, palette: .neutral)
 }
 
@@ -12,6 +13,7 @@ struct VinylPressingView: View {
     var seed: Float = 0
     var palette: ArtworkPalette? = nil
     var design: VinylDesign = .original
+    var recordDesign: RecordDesign = .classic
     let diameter: CGFloat
 
     var body: some View {
