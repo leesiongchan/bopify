@@ -128,7 +128,7 @@ Checked against every spec section: Task 1 owns default/fallback/independence, T
 
 ## Execution Handoff
 
-The user approved this plan and native execution on 2026-10-31. Implemented on `feat/muted-record-materials` in `.worktrees/muted-record-materials`; independent whole-change review completed, with findings addressed in one correction pass. Integration choice is pending.
+The user approved this plan and native execution on 2026-10-31. Implemented on `feat/muted-record-materials` in `.worktrees/muted-record-materials`; independent whole-change review completed, with findings addressed in one correction pass. The user selected a local merge into `main`; merged-checkout verification passed.
 
 
 ## Verification evidence — 2026-10-31
@@ -168,3 +168,10 @@ These are the executor's recorded rulings, in order:
 6. Correct the accepted study's angular discontinuity with periodic sine modulation in Glass and the related Nacre overtone, preserving density `0.50` and material character. Tradeoff: a small smoke-layout change from the throwaway study; native seam regression and visual captures verify continuity.
 
 No additional review pass was dispatched; the independent review's fixes were verified through the new regressions and final full suite.
+
+
+## Local integration — 2026-10-31
+
+The user selected local integration. `main` fast-forwarded from `28cddab` to `f4c757b`; no remote update or push was performed. The complete native suite was rerun from the main checkout using `/tmp/bopify-record-merged-tests`: **263 passed, zero failures, zero skips**, followed by passing active-application keyboard checks for both choosers. The **460 Swift package tests** also passed from main. The temporary feature worktree and merged branch are approved for cleanup.
+
+Merged verification artifacts: `/tmp/bopify-record-validation/merged-native-results.json`, `/tmp/bopify-record-merged-native.log`, and `/tmp/bopify-record-merged-package.log`.

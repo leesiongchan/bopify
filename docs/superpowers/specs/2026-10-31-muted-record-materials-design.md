@@ -51,4 +51,4 @@ Exercise native chooser pointer/keyboard operation, single-window reuse, relaunc
 
 ## Approval
 
-The user approved this written design on 2026-10-31. The implementation plan is `docs/superpowers/plans/2026-10-31-muted-record-materials.md`; the user approved native execution, implementation and review are complete, and integration choice is pending.
+The user approved this written design on 2026-10-31. The implementation plan is `docs/superpowers/plans/2026-10-31-muted-record-materials.md`; the user approved native execution, implementation and review are complete, and the user selected a local merge into `main`, and merged-checkout verification passed.
