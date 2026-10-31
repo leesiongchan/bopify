@@ -197,7 +197,7 @@ struct RecordPreviewScene: View {
                         diameter: fixture.diameter,
                         isMoving: motorRequest != .snap && (fixture.isPlaying || isCoasting) && rotation.isMoving(at: ProcessInfo.processInfo.systemUptime),
                         isVisible: fixture.isVisible, rotation: rotation,
-                        pressingSeed: pressing.seed, palette: pressing.palette,
+                        pressingSeed: pressing.seed, palette: pressing.palette, design: pressing.design,
                         reduceMotionOverride: fixture.reduceMotion)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .onChange(of: motorRequest, initial: true) { _, request in

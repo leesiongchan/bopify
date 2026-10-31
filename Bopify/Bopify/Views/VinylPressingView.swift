@@ -4,6 +4,7 @@ import BopifyPlayback
 struct PressingAppearance: Hashable {
     let seed: Float
     let palette: ArtworkPalette
+    var design: VinylDesign = .original
     static let neutral = Self(seed: 0, palette: .neutral)
 }
 

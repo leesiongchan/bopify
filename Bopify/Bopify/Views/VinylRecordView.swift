@@ -11,6 +11,7 @@ struct VinylRecordView: View, Animatable {
     let rotation: RecordRotation
     var pressingSeed: Float = 0
     var palette: ArtworkPalette = .neutral
+    var design: VinylDesign = .original
     var artworkRotationOffset = 0.0
     var rotationOverride: Double? = nil
     var isScrubbing = false
@@ -43,11 +44,11 @@ struct VinylRecordView: View, Animatable {
                     .offset(y: diameter * 0.0125)
                     .mask(revealMask)
                 ZStack {
-                    VinylPressingView(seed: pressingSeed, palette: palette, diameter: diameter)
-                        .id(PressingAppearance(seed: pressingSeed, palette: palette))
+                    VinylPressingView(seed: pressingSeed, palette: palette, design: design, diameter: diameter)
+                        .id(PressingAppearance(seed: pressingSeed, palette: palette, design: design))
                         .transition(.opacity)
                         .animation(isVisible && !isIncomingDuringLoad ? .easeInOut(duration: reduceMotion ? 0.16 : 0.65) : nil,
-                                   value: PressingAppearance(seed: pressingSeed, palette: palette))
+                                   value: PressingAppearance(seed: pressingSeed, palette: palette, design: design))
                         .mask(revealMask)
                     RecordDust().mask(revealMask)
                     MorphingArtworkView(image: image, diameter: labelSize,
