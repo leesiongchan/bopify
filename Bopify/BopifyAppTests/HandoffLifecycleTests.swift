@@ -7,6 +7,80 @@ import BopifyPlayback
 
 @MainActor @Suite("Handoff lifecycle", .serialized)
 struct HandoffLifecycleTests {
+    @Test(.enabled("Requires native capture") { @MainActor in VinylRenderingFixture.canCapture })
+    func styleChangesDuringReplacementKeepTheOutgoingRecordAndSettleTheLatestChoice() async throws {
+        let f = try await HandoffAuditFixture.make()
+        defer { f.close() }
+        let initial = try await f.record("style-handoff-initial")
+        try f.clickCenter()
+        try await f.wait { f.engine.loadRequests.count == 1 }
+        for design in ["bloom", "drift", "carnival"] {
+            f.defaults.set(design, forKey: VinylDesign.preferenceKey)
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        // Replace the unconfirmed B flight with C while the A record is still underneath.
+        f.environment.likedSongs.select(f.c.uri)
+        try await f.settleShelf()
+        try f.clickCenter()
+        try await f.wait { f.engine.loadRequests.count == 2 }
+        f.defaults.set("strata", forKey: VinylDesign.preferenceKey)
+        f.defaults.set("bloom", forKey: VinylDesign.preferenceKey)
+        let waiting = try await f.record("style-handoff-replaced")
+        #expect(VinylRenderingFixture.differingAnnulusFraction(initial, waiting) < 0.04,
+                "An unconfirmed replacement must retain the original outgoing pressing")
+        f.engine.emit(.trackChanged(f.c))
+        f.engine.emit(.paused(positionMs: 0))
+        try await f.wait { (try? f.sample().blueComponent) ?? 0 > 0.85 }
+        try await Task.sleep(for: .milliseconds(1800))
+        let settled = try await f.record("style-handoff-settled")
+        f.defaults.set("original", forKey: VinylDesign.preferenceKey)
+        try await Task.sleep(for: .milliseconds(800))
+        let original = try await f.record("style-handoff-original-reference")
+        #expect(VinylRenderingFixture.differingAnnulusFraction(settled, original) > 0.1)
+        f.defaults.set("bloom", forKey: VinylDesign.preferenceKey)
+        try await Task.sleep(for: .milliseconds(800))
+        let bloom = try await f.record("style-handoff-bloom-reference")
+        #expect(VinylRenderingFixture.differingAnnulusFraction(settled, bloom) < 0.04,
+                "The settled real player must use only the latest saved choice")
+        #expect(f.engine.loadRequests.count == 2)
+    }
+
+    @Test(.enabled("Requires native capture") { @MainActor in VinylRenderingFixture.canCapture })
+    func canceledHandoffAndHiddenSessionResetRetainThePreferenceAndReleaseArtwork() async throws {
+        let f = try await HandoffAuditFixture.make()
+        defer { f.close() }
+        try f.clickCenter()
+        try await f.wait { f.engine.loadRequests.count == 1 }
+        f.defaults.set("drift", forKey: VinylDesign.preferenceKey)
+        f.defaults.set("carnival", forKey: VinylDesign.preferenceKey)
+        f.engine.emit(.commandRejected("unavailable"))
+        try await f.wait { f.player.commandNotice != nil }
+        try await Task.sleep(for: .milliseconds(800))
+        let canceled = try await f.record("style-canceled")
+        f.defaults.set("original", forKey: VinylDesign.preferenceKey)
+        try await Task.sleep(for: .milliseconds(800))
+        let original = try await f.record("style-canceled-original")
+        #expect(VinylRenderingFixture.differingAnnulusFraction(canceled, original) > 0.1)
+        f.defaults.set("carnival", forKey: VinylDesign.preferenceKey)
+        try await Task.sleep(for: .milliseconds(800))
+        let carnival = try await f.record("style-canceled-carnival")
+        #expect(VinylRenderingFixture.differingAnnulusFraction(canceled, carnival) < 0.04)
+
+        f.environment.presentation.sendAttention(.visibility(false))
+        f.panel.orderOut(nil)
+        f.defaults.set("strata", forKey: VinylDesign.preferenceKey)
+        f.store.clear()
+        try await Task.sleep(for: .milliseconds(250))
+        #expect(f.store.image(for: f.a.artwork!.url) == nil)
+        #expect(f.defaults.string(forKey: VinylDesign.preferenceKey) == "strata")
+        f.environment.presentation.sendAttention(.visibility(true))
+        f.panel.orderFrontRegardless()
+        try await Task.sleep(for: .milliseconds(250))
+        let released = try f.sample()
+        #expect(released.redComponent < 0.8, "The mounted player must release the previous red artwork on session reset")
+        #expect(f.engine.loadRequests.count == 1, "Style selection and session reset must not request playback")
+    }
+
     @Test func replacementKeepsTheRevealedRecordInsteadOfReturningToTheFirstSong() async throws {
         let f = try await HandoffAuditFixture.make()
         defer { f.close() }
@@ -199,6 +273,19 @@ struct HandoffLifecycleTests {
         let point = CGPoint(x: layout.recordCenter.x + layout.recordDiameter * 0.1, y: layout.recordCenter.y)
         return try #require(bitmap.colorAt(x: Int(point.x * CGFloat(bitmap.pixelsWide) / host.bounds.width),
             y: Int(point.y * CGFloat(bitmap.pixelsHigh) / host.bounds.height))?.usingColorSpace(.deviceRGB))
+    }
+
+    func record(_ name: String) async throws -> NSBitmapImageRep {
+        let bitmap = try await VinylRenderingFixture.capture(panel,
+            to: VinylRenderingFixture.directory.appendingPathComponent("\(name).png"))
+        let host = try #require(panel.contentView)
+        let layout = controller.layout
+        let scale = CGFloat(bitmap.pixelsWide) / host.bounds.width
+        let rect = CGRect(x: layout.recordCenter.x - layout.recordDiameter / 2,
+            y: layout.recordCenter.y - layout.recordDiameter / 2,
+            width: layout.recordDiameter, height: layout.recordDiameter)
+            .applying(CGAffineTransform(scaleX: scale, y: scale))
+        return NSBitmapImageRep(cgImage: try #require(bitmap.cgImage?.cropping(to: rect)))
     }
 
     func rgb(_ color: NSColor) -> String {

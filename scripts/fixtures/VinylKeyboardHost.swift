@@ -37,30 +37,35 @@ import AppKit
             app.terminate(nil)
         }
 
-        schedule(0.5) {
+        func beginWhenKey() {
             results.window = NSApp.windows.first { $0.identifier?.rawValue == "vinyl-design" }
-            app.activate()
-            results.window?.makeKeyAndOrderFront(nil)
-            results.wasKey = results.window?.isKeyWindow == true
+            guard app.isActive, results.window?.isKeyWindow == true else {
+                app.activate()
+                results.window?.makeKeyAndOrderFront(nil)
+                schedule(0.05) { beginWhenKey() }
+                return
+            }
+            results.wasKey = true
+            schedule(0.1) { send("\u{f701}", code: 125) }
+            schedule(0.3) { send("\u{f701}", code: 125) }
+            schedule(0.5) { send(" ", code: 49) }
+            schedule(0.7) {
+                results.style = defaults.string(forKey: VinylDesign.preferenceKey)
+                send("\u{1b}", code: 53)
+            }
+            schedule(0.9) {
+                results.closed = results.window?.isVisible == false
+                controller.show()
+                results.reused = NSApp.windows.first { $0.identifier?.rawValue == "vinyl-design" && $0.isVisible } === results.window
+            }
+            schedule(1.1) { send("\u{f703}", code: 124) }
+            schedule(1.3) { send("\r", code: 36) }
+            schedule(1.5) {
+                results.returnStyle = defaults.string(forKey: VinylDesign.preferenceKey)
+                finish()
+            }
         }
-        schedule(0.7) { send("\u{f701}", code: 125) }
-        schedule(0.9) { send("\u{f701}", code: 125) }
-        schedule(1.1) { send(" ", code: 49) }
-        schedule(1.3) {
-            results.style = defaults.string(forKey: VinylDesign.preferenceKey)
-            send("\u{1b}", code: 53)
-        }
-        schedule(1.5) {
-            results.closed = results.window?.isVisible == false
-            controller.show()
-            results.reused = NSApp.windows.first { $0.identifier?.rawValue == "vinyl-design" && $0.isVisible } === results.window
-        }
-        schedule(1.7) { send("\u{f703}", code: 124) }
-        schedule(1.9) { send("\r", code: 36) }
-        schedule(2.1) {
-            results.returnStyle = defaults.string(forKey: VinylDesign.preferenceKey)
-            finish()
-        }
+        schedule(0.5) { beginWhenKey() }
         schedule(10) { finish() }
         app.run()
     }
