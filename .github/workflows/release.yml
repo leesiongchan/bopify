@@ -93,6 +93,12 @@ jobs:
         run: ./scripts/build-rust.sh
       - name: Test Swift packages
         run: swift test --package-path Packages/BopifyCore
+      - name: Enable motion for native animation tests
+        # The hosted image disables motion; these tests sample intermediate frames.
+        run: |
+          defaults write com.apple.universalaccess reduceMotion -bool false
+          defaults read com.apple.universalaccess reduceMotion
+          swift -e 'import AppKit; precondition(!NSWorkspace.shared.accessibilityDisplayShouldReduceMotion, "Native animation tests require motion")'
       - name: Test macOS app
         run: >-
           xcodebuild -project Bopify/Bopify.xcodeproj -scheme BopifyAppTests

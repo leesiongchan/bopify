@@ -56,7 +56,19 @@ struct PlaybackFeedbackTests {
         for progress in [0.0, 0.25, 0.6, 1.0] {
             let pixels = try await snapshot(PlaybackButtonFace(isPlaying: true, previousPlaying: false,
                 progress: progress).frame(width: 48, height: 48), name: "button-\(progress)")
-            #expect(pixels > 50)
+            #expect(pixels.visiblePixels > 50)
+        }
+    }
+
+    @Test(arguments: [false, true])
+    func reducedMotionKeepsTheConfirmedGlyphAtEveryAnimationPhase(isPlaying: Bool) async throws {
+        let settled = try await snapshot(PlaybackButtonFace(isPlaying: isPlaying, previousPlaying: !isPlaying,
+            progress: 1), name: "reduced-button-settled-\(isPlaying)")
+        #expect(settled.visiblePixels > 50)
+        for progress in [0.0, 0.25, 0.6] {
+            let pixels = try await snapshot(PlaybackButtonFace(isPlaying: isPlaying, previousPlaying: !isPlaying,
+                progress: progress, reduceMotion: true), name: "reduced-button-\(isPlaying)-\(progress)")
+            #expect(pixels.png == settled.png, "Reduced motion must show the confirmed glyph without intermediate frames")
         }
     }
 
@@ -68,16 +80,17 @@ struct PlaybackFeedbackTests {
         for progress in [0.0, 0.18, 0.32] {
             let pixels = try await snapshot(RecordLoadTransition(launch: launch, destination: target, progress: progress),
                                             name: "flight-\(progress)")
-            #expect(pixels > 50)
+            #expect(pixels.visiblePixels > 50)
         }
         let finished = try await snapshot(RecordLoadTransition(launch: launch, destination: target, progress: 1), name: "flight-finished")
         let reduced = try await snapshot(RecordLoadTransition(launch: launch, destination: target, progress: 0.45, reduceMotion: true), name: "flight-reduced")
-        #expect(finished == 0)
-        #expect(reduced == 0)
+        #expect(finished.visiblePixels == 0)
+        #expect(reduced.visiblePixels == 0)
     }
 
-    private func snapshot<Content: View>(_ content: Content, name: String) async throws -> Int {
-        let host = NSHostingView(rootView: content.frame(width: 240, height: 240).background(.black))
+    private func snapshot<Content: View>(_ content: Content, name: String) async throws -> (visiblePixels: Int, png: Data) {
+        let host = NSHostingView(rootView: content.frame(width: 240, height: 240).background(.black)
+            .environment(\.colorScheme, .dark))
         let window = NSWindow(contentRect: CGRect(x: 300, y: 300, width: 240, height: 240),
                               styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
@@ -111,7 +124,7 @@ struct PlaybackFeedbackTests {
                    max(color.redComponent, color.greenComponent, color.blueComponent) > 0.1 { visible += 1 }
             }
         }
-        return visible
+        return (visible, png)
     }
 }
 
