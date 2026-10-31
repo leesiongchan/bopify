@@ -20,7 +20,7 @@ import tempfile
 import threading
 
 
-def verify_keyboard(repo):
+def verify_keyboard(repo, derived_data):
     with tempfile.TemporaryDirectory(prefix='bopify-vinyl-keyboard-') as temporary:
         root = Path(temporary)
         app = root / 'VinylKeyboardTests.app'
@@ -31,6 +31,7 @@ def verify_keyboard(repo):
             'Packages/BopifyCore/Sources/BopifyPlayback/ArtworkPalette.swift',
             'Packages/BopifyCore/Sources/BopifyDomain/BopifyLog.swift',
             'Bopify/Bopify/Views/VinylDesign.swift', 'Bopify/Bopify/Views/VinylDesignPalette.swift',
+            'Bopify/Bopify/Views/RecordDesign.swift',
             'Bopify/Bopify/Views/VinylDesignPickerModel.swift',
             'Bopify/Bopify/Views/VinylPressingView.swift', 'Bopify/Bopify/Views/PlayerSurface.swift',
             'Bopify/Bopify/Views/VinylDesignPicker.swift',
@@ -44,7 +45,7 @@ def verify_keyboard(repo):
             'CFBundleName': 'Vinyl keyboard tests', 'CFBundlePackageType': 'APPL', 'CFBundleVersion': '1',
             'CFBundleDevelopmentRegion': 'en', 'NSPrincipalClass': 'NSApplication',
         }))
-        resources = Path('/tmp/bopify-vinyl-tests/Build/Products/Debug/BopifyAppTests.xctest/Contents/Resources')
+        resources = derived_data / 'Build/Products/Debug/BopifyAppTests.xctest/Contents/Resources'
         shutil.copy(resources / 'default.metallib', contents / 'Resources/default.metallib')
         shutil.copytree(resources / 'en.lproj', contents / 'Resources/en.lproj')
         subprocess.run(['xcrun', 'swiftc', '-O', '-swift-version', '6', '-parse-as-library', str(root / 'Host.swift'),
@@ -88,6 +89,8 @@ def window_owner(window):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--all', action='store_true', help='Run the entire app test suite')
+    parser.add_argument('--suite', action='append', help='Run a named app test suite (repeatable)')
+    parser.add_argument('--derived-data-path', type=Path, default=Path('/tmp/bopify-vinyl-tests'))
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[1]
     output = Path('/tmp/bopify-vinyl-validation')
@@ -142,12 +145,12 @@ def main():
         worker.start()
         (requests / 'ready').touch()
         command = ['xcodebuild', '-quiet', '-project', 'Bopify/Bopify.xcodeproj', '-scheme', 'BopifyAppTests',
-                   '-destination', 'platform=macOS,arch=arm64', '-derivedDataPath', '/tmp/bopify-vinyl-tests', 'CODE_SIGNING_ALLOWED=NO']
+                   '-destination', 'platform=macOS,arch=arm64', '-derivedDataPath', str(args.derived_data_path), 'CODE_SIGNING_ALLOWED=NO']
         if not args.all:
-            command += ['-only-testing:BopifyAppTests/VinylRenderingTests']
+            command += [f'-only-testing:BopifyAppTests/{suite}' for suite in (args.suite or ['VinylRenderingTests'])]
         status = subprocess.call(command + ['test'], cwd=repo)
         if status == 0:
-            verify_keyboard(repo)
+            verify_keyboard(repo, args.derived_data_path)
         return status
     finally:
         stop.set()

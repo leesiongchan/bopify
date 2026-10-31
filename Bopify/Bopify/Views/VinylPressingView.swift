@@ -15,6 +15,8 @@ struct VinylPressingView: View {
     var design: VinylDesign = .original
     var recordDesign: RecordDesign = .classic
     let diameter: CGFloat
+    var reduceTransparencyOverride = false
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         Group {
@@ -23,10 +25,14 @@ struct VinylPressingView: View {
                 Rectangle().fill(.white)
                     .colorEffect(pressingShader(c0, c1, c2))
             case let .some(.tinted(tint)):
-                Circle().fill(Color(red: 0.035, green: 0.055, blue: 0.05))
-                    .overlay(Circle().fill(AngularGradient(colors: [
-                        .clear, tint.color.opacity(0.12), .clear, tint.color.opacity(0.07), .clear
-                    ], center: .center)))
+                if recordDesign == .classic {
+                    Circle().fill(Color(red: 0.035, green: 0.055, blue: 0.05))
+                        .overlay(Circle().fill(AngularGradient(colors: [
+                            .clear, tint.color.opacity(0.12), .clear, tint.color.opacity(0.07), .clear
+                        ], center: .center)))
+                } else {
+                    Rectangle().fill(.white).colorEffect(materialShader)
+                }
             case nil:
                 Rectangle().fill(.black)
                     .colorEffect(ShaderLibrary.bundle(Bundle(for: VinylShaderBundle.self))
@@ -35,6 +41,16 @@ struct VinylPressingView: View {
         }
         .frame(width: diameter, height: diameter)
         .clipShape(Circle())
+    }
+
+    private var materialShader: Shader {
+        let library = ShaderLibrary.bundle(Bundle(for: VinylShaderBundle.self))
+        let size = Shader.Argument.float2(Float(diameter), Float(diameter))
+        if recordDesign == .glass {
+            return library.recordGlass(size, .float(seed), .float(RecordDesign.glassSmokeDensity),
+                                       .float(reduceTransparency || reduceTransparencyOverride ? 1 : 0))
+        }
+        return library.recordNacre(size, .float(seed))
     }
 
     private func pressingShader(_ c0: ArtworkColor, _ c1: ArtworkColor, _ c2: ArtworkColor) -> Shader {

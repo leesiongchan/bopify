@@ -19,13 +19,13 @@ import Testing
         ArtworkColor(red: 0.45, green: 0.77, blue: 0.90),
         ArtworkColor(red: 0.85, green: 0.90, blue: 0.88))
 
-    static func capture<Content: View>(_ content: Content, size: CGSize, to url: URL) async throws -> NSBitmapImageRep {
+    static func capture<Content: View>(_ content: Content, size: CGSize, to url: URL, background: Color = .black) async throws -> NSBitmapImageRep {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let window = NSWindow(contentRect: CGRect(origin: CGPoint(x: 300, y: 300), size: size),
                               styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.hasShadow = false
-        window.contentView = NSHostingView(rootView: content.frame(width: size.width, height: size.height).background(.black))
+        window.contentView = NSHostingView(rootView: content.frame(width: size.width, height: size.height).background(background))
         defer { window.close() }
         window.orderFrontRegardless()
         return try await capture(window, to: url)
