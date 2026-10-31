@@ -1,6 +1,6 @@
 # Selectable vinyl designs
 
-Status: proposed design, awaiting user approval. Implementation is not authorized by this document alone.
+Status: approved by the user on 2026-10-31. Implementation planning is authorized; execution awaits review of the selected plan.
 
 ## Intent and agreed direction
 
@@ -118,4 +118,4 @@ Research informing the new compositions:
 
 ## Approval
 
-Pending user review of this written design. After approval, the next step is the implementation plan, not immediate implementation.
+The user approved this written design on 2026-10-31. The next step is review of the implementation plan and selection of its execution method.
