@@ -29,6 +29,7 @@ struct PlaybackConfirmationTests {
         f.report("unconfirmed650 vs before", waiting, before)
         #expect(f.difference(confirmed, settled) > 100, "Confirmation must begin the icon transition even after a slow command")
         f.report("old vs new settled glyph", waiting, settled)
+        #expect(f.difference(waiting, settled) > 100, "Confirmed pause must replace the settled playing glyph")
     }
 
     @Test func spaceAndExternalEventsChangeStateWithoutAClickTrigger() async throws {
@@ -63,6 +64,7 @@ struct PlaybackConfirmationTests {
         #expect(f.engine.commands == ["pause"])
         #expect(f.difference(external, final) > 100)
         f.report("external playing vs paused", final, paused)
+        #expect(f.difference(final, paused) > 100, "External playback must replace the settled paused glyph")
     }
 
 }
@@ -80,7 +82,7 @@ struct PlaybackConfirmationTests {
         player = PlayerModel(engine: engine)
         let player = player
         panel = StatusPanel(content: TransportControls(player: player)
-            .frame(width: 240, height: 100).background(.black).preferredColorScheme(.dark))
+            .frame(width: 240, height: 100).background(.black).environment(\.colorScheme, .dark))
         panel.setFrame(CGRect(x: 300, y: 300, width: 240, height: 100), display: false)
         panel.isReleasedWhenClosed = false
         panel.onTogglePlayback = {
