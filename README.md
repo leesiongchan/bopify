@@ -37,6 +37,8 @@ open Bopify/Bopify.xcodeproj
 
 Select the Bopify scheme in Xcode and run it. The build script creates the Rust library required by the Swift package.
 
+Use the same Apple Development signing identity for local builds. Ad-hoc signing (`CODE_SIGN_IDENTITY=-`) ties Keychain trust to each build's code hash, so rebuilding can trigger another password prompt even after choosing Always Allow. Certificate-based signing gives successive local builds a stable identity; the first switch may still require approval for the saved sign-in items.
+
 ## Releases
 
 Pushes to `main` release automatically when they bring user-facing app changes: a `feat:`, `fix:`, `perf:`, `revert:`, or breaking Conventional Commit touching the shipped app inputs listed in `cliff.toml`. Website, documentation, agent instructions, and test-only changes never release the app, and other commit types such as `chore:`, `refactor:`, and `build:` wait for the next release.
