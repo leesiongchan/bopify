@@ -19,9 +19,9 @@ final class VinylDesignPickerModel {
         let target: Int
         switch direction {
         case .left: target = max(0, index - 1)
-        case .right: target = min(6, index + 1)
-        case .up: target = index <= 3 ? 0 : index - 3
-        case .down: target = index == 0 ? 1 : index <= 3 ? index + 3 : index
+        case .right: target = min(VinylDesign.allCases.count - 1, index + 1)
+        case .up: target = index < 3 ? index : index - 3
+        case .down: target = index + 3 < VinylDesign.allCases.count ? index + 3 : index
         }
         focused = VinylDesign.allCases[target]
     }

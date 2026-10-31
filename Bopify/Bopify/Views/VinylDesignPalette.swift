@@ -9,7 +9,7 @@ struct VinylDesignPalette: Equatable, Sendable {
     static func resolve(_ source: ArtworkPalette, design: VinylDesign) -> Self? {
         guard case let .marble(c0, c1, c2) = source else { return nil }
         switch design {
-        case .original, .undertow, .drift, .strata:
+        case .original, .undertow, .strata:
             return Self(primary: c0, secondary: c1, accent: c2, paper: c2)
         case .bloom, .rhapsody, .carnival:
             return Self(primary: vivid(c0), secondary: vivid(c1), accent: vivid(c2), paper: c2)

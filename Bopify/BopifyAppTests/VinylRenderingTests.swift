@@ -72,7 +72,7 @@ struct VinylRenderingTests {
 
     @Test(.enabled("Requires screen capture or host capture helper") { @MainActor in VinylRenderingFixture.canCapture })
     func contourStylesRenderDistinctly() async throws {
-        let images = try await [VinylDesign.undertow, .drift, .strata].asyncImages()
+        let images = try await [VinylDesign.undertow, .strata].asyncImages()
         for i in 0..<images.count {
             for j in (i + 1)..<images.count {
                 #expect(VinylRenderingFixture.differingAnnulusFraction(images[i], images[j]) > 0.10)
@@ -82,7 +82,7 @@ struct VinylRenderingTests {
 
     @Test(.enabled("Requires screen capture or host capture helper") { @MainActor in VinylRenderingFixture.canCapture })
     func contoursFollowCoverColors() async throws {
-        for design in [VinylDesign.undertow, .drift, .strata] {
+        for design in [VinylDesign.undertow, .strata] {
             let warm = try await capture(design, palette: VinylRenderingFixture.warm, name: "warm")
             let cool = try await capture(design, palette: VinylRenderingFixture.cool, name: "cool")
             #expect(VinylRenderingFixture.differingAnnulusFraction(warm, cool) > 0.10)

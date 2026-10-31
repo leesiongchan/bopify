@@ -22,9 +22,8 @@ struct VinylDesignPicker: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("vinyl.title", bundle: strings).font(.title2.weight(.semibold))
             Text("vinyl.paletteHelp", bundle: strings).font(.caption).foregroundStyle(.secondary)
-            choice(.original)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                ForEach(VinylDesign.allCases.filter { $0 != .original }, id: \.rawValue) { design in
+                ForEach(VinylDesign.allCases, id: \.rawValue) { design in
                     choice(design)
                 }
             }
@@ -47,29 +46,19 @@ struct VinylDesignPicker: View {
         return Button {
             model.select(design)
         } label: {
-            Group {
-                if design == .original {
-                    HStack {
-                        Text(LocalizedStringKey(design.nameKey), bundle: strings)
-                        Text("vinyl.originalHelp", bundle: strings).font(.caption).foregroundStyle(.secondary)
-                        Spacer()
-                        checkmark(isSelected)
+            VStack(spacing: 8) {
+                VinylPressingView(seed: 42, palette: palette, design: design, diameter: 124)
+                    .overlay {
+                        Circle().fill(Color(red: 0.9569, green: 0.8745, blue: 0.6078))
+                            .frame(width: 124 * 0.43, height: 124 * 0.43)
+                            .overlay(Circle().fill(.black.opacity(0.65)).frame(width: 3, height: 3))
                     }
-                } else {
-                    VStack(spacing: 8) {
-                        VinylPressingView(seed: 42, palette: palette, design: design, diameter: 124)
-                            .overlay {
-                                Circle().fill(Color(red: 0.9569, green: 0.8745, blue: 0.6078))
-                                    .frame(width: 124 * 0.43, height: 124 * 0.43)
-                                    .overlay(Circle().fill(.black.opacity(0.65)).frame(width: 3, height: 3))
-                            }
-                        HStack(spacing: 4) {
-                            Text(LocalizedStringKey(design.nameKey), bundle: strings).font(.caption)
-                            checkmark(isSelected)
-                        }
-                    }.frame(maxWidth: .infinity)
+                HStack(spacing: 4) {
+                    Text(LocalizedStringKey(design.nameKey), bundle: strings).font(.caption)
+                    checkmark(isSelected)
                 }
             }
+            .frame(maxWidth: .infinity)
             .padding(10)
             .background(RoundedRectangle(cornerRadius: 10).fill(isSelected ? Color.accentColor.opacity(0.12) : .primary.opacity(0.04)))
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(isSelected ? Color.accentColor : .secondary.opacity(0.22), lineWidth: isSelected ? 1.5 : 1))

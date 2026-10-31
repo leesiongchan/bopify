@@ -14,7 +14,7 @@ struct HandoffLifecycleTests {
         let initial = try await f.record("style-handoff-initial")
         try f.clickCenter()
         try await f.wait { f.engine.loadRequests.count == 1 }
-        for design in ["bloom", "drift", "carnival"] {
+        for design in ["bloom", "undertow", "carnival"] {
             f.defaults.set(design, forKey: VinylDesign.preferenceKey)
             try await Task.sleep(for: .milliseconds(100))
         }
@@ -54,7 +54,7 @@ struct HandoffLifecycleTests {
         defer { f.close() }
         try f.clickCenter()
         try await f.wait { f.engine.loadRequests.count == 1 }
-        f.defaults.set("drift", forKey: VinylDesign.preferenceKey)
+        f.defaults.set("undertow", forKey: VinylDesign.preferenceKey)
         f.defaults.set("carnival", forKey: VinylDesign.preferenceKey)
         f.engine.emit(.commandRejected("unavailable"))
         try await f.wait { f.player.commandNotice != nil }

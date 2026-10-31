@@ -20,37 +20,21 @@ static float contourLine(float distance, float halfWidth) {
     float pixel = max(length(float2(dfdx(q.x), dfdy(q.x))), 0.01);
     half3 dark = half3(0.047, 0.071, 0.082);
     half3 rgb = dark;
-    if (style > 0.5 && style < 1.5) {
-        float a = atan2(q.y, q.x), radius = length(q);
-        float radialPixel = max(length(float2(dfdx(radius), dfdy(radius))), pixel);
-        for (int i = 0; i < 9; ++i) {
-            float b = 146 + i * 35;
-            float target = b + 28 * sin(3 * a + b * 0.008) + 20 * sin(5 * a - b * 0.006) + 10 * sin(9 * a + b * 0.004);
-            float d = abs(radius - target) / radialPixel;
-            rgb = mix(rgb, c1.rgb, half(contourLine(d, 9 / radialPixel)));
-            rgb = mix(rgb, c2.rgb, half(contourLine(d, 5 / radialPixel)));
-            rgb = mix(rgb, dark, half(contourLine(d, 2 / radialPixel)));
-            float accent = b + 17 + 28 * sin(3 * a + (b + 17) * 0.008)
-                + 20 * sin(5 * a - (b + 17) * 0.006) + 10 * sin(9 * a + (b + 17) * 0.004);
-            rgb = mix(rgb, c0.rgb, half(contourLine(abs(radius - accent) / radialPixel, 1.3 / radialPixel)));
-        }
+    float f = contourField(q / 720 * 2.8);
+    float gradient = max(length(float2(dfdx(f), dfdy(f))), 0.00001);
+    if (style > 0.5) {
+        float band = (f + 1.35) * 3.3;
+        int index = (int(floor(band)) % 8 + 8) % 8;
+        rgb = index < 2 || index == 6 ? c0.rgb : index < 4 || index == 5 ? c1.rgb : index == 4 ? c2.rgb : dark;
+        float d = min(fract(band), 1 - fract(band)) / (gradient * 3.3);
+        rgb = mix(rgb, dark, half(contourLine(d, 5.5 / pixel)));
+        rgb = mix(rgb, c2.rgb, half(contourLine(d, 2 / pixel)));
     } else {
-        float f = contourField(q / 720 * 2.8);
-        float gradient = max(length(float2(dfdx(f), dfdy(f))), 0.00001);
-        if (style > 1.5) {
-            float band = (f + 1.35) * 3.3;
-            int index = (int(floor(band)) % 8 + 8) % 8;
-            rgb = index < 2 || index == 6 ? c0.rgb : index < 4 || index == 5 ? c1.rgb : index == 4 ? c2.rgb : dark;
-            float d = min(fract(band), 1 - fract(band)) / (gradient * 3.3);
-            rgb = mix(rgb, dark, half(contourLine(d, 5.5 / pixel)));
-            rgb = mix(rgb, c2.rgb, half(contourLine(d, 2 / pixel)));
-        } else {
-            for (int i = 0; i < 34; ++i) {
-                float d = abs(f - (-1.25 + i * 0.076)) / gradient;
-                float width = i % 7 == 0 ? 9 : i % 4 == 0 ? 3.6 : 2.1;
-                half3 ink = i % 7 == 0 ? c2.rgb : i % 3 == 0 ? c0.rgb : i % 3 == 1 ? c1.rgb : c2.rgb;
-                rgb = mix(rgb, ink, half(contourLine(d, width * 0.5 / pixel)));
-            }
+        for (int i = 0; i < 34; ++i) {
+            float d = abs(f - (-1.25 + i * 0.076)) / gradient;
+            float width = i % 7 == 0 ? 9 : i % 4 == 0 ? 3.6 : 2.1;
+            half3 ink = i % 7 == 0 ? c2.rgb : i % 3 == 0 ? c0.rgb : i % 3 == 1 ? c1.rgb : c2.rgb;
+            rgb = mix(rgb, ink, half(contourLine(d, width * 0.5 / pixel)));
         }
     }
     return half4(rgb, 1);

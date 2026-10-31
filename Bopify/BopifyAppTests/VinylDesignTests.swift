@@ -9,10 +9,11 @@ struct VinylDesignTests {
         ArtworkColor(red: 0.9569, green: 0.8745, blue: 0.6078))
 
     @Test func stableIDsAndFallback() {
-        #expect(VinylDesign.allCases.map(\.rawValue) == ["original", "undertow", "drift", "strata", "bloom", "rhapsody", "carnival"])
+        #expect(VinylDesign.allCases.map(\.rawValue) == ["original", "undertow", "strata", "bloom", "rhapsody", "carnival"])
         #expect(VinylDesign.resolve(nil) == .original)
         #expect(VinylDesign.resolve("removed-style") == .original)
         #expect(VinylDesign.resolve("bloom") == .bloom)
+        #expect(VinylDesign.resolve("drift") == .original)
     }
 
     @Test(arguments: VinylDesign.allCases)
@@ -21,7 +22,7 @@ struct VinylDesignTests {
         #expect(VinylDesignPalette.resolve(.tinted(ArtworkColor(red: 0.5, green: 0.5, blue: 0.5)), design: design) == nil)
     }
 
-    @Test(arguments: [VinylDesign.original, .undertow, .drift, .strata])
+    @Test(arguments: [VinylDesign.original, .undertow, .strata])
     func originalAndContoursPreserveExtractedColors(design: VinylDesign) throws {
         let palette = try #require(VinylDesignPalette.resolve(warm, design: design))
         #expect(palette.primary == ArtworkColor(red: 0.9333, green: 0.5098, blue: 0.4510))

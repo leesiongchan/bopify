@@ -1,5 +1,7 @@
 # Selectable vinyl designs
 
+> Catalog revision requested after implementation: display Original as **Marble** while keeping its saved `original` ID; remove Drift and resolve saved `drift` IDs to Marble. Show the six remaining designs together in a three-column, two-row thumbnail grid. This supersedes the original catalog and chooser layout below. Verified with 238 passing native tests (no skips), actual native keyboard and six-card chooser captures, and a signed Release build.
+
 Status: approved by the user on 2026-10-31. Implementation planning is authorized; execution awaits review of the selected plan.
 
 ## Intent and agreed direction

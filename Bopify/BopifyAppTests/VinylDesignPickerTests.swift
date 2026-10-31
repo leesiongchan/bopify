@@ -17,7 +17,13 @@ struct VinylDesignPickerTests {
         #expect(defaults.string(forKey: VinylDesign.preferenceKey) == "bloom")
         model.move(.right)
         model.move(.up)
-        #expect(model.focused == .drift)
+        #expect(model.focused == .undertow)
+        model.move(.right)
+        model.move(.down)
+        model.move(.right)
+        #expect(model.focused == .carnival)
+        model.move(.up)
+        #expect(model.focused == .strata)
     }
     @Test func windowReopensAsOneInstance() async throws {
         let (defaults, suite) = try makeDefaults()
@@ -51,14 +57,16 @@ struct VinylDesignPickerTests {
         #expect(try element("vinyl.design.bloom", in: window()).value == "Selected")
     }
 
-    @Test func invalidPreferenceSelectsOriginal() async throws {
+    @Test(arguments: ["removed-style", "drift"])
+    func invalidPreferenceSelectsMarble(rawValue: String) async throws {
         let (defaults, suite) = try makeDefaults()
         defer { defaults.removePersistentDomain(forName: suite) }
-        defaults.set("removed-style", forKey: VinylDesign.preferenceKey)
+        defaults.set(rawValue, forKey: VinylDesign.preferenceKey)
         let mounted = showPicker(defaults: defaults)
         defer { mounted.close() }
         try await Task.sleep(for: .milliseconds(100))
         #expect(try element("vinyl.design.original", in: window()).value == "Selected")
+        #expect(try element("vinyl.design.original", in: window()).label == "Marble")
         #expect(try element("vinyl.design.carnival", in: window()).value == "Not selected")
     }
 

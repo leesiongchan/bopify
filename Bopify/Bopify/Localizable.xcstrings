@@ -2042,22 +2042,12 @@
         }
       }
     },
-    "vinyl.design.drift": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Drift"
-          }
-        }
-      }
-    },
     "vinyl.design.original": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Original"
+            "value": "Marble"
           }
         }
       }
@@ -2108,16 +2098,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Not selected"
-          }
-        }
-      }
-    },
-    "vinyl.originalHelp": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Current appearance"
           }
         }
       }

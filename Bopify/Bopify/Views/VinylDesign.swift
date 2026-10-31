@@ -1,5 +1,5 @@
 enum VinylDesign: String, CaseIterable, Sendable {
-    case original, undertow, drift, strata, bloom, rhapsody, carnival
+    case original, undertow, strata, bloom, rhapsody, carnival
 
     static let preferenceKey = "player.vinylDesign"
 

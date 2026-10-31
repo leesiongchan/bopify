@@ -39,8 +39,8 @@ struct VinylPressingView: View {
         let library = ShaderLibrary.bundle(Bundle(for: VinylShaderBundle.self))
         let size = Shader.Argument.float2(Float(diameter), Float(diameter))
         switch design {
-        case .undertow, .drift, .strata:
-            let style: Float = design == .undertow ? 0 : design == .drift ? 1 : 2
+        case .undertow, .strata:
+            let style: Float = design == .undertow ? 0 : 1
             return library.vinylContours(size, .float(seed), .color(c0.color), .color(c1.color), .color(c2.color), .float(style))
         case .original:
             return library.pressing(size, .float(seed), .color(c0.color), .color(c1.color), .color(c2.color))
