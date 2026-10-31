@@ -25,6 +25,9 @@ struct HandoffLifecycleTests {
         try await f.wait { f.engine.loadRequests.count == 2 }
         f.defaults.set("strata", forKey: VinylDesign.preferenceKey)
         f.defaults.set("bloom", forKey: VinylDesign.preferenceKey)
+        // Let the flying cover reach the spindle before sampling the outgoing annulus.
+        // Metadata is still unconfirmed, so the handoff remains active at its waiting stage.
+        try await Task.sleep(for: .seconds(CoverFlowLaunch.duration * 0.36))
         let waiting = try await f.record("style-handoff-replaced")
         #expect(VinylRenderingFixture.differingAnnulusFraction(initial, waiting) < 0.04,
                 "An unconfirmed replacement must retain the original outgoing pressing")
