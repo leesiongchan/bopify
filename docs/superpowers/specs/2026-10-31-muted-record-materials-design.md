@@ -1,6 +1,6 @@
 # Muted record materials
 
-Status: approved by the user on 2026-10-31. The user accepted the Glass and Nacre visual studies, requested 50% smoke density for Glass, and approved this written design. Implementation planning is authorized.
+Status: approved by the user on 2026-10-31. The user accepted the Glass and Nacre visual studies, requested 50% smoke density for Glass, and approved this written design. Implementation completed on `feat/muted-record-materials`; verification is recorded in the selected plan.
 
 ## Intent and scope
 
@@ -51,4 +51,4 @@ Exercise native chooser pointer/keyboard operation, single-window reuse, relaunc
 
 ## Approval
 
-The user approved this written design on 2026-10-31. The implementation plan is `docs/superpowers/plans/2026-10-31-muted-record-materials.md`; execution awaits plan review and selection of an execution method.
+The user approved this written design on 2026-10-31. The implementation plan is `docs/superpowers/plans/2026-10-31-muted-record-materials.md`; the user approved native execution, implementation and review are complete, and integration choice is pending.

@@ -9,6 +9,55 @@ import BopifyPlayback
 @MainActor @Suite("Record continuity", .serialized)
 struct RecordContinuityTests {
     @Test(.enabled("Requires native screen capture") { @MainActor in VinylRenderingFixture.canCapture })
+    func playingMaterialChangePreservesMotorAndLabelPhase() async throws {
+        let fixture = try await MaterialPlayerFixture(splitLabel: true)
+        defer { fixture.close() }
+        fixture.engine.emit(.activeDeviceChanged(isActive: true))
+        fixture.engine.emit(.playing(positionMs: 0))
+        try await Task.sleep(for: .milliseconds(1200))
+        let before = try await fixture.record("material-playing-before")
+        let started = ProcessInfo.processInfo.systemUptime
+        let commands = fixture.engine.commands
+        fixture.defaults.set("nacre", forKey: RecordDesign.preferenceKey)
+        try await Task.sleep(for: .milliseconds(850))
+        let after = try await fixture.record("material-playing-after")
+        let elapsed = ProcessInfo.processInfo.systemUptime - started
+        let delta = labelPhase(after) - labelPhase(before)
+        let angle = atan2(sin(delta), cos(delta))
+        #expect(abs(angle - elapsed * .pi / 6) < 0.15)
+        #expect(fixture.engine.commands == commands)
+        #expect(fixture.player.state.phase == .playing)
+    }
+
+    @Test(.enabled("Requires native screen capture") { @MainActor in VinylRenderingFixture.canCapture }, arguments: [false, true])
+    func replacedHandoffKeepsOutgoingGlassAndSettlesLatestChoice(cancel: Bool) async throws {
+        let fixture = try await MaterialPlayerFixture(nextColor: .gray)
+        defer { fixture.close() }
+        let before = try await fixture.record("material-replaced-before-\(cancel)")
+        try await beginMaterialHandoff(fixture)
+        try await waitUntil { fixture.engine.loadRequests.count == 1 }
+        fixture.defaults.set("nacre", forKey: RecordDesign.preferenceKey)
+        try await Task.sleep(for: .milliseconds(150))
+        try await beginMaterialHandoff(fixture)
+        try await waitUntil { fixture.engine.loadRequests.count == 2 }
+        fixture.defaults.set("classic", forKey: RecordDesign.preferenceKey)
+        try await Task.sleep(for: .milliseconds(800))
+        let pending = try await fixture.record("material-replaced-pending-\(cancel)")
+        #expect(VinylRenderingFixture.differingAnnulusFraction(before, pending) < 0.01)
+        if cancel {
+            fixture.environment.presentation.sendAttention(.visibility(false))
+            try await Task.sleep(for: .milliseconds(800))
+        } else {
+            await fixture.show(fixture.next)
+            try await Task.sleep(for: .milliseconds(900))
+        }
+        let settled = try await fixture.record("material-replaced-settled-\(cancel)")
+        #expect(meanAnnulus(settled) < 0.16, "The latest Classic choice must settle after replacement or cancellation")
+        #expect(fixture.defaults.string(forKey: RecordDesign.preferenceKey) == "classic")
+        #expect(fixture.engine.loadRequests.count == 2)
+    }
+
+    @Test(.enabled("Requires native screen capture") { @MainActor in VinylRenderingFixture.canCapture })
     func materialUpdatesWithoutChangingLabelOrPlayback() async throws {
         let fixture = try await MaterialPlayerFixture()
         defer { fixture.close() }
@@ -280,6 +329,40 @@ struct RecordContinuityTests {
         }
     }
 
+    private func beginMaterialHandoff(_ fixture: MaterialPlayerFixture) async throws {
+        try await waitUntil { findInput(fixture.panel.contentView)?.input != nil && !fixture.environment.likedSongs.tracks.isEmpty }
+        let input = try #require(findInput(fixture.panel.contentView))
+        let point = input.convert(CGPoint(x: input.bounds.midX, y: input.bounds.midY), to: nil)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            fixture.panel.sendEvent(try #require(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: fixture.panel.windowNumber,
+                context: nil, eventNumber: 1, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0)))
+        }
+    }
+
+    private func labelPhase(_ bitmap: NSBitmapImageRep) -> Double {
+        var xMoment = 0.0, yMoment = 0.0
+        for i in 0..<72 {
+            let a = Double(i) / 72 * 2 * .pi
+            let x = Int(Double(bitmap.pixelsWide) * (0.5 + 0.125 * cos(a)))
+            let y = Int(Double(bitmap.pixelsHigh) * (0.5 + 0.125 * sin(a)))
+            let light = Double(bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB)?.redComponent ?? 0)
+            xMoment += light * cos(a); yMoment += light * sin(a)
+        }
+        return atan2(yMoment, xMoment)
+    }
+
+    private func meanAnnulus(_ bitmap: NSBitmapImageRep) -> Double {
+        var total = 0.0
+        for i in 0..<36 {
+            let a = Double(i) / 36 * 2 * .pi
+            let x = Int(Double(bitmap.pixelsWide) * (0.5 + 0.34 * cos(a)))
+            let y = Int(Double(bitmap.pixelsHigh) * (0.5 + 0.34 * sin(a)))
+            total += Double(bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB)?.redComponent ?? 1)
+        }
+        return total / 36
+    }
+
     private func samplePhoto(_ panel: NSWindow, layout: RecordLayout) throws -> NSColor {
         let host = try #require(panel.contentView)
         host.layoutSubtreeIfNeeded()
@@ -314,16 +397,18 @@ struct RecordContinuityTests {
     let panel: StatusPanel
     private let suite = "bopify-material-player-\(UUID().uuidString)"
 
-    init(withoutArtwork: Bool = false, nextColor: NSColor = .red) async throws {
+    init(withoutArtwork: Bool = false, nextColor: NSColor = .red, splitLabel: Bool = false) async throws {
         let source = previewTracks[0]
         track = Track(uri: source.uri, title: source.title, artists: source.artists, albumTitle: source.albumTitle,
                       artwork: withoutArtwork ? nil : source.artwork, durationMs: source.durationMs)
-        func artwork(_ color: NSColor) -> NSImage {
+        func artwork(_ color: NSColor, split: Bool = false) -> NSImage {
             NSImage(size: NSSize(width: 160, height: 160), flipped: false) { rect in
-                color.setFill(); rect.fill(); return true
+                color.setFill(); rect.fill()
+                if split { NSColor(white: 0.9, alpha: 1).setFill(); CGRect(x: 80, y: 0, width: 80, height: 160).fill() }
+                return true
             }
         }
-        store = ArtworkStore(previewImages: [source.artwork!.url: artwork(.gray), next.artwork!.url: artwork(nextColor)])
+        store = ArtworkStore(previewImages: [source.artwork!.url: artwork(.gray, split: splitLabel), next.artwork!.url: artwork(nextColor)])
         if !withoutArtwork { _ = await store.loadPalette(source.artwork!.url) }
         _ = await store.loadPalette(next.artwork!.url)
         defaults = try #require(UserDefaults(suiteName: suite))

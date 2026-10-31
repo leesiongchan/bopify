@@ -26,7 +26,8 @@ static float materialGaps(float r) {
     float x = p.x * cos(phase) - p.y * sin(phase);
     float y = p.x * sin(phase) + p.y * cos(phase);
     float field = sin(5.0*x + 1.3*sin(4.0*y)) + 0.42*sin(9.0*y - 3.0*x) + 0.21*sin(14.0*x + 8.0*y);
-    float smoke = pow(0.5 + 0.5*sin(2.0*field + 0.4*a), 4.0);
+    // Angular modulation must be periodic across atan2's -pi/pi boundary.
+    float smoke = pow(0.5 + 0.5*sin(2.0*field + 0.4*sin(a)), 4.0);
     float wisps = pow(0.5 + 0.5*sin(13.0*field + 4.0*r), 18.0);
     float edge = smoothstep(0.965, 0.995, r);
     float alpha = min(0.8, density*(0.65 + 0.9*smoke) + 0.075*materialGrooves(r)
@@ -52,7 +53,7 @@ static float materialGaps(float r) {
     float grain = (materialHash(position) - 0.5) * 3.0;
     float base = 177.0 + 31.0*layer - 12.0*seam - 11.0*materialGrooves(r)
                - 12.0*materialGaps(r) + grain - 24.0*smoothstep(0.965, 0.995, r);
-    float overtone = sin(28.0*w + 0.2*a), warm = cos(3.0*p.x - 2.0*p.y);
+    float overtone = sin(28.0*w + 0.2*sin(a)), warm = cos(3.0*p.x - 2.0*p.y);
     float3 rgb = (base + float3(9.0 + 5.0*warm + 4.0*overtone, 12.0 + 6.0*overtone,
                                 4.0 - 4.0*warm + 8.0*overtone)) / 255.0;
     float alpha = saturate((1.0 - r) * radius);
