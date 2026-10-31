@@ -8,6 +8,94 @@ import BopifyPlayback
 
 @MainActor @Suite("Record continuity", .serialized)
 struct RecordContinuityTests {
+    @Test(.enabled("Requires native screen capture") { @MainActor in VinylRenderingFixture.canCapture })
+    func materialUpdatesWithoutChangingLabelOrPlayback() async throws {
+        let fixture = try await MaterialPlayerFixture()
+        defer { fixture.close() }
+        let beforeLabel = try samplePhoto(fixture.panel, layout: fixture.controller.layout)
+        let before = try await fixture.record("material-before")
+        let commands = fixture.engine.commands
+        fixture.defaults.set("nacre", forKey: RecordDesign.preferenceKey)
+        try await Task.sleep(for: .milliseconds(800))
+        let after = try await fixture.record("material-after")
+        let afterLabel = try samplePhoto(fixture.panel, layout: fixture.controller.layout)
+        #expect(VinylRenderingFixture.differingAnnulusFraction(before, after) > 0.1)
+        #expect(abs(beforeLabel.redComponent - afterLabel.redComponent) < 0.01)
+        #expect(abs(beforeLabel.greenComponent - afterLabel.greenComponent) < 0.01)
+        #expect(fixture.engine.commands == commands)
+        #expect(fixture.defaults.string(forKey: VinylDesign.preferenceKey) == "carnival")
+    }
+
+    @Test(.enabled("Requires native screen capture") { @MainActor in VinylRenderingFixture.canCapture })
+    func mutedColorfulMutedRestoresBothPreferences() async throws {
+        let fixture = try await MaterialPlayerFixture()
+        defer { fixture.close() }
+        let initial = try await fixture.record("material-muted-first")
+        await fixture.show(fixture.next)
+        let colorful = try await fixture.record("material-colorful")
+        fixture.defaults.set("classic", forKey: RecordDesign.preferenceKey)
+        try await Task.sleep(for: .milliseconds(800))
+        let unchangedColorful = try await fixture.record("material-colorful-classic")
+        #expect(VinylRenderingFixture.differingAnnulusFraction(colorful, unchangedColorful) == 0)
+        fixture.defaults.set("glass", forKey: RecordDesign.preferenceKey)
+        await fixture.show(fixture.track)
+        let restored = try await fixture.record("material-muted-restored")
+        #expect(VinylRenderingFixture.differingAnnulusFraction(initial, restored) == 0)
+        #expect(fixture.defaults.string(forKey: VinylDesign.preferenceKey) == "carnival")
+        #expect(fixture.defaults.string(forKey: RecordDesign.preferenceKey) == "glass")
+    }
+
+    @Test(.enabled("Requires native screen capture") { @MainActor in VinylRenderingFixture.canCapture })
+    func neutralRecordUsesSavedMaterial() async throws {
+        let fixture = try await MaterialPlayerFixture(withoutArtwork: true)
+        defer { fixture.close() }
+        let glass = try await fixture.record("material-neutral-glass")
+        fixture.defaults.set("nacre", forKey: RecordDesign.preferenceKey)
+        try await Task.sleep(for: .milliseconds(800))
+        let nacre = try await fixture.record("material-neutral-nacre")
+        #expect(VinylRenderingFixture.differingAnnulusFraction(glass, nacre) > 0.1)
+        #expect(fixture.engine.loadRequests.isEmpty)
+    }
+
+    @Test(.enabled("Requires native screen capture") { @MainActor in VinylRenderingFixture.canCapture })
+    func sessionResetRetainsBothPreferences() async throws {
+        let fixture = try await MaterialPlayerFixture(withoutArtwork: true)
+        defer { fixture.close() }
+        let initial = try await fixture.record("material-reset-before")
+        fixture.store.clear()
+        try await Task.sleep(for: .milliseconds(900))
+        let reset = try await fixture.record("material-reset-after")
+        #expect(VinylRenderingFixture.differingAnnulusFraction(initial, reset) == 0)
+        #expect(fixture.defaults.string(forKey: VinylDesign.preferenceKey) == "carnival")
+        #expect(fixture.defaults.string(forKey: RecordDesign.preferenceKey) == "glass")
+    }
+
+    @Test(.enabled("Requires native screen capture") { @MainActor in VinylRenderingFixture.canCapture })
+    func latestMaterialWaitsForCoverHandoff() async throws {
+        let fixture = try await MaterialPlayerFixture(nextColor: .gray)
+        defer { fixture.close() }
+        let before = try await fixture.record("material-flight-before")
+        try await waitUntil { findInput(fixture.panel.contentView)?.input != nil && !fixture.environment.likedSongs.tracks.isEmpty }
+        let input = try #require(findInput(fixture.panel.contentView))
+        let point = input.convert(CGPoint(x: input.bounds.midX, y: input.bounds.midY), to: nil)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            fixture.panel.sendEvent(try #require(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: fixture.panel.windowNumber,
+                context: nil, eventNumber: 1, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0)))
+        }
+        try await waitUntil { fixture.engine.loadRequests.count == 1 }
+        fixture.defaults.set("classic", forKey: RecordDesign.preferenceKey)
+        fixture.defaults.set("nacre", forKey: RecordDesign.preferenceKey)
+        try await Task.sleep(for: .milliseconds(800))
+        let pending = try await fixture.record("material-flight-pending")
+        #expect(VinylRenderingFixture.differingAnnulusFraction(before, pending) < 0.01)
+        await fixture.show(fixture.next)
+        try await Task.sleep(for: .milliseconds(900))
+        let arrived = try await fixture.record("material-flight-arrived")
+        #expect(VinylRenderingFixture.differingAnnulusFraction(before, arrived) > 0.1)
+        #expect(fixture.defaults.string(forKey: RecordDesign.preferenceKey) == "nacre")
+    }
+
     @Test(.enabled("Requires screen capture or host capture helper") { @MainActor in VinylRenderingFixture.canCapture })
     func globalStyleUpdatesWithoutChangingLabelOrPlayback() async throws {
         let track = previewTracks[0]
@@ -211,6 +299,78 @@ struct RecordContinuityTests {
         let deadline = ContinuousClock.now.advanced(by: .seconds(3))
         while !condition(), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
         try #require(condition())
+    }
+}
+
+@MainActor private final class MaterialPlayerFixture {
+    let track: Track
+    let next = previewTracks[1]
+    let store: ArtworkStore
+    let engine = LiveLyricTestEngine()
+    let player: PlayerModel
+    let environment: AppEnvironment
+    let defaults: UserDefaults
+    let controller: PlayerWindowController
+    let panel: StatusPanel
+    private let suite = "bopify-material-player-\(UUID().uuidString)"
+
+    init(withoutArtwork: Bool = false, nextColor: NSColor = .red) async throws {
+        let source = previewTracks[0]
+        track = Track(uri: source.uri, title: source.title, artists: source.artists, albumTitle: source.albumTitle,
+                      artwork: withoutArtwork ? nil : source.artwork, durationMs: source.durationMs)
+        func artwork(_ color: NSColor) -> NSImage {
+            NSImage(size: NSSize(width: 160, height: 160), flipped: false) { rect in
+                color.setFill(); rect.fill(); return true
+            }
+        }
+        store = ArtworkStore(previewImages: [source.artwork!.url: artwork(.gray), next.artwork!.url: artwork(nextColor)])
+        if !withoutArtwork { _ = await store.loadPalette(source.artwork!.url) }
+        _ = await store.loadPalette(next.artwork!.url)
+        defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.set("glass", forKey: RecordDesign.preferenceKey)
+        defaults.set("carnival", forKey: VinylDesign.preferenceKey)
+        defaults.set("liked", forKey: "library.tab")
+        player = PlayerModel(engine: engine)
+        player.applyPreviewEvents([.trackChanged(track), .paused(positionMs: 0)])
+        player.start()
+        let service = ContinuityLibrary(track: next)
+        environment = AppEnvironment(previewPlayer: player, favoriteService: service, savedTracksService: service, artworkStore: store)
+        environment.presentation.sendAttention(.visibility(true))
+        environment.presentation.sendAttention(.keyboardFocus(true))
+        controller = PlayerWindowController(defaults: defaults)
+        panel = StatusPanel(content: RecordPlayerView(player: player, artworkStore: store,
+            presentation: environment.presentation, windowController: controller)
+            .environment(environment).defaultAppStorage(defaults))
+        panel.isReleasedWhenClosed = false
+        controller.attach(to: panel)
+        controller.apply(mode: .expanded, reduceMotion: true, visibleFrame: CGRect(x: 0, y: 0, width: 1000, height: 800))
+        panel.makeKeyAndOrderFront(nil)
+        try await Task.sleep(for: .milliseconds(900))
+    }
+
+    func show(_ track: Track) async {
+        engine.emit(.trackChanged(track))
+        engine.emit(.paused(positionMs: 0))
+        try? await Task.sleep(for: .milliseconds(1100))
+    }
+
+    func record(_ name: String) async throws -> NSBitmapImageRep {
+        let bitmap = try await VinylRenderingFixture.capture(panel,
+            to: VinylRenderingFixture.directory.appendingPathComponent("\(name).png"))
+        let host = try #require(panel.contentView)
+        let scale = CGFloat(bitmap.pixelsWide) / host.bounds.width
+        let layout = controller.layout
+        let rect = CGRect(x: layout.recordCenter.x - layout.recordDiameter / 2,
+                          y: layout.recordCenter.y - layout.recordDiameter / 2,
+                          width: layout.recordDiameter, height: layout.recordDiameter)
+            .applying(CGAffineTransform(scaleX: scale, y: scale))
+        return NSBitmapImageRep(cgImage: try #require(bitmap.cgImage?.cropping(to: rect)))
+    }
+
+    func close() {
+        panel.close()
+        player.stop()
+        defaults.removePersistentDomain(forName: suite)
     }
 }
 

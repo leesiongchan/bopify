@@ -29,4 +29,26 @@ struct RecordDesignTests {
         #expect(outgoing.recordDesign == .glass)
         #expect(outgoing != appearance)
     }
+
+    @Test func latestMaterialWaitsForCoverHandoff() {
+        var selection = RecordDesignSelection(rawValue: "glass")
+        selection.beginHandoff()
+        selection.select(rawValue: "nacre")
+        selection.select(rawValue: "classic")
+        #expect(selection.appearance == .glass)
+        selection.finishHandoff()
+        #expect(selection.appearance == .classic)
+    }
+
+    @Test func replacementAndCancellationRetainLatestMaterial() {
+        var selection = RecordDesignSelection(rawValue: "glass")
+        selection.beginHandoff()
+        selection.select(rawValue: "nacre")
+        selection.beginHandoff()
+        #expect(selection.appearance == .nacre)
+        selection.select(rawValue: "glass")
+        selection.finishHandoff()
+        #expect(selection.selected == .glass)
+        #expect(selection.appearance == .glass)
+    }
 }

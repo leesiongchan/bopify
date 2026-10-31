@@ -49,6 +49,8 @@ struct RecordPlayerView: View {
     @AppStorage("player.artworkBackground") private var showsArtworkBackground = true
     @AppStorage(VinylDesign.preferenceKey) private var designRawValue = VinylDesign.original.rawValue
     @State private var designSelection = VinylDesignSelection()
+    @AppStorage(RecordDesign.preferenceKey) private var recordDesignRawValue = RecordDesign.classic.rawValue
+    @State private var recordDesignSelection = RecordDesignSelection()
     @State private var pendingSelection: QueueSelectionStatus?
     @State private var controlsContentHeight: CGFloat?
     @State private var coverLaunch: CoverFlowLaunch?
@@ -272,7 +274,9 @@ struct RecordPlayerView: View {
         .onChange(of: windowController.layout) { _, _ in showsCoverFunnel = false }
         .onChange(of: artworkStore.sessionRevision) { _, _ in
             finishCoverLoad(); dockedCoverRatio = 0.43; loadingFromPlaying = false
-            displayedPressing = .neutral; displayedOccurrenceID = "missing"; artworkRotationOffset = 0
+            displayedPressing = PressingAppearance(seed: 0, palette: .neutral, design: designSelection.appearance,
+                                                   recordDesign: recordDesignSelection.appearance)
+            displayedOccurrenceID = "missing"; artworkRotationOffset = 0
         }
         .onChange(of: reduceMotion) { _, reduced in if reduced { finishCoverLoad() } }
         .onChange(of: player.commandFailureRevision) { _, _ in finishCoverLoad() }
@@ -314,6 +318,10 @@ struct RecordPlayerView: View {
             designSelection.select(rawValue: value)
             applySelectedDesign()
         }
+        .onChange(of: recordDesignRawValue, initial: true) { _, value in
+            recordDesignSelection.select(rawValue: value)
+            applySelectedDesign()
+        }
     }
 
     private func finishReveal() async {
@@ -340,6 +348,7 @@ struct RecordPlayerView: View {
                     isVisible: presentation.isVisible, rotation: rotation,
                     pressingSeed: outgoingRecord.pressing.seed, palette: outgoingRecord.pressing.palette,
                     design: outgoingRecord.pressing.design,
+                    recordDesign: outgoingRecord.pressing.recordDesign,
                     artworkRotationOffset: outgoingRecord.artworkRotationOffset,
                     rotationOverride: pressedAngle.map { $0 + (scrub?.angleDelta ?? 0) },
                     isScrubbing: pressedAngle != nil, reduceMotionOverride: reduceMotion,
@@ -386,7 +395,8 @@ struct RecordPlayerView: View {
                                                  sessionRevision: request.sessionRevision)
         displayedOccurrenceID = occurrenceID
         displayedPressing = PressingAppearance(seed: request.uri.map(PressingSeed.offset) ?? 0,
-                                               palette: artwork?.palette ?? .neutral, design: designSelection.appearance)
+                                               palette: artwork?.palette ?? .neutral, design: designSelection.appearance,
+                                               recordDesign: recordDesignSelection.appearance)
         confirmCoverArtwork()
     }
 
@@ -403,6 +413,7 @@ struct RecordPlayerView: View {
               !reduceMotion, launch.sourceFrame.width > 0, launch.artwork != nil else { finishCoverLoad(); return }
         coverLaunch = launch
         designSelection.beginHandoff()
+        recordDesignSelection.beginHandoff()
         showsCoverFunnel = true
         outgoingRecord = previous
         coverTiming = RecordLoadTiming(startedAt: launch.startedAt)
@@ -432,12 +443,14 @@ struct RecordPlayerView: View {
         outgoingRecord = nil
         showsCoverFunnel = false
         designSelection.finishHandoff()
+        recordDesignSelection.finishHandoff()
         applySelectedDesign()
     }
 
     private func applySelectedDesign() {
         guard coverLaunch == nil else { return }
         displayedPressing.design = designSelection.appearance
+        displayedPressing.recordDesign = recordDesignSelection.appearance
     }
 
     private func recordFace(diameter: CGFloat, loadProgress: Double, angle: Double?) -> some View {
@@ -446,6 +459,7 @@ struct RecordPlayerView: View {
                         isVisible: presentation.isVisible, rotation: rotation,
                         pressingSeed: displayedPressing.seed, palette: displayedPressing.palette,
                         design: displayedPressing.design,
+                        recordDesign: displayedPressing.recordDesign,
                         artworkRotationOffset: artworkRotationOffset,
                         rotationOverride: angle ?? pressedAngle.map { $0 + (scrub?.angleDelta ?? 0) }, isScrubbing: pressedAngle != nil,
                         reduceMotionOverride: reduceMotion, loadProgress: loadProgress,
