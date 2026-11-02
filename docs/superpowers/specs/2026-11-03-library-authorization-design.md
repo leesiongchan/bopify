@@ -1,6 +1,6 @@
 # Library authorization and setup diagnostics
 
-Status: design approved by the user on 2026-11-03; awaiting review of this written spec. Third of four reliability specs. It adds code −7 to the FFI contract introduced in `2026-11-03-connection-resilience-design.md`.
+Status: approved by the user on 2026-11-03, design and written spec. Third of four reliability specs. It adds code −7 to the FFI contract introduced in `2026-11-03-connection-resilience-design.md`.
 
 ## Intent and scope
 

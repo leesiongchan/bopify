@@ -1,6 +1,6 @@
 # Connection resilience
 
-Status: design approved by the user on 2026-11-03; awaiting review of this written spec. First of four reliability specs from the Spotifast comparison. Order: connection resilience, refused audio keys, library authorization, audio output lifecycle.
+Status: approved by the user on 2026-11-03, design and written spec. First of four reliability specs from the Spotifast comparison. Order: connection resilience, refused audio keys, library authorization, audio output lifecycle.
 
 ## Intent and scope
 

@@ -1,6 +1,6 @@
 # Audio output lifecycle
 
-Status: design approved by the user on 2026-11-03; awaiting review of this written spec. Fourth of four reliability specs. It reuses `playbackNotice` from `2026-11-03-refused-audio-keys-design.md`.
+Status: approved by the user on 2026-11-03, design and written spec. Fourth of four reliability specs. It reuses `playbackNotice` from `2026-11-03-refused-audio-keys-design.md`.
 
 ## Intent and scope
 

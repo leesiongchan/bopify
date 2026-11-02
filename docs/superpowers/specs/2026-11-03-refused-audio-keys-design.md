@@ -1,6 +1,6 @@
 # Refused audio keys
 
-Status: design approved by the user on 2026-11-03; awaiting review of this written spec. Second of four reliability specs. It depends on the fork rebase in `2026-11-03-connection-resilience-design.md`.
+Status: approved by the user on 2026-11-03, design and written spec. Second of four reliability specs. It depends on the fork rebase in `2026-11-03-connection-resilience-design.md`.
 
 ## Intent and scope
 
