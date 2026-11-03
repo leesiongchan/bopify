@@ -57,7 +57,7 @@ public struct TokenClient: Sendable {
                 refreshToken: decoded.refresh_token ?? fallbackRefreshToken,
                 expiresAt: Date().addingTimeInterval(TimeInterval(decoded.expires_in)),
                 grantedScopes: decoded.scope.map { Set($0.split(separator: " ").map(String.init)) } ?? fallbackScopes)
-        case 429, 500...599:
+        case 408, 429, 500...599:
             throw PlayerError.networkUnavailable
         default:
             struct OAuthFailure: Decodable { let error: String }

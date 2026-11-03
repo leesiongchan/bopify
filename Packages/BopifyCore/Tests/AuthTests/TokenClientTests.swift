@@ -104,8 +104,8 @@ struct TokenClientTests {
         await #expect(throws: PlayerError.unknown) { _ = try await makeClient().refresh(refreshToken: "RT") }
     }
 
-    @Test func mapsServerFailureToNetworkUnavailable() async {
-        StubProtocol.handler = { _ in (503, Data()) }
+    @Test(arguments: [408, 503]) func mapsTimeoutAndServerFailureToNetworkUnavailable(_ status: Int) async {
+        StubProtocol.handler = { _ in (status, Data()) }
         await #expect(throws: PlayerError.networkUnavailable) {
             _ = try await makeClient().refresh(refreshToken: "RT")
         }
