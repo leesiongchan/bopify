@@ -11,6 +11,7 @@ public enum PlayerError: Error, Hashable, Sendable {
     case credentialCorrupt
     case credentialSaveFailed
     case premiumRequired
+    case accountRestricted
     case networkUnavailable
     case playbackSessionLost
     case unknown
@@ -29,6 +30,7 @@ public enum PlayerError: Error, Hashable, Sendable {
         case -3: self = .authExpired
         case -4: self = .premiumRequired
         case -5: self = .networkUnavailable
+        case -6: self = .accountRestricted
         default: self = .unknown
         }
     }

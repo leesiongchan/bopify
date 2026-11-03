@@ -4,5 +4,6 @@
   "authInvalid": -3,
   "premiumRequired": -4,
   "networkUnavailable": -5,
+  "accountRestricted": -6,
   "unknown": -99
 }

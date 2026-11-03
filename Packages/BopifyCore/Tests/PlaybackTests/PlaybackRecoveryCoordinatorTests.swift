@@ -113,7 +113,7 @@ struct PlaybackRecoveryCoordinatorTests {
     }
 
     /// Wake and network changes must not loop on an account problem; an explicit Retry always tries again.
-    @Test(arguments: [PlayerError.premiumRequired, .unknown]) func onlyAnExplicitRetryLeavesAFailure(_ error: PlayerError) async {
+    @Test(arguments: [PlayerError.premiumRequired, .accountRestricted, .unknown]) func onlyAnExplicitRetryLeavesAFailure(_ error: PlayerError) async {
         let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
         let recovery = coordinator(gate, clock)
         recovery.start(); await gate.waitForCreationCount(1); gate.failNext(with: error); await settle()

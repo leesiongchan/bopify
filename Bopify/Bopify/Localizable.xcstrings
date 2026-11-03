@@ -313,6 +313,16 @@
         }
       }
     },
+    "error.accountRestricted" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotify won't let this account play here."
+          }
+        }
+      }
+    },
     "error.authDenied" : {
       "localizations" : {
         "en" : {

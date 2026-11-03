@@ -67,7 +67,7 @@ struct StartupConnectionTests {
         #expect(connection(status, offersRetry: true).actionKey == "connection.retry")
     }
 
-    @Test(arguments: [PlayerError.premiumRequired, .unknown, .networkUnavailable])
+    @Test(arguments: [PlayerError.premiumRequired, .accountRestricted, .unknown, .networkUnavailable])
     func everyFailureOffersRetryNow(error: PlayerError) {
         #expect(connection(.failed(error)).actionKey == "connection.retry")
     }

@@ -19,7 +19,7 @@ struct LibrespotEngineTests {
     @Test func mapsTheSharedFFICodesOntoTheErrorTaxonomy() throws {
         let expected: [String: PlayerError] = [
             "invalidArgument": .unknown, "sessionLost": .playbackSessionLost, "authInvalid": .authExpired,
-            "premiumRequired": .premiumRequired, "networkUnavailable": .networkUnavailable, "unknown": .unknown,
+            "premiumRequired": .premiumRequired, "accountRestricted": .accountRestricted, "networkUnavailable": .networkUnavailable, "unknown": .unknown,
         ]
         let fixture = URL(filePath: #filePath).deletingLastPathComponent()
             .appending(path: "../../../../contracts/ffi-error-codes.json").standardized

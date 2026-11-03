@@ -9,7 +9,7 @@ license = "MIT"
 
 # Keep all librespot crates on the same reviewed commit of the Bopify fork.
 [workspace.dependencies]
-librespot-core = { git = "https://github.com/leesiongchan/librespot.git", rev = "7857e749cc83d4ac98ffe42e14dc3cdfa3cc18c9" }
-librespot-playback = { git = "https://github.com/leesiongchan/librespot.git", rev = "7857e749cc83d4ac98ffe42e14dc3cdfa3cc18c9" }
-librespot-connect = { git = "https://github.com/leesiongchan/librespot.git", rev = "7857e749cc83d4ac98ffe42e14dc3cdfa3cc18c9" }
-librespot-metadata = { git = "https://github.com/leesiongchan/librespot.git", rev = "7857e749cc83d4ac98ffe42e14dc3cdfa3cc18c9" }
+librespot-core = { git = "https://github.com/leesiongchan/librespot.git", rev = "80f49d50bf46ac454255f02c2fe0ed46ddf01fa6" }
+librespot-playback = { git = "https://github.com/leesiongchan/librespot.git", rev = "80f49d50bf46ac454255f02c2fe0ed46ddf01fa6" }
+librespot-connect = { git = "https://github.com/leesiongchan/librespot.git", rev = "80f49d50bf46ac454255f02c2fe0ed46ddf01fa6" }
+librespot-metadata = { git = "https://github.com/leesiongchan/librespot.git", rev = "80f49d50bf46ac454255f02c2fe0ed46ddf01fa6" }

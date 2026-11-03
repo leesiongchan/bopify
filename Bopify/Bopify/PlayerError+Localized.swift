@@ -10,6 +10,7 @@ extension PlayerError {
         case .invalidCallback: Text("error.invalidCallback")
         case .authExpired: Text("error.authExpired")
         case .premiumRequired: Text("error.premiumRequired")
+        case .accountRestricted: Text("error.accountRestricted")
         case .networkUnavailable: Text("error.networkUnavailable")
         case .playbackSessionLost: Text("error.playbackSessionLost")
         case .credentialCleanupNotRecorded: Text("error.credentialCleanupNotRecorded")

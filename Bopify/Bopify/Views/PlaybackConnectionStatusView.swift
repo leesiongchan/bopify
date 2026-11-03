@@ -25,6 +25,7 @@ struct PlaybackConnectionStatusView: View {
         case let .failed(error):
             switch error {
             case .premiumRequired: "error.premiumRequired"
+            case .accountRestricted: "error.accountRestricted"
             case .authDenied: "error.authDenied"
             case .authExpired: "error.authExpired"
             case .invalidCallback: "error.invalidCallback"

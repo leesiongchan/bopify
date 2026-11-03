@@ -346,21 +346,25 @@ fn command_failed<E>(_err: E) -> BopifyError {
     BopifyError::SessionLost
 }
 
+/// Only account problems are terminal: DNS, routes, Spotify outages and malformed
+/// answers can all clear on their own, so recovery keeps retrying them.
 fn classify_connect_error(err: librespot_core::Error) -> BopifyError {
     use librespot_core::error::{AuthenticationFailure, ErrorKind};
+    let io_kind = err
+        .error
+        .downcast_ref::<std::io::Error>()
+        .map(std::io::Error::kind);
     let error = match err.authentication_failure() {
         Some(AuthenticationFailure::PremiumRequired) => BopifyError::PremiumRequired,
         Some(AuthenticationFailure::InvalidCredentials) => BopifyError::AuthInvalid,
-        None => match err.kind {
-            ErrorKind::Unauthenticated => BopifyError::AuthInvalid,
-            ErrorKind::Unavailable
-            | ErrorKind::DeadlineExceeded
-            | ErrorKind::ResourceExhausted
-            | ErrorKind::Aborted => BopifyError::NetworkUnavailable,
-            _ => BopifyError::Unknown,
-        },
+        Some(AuthenticationFailure::AccountRestricted) => BopifyError::AccountRestricted,
+        None if err.kind == ErrorKind::Unauthenticated => BopifyError::AuthInvalid,
+        None => BopifyError::NetworkUnavailable,
     };
-    log::error!("engine: spirc connect failed error={error:?}");
+    log::error!(
+        "engine: spirc connect failed kind={:?} io_kind={io_kind:?} error={error:?}",
+        err.kind
+    );
     error
 }
 
@@ -428,6 +432,40 @@ mod tests {
             with_connect_deadline(std::future::pending::<Result<(), librespot_core::Error>>())
                 .await;
         assert_eq!(result, Err(BopifyError::NetworkUnavailable));
+    }
+
+    /// DNS, routes, Spotify outages and malformed answers can all clear on their own,
+    /// so only account problems may stop recovery.
+    #[test]
+    fn only_account_problems_stop_recovery() {
+        use librespot_core::Error as Lib;
+        use std::io::{Error as Io, ErrorKind as IoKind};
+        let retryable = [
+            Lib::from(Io::from(IoKind::HostUnreachable)),
+            Lib::from(Io::from(IoKind::NetworkUnreachable)),
+            Lib::from(Io::from(IoKind::NetworkDown)),
+            Lib::from(Io::other("failed to lookup address information")),
+            Lib::from(Io::from(IoKind::UnexpectedEof)),
+            Lib::from(Io::from(IoKind::InvalidData)),
+            Lib::failed_precondition("TRY_AGAIN_LATER"),
+            Lib::permission_denied("HTTP 403"),
+            Lib::not_found("HTTP 404"),
+            Lib::invalid_argument("HTTP 400"),
+            Lib::unknown("HTTP 502"),
+            Lib::internal("channel closed"),
+        ];
+        for error in retryable {
+            let kind = error.kind;
+            assert_eq!(
+                classify_connect_error(error),
+                BopifyError::NetworkUnavailable,
+                "{kind:?}"
+            );
+        }
+        assert_eq!(
+            classify_connect_error(Lib::unauthenticated("HTTP 401")),
+            BopifyError::AuthInvalid
+        );
     }
 
     #[test]

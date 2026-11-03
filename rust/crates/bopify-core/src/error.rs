@@ -5,6 +5,7 @@ pub enum BopifyError {
     AuthInvalid,
     PremiumRequired,
     NetworkUnavailable,
+    AccountRestricted,
     Unknown,
 }
 
@@ -24,6 +25,7 @@ impl BopifyError {
             Self::AuthInvalid => -3,
             Self::PremiumRequired => -4,
             Self::NetworkUnavailable => -5,
+            Self::AccountRestricted => -6,
             Self::Unknown => -99,
         }
     }
@@ -35,6 +37,7 @@ impl BopifyError {
             Self::AuthInvalid => "access token rejected or expired",
             Self::PremiumRequired => "Spotify Premium is required",
             Self::NetworkUnavailable => "network unavailable",
+            Self::AccountRestricted => "Spotify will not let this account play here",
             Self::Unknown => "unknown error",
         }
     }
@@ -56,6 +59,7 @@ mod tests {
                 AuthInvalid => "authInvalid",
                 PremiumRequired => "premiumRequired",
                 NetworkUnavailable => "networkUnavailable",
+                AccountRestricted => "accountRestricted",
                 Unknown => "unknown",
             }
         }
@@ -65,6 +69,7 @@ mod tests {
             AuthInvalid,
             PremiumRequired,
             NetworkUnavailable,
+            AccountRestricted,
             Unknown,
         ];
         let actual: std::collections::BTreeMap<String, i32> = all
