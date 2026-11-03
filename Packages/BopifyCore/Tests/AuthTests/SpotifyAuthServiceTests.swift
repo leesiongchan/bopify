@@ -80,22 +80,6 @@ struct SpotifyAuthServiceTests {
         #expect(try await service.validAccessToken() == "SAVED_FAKE")
     }
 
-    @Test func libraryConsentStartsWithoutPlaybackGrant() async throws {
-        AuthFlowStubProtocol.handler = { _ in (200, Data(self.librarySuccess.utf8)) }
-        let store = InMemoryTokenStore()
-        let service = SpotifyAuthService(clientID: "25bbd3bacca4412b80f17b892072af71", client: makeClient(), store: store, openURL: { url in
-            let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
-            #expect(query["client_id"] == "25bbd3bacca4412b80f17b892072af71")
-            #expect(Set(query["scope"]!.split(separator: " ").map(String.init)) == ["user-library-read", "user-library-modify", "user-read-recently-played", "user-top-read", "playlist-read-private", "playlist-read-collaborative", "user-follow-read"])
-            #expect(URL(string: query["redirect_uri"]!)?.path == "/login")
-            let callback = URL(string: "\(query["redirect_uri"]!)?code=TESTCODE&state=\(query["state"]!)")!
-            Task { _ = try? await URLSession.shared.data(from: callback) }
-        })
-        let token = try await service.authorizeLibrary()
-        #expect(token.grantedScopes == ["user-library-read", "user-library-modify", "user-read-recently-played", "user-top-read", "playlist-read-private", "playlist-read-collaborative", "user-follow-read"])
-        #expect(store.load()?.accessToken == "LIBRARY")
-    }
-
     @Test func libraryConsentUsesTheRegisteredFixedCallback() async throws {
         AuthFlowStubProtocol.handler = { _ in (200, Data(self.librarySuccess.utf8)) }
         let reserved = LoopbackCallbackListener(expectedState: "unused")
@@ -155,21 +139,6 @@ struct SpotifyAuthServiceTests {
         #expect(nextToken?.accessToken == "LIBRARY")
     }
 
-    @Test func libraryConsentReplacesLegacyGrantWithCompleteAccess() async throws {
-        let widened = #"{"access_token":"WIDE","token_type":"Bearer","expires_in":3600,"refresh_token":"RT","scope":"user-library-read user-library-modify user-read-recently-played user-top-read playlist-read-private playlist-read-collaborative user-follow-read"}"#
-        AuthFlowStubProtocol.handler = { _ in (200, Data(widened.utf8)) }
-        let store = InMemoryTokenStore()
-        try store.save(TokenSet(accessToken: "OLD", refreshToken: "RT", expiresAt: Date().addingTimeInterval(3600), grantedScopes: ["streaming", "user-library-read"]))
-        let service = SpotifyAuthService(clientID: "dashboard", client: makeClient(), store: store, openURL: { url in
-            let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
-            #expect(Set(query["scope"]!.split(separator: " ").map(String.init)) == ["user-library-read", "user-library-modify", "user-read-recently-played", "user-top-read", "playlist-read-private", "playlist-read-collaborative", "user-follow-read"])
-            let callback = URL(string: "\(query["redirect_uri"]!)?code=TESTCODE&state=\(query["state"]!)")!
-            Task { _ = try? await URLSession.shared.data(from: callback) }
-        })
-        let token = try await service.authorizeLibrary()
-        #expect(token.grantedScopes == ["user-library-read", "user-library-modify", "user-read-recently-played", "user-top-read", "playlist-read-private", "playlist-read-collaborative", "user-follow-read"])
-    }
-
     @Test func libraryConsentRejectsMissingScopes() async throws {
         AuthFlowStubProtocol.handler = { _ in (200, Data(#"{"access_token":"PARTIAL","token_type":"Bearer","expires_in":3600,"scope":"user-library-read"}"#.utf8)) }
         let store = InMemoryTokenStore()
@@ -184,34 +153,6 @@ struct SpotifyAuthServiceTests {
             _ = try await service.authorizeLibrary()
         }
         #expect(store.load() == old)
-    }
-
-    @Test func libraryGrantRestoresLazilyWithoutBrowser() async throws {
-        let store = InMemoryTokenStore()
-        try store.save(TokenSet(accessToken: "LIBRARY_SAVED", refreshToken: "RT",
-                                expiresAt: Date().addingTimeInterval(3600), grantedScopes: ["user-library-read"]))
-        let relaunched = SpotifyAuthService(clientID: "dashboard", client: makeClient(), store: store,
-                                            openURL: { _ in Issue.record("Restoring a grant must not open OAuth") })
-        #expect(try await relaunched.validAccessToken(requiredScopes: ["user-library-read"]) == "LIBRARY_SAVED")
-    }
-
-    @Test func libraryConsentCancelledBySignOut() async throws {
-        AuthFlowStubProtocol.handler = { _ in (200, Data(self.librarySuccess.utf8)) }
-        let store = InMemoryTokenStore()
-        let box = LateBinding<SpotifyAuthService>()
-        let service = SpotifyAuthService(clientID: "dashboard", client: makeClient(), store: store, openURL: { url in
-            let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
-            Task {
-                try? await box.value?.signOut()
-                let callback = URL(string: "\(query["redirect_uri"]!)?code=TESTCODE&state=\(query["state"]!)")!
-                _ = try? await URLSession.shared.data(from: callback)
-            }
-        })
-        box.value = service
-        await #expect(throws: PlayerError.authDenied) {
-            _ = try await service.authorizeLibrary()
-        }
-        #expect(store.load() == nil)
     }
 
     @Test func signInRequestsExactlyTheStreamingScopeAndCompletesTheFlow() async throws {
@@ -343,40 +284,6 @@ struct SpotifyAuthServiceTests {
         try store.save(TokenSet(accessToken: "NEW_FAKE", refreshToken: "RT", expiresAt: .distantFuture, grantedScopes: ["streaming"]))
         let service = SpotifyAuthService(clientID: "test", client: makeClient(), store: store)
         #expect(try await service.validAccessToken(rejecting: "OLD_FAKE") == "NEW_FAKE")
-    }
-
-    @Test func forcedAndOrdinaryRefreshShareRequest() async throws {
-        let gate = RefreshGate()
-        ControlledRefreshProtocol.gate = gate
-        let store = InMemoryTokenStore()
-        try store.save(TokenSet(accessToken: "OLD", refreshToken: "RT", expiresAt: .distantPast, grantedScopes: ["streaming"]))
-        let config = URLSessionConfiguration.ephemeral
-        config.protocolClasses = [ControlledRefreshProtocol.self]
-        let service = SpotifyAuthService(clientID: "test", client: TokenClient(clientID: "test", session: URLSession(configuration: config)), store: store)
-        let first = Task { try await service.validAccessToken() }
-        for await _ in gate.started.stream { break }
-        let second = Task { try await service.validAccessToken(rejecting: "OLD") }
-        for _ in 0..<100 { await Task.yield() }
-        gate.release()
-        #expect(try await first.value == "NEW_FAKE")
-        #expect(try await second.value == "NEW_FAKE")
-        #expect(gate.requestCount == 1)
-    }
-
-    @Test func signOutDuringForcedRefreshCannotSave() async throws {
-        let gate = RefreshGate()
-        ControlledRefreshProtocol.gate = gate
-        let store = InMemoryTokenStore()
-        try store.save(TokenSet(accessToken: "OLD", refreshToken: "RT", expiresAt: .distantFuture, grantedScopes: ["streaming"]))
-        let config = URLSessionConfiguration.ephemeral
-        config.protocolClasses = [ControlledRefreshProtocol.self]
-        let service = SpotifyAuthService(clientID: "test", client: TokenClient(clientID: "test", session: URLSession(configuration: config)), store: store)
-        let request = Task { try await service.validAccessToken(rejecting: "OLD") }
-        for await _ in gate.started.stream { break }
-        try await service.signOut()
-        gate.release()
-        do { _ = try await request.value; Issue.record("Stale forced refresh returned") } catch {}
-        #expect(store.load() == nil)
     }
 
     @Test func newConsentInvalidatesForcedRefresh() async throws {

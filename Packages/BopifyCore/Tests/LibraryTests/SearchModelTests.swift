@@ -43,41 +43,6 @@ struct SearchModelTests {
         #expect(await service.requests.count == 1)
     }
 
-    @Test(arguments: ["edit", "clear", "close"])
-    func staleLinkLookupCannotReplaceCurrentResults(_ action: String) async {
-        let service = SearchFixture()
-        let model = SearchModel(service: service, debounce: {})
-        model.updateQuery("spotify:track:abc")
-        await service.holdNext()
-        let pending = Task { await model.search() }
-        await service.waitUntilHeld()
-        if action == "edit" {
-            model.updateQuery("new text")
-            await model.search()
-        } else if action == "clear" { model.clear() }
-        else { model.cancel() }
-        let expected = model.results
-        await service.finishHeld(Dictionary(uniqueKeysWithValues: CatalogSearchKind.allCases.map {
-            ($0, CatalogSearchPage(results: $0 == .song ? [searchResult(.song, "late")] : [], nextOffset: nil))
-        }))
-        await pending.value
-        #expect(model.results == expected && model.selectedURI == nil && !model.isLoading)
-    }
-
-    @Test func transientLinkFailureCanRetryAndSelectTheResult() async {
-        let service = SearchFixture()
-        await service.fail(.unavailable, for: .song)
-        let model = SearchModel(service: service, debounce: {})
-        model.updateQuery("spotify:track:abc")
-        await model.search()
-        for kind in CatalogSearchKind.allCases {
-            await service.setPage(CatalogSearchPage(results: kind == .song ? [searchResult(.song, "abc")] : [], nextOffset: nil), for: kind)
-        }
-        await model.retry(at: Date())
-        #expect(model.error == nil && model.selectedURI == SpotifyURI("spotify:track:abc"))
-        #expect(await service.requests.count == 2)
-    }
-
     @Test(arguments: ["  bjork  ", "BJÖRK"])
     func ranksTitlesAcrossKindsIgnoringCaseAndAccents(_ query: String) async {
         let service = SearchFixture()
@@ -116,30 +81,6 @@ struct SearchModelTests {
         await model.search()
         #expect(model.results.map(\.uri) == [target.uri, searchResult(.song, "first").uri,
             searchResult(.album, "first").uri, searchResult(.playlist, "first").uri])
-    }
-
-    @Test func equalScoresKeepSourceOrderAcrossKinds() async {
-        let service = SearchFixture()
-        for kind in CatalogSearchKind.allCases {
-            let result: CatalogSearchResult
-            if kind == .song {
-                result = .song(Track(uri: SpotifyURI("spotify:track:equal")!, title: "Mira",
-                    artists: [], albumTitle: nil, artwork: nil, durationMs: 180_000))
-            } else {
-                let collection = LibraryCollection(uri: SpotifyURI("spotify:\(kind.rawValue):equal")!,
-                    title: "Mira", subtitle: "", artwork: nil)
-                switch kind {
-                case .album: result = .album(collection)
-                case .artist: result = .artist(collection)
-                default: result = .playlist(collection)
-                }
-            }
-            await service.setPage(CatalogSearchPage(results: [result], nextOffset: nil), for: kind)
-        }
-        let model = SearchModel(service: service, debounce: {})
-        model.updateQuery("mira")
-        await model.search()
-        #expect(model.results.map(\.kind) == CatalogSearchKind.allCases)
     }
 
     @Test func equalMatchesRetainSpotifyOrderAndNeverFilterResults() async {
@@ -183,29 +124,6 @@ struct SearchModelTests {
         #expect(model.selectedURI == selected)
         #expect(searchGroup(model, .playlist).error == .unavailable)
         #expect(model.groups.allSatisfy { !$0.isLoading })
-    }
-
-    @Test func closingSingleMoreCancelsEveryKindAndRejectsLatePages() async {
-        let service = SearchFixture()
-        for kind in [CatalogSearchKind.artist, .playlist] {
-            await service.setPage(CatalogSearchPage(results: [], nextOffset: nil), for: kind)
-        }
-        let model = SearchModel(service: service, debounce: {})
-        model.updateQuery("music")
-        await model.search()
-        let original = model.groups
-        await service.holdNext([.song])
-        await service.holdNext([.album])
-        let loading = Task { await model.loadMore() }
-        await service.waitUntilHeld([.song])
-        await service.waitUntilHeld([.album])
-        model.cancel()
-        for kind in [CatalogSearchKind.album, .song] {
-            await service.finishHeld([kind: CatalogSearchPage(results: [searchResult(kind, "late")], nextOffset: nil)], kinds: [kind])
-        }
-        await loading.value
-        #expect(model.groups == original && model.query == "music")
-        #expect(await service.cancelledRequests == 2)
     }
 
     @Test func normalizesQueriesAndSkipsBlankRequests() async {

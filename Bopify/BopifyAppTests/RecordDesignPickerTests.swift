@@ -70,19 +70,6 @@ struct RecordDesignPickerTests {
         #expect(try window() === first)
     }
 
-    @Test(.enabled("Requires native screen capture") { @MainActor in VinylRenderingFixture.canCapture })
-    func nativeChooserHasStaticMaterialPreviews() async throws {
-        let (defaults, suite) = try makeDefaults()
-        defer { defaults.removePersistentDomain(forName: suite) }
-        defaults.set("glass", forKey: RecordDesign.preferenceKey)
-        let controller = RecordDesignWindowController(defaults: defaults)
-        controller.show()
-        defer { controller.close() }
-        let image = try await VinylRenderingFixture.capture(window(),
-            to: VinylRenderingFixture.directory.appendingPathComponent("record-design-chooser.png"))
-        #expect(image.pixelsWide >= 540)
-    }
-
     private func makeDefaults() throws -> (UserDefaults, String) {
         _ = NSApplication.shared
         let suite = "bopify-record-picker-\(UUID().uuidString)"

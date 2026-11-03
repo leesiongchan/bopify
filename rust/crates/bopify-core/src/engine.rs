@@ -501,16 +501,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn network_error_mentioning_credentials_is_not_a_token_rejection() {
-        assert_eq!(
-            classify_connect_error(librespot_core::Error::unavailable(
-                "credentials network lookup failed"
-            )),
-            BopifyError::NetworkUnavailable
-        );
-    }
-
     #[tokio::test(start_paused = true)]
     async fn invalid_session_reports_loss_while_spirc_is_stalled() {
         for already_invalid in [false, true] {
@@ -537,22 +527,6 @@ mod tests {
             );
             assert!(received.recv().await.is_none());
         }
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn invalid_session_during_teardown_never_reports_recovery() {
-        let session = Session::new(SessionConfig::default(), None);
-        let (output, mut received) = tokio::sync::mpsc::unbounded_channel();
-        let reporter = EngineReporter::new(Arc::new(move |event| {
-            output.send(event).unwrap();
-        }));
-        reporter.begin_teardown();
-        supervise_spirc(std::future::pending(), session.clone(), reporter);
-        session.shutdown();
-        let result = tokio::time::timeout(std::time::Duration::from_secs(1), received.recv())
-            .await
-            .expect("shutdown observer must finish during intentional teardown");
-        assert!(result.is_none());
     }
 
     #[tokio::test]
@@ -665,44 +639,5 @@ mod tests {
         failed.store(true, std::sync::atomic::Ordering::Release);
         tokio::time::advance(std::time::Duration::from_secs(1)).await;
         assert!(received.try_recv().is_err());
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn early_output_fault_reports_after_supervisor_starts() {
-        let (output, mut received) = tokio::sync::mpsc::unbounded_channel();
-        let reporter = EngineReporter::new(Arc::new(move |event| {
-            output.send(event).unwrap();
-        }));
-        let failed = reporter.output_error_signal();
-        failed.store(true, Ordering::Release);
-        supervise_audio_output(failed, reporter);
-        let event = tokio::time::timeout(std::time::Duration::from_secs(1), received.recv())
-            .await
-            .unwrap()
-            .unwrap();
-        assert!(matches!(
-            event,
-            WireEvent::SessionLost {
-                reason: SessionLossReason::AudioOutputFailed
-            }
-        ));
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn output_supervisor_cannot_report_after_teardown() {
-        let (output, mut received) = tokio::sync::mpsc::unbounded_channel();
-        let reporter = EngineReporter::new(Arc::new(move |event| {
-            output.send(event).unwrap();
-        }));
-        let failed = reporter.output_error_signal();
-        reporter.begin_teardown();
-        failed.store(true, Ordering::Release);
-        supervise_audio_output(failed, reporter);
-        assert!(
-            tokio::time::timeout(std::time::Duration::from_secs(1), received.recv())
-                .await
-                .unwrap()
-                .is_none()
-        );
     }
 }

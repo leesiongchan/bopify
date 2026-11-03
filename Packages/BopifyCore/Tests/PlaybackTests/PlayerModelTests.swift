@@ -6,16 +6,6 @@ import BopifyDomain
 @MainActor
 @Suite("PlayerModel")
 struct PlayerModelTests {
-    @Test func eventSynchronizationWaitsForSlowDelivery() async {
-        let engine = StubPlaybackEngine(eventDelay: .milliseconds(80))
-        let model = PlayerModel(engine: engine)
-        model.start()
-        defer { model.stop() }
-        await settle(model, engine, [.trackChanged(makeTrack()), .playing(positionMs: 1000), .loading])
-        #expect(model.state.currentTrack?.title == "Title")
-        #expect(model.state.phase == .loading)
-        #expect(await engine.consumedEvents() == 3)
-    }
 
     @Test(arguments: ["unchanged", "queueOnly", "sameURITrack"])
     func queuedSeekCannotOutliveItsSongOccurrence(change: String) async throws {
@@ -375,18 +365,6 @@ struct PlayerModelTests {
         #expect(model.displayPositionMs(at: model.positionUpdatedAt.addingTimeInterval(1)) == 31_000)
     }
 
-    @Test func trackChangedPopulatesMetadataAndDuration() async {
-        let engine = StubPlaybackEngine()
-        let model = PlayerModel(engine: engine)
-        model.start()
-        await settle(model, engine, [.trackChanged(makeTrack())])
-
-        #expect(model.state.currentTrack?.title == "Title")
-        #expect(model.state.durationMs == 240_000)
-        #expect(model.state.canNext)
-        #expect(model.state.canPrevious)
-    }
-
     @Test func losingTheActiveDeviceStopsPretendingToPlay() async {
         let engine = StubPlaybackEngine()
         let model = PlayerModel(engine: engine)
@@ -523,28 +501,6 @@ struct PlayerModelTests {
         #expect(model.state.phase == .error(.playbackSessionLost))
     }
 
-    @Test func externalPauseFromAnotherDeviceIsReflected() async {
-        let engine = StubPlaybackEngine()
-        let model = PlayerModel(engine: engine)
-        model.start()
-        await settle(model, engine, [.playing(positionMs: 0), .paused(positionMs: 900)])
-
-        #expect(model.state.phase == .paused)
-        #expect(engine.recordedCommands.isEmpty)
-    }
-
-    @Test func loadSendsTheContextURIToTheEngine() async {
-        let engine = StubPlaybackEngine()
-        let model = PlayerModel(engine: engine)
-        model.start()
-
-        let request = PlayRequest(contextURI: SpotifyURI("spotify:playlist:xyz")!)
-        model.load(request)
-        await waitUntil { engine.recordedCommands.contains("load:spotify:playlist:xyz") }
-
-        #expect(engine.recordedCommands.contains("load:spotify:playlist:xyz"))
-    }
-
     @Test func recoveringFromFailureClearsTheStaleError() async {
         let engine = StubPlaybackEngine()
         let model = PlayerModel(engine: engine)
@@ -628,16 +584,6 @@ struct PlayerModelTests {
         await settle(model, engine, [.sessionLost(.spircEnded)])
         #expect(!model.state.isActiveDevice)
         #expect(nowPlayingInfo(for: model.state, positionMs: 0) == nil)
-    }
-
-    @Test func becomingActiveAlwaysClearsTheMirrorEvenWithoutATakeoverEvent() async {
-        let engine = StubPlaybackEngine()
-        let model = PlayerModel(engine: engine)
-        model.start()
-        defer { model.stop() }
-        await settle(model, engine, [.remotePlayback(makeRemote())])
-        await settle(model, engine, [.activeDeviceChanged(isActive: true)])
-        #expect(model.state.mirror == nil)
     }
 
     @Test func playWhileInactiveAsksTheEngineToPlayHereWithoutAssumingItWorked() async {

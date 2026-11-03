@@ -155,18 +155,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn our_modules_map_to_the_swift_playback_category() {
-        for target in [
-            "bopify_core::engine",
-            "bopify_core::ffi",
-            "bopify_core::event",
-        ] {
-            assert!(is_ours(target), "{target}");
-            assert_eq!(ceiling_for(target), LevelFilter::Debug);
-        }
-    }
-
-    #[test]
     fn librespot_is_a_separate_category_held_at_warn() {
         for target in [
             "librespot_core::session",

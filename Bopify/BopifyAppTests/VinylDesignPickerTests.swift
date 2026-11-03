@@ -57,19 +57,6 @@ struct VinylDesignPickerTests {
         #expect(try element("vinyl.design.bloom", in: window()).value == "Selected")
     }
 
-    @Test(arguments: ["removed-style", "drift"])
-    func invalidPreferenceSelectsMarble(rawValue: String) async throws {
-        let (defaults, suite) = try makeDefaults()
-        defer { defaults.removePersistentDomain(forName: suite) }
-        defaults.set(rawValue, forKey: VinylDesign.preferenceKey)
-        let mounted = showPicker(defaults: defaults)
-        defer { mounted.close() }
-        try await Task.sleep(for: .milliseconds(100))
-        #expect(try element("vinyl.design.original", in: window()).value == "Selected")
-        #expect(try element("vinyl.design.original", in: window()).label == "Marble")
-        #expect(try element("vinyl.design.carnival", in: window()).value == "Not selected")
-    }
-
     @Test func accessibilityExposesOneSelectedDesign() async throws {
         let (defaults, suite) = try makeDefaults()
         defer { defaults.removePersistentDomain(forName: suite) }

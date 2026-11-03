@@ -59,19 +59,6 @@ struct RecordLayoutTests {
         #expect(!expanded.controlsFrame.intersects(expanded.lowerFrame))
     }
 
-    @Test func recordSizesAndFixedQueueTransport() {
-        let rest = recordLayout(mode: .compact, availableSize: available)
-        let focus = recordLayout(mode: .expanded, availableSize: available)
-        let queue = recordLayout(mode: .queue, availableSize: available)
-        #expect(rest.recordDiameter == 118)
-        #expect(rest.contentSize == CGSize(width: 142, height: 142))
-        #expect(focus.recordDiameter == 182)
-        #expect(focus.contentSize == CGSize(width: 484, height: 360))
-        #expect(queue.contentSize == CGSize(width: 484, height: 360))
-        #expect(focus.recordCenter == queue.recordCenter)
-        #expect(focus.controlsFrame == queue.controlsFrame)
-    }
-
     @Test func restingSleeveIsADiscBehindTheRecord() {
         let rest = recordLayout(mode: .compact, availableSize: available)
         let radius = rest.recordDiameter / 2

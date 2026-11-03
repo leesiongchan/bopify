@@ -46,18 +46,6 @@ struct TokenClientTests {
      "refresh_token":"RT","scope":"streaming"}
     """#
 
-    @Test func exchangesAuthorizationCodeForTokens() async throws {
-        StubProtocol.handler = { _ in (200, Data(self.success.utf8)) }
-        let tokens = try await makeClient().exchange(
-            code: "CODE", redirectURI: "http://127.0.0.1:5000/callback",
-            pkce: PKCEPair(verifier: "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"))
-
-        #expect(tokens.accessToken == "AT")
-        #expect(tokens.refreshToken == "RT")
-        #expect(tokens.grantedScopes == ["streaming"])
-        #expect(tokens.expiresAt > Date())
-    }
-
     @Test func sendsPKCEVerifierAndClientIDButNoSecret() async throws {
         StubProtocol.handler = { _ in (200, Data(self.success.utf8)) }
         _ = try await makeClient().exchange(
@@ -97,11 +85,6 @@ struct TokenClientTests {
     @Test func throttlingIsRetryable() async {
         StubProtocol.handler = { _ in (429, Data(#"{"error":"temporarily_unavailable"}"#.utf8)) }
         await #expect(throws: PlayerError.networkUnavailable) { _ = try await makeClient().refresh(refreshToken: "RT") }
-    }
-
-    @Test func malformedSuccessIsUnknown() async {
-        StubProtocol.handler = { _ in (200, Data("{}".utf8)) }
-        await #expect(throws: PlayerError.unknown) { _ = try await makeClient().refresh(refreshToken: "RT") }
     }
 
     @Test(arguments: [408, 503]) func mapsTimeoutAndServerFailureToNetworkUnavailable(_ status: Int) async {

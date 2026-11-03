@@ -23,12 +23,12 @@ struct ArtworkStoreTests {
             RemoteArtworkView(url: url, store: fixture.store, size: 76) { Color.gray }.frame(width: 76, height: 76))
         defer { window.close() }
         try await artworkEventually { ArtworkProtocol.count(url) == 1 }
-        try await artworkEventually { self.redArea(in: host, snapshot: "before", scale: scale) > 1_000 }
+        try await artworkEventually { self.redArea(in: host, scale: scale) > 1_000 }
         fixture.cache.removeAll()
         await fixture.store.load(fixture.url())
         try #require(fixture.store.image(for: url) == nil)
         try await Task.sleep(for: .milliseconds(100))
-        try await artworkEventually { self.redArea(in: host, snapshot: "after", scale: scale) > 1_000 }
+        try await artworkEventually { self.redArea(in: host, scale: scale) > 1_000 }
         #expect(ArtworkProtocol.count(url) == 1)
     }
 
@@ -205,7 +205,7 @@ struct ArtworkStoreTests {
         #expect(fixture.store.image(for: url) == nil)
     }
 
-    private func redArea(in view: NSView, snapshot: String? = nil, scale: CGFloat = 1) -> CGFloat {
+    private func redArea(in view: NSView, scale: CGFloat = 1) -> CGFloat {
         view.layoutSubtreeIfNeeded()
         guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil,
             pixelsWide: Int(view.bounds.width * scale), pixelsHigh: Int(view.bounds.height * scale),
@@ -221,12 +221,7 @@ struct ArtworkStoreTests {
             }
         }
         // Each sample covers four pixels; compare square points at either backing scale.
-        let area = CGFloat(count * 4) / (scale * scale)
-        if area > 1_000, let snapshot {
-            try? bitmap.representation(using: .png, properties: [:])?.write(
-                to: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("bopify-artwork-\(snapshot).png"))
-        }
-        return area
+        return CGFloat(count * 4) / (scale * scale)
     }
 
     @Test func sharedLoadSurvivesOneCancellationAndThenUsesTheCache() async throws {

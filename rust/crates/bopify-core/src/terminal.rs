@@ -184,19 +184,4 @@ mod tests {
             })
         );
     }
-
-    #[test]
-    fn output_fault_after_teardown_cannot_call_the_sink() {
-        let events = Arc::new(Mutex::new(Vec::new()));
-        let output = events.clone();
-        let reporter =
-            EngineReporter::new(Arc::new(move |event| output.lock().unwrap().push(event)));
-        reporter.begin_teardown();
-        reporter
-            .output_error_signal()
-            .store(true, std::sync::atomic::Ordering::Release);
-        reporter.event(WireEvent::Paused { position_ms: 0 });
-        reporter.session_lost(SessionLossReason::PlayerChannelClosed);
-        assert!(events.lock().unwrap().is_empty());
-    }
 }

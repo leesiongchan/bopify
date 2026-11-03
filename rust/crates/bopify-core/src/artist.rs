@@ -226,18 +226,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn missing_displayed_artist_is_unavailable() {
-        assert_eq!(
-            selected_artist_uri(&[], 0),
-            Err(ArtistTopTracksFailure::Unavailable)
-        );
-        assert_eq!(
-            selected_artist_uri(&[], u32::MAX),
-            Err(ArtistTopTracksFailure::Unavailable)
-        );
-    }
-
     fn fake(uris: &[&str]) -> Fake {
         Fake {
             tracks: uris

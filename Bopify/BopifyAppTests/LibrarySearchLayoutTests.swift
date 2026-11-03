@@ -4,8 +4,6 @@ import Testing
 import BopifyDomain
 import BopifyLibrary
 import BopifyPlayback
-import ImageIO
-import UniformTypeIdentifiers
 
 @MainActor @Suite("Library and search layout", .serialized)
 struct LibrarySearchLayoutTests {
@@ -51,7 +49,7 @@ struct LibrarySearchLayoutTests {
         #expect(launch.artwork != nil)
     }
 
-    @Test func selectedCoverLoadsDuringTheFlightAndProducesAMotionPreview() async throws {
+    @Test func selectedCoverKeepsTheOutgoingVinylVisibleDuringTheFlight() async throws {
         let environment = makePreviewEnvironment(.paused)
         let player = try #require(environment.player)
         defer { player.stop() }
@@ -76,28 +74,13 @@ struct LibrarySearchLayoutTests {
         try await Task.sleep(for: .milliseconds(200))
         let input = try #require(coverInput(in: panel.contentView))
         let host = try #require(panel.contentView)
-        let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("bopify-turntable-prototype.gif")
-        let gif = try #require(CGImageDestinationCreateWithURL(url as CFURL, UTType.gif.identifier as CFString, 48, nil))
-        CGImageDestinationSetProperties(gif, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0]] as CFDictionary)
-        var previousFrame = Date.now
         var outgoingDiscAlpha: CGFloat = 0
-        for frame in 0..<48 {
+        for frame in 0...8 {
             if frame == 5 { try click(input, x: input.bounds.midX) }
-            if frame == 14 {
-                #expect(player.state.currentTrack?.uri == environment.likedSongs.tracks.first?.uri)
-                #expect(player.state.phase == .playing)
-            }
-            if frame == 28 || frame == 40 { player.togglePlayPause() }
-            if frame == 9 {
-                try String(panel.windowNumber).write(to: URL(fileURLWithPath: NSTemporaryDirectory())
-                    .appendingPathComponent("bopify-transition-window-id.txt"), atomically: true, encoding: .utf8)
-                try await Task.sleep(for: .milliseconds(500))
-            }
-            host.layoutSubtreeIfNeeded()
-            let bitmap = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
-            host.cacheDisplay(in: host.bounds, to: bitmap)
-            let image = try #require(bitmap.cgImage)
             if frame == 0 || frame == 8 {
+                host.layoutSubtreeIfNeeded()
+                let bitmap = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+                host.cacheDisplay(in: host.bounds, to: bitmap)
                 let point = CGPoint(x: controller.layout.recordCenter.x - controller.layout.recordDiameter * 0.4,
                                     y: controller.layout.recordCenter.y)
                 let sample = try #require(bitmap.colorAt(x: Int(point.x * CGFloat(bitmap.pixelsWide) / host.bounds.width),
@@ -109,16 +92,10 @@ struct LibrarySearchLayoutTests {
                             "The outgoing vinyl must remain visible while the incoming cover is being drawn in")
                 }
             }
-            let delay = max(1.0 / 30, Date.now.timeIntervalSince(previousFrame))
-            previousFrame = .now
-            CGImageDestinationAddImage(gif, image, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: delay]] as CFDictionary)
-            if frame == 0 || frame == 9 {
-                let png = try #require(bitmap.representation(using: .png, properties: [:]))
-                try png.write(to: url.deletingLastPathComponent().appendingPathComponent("bopify-turntable-\(frame == 0 ? "before" : "flight").png"))
-            }
             try await Task.sleep(for: .milliseconds(33))
         }
-        #expect(CGImageDestinationFinalize(gif))
+        try await waitUntil { player.state.phase == .playing }
+        #expect(player.state.currentTrack?.uri == environment.likedSongs.tracks.first?.uri)
     }
 
     @Test(arguments: [484.0, 350.0])

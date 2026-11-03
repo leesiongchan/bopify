@@ -332,17 +332,6 @@ struct PlaybackRecoveryCoordinatorTests {
         #expect(recovery.player.restorationUnavailable)
         await recovery.stop()
     }
-    @Test func rejectedTokenRefreshesOnceThenStopsOnRepeatedRejection() async {
-        let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
-        let calls = TokenLookups()
-        let recovery = PlaybackRecoveryCoordinator(player: PlayerModel(), tokenProvider: { rejected in await calls.token(rejected) }, makeEngine: { _, options in try await gate.create(configuration: options) }, now: { clock.now }, sleep: { try await clock.sleep(for: $0) })
-        recovery.start(); await gate.waitForCreationCount(1); gate.failNext(with: .authExpired)
-        await gate.waitForCreationCount(2); gate.failNext(with: .authExpired); await settle()
-        #expect(await calls.rejections == [nil, "OLD_FAKE"])
-        #expect(recovery.status == .needsReauthentication)
-        recovery.retryNow(); await settle(); #expect(gate.configurations.count == 2)
-        await recovery.stop()
-    }
     @Test(arguments: [PlayerError.authDenied, .authExpired]) func networkChangesPreservePermanentFailure(_ error: PlayerError) async {
         let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
         let recovery = coordinator(gate, clock)

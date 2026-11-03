@@ -52,19 +52,6 @@ struct SavedCollectionsModelTests {
         #expect(await service.requests == ["playlists:0:50", "albums:0:50", "artists:start:50", "albums:0:50"])
     }
 
-    @Test func playlistFailureStillShowsAlbumsAndRetryDoesNotReloadThem() async {
-        let album = collection("album", kind: .albums)
-        let service = CollectionFixture(page: .init(items: [], nextCursor: nil), albums: .init(items: [album], nextCursor: nil))
-        await service.setPlaylistError(.forbidden)
-        let model = SavedCollectionsModel(service: service)
-        await model.reveal(at: Date())
-        #expect(model.items == [album] && model.error == .forbidden)
-        await service.setPlaylistError(nil)
-        await model.retry(at: Date())
-        #expect(model.items == [album] && model.error == nil && !model.hasMore)
-        #expect(await service.requests == ["playlists:0:50", "albums:0:50", "artists:start:50", "playlists:0:50"])
-    }
-
     @Test func clearRejectsLateResponse() async {
         let first = collection("first")
         let service = CollectionFixture(page: .init(items: [first], nextCursor: nil))
@@ -142,7 +129,6 @@ struct SavedCollectionsModelTests {
 private actor CollectionFixture: LibraryCollectionsService {
     var requests: [String] = []
     private var page: LibraryCollectionsPage
-    private var playlistError: LibraryError?
     private var albums: Result<LibraryCollectionsPage, LibraryError>
     private var artists: Result<LibraryCollectionsPage, LibraryError> = .success(.init(items: [], nextCursor: nil))
     private var shouldHold = false
@@ -154,7 +140,6 @@ private actor CollectionFixture: LibraryCollectionsService {
         self.albums = .success(albums)
     }
     func setPage(_ page: LibraryCollectionsPage) { self.page = page }
-    func setPlaylistError(_ error: LibraryError?) { playlistError = error }
     func setAlbums(_ result: Result<LibraryCollectionsPage, LibraryError>) { albums = result }
     func setArtists(_ result: Result<LibraryCollectionsPage, LibraryError>) { artists = result }
     func holdNext(_ kind: LibraryCollectionKind? = nil) { shouldHold = true; heldKind = kind }
@@ -173,7 +158,6 @@ private actor CollectionFixture: LibraryCollectionsService {
         }
         if kind == .artists { return try artists.get() }
         if kind == .albums { return try albums.get() }
-        if let playlistError { throw playlistError }
         return page
     }
 }

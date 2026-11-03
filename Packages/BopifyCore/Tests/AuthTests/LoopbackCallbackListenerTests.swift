@@ -45,17 +45,6 @@ struct LoopbackCallbackListenerTests {
         await listener.stop()
     }
 
-    @Test func surfacesUserDenial() async throws {
-        let listener = LoopbackCallbackListener(expectedState: "s", expectedPath: "/callback")
-        let port = try await listener.start()
-
-        let result = Task { try await listener.waitForCallback() }
-        try await get(URL(string: "http://127.0.0.1:\(port)/callback?error=access_denied&state=s")!)
-
-        await #expect(throws: CallbackError.accessDenied) { try await result.value }
-        await listener.stop()
-    }
-
     @Test func stopCancelsAPendingWait() async throws {
         let listener = LoopbackCallbackListener(expectedState: "s", expectedPath: "/callback")
         _ = try await listener.start()

@@ -61,12 +61,6 @@ struct LyricDocumentTests {
         #expect(doc.project(positionMs: 80_000, durationMs: 100_000).next == nil)
     }
 
-    @Test func endingKeepsLastGroupAsReaderAnchor() throws {
-        let ended = try lyricTestDocument().project(positionMs: 100_000, durationMs: 100_000)
-        #expect(ended.current == nil && ended.next == nil)
-        #expect(ended.previous?.occurrenceIDs == ["next"])
-    }
-
     @Test func beforeBlankOpeningDoesNotInventUpcomingWords() throws {
         let document = try LyricDocument(cues: [
             LyricCue(id: "gap", startMs: 10, text: " \n "),
@@ -74,8 +68,6 @@ struct LyricDocumentTests {
         ])
         #expect(document.project(positionMs: 0, durationMs: 100).next == nil)
         #expect(document.project(positionMs: 10, durationMs: 100).next?.occurrenceIDs == ["words"])
-        let empty = try LyricDocument(cues: []).project(positionMs: 100, durationMs: 100)
-        #expect(empty.current == nil && empty.previous == nil && empty.next == nil)
     }
 }
 

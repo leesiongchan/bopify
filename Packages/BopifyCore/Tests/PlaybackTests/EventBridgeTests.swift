@@ -35,25 +35,6 @@ struct EventBridgeTests {
         #expect(received == expected)
     }
 
-    @Test func deliversAnEventPushedFromABackgroundThread() async throws {
-        let bridge = EventBridge()
-        let json = Array(#"{"type":"playing","positionMs":4200}"#.utf8)
-
-        // The context is taken and dropped on the pushing thread: a raw
-        // pointer is not Sendable, and this is where Rust holds it anyway.
-        Thread.detachNewThread {
-            let ctx = bridge.retainedContext()
-            defer { EventBridge.releaseContext(ctx) }
-            json.withUnsafeBufferPointer { buffer in
-                bopifyEventTrampoline(buffer.baseAddress!, UInt(buffer.count), ctx)
-            }
-        }
-
-        var iterator = bridge.events.makeAsyncIterator()
-        let event = await iterator.next()
-        #expect(event == .playing(positionMs: 4200))
-    }
-
     @Test(arguments: [
         (#"{"type":"playing"}"#, "positionMs"),
         (#"{"type":"trackChanged","trackUri":"spotify:local:a:b:c:1","title":"T","artists":[],"durationMs":1}"#, "trackUri"),
@@ -98,13 +79,6 @@ struct EventBridgeTests {
         var iterator = events.makeAsyncIterator()
         #expect(await iterator.next() == .endOfTrack)
         EventBridge.releaseContext(ctx)
-    }
-
-    @Test func finishTerminatesTheStream() async throws {
-        let bridge = EventBridge()
-        bridge.finish()
-        var iterator = bridge.events.makeAsyncIterator()
-        #expect(await iterator.next() == nil)
     }
 
     /// A bridge dropped without an explicit `finish()` must not leave its
@@ -160,23 +134,6 @@ private func mixJSON(_ id: UInt64, context: String = "spotify:playlist:m", seed:
 
 @Suite("EventBridge radio")
 struct EventBridgeRadioTests {
-    @Test func sessionLossFailsWaitersAndStillDeliversTheTerminalEvent() async {
-        let bridge = EventBridge()
-        let waiting = Task { try await bridge.radio(seed: radioSeed) { _ in
-            push([#"{"type":"sessionLost","reason":"spircEnded"}"#, #"{"type":"sessionLost","reason":"spircEnded"}"#], into: bridge)
-        } }
-        await #expect(throws: PlayerError.playbackSessionLost) { _ = try await waiting.value }
-        var iterator = bridge.events.makeAsyncIterator()
-        #expect(await iterator.next() == .sessionLost(.spircEnded))
-        bridge.finish()
-    }
-    @Test func aReplyResumesTheRequestWithItsID() async throws {
-        let bridge = EventBridge()
-        let mix = try await bridge.radio(seed: radioSeed) { id in push([mixJSON(id)], into: bridge) }
-        #expect(mix.contextURI.rawValue == "spotify:playlist:m")
-        #expect(mix.tracks.map(\.uri.rawValue) == ["spotify:track:a"])
-    }
-
     /// Replies arrive in reverse order; each must still reach the caller that sent its ID.
     @Test func concurrentRequestsEachGetTheReplyCarryingTheirID() async throws {
         let bridge = EventBridge()

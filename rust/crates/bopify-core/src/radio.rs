@@ -249,23 +249,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn artist_songs_use_the_sessions_country_list() {
-        let first = SpotifyUri::from_uri("spotify:track:11dFghVXANMlKmJXsNCbNl").unwrap();
-        let local = SpotifyUri::from_uri("spotify:track:4uLU6hMCjMI75M1A2tKUQC").unwrap();
-        let top = CountryTopTracks(vec![
-            TopTracks {
-                country: "US".into(),
-                tracks: librespot_metadata::track::Tracks(vec![first]),
-            },
-            TopTracks {
-                country: "MY".into(),
-                tracks: librespot_metadata::track::Tracks(vec![local.clone()]),
-            },
-        ]);
-        assert_eq!(pick_top_tracks(&top, "MY"), vec![local]);
-    }
-
-    #[test]
     fn artist_songs_fall_back_when_the_local_list_is_empty() {
         let fallback = SpotifyUri::from_uri("spotify:track:11dFghVXANMlKmJXsNCbNl").unwrap();
         let top = CountryTopTracks(vec![

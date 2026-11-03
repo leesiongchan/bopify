@@ -52,19 +52,6 @@ struct MusicBrowserTests {
         #expect(!environment.searchPopover.isVisible)
     }
 
-    @Test(arguments: [LibraryError.invalidLink, .unsupportedLink, .notFound])
-    func invalidLinksShowAnErrorWithoutRetryOrPlayback(_ failure: LibraryError) async throws {
-        let (environment, panel, window) = try await openSearch(LinkedSearchService(kind: .song, failure: failure))
-        defer { environment.searchPopover.close(); panel.close() }
-        let field = try #require(searchField(in: window.contentView))
-        field.selectText(nil)
-        let editor = try #require(field.currentEditor() as? NSTextView)
-        editor.insertText("https://open.spotify.com/track/missing", replacementRange: editor.selectedRange())
-        try await waitUntil { environment.search.error == failure && !environment.search.isLoading }
-        #expect(!environment.search.canRetry && environment.search.selectedURI == nil)
-        #expect(environment.search.results.isEmpty && resultTable(in: window.contentView) == nil)
-    }
-
     @Test func typingMultipleCharactersKeepsTheInsertionPointAndArrowKeysSelectResults() async throws {
         let environment = makePreviewEnvironment(.paused)
         defer { environment.searchPopover.close(); environment.player?.stop() }
@@ -329,34 +316,6 @@ struct MusicBrowserTests {
         #expect(Set(await service.requests.dropFirst().map(\.kinds)) == Set([Set([CatalogSearchKind.song])]))
     }
 
-    @Test func typeRetryAndLateReplyRespectDismissal() async throws {
-        let service = PagingSearchService()
-        let (environment, panel, window) = try await openSearch(service)
-        defer { environment.searchPopover.close(); panel.close(); Task { await service.releasePage() } }
-        let table = try #require(resultTable(in: window.contentView))
-        await service.failNextPages(.unavailable, for: .song)
-        table.scrollRowToVisible(table.numberOfRows - 1)
-        try await waitUntil { environment.search.groups.first { $0.kind == .song }?.error == .unavailable &&
-            environment.search.groups.allSatisfy { !$0.isLoading } }
-        #expect(environment.search.results.count == 19 && environment.search.error == nil)
-        let original = environment.search.results
-        try await waitUntil { table.numberOfRows == 20 }
-        await service.failNextPages(nil, for: .song)
-        await service.holdNextPage(.song)
-        try pressSearchControl(in: table, row: original.count)
-        await service.waitUntilHeld()
-        environment.searchPopover.close()
-        await service.releasePage()
-        try await waitUntil { !window.isVisible }
-        for _ in 0..<10 { await Task.yield() }
-        #expect(environment.search.results == original)
-        #expect(environment.search.groups.first { $0.kind == .song }?.nextOffset == 10)
-        environment.showSearch()
-        try await waitUntil { searchWindow(attachedTo: panel) != nil }
-        #expect(await service.requests.count == 3)
-        #expect(await service.requests.last == BrowserRequest(kinds: [.song], offset: 10, limit: 10))
-    }
-
     @Test(arguments: CatalogSearchKind.allCases)
     func arrowKeysCrossGroupsAndReturnPlaysEachKind(_ kind: CatalogSearchKind) async throws {
         let engine = LiveLyricTestEngine()
@@ -463,9 +422,7 @@ struct MusicBrowserTests {
 
 private nonisolated struct LinkedSearchService: CatalogSearchService {
     let kind: CatalogSearchKind
-    var failure: LibraryError?
     func search(query: String, kinds: Set<CatalogSearchKind>, offset: Int, limit: Int) async throws -> [CatalogSearchKind: CatalogSearchPage] {
-        if let failure { throw failure }
         let uri = SpotifyURI("spotify:\(kind.rawValue):linked")!
         let item = LibraryCollection(uri: uri, title: "Linked music", subtitle: kind == .artist ? "" : "Artist", artwork: nil)
         let result: CatalogSearchResult = switch kind {

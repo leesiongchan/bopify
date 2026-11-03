@@ -10,9 +10,9 @@ public final class StubPlaybackEngine: PlaybackEngine, @unchecked Sendable {
     private let feed: StubEventFeed
     private let commandDelay: Duration
 
-    public init(eventDelay: Duration = .zero, commandDelay: Duration = .zero) {
+    public init(commandDelay: Duration = .zero) {
         let input = AsyncStream<PlaybackEvent>.makeStream(bufferingPolicy: .unbounded)
-        let feed = StubEventFeed(input.stream, delay: eventDelay)
+        let feed = StubEventFeed(input.stream)
         self.feed = feed
         self.commandDelay = commandDelay
         continuation = input.continuation
@@ -65,13 +65,11 @@ public final class StubPlaybackEngine: PlaybackEngine, @unchecked Sendable {
 
 private actor StubEventFeed {
     private var iterator: AsyncStream<PlaybackEvent>.Iterator
-    private let delay: Duration
     private var delivered = 0
     private(set) var consumed = 0
 
-    init(_ stream: AsyncStream<PlaybackEvent>, delay: Duration) {
+    init(_ stream: AsyncStream<PlaybackEvent>) {
         iterator = stream.makeAsyncIterator()
-        self.delay = delay
     }
 
     func next() async -> PlaybackEvent? {
@@ -80,10 +78,7 @@ private actor StubEventFeed {
         var iterator = self.iterator
         let event = await iterator.next(isolation: self)
         self.iterator = iterator
-        if event != nil {
-            if delay > .zero { try? await Task.sleep(for: delay) }
-            delivered += 1
-        }
+        if event != nil { delivered += 1 }
         return event
     }
 }

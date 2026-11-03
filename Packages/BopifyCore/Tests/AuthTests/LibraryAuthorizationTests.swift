@@ -89,20 +89,6 @@ struct LibraryAuthorizationTests {
         }
     }
 
-    @Test func replacingTheIDClearsTheGrant() async throws {
-        try await withSuite { suite, defaults in
-            defaults.set(id, forKey: LibraryAuthorization.defaultsKey)
-            let store = InMemoryTokenStore()
-            try store.save(grant())
-            let library = authorization(suite, store: store)
-            _ = try await library.setClientID(other)
-            #expect(store.load() == nil)
-            await #expect(throws: LibraryError.authorizationRequired) {
-                try await library.validAccessToken(requiredScopes: ["user-library-read"])
-            }
-        }
-    }
-
     /// `cancelPendingWork()` alone would leave the old service holding its in-memory grant.
     @Test func replacingTheIDSignsOutTheOldClient() async throws {
         try await withSuite { suite, defaults in

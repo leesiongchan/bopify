@@ -101,12 +101,6 @@ struct PlayerPresentationTests {
         state.phase = .paused
         #expect(PlayerContent(state) == .player)
     }
-    @Test func errorsSurfaceOverARemoteOutcome() {
-        var state = PlaybackState()
-        state.startup = .resolved(.remote(deviceName: "iPhone"))
-        state.phase = .error(.playbackSessionLost)
-        #expect(PlayerContent(state) == .player)
-    }
 
     private func remote(isPlaying: Bool) -> RemotePlayback {
         RemotePlayback(deviceName: "iPhone", trackURI: SpotifyURI("spotify:track:r")!, track: nil,

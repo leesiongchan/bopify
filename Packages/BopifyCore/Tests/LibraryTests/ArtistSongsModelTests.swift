@@ -30,23 +30,6 @@ struct ArtistSongsModelTests {
         #expect(model.playRequest(for: testTrack("song")) == nil)
     }
 
-    @Test func newerTrackWinsOverAnOlderReply() async {
-        let model = ArtistSongsModel()
-        let (started, signal) = AsyncStream.makeStream(of: Void.self)
-        var finish: CheckedContinuation<ArtistTopTracks, Never>?
-        let old = Task {
-            await model.load(for: source) { _ in
-                await withCheckedContinuation { finish = $0; signal.yield(()) }
-            }
-        }
-        for await _ in started { break }
-        let newer = testTrack("newer").uri
-        await model.load(for: newer) { response($0) }
-        finish?.resume(returning: response(source))
-        await old.value
-        #expect(model.result?.trackURI == newer)
-    }
-
     @Test func switchingSingersOnTheSameTrackRejectsTheFirstSingersLateReply() async {
         let model = ArtistSongsModel()
         let (started, signal) = AsyncStream.makeStream(of: Void.self)

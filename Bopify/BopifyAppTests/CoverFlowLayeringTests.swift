@@ -49,9 +49,6 @@ struct CoverFlowLayeringTests {
                 y: 44 * bitmap.pixelsHigh / 160)?.usingColorSpace(.deviceRGB))
             #expect(left.greenComponent > left.redComponent + 0.2, "The left neighboring cover must be rendered")
             #expect(right.blueComponent > right.redComponent + 0.2, "The right neighboring cover must be rendered")
-            let png = try #require(bitmap.representation(using: .png, properties: [:]))
-            try png.write(to: URL(fileURLWithPath: NSTemporaryDirectory())
-                .appendingPathComponent("bopify-cover-overlap-\(activated).png"))
         }
     }
 

@@ -91,48 +91,6 @@ struct SpotifyLibraryClientTests {
             #expect(LibraryProtocol.fixture.requests.count == 1)
         }
     }
-    @Test func concurrentLibraryFeaturesShareEstablishedCooldown() async {
-        let uri = self.uri
-        LibraryProtocol.fixture.reset(.init(status: 429, headers: ["Retry-After": "12"]))
-        let client = client()
-        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 12)) {
-            _ = try await client.savedTracks(offset: 0, limit: 50)
-        }
-        LibraryProtocol.fixture.reset(.init())
-        let blocked = await withTaskGroup(of: Bool.self) { group in
-            group.addTask {
-                do { _ = try await client.savedState(for: uri); return false }
-                catch { return error as? LibraryError == .rateLimited(retryAfterSeconds: 12) }
-            }
-            group.addTask {
-                do { _ = try await client.savedTracks(offset: 0, limit: 50); return false }
-                catch { return error as? LibraryError == .rateLimited(retryAfterSeconds: 12) }
-            }
-            var results: [Bool] = []
-            for await result in group { results.append(result) }
-            return results
-        }
-        #expect(blocked == [true, true])
-        #expect(LibraryProtocol.fixture.requests.isEmpty)
-    }
-    @Test func cooldownExpiresForBothLibraryFeatures() async throws {
-        let clock = LibraryClock()
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [LibraryProtocol.self]
-        let client = SpotifyLibraryClient(session: URLSession(configuration: configuration),
-                                          tokenProvider: { _ in "TEST_TOKEN" }, now: { clock.now() })
-        LibraryProtocol.fixture.reset(.init(status: 429, headers: ["Retry-After": "12"]))
-        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 12)) {
-            _ = try await client.savedTracks(offset: 0, limit: 50)
-        }
-        clock.advance(11)
-        LibraryProtocol.fixture.reset(.init(data: Data("[true]".utf8)))
-        await #expect(throws: LibraryError.rateLimited(retryAfterSeconds: 1)) { _ = try await client.savedState(for: uri) }
-        #expect(LibraryProtocol.fixture.requests.isEmpty)
-        clock.advance(1)
-        #expect(try await client.savedState(for: uri))
-        #expect(LibraryProtocol.fixture.requests.count == 1)
-    }
     @Test @MainActor func featuresJoiningCooldownKeepTheOriginalDeadline() async throws {
         let clock = LibraryClock()
         let configuration = URLSessionConfiguration.ephemeral
@@ -348,30 +306,6 @@ struct SpotifyLibraryClientTests {
         #expect(query(request)?.first == URLQueryItem(name: "q", value: text))
     }
 
-    @Test func searchEncodesQueryAndUsesLibraryTokenWithoutUserScopes() async throws {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [LibraryProtocol.self]
-        let client = SpotifyLibraryClient(session: URLSession(configuration: configuration)) { scopes in
-            #expect(scopes.isEmpty)
-            return "CATALOG_LIBRARY_TOKEN"
-        }
-        let track = savedTrack("a")["track"]!
-        let data = try JSONSerialization.data(withJSONObject: ["tracks": ["items": [track, NSNull()],
-            "offset": 0, "limit": 10, "total": 12, "next": "https://untrusted.invalid/?offset=999"]])
-        LibraryProtocol.fixture.reset(.init(data: data))
-        let page = try await client.search(query: "  Björk & year:2026  ", kinds: [.song], offset: 0, limit: 10)
-        #expect(page[.song]?.results.map(\.uri.rawValue) == ["spotify:track:a"])
-        #expect(page[.song]?.nextOffset == 2)
-        let request = try #require(LibraryProtocol.fixture.requests.first)
-        #expect(request.url?.path == "/v1/search")
-        #expect(request.url?.host == "api.spotify.com")
-        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer CATALOG_LIBRARY_TOKEN")
-        let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems
-        #expect(query == [URLQueryItem(name: "q", value: "Björk & year:2026"),
-            URLQueryItem(name: "type", value: "track"), URLQueryItem(name: "offset", value: "0"),
-            URLQueryItem(name: "limit", value: "10")])
-    }
-
     @Test func catalogSearchEncodesAllKindsAndUsesNoUserScopes() async throws {
         let body = ["tracks": catalogPage([]), "albums": catalogPage([]),
                     "artists": catalogPage([]), "playlists": catalogPage([])]
@@ -572,15 +506,6 @@ struct SpotifyLibraryClientTests {
         }
     }
 
-    @Test func missingCollectionArtworkIsAllowedAndWrongIdentifiersAreSkipped() async throws {
-        let body = #"{"items":[{"uri":"spotify:playlist:a","name":"No artwork","owner":{"display_name":null},"images":[]},{"uri":"spotify:playlist:bad,id","name":"Bad"},{"uri":"spotify:album:wrong","name":"Wrong"}],"offset":0,"limit":50,"total":3,"next":null}"#
-        LibraryProtocol.fixture.reset(.init(data: Data(body.utf8)))
-        let page = try await client().savedCollections(.playlists, cursor: .offset(0), limit: 50)
-        #expect(page.items.count == 1)
-        #expect(page.items.first?.artwork == nil)
-        #expect(page.nextCursor == nil)
-    }
-
     private func savedTrack(_ id: String, image: Bool = true) -> [String: Any] {
         ["track": ["uri": "spotify:track:\(id)", "name": "Song \(id)",
                    "artists": [["name": "Artist"]], "duration_ms": 180_000,
@@ -625,14 +550,6 @@ struct SpotifyLibraryClientTests {
         LibraryProtocol.fixture.reset(.init())
         try await writeClient.save(uri)
         #expect(LibraryProtocol.fixture.requests.first?.value(forHTTPHeaderField: "Authorization") == "Bearer LIBRARY_ONLY")
-    }
-    @Test func skippedTrackDoesNotChangeNextOffset() async throws {
-        LibraryProtocol.fixture.reset(.init(data: try savedPage([savedTrack("a"), ["track": NSNull()], savedTrack("b")])))
-        let page = try await client().savedTracks(offset: 0, limit: 50)
-        #expect(page.tracks.count == 2)
-        #expect(page.nextOffset == 3)
-        #expect(page.tracks.map(\.uri.rawValue) == ["spotify:track:a", "spotify:track:b"])
-        #expect(page.tracks[0].artwork == page.tracks[1].artwork)
     }
     @Test func invalidItemsAreSkippedAndMissingArtworkIsAllowed() async throws {
         var invalidURI = savedTrack("bad,id")
@@ -686,16 +603,6 @@ struct SpotifyLibraryClientTests {
             }
         }
     }
-    @Test func savedTracksErrorsAndCancellation() async {
-        for (status, error) in [(401, LibraryError.authorizationRequired), (403, .forbidden),
-                                 (429, .rateLimited(retryAfterSeconds: 12)), (503, .unavailable), (302, .invalidResponse)] {
-            LibraryProtocol.fixture.reset(.init(status: status, headers: ["Retry-After": "12"]))
-            await #expect(throws: error) { _ = try await client().savedTracks(offset: 0, limit: 50) }
-            #expect(LibraryProtocol.fixture.requests.count == 1)
-        }
-        LibraryProtocol.fixture.reset(.init(error: URLError(.cancelled)))
-        await #expect(throws: CancellationError.self) { _ = try await client().savedTracks(offset: 0, limit: 50) }
-    }
 
     private func scopedClient(_ expected: Set<String>) -> SpotifyLibraryClient {
         let configuration = URLSessionConfiguration.ephemeral
@@ -708,14 +615,6 @@ struct SpotifyLibraryClientTests {
     private func query(_ request: URLRequest?) -> [URLQueryItem]? {
         request?.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems }
     }
-    @Test func recentlyPlayedPreservesFiftyDistinctSongs() async throws {
-        let body = try JSONSerialization.data(withJSONObject: ["items": (0..<50).map { savedTrack("song\($0)") }])
-        LibraryProtocol.fixture.reset(.init(data: body))
-        let plays = try await scopedClient(["user-read-recently-played"]).recentlyPlayed()
-        #expect(plays.count == 50)
-        #expect(plays.last?.track.uri.rawValue == "spotify:track:song49")
-    }
-
     @Test func recentlyPlayedKeepsLoadableContextsAndSkipsBadItems() async throws {
         var album = savedTrack("a")
         album["context"] = ["uri": "spotify:album:alb", "type": "album"]

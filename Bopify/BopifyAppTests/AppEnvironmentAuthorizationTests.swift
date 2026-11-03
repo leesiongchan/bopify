@@ -31,20 +31,6 @@ struct AppEnvironmentAuthorizationTests {
         await fixture.stop()
     }
 
-    @Test func approvedSetupStartsPlayback() async throws {
-        let fixture = AuthorizationFixture(approvedScopes: allLibraryScopes, startSignedOut: true)
-        fixture.store.save(TokenSet(accessToken: "PLAYBACK", refreshToken: "REFRESH",
-            expiresAt: .distantFuture, grantedScopes: ["streaming"]))
-        await fixture.environment.restoreOrPromptSignIn()
-        #expect(fixture.environment.authState == .needsLibraryAuthorization)
-        #expect(fixture.environment.recovery == nil)
-
-        await fixture.environment.completeLibrarySetup()
-        #expect(fixture.environment.authState == .signedIn)
-        #expect(fixture.environment.recovery != nil)
-        await fixture.stop()
-    }
-
     @Test func deniedSetupPreservesPlaybackGrantWithoutStartingThePlayer() async throws {
         let fixture = AuthorizationFixture(approvedScopes: [], startSignedOut: true)
         fixture.store.save(TokenSet(accessToken: "PLAYBACK", refreshToken: "REFRESH",

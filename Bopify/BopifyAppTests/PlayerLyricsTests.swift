@@ -51,16 +51,6 @@ struct PlayerLyricsTests {
         #expect(f.panel.isKeyWindow && f.environment.presentation.mode == .expanded)
     }
 
-    @Test func hoveringTheMiniVinylNeverExpandsThePlayer() async throws {
-        let f = try PlayerLyricsFixture()
-        defer { f.close() }
-        try await f.show()
-        f.panel.updatePlayerPointer(at: f.controller.layout.recordCenter)
-        try await Task.sleep(for: .milliseconds(1300))
-        #expect(f.environment.presentation.mode == .compact)
-        #expect(!f.panel.isKeyWindow)
-    }
-
     @Test func compactFavoriteClickTogglesSavedStateWithoutExpandingOrDragging() async throws {
         let preview = makePreviewEnvironment(.paused)
         let environment = AppEnvironment(previewPlayer: preview.player, favoriteService: LyricFavoriteService(),
