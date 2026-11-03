@@ -119,6 +119,34 @@ struct PlaybackRecoveryCoordinatorTests {
         engine.emit(.sessionLost(.spircEnded)); await gate.waitForCreationCount(4)
         #expect(clock.pendingDelays.isEmpty)
         gate.failNext(with: .networkUnavailable); await settle()
+        // Only the newest drop is inside the window, so the connect failure starts one rung up.
+        #expect(clock.pendingDelays == [.seconds(2)])
+        await recovery.stop()
+    }
+
+    /// Drops and connect failures share one ladder; a successful connection clears only the connect-failure count.
+    @Test func dropsAndConnectFailuresShareTheLadderUntilReady() async {
+        let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
+        let recovery = coordinator(gate, clock)
+        recovery.start(); await gate.waitForCreationCount(1)
+        var engine = RecoveryStubEngine(); gate.succeedNext(with: engine); await settle()
+        engine.emit(.connectionReady(.remote)); await settle()
+        engine.emit(.sessionLost(.spircEnded)); await gate.waitForCreationCount(2)
+        engine = RecoveryStubEngine(); gate.succeedNext(with: engine); await settle()
+        engine.emit(.connectionReady(.remote)); await settle()
+        engine.emit(.sessionLost(.spircEnded)); await settle()
+        #expect(clock.pendingDelays == [.seconds(2)])
+        clock.advance(by: .seconds(2)); await gate.waitForCreationCount(3)
+        gate.failNext(with: .networkUnavailable); await settle()
+        #expect(clock.pendingDelays == [.seconds(5)], "two drops plus a connect failure")
+        clock.advance(by: .seconds(5)); await gate.waitForCreationCount(4)
+        engine = RecoveryStubEngine(); gate.succeedNext(with: engine); await settle()
+        engine.emit(.connectionReady(.remote)); await settle()
+        engine.emit(.sessionLost(.spircEnded)); await settle()
+        #expect(clock.pendingDelays == [.seconds(5)], "third drop; ready cleared the connect failure")
+        clock.advance(by: .seconds(5)); await gate.waitForCreationCount(5)
+        gate.failNext(with: .networkUnavailable); await settle()
+        #expect(clock.pendingDelays == [.seconds(15)], "connect failure after the third drop")
         await recovery.stop()
     }
 

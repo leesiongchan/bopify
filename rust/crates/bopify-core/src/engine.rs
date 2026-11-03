@@ -349,23 +349,32 @@ fn command_failed<E>(_err: E) -> BopifyError {
 /// Only account problems are terminal: DNS, routes, Spotify outages and malformed
 /// answers can all clear on their own, so recovery keeps retrying them.
 fn classify_connect_error(err: librespot_core::Error) -> BopifyError {
-    use librespot_core::error::{AuthenticationFailure, ErrorKind};
     let io_kind = err
         .error
         .downcast_ref::<std::io::Error>()
         .map(std::io::Error::kind);
-    let error = match err.authentication_failure() {
-        Some(AuthenticationFailure::PremiumRequired) => BopifyError::PremiumRequired,
-        Some(AuthenticationFailure::InvalidCredentials) => BopifyError::AuthInvalid,
-        Some(AuthenticationFailure::AccountRestricted) => BopifyError::AccountRestricted,
-        None if err.kind == ErrorKind::Unauthenticated => BopifyError::AuthInvalid,
-        None => BopifyError::NetworkUnavailable,
-    };
+    let error = connect_error_class(err.authentication_failure(), err.kind);
     log::error!(
         "engine: spirc connect failed kind={:?} io_kind={io_kind:?} error={error:?}",
         err.kind
     );
     error
+}
+
+/// The decision itself, apart from librespot's error type: its login-failure variants
+/// are crate-private, so tests cannot build an error that carries one.
+fn connect_error_class(
+    failure: Option<librespot_core::error::AuthenticationFailure>,
+    kind: librespot_core::error::ErrorKind,
+) -> BopifyError {
+    use librespot_core::error::{AuthenticationFailure, ErrorKind};
+    match failure {
+        Some(AuthenticationFailure::PremiumRequired) => BopifyError::PremiumRequired,
+        Some(AuthenticationFailure::InvalidCredentials) => BopifyError::AuthInvalid,
+        Some(AuthenticationFailure::AccountRestricted) => BopifyError::AccountRestricted,
+        None if kind == ErrorKind::Unauthenticated => BopifyError::AuthInvalid,
+        None => BopifyError::NetworkUnavailable,
+    }
 }
 
 /// librespot's login has no timeout of its own; past this the attempt counts as a network failure.
@@ -466,6 +475,30 @@ mod tests {
             classify_connect_error(Lib::unauthenticated("HTTP 401")),
             BopifyError::AuthInvalid
         );
+    }
+
+    #[test]
+    fn account_problems_map_to_their_terminal_errors() {
+        use librespot_core::error::{AuthenticationFailure as Failure, ErrorKind};
+        for (failure, expected, code) in [
+            (Failure::PremiumRequired, BopifyError::PremiumRequired, -4),
+            (Failure::InvalidCredentials, BopifyError::AuthInvalid, -3),
+            (
+                Failure::AccountRestricted,
+                BopifyError::AccountRestricted,
+                -6,
+            ),
+        ] {
+            // The kind must not matter once librespot has named the failure.
+            for kind in [ErrorKind::PermissionDenied, ErrorKind::Unavailable] {
+                assert_eq!(
+                    connect_error_class(Some(failure), kind),
+                    expected,
+                    "{failure:?}"
+                );
+            }
+            assert_eq!(expected.code(), code, "{expected:?}");
+        }
     }
 
     #[test]

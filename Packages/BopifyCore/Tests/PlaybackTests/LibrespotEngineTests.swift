@@ -18,8 +18,13 @@ struct LibrespotEngineTests {
     /// with nothing useful to show a listener. Rust's `error.rs` tests read the same fixture.
     @Test func mapsTheSharedFFICodesOntoTheErrorTaxonomy() throws {
         let expected: [String: PlayerError] = [
-            "invalidArgument": .unknown, "sessionLost": .playbackSessionLost, "authInvalid": .authExpired,
-            "premiumRequired": .premiumRequired, "accountRestricted": .accountRestricted, "networkUnavailable": .networkUnavailable, "unknown": .unknown,
+            "invalidArgument": .unknown,
+            "sessionLost": .playbackSessionLost,
+            "authInvalid": .authExpired,
+            "premiumRequired": .premiumRequired,
+            "accountRestricted": .accountRestricted,
+            "networkUnavailable": .networkUnavailable,
+            "unknown": .unknown,
         ]
         let fixture = URL(filePath: #filePath).deletingLastPathComponent()
             .appending(path: "../../../../contracts/ffi-error-codes.json").standardized
