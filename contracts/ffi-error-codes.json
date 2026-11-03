@@ -1,0 +1,8 @@
+{
+  "invalidArgument": -1,
+  "sessionLost": -2,
+  "authInvalid": -3,
+  "premiumRequired": -4,
+  "networkUnavailable": -5,
+  "unknown": -99
+}

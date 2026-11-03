@@ -15,14 +15,17 @@ struct LibrespotEngineTests {
     }
 
     /// `InvalidArgument` (-1), `Unknown` (-99) and unrecognised codes all fold to `.unknown`, because -1 is a caller bug
-    /// with nothing useful to show a listener.
-    @Test func mapsFFICodesOntoTheErrorTaxonomy() {
-        #expect(PlayerError(ffiCode: -1) == .unknown)
-        #expect(PlayerError(ffiCode: -2) == .playbackSessionLost)
-        #expect(PlayerError(ffiCode: -3) == .authExpired)
-        #expect(PlayerError(ffiCode: -4) == .premiumRequired)
-        #expect(PlayerError(ffiCode: -5) == .networkUnavailable)
-        #expect(PlayerError(ffiCode: -99) == .unknown)
+    /// with nothing useful to show a listener. Rust's `error.rs` tests read the same fixture.
+    @Test func mapsTheSharedFFICodesOntoTheErrorTaxonomy() throws {
+        let expected: [String: PlayerError] = [
+            "invalidArgument": .unknown, "sessionLost": .playbackSessionLost, "authInvalid": .authExpired,
+            "premiumRequired": .premiumRequired, "networkUnavailable": .networkUnavailable, "unknown": .unknown,
+        ]
+        let fixture = URL(filePath: #filePath).deletingLastPathComponent()
+            .appending(path: "../../../../contracts/ffi-error-codes.json").standardized
+        let codes = try JSONDecoder().decode([String: Int32].self, from: Data(contentsOf: fixture))
+        #expect(Set(codes.keys) == Set(expected.keys))
+        for (name, code) in codes { #expect(PlayerError(ffiCode: code) == expected[name], "\(name)") }
         #expect(PlayerError(ffiCode: 12345) == .unknown)
     }
 
