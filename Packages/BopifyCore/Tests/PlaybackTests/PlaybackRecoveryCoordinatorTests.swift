@@ -75,6 +75,34 @@ struct PlaybackRecoveryCoordinatorTests {
         await recovery.stop()
     }
 
+    /// A loss recorded just before invalidate() must not make the next start() wait out the old ladder.
+    @Test func startAfterInvalidateBeginsFromACleanLadder() async {
+        let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
+        let recovery = coordinator(gate, clock)
+        recovery.start(); await gate.waitForCreationCount(1)
+        var engine = RecoveryStubEngine(); gate.succeedNext(with: engine); await settle()
+        engine.emit(.connectionReady(.remote)); await settle()
+        for (drop, seconds) in [0.0, 2, 5].enumerated() {
+            clock.advance(by: .seconds(61)); await settle()
+            engine.emit(.sessionLost(.spircEnded)); await settle()
+            if seconds > 0 { clock.advance(by: .seconds(seconds)) }
+            await gate.waitForCreationCount(drop + 2)
+            engine = RecoveryStubEngine(); gate.succeedNext(with: engine); await settle()
+            engine.emit(.connectionReady(.remote)); await settle()
+        }
+        // Reported and invalidated without yielding, so the worker never consumes the pending wait.
+        recovery.reportSessionLoss(.spircEnded, epoch: recovery.player.engineEpoch)
+        recovery.invalidate()
+        let creations = gate.configurations.count
+        recovery.start(); await settle()
+        #expect(gate.configurations.count == creations + 1)
+        #expect(clock.pendingDelays.isEmpty)
+        guard gate.configurations.count == creations + 1 else { return await recovery.stop() }
+        gate.failNext(with: .networkUnavailable); await settle()
+        #expect(clock.pendingDelays.contains(.seconds(2)), "connect-failure count restarts too")
+        await recovery.stop()
+    }
+
     @Test func dropsOlderThanTenMinutesStopCounting() async {
         let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
         let recovery = coordinator(gate, clock)

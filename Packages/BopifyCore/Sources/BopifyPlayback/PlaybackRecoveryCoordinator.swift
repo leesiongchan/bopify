@@ -89,6 +89,12 @@ public final class PlaybackRecoveryCoordinator {
         if let recovery { snapshot = recovery; hasBeenReady = true }
         forcedRefreshUsed = false
         rejectedToken = nil
+        // A new session starts from the first rung; state left by an earlier session must not delay it.
+        retryBeforeCreate = false
+        connectFailures = 0
+        recentDrops = []
+        offersManualRetry = false
+        delay?.cancel()
         worker?.cancel()
         let previous = worker
         launch(after: previous)
