@@ -54,6 +54,7 @@ final class AppEnvironment {
     private static let approvedLibraryClientKey = "library.approvedClientID"
     private(set) var recovery: PlaybackRecoveryCoordinator?
     var connectionStatus: PlaybackConnectionStatus { recovery?.status ?? .ready }
+    var offersPlaybackRetry: Bool { recovery?.offersManualRetry ?? false }
     var hasPlaybackConnected: Bool { recovery?.hasBeenReady ?? false }
     @ObservationIgnored private var connectionMonitor: PlaybackConnectionMonitor?
     @ObservationIgnored private var sessionGeneration = 0

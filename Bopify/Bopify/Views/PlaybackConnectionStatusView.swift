@@ -9,6 +9,8 @@ struct PlaybackConnectionStatusView: View {
     let hasConnected: Bool
     let onRetry: () -> Void
     let onReconnect: () -> Void
+    /// Recovery is waiting long enough that the listener may want to try at once.
+    var offersRetry = false
     var isAuthorizing = false
     var onCancel: () -> Void = {}
 
@@ -44,11 +46,14 @@ struct PlaybackConnectionStatusView: View {
     var message: Text { Text(LocalizedStringKey(messageKey)) }
     var actionKey: String? {
         if isAuthorizing { return "signIn.cancel" }
+        if offersRetry, [.connecting, .reconnecting, .offline].contains(status) { return "connection.retry" }
         return switch status {
         case .needsReauthentication, .failed(.credentialCorrupt): "connection.reconnect"
         case let .failed(error) where error.canRetryCredentials: "connection.retryCredentials"
+        // Recovery never retries a failure on its own, so the listener always gets a way out.
+        case .failed: "connection.retry"
         case .ready where restorationUnavailable: "connection.retryRestoration"
-        // Recovery already retries with backoff and as soon as the network returns.
+        // Recovery already retries short waits on its own, and as soon as the network returns.
         default: nil
         }
     }

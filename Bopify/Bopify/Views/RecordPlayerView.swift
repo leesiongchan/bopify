@@ -129,6 +129,7 @@ struct RecordPlayerView: View {
         return PlaybackConnectionStatusView(status: environment.connectionStatus, restorationUnavailable: player.restorationUnavailable,
             hasConnected: environment.hasPlaybackConnected,
             onRetry: environment.retryPlaybackConnection, onReconnect: { Task { await environment.reconnectSpotify() } },
+            offersRetry: environment.offersPlaybackRetry,
             isAuthorizing: environment.isAuthorizingPlayback, onCancel: environment.cancelPlaybackAuthorization)
     }
     private var needsAttention: Bool {

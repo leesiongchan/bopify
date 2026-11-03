@@ -107,7 +107,7 @@ struct PlayerRootView: View {
     }
 
     private func connection(for player: PlayerModel) -> PlaybackConnectionStatusView {
-        PlaybackConnectionStatusView(status: environment.connectionStatus, restorationUnavailable: player.restorationUnavailable, hasConnected: environment.hasPlaybackConnected, onRetry: environment.retryPlaybackConnection, onReconnect: { Task { await environment.reconnectSpotify() } }, isAuthorizing: environment.isAuthorizingPlayback, onCancel: environment.cancelPlaybackAuthorization)
+        PlaybackConnectionStatusView(status: environment.connectionStatus, restorationUnavailable: player.restorationUnavailable, hasConnected: environment.hasPlaybackConnected, onRetry: environment.retryPlaybackConnection, onReconnect: { Task { await environment.reconnectSpotify() } }, offersRetry: environment.offersPlaybackRetry, isAuthorizing: environment.isAuthorizingPlayback, onCancel: environment.cancelPlaybackAuthorization)
     }
 
     /// Only an actual sign-in can be cancelled; once it succeeds, the player is just starting.

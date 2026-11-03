@@ -41,9 +41,9 @@ struct SignInRecordTests {
 @MainActor @Suite("Startup connection")
 struct StartupConnectionTests {
     private func connection(_ status: PlaybackConnectionStatus, restorationUnavailable: Bool = false,
-                            isAuthorizing: Bool = false) -> PlaybackConnectionStatusView {
+                            isAuthorizing: Bool = false, offersRetry: Bool = false) -> PlaybackConnectionStatusView {
         PlaybackConnectionStatusView(status: status, restorationUnavailable: restorationUnavailable, hasConnected: true,
-                                     onRetry: {}, onReconnect: {}, isAuthorizing: isAuthorizing)
+                                     onRetry: {}, onReconnect: {}, offersRetry: offersRetry, isAuthorizing: isAuthorizing)
     }
 
     @Test(arguments: [PlaybackConnectionStatus.connecting, .restoring, .reconnecting, .stopped])
@@ -56,10 +56,25 @@ struct StartupConnectionTests {
         #expect(connection(status).isFailure)
     }
 
-    /// Recovery retries on its own with backoff and again as soon as the network returns, so a manual retry adds nothing.
+    /// Short waits retry on their own, so a manual retry would add nothing.
     @Test(arguments: [PlaybackConnectionStatus.connecting, .restoring, .reconnecting, .offline])
-    func automaticRecoveryOffersNoManualRetry(status: PlaybackConnectionStatus) {
+    func shortWaitsOfferNoManualRetry(status: PlaybackConnectionStatus) {
         #expect(connection(status).actionKey == nil)
+    }
+
+    @Test(arguments: [PlaybackConnectionStatus.connecting, .reconnecting, .offline])
+    func longWaitsOfferRetryNow(status: PlaybackConnectionStatus) {
+        #expect(connection(status, offersRetry: true).actionKey == "connection.retry")
+    }
+
+    @Test(arguments: [PlayerError.premiumRequired, .unknown, .networkUnavailable])
+    func everyFailureOffersRetryNow(error: PlayerError) {
+        #expect(connection(.failed(error)).actionKey == "connection.retry")
+    }
+
+    @Test func credentialFailuresKeepTheirOwnActions() {
+        #expect(connection(.failed(.credentialCorrupt)).actionKey == "connection.reconnect")
+        #expect(connection(.failed(.credentialUnavailable)).actionKey == "connection.retryCredentials")
     }
 
     @Test func unrestorablePlaybackIsAFailureButAuthorizingIsNot() {
