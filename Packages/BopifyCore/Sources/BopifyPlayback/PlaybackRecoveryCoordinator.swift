@@ -8,8 +8,15 @@ public enum PlaybackConnectionStatus: Equatable, Sendable {
     case stopped
 }
 
-func recoveryRetryDelay(failureCount: Int, jitterUnit: Double) -> Duration {
-    let nominal: Double = failureCount >= 6 ? 30 : pow(2, Double(max(0, failureCount - 1)))
+/// Nominal seconds before each retry: a first drop reconnects at once, repeated trouble escalates to five minutes.
+let recoveryRetrySchedule: [Double] = [0, 2, 5, 15, 30, 60, 120, 300]
+/// Drops older than this stop counting, so a session that recovers for good starts again from an immediate retry.
+let recoveryDropWindow: TimeInterval = 600
+/// Waits this long or longer offer the listener a manual retry.
+let manualRetryThreshold: Double = 30
+
+func recoveryRetryDelay(step: Int, jitterUnit: Double) -> Duration {
+    let nominal = recoveryRetrySchedule[min(max(0, step), recoveryRetrySchedule.count - 1)]
     let unit = jitterUnit.isFinite ? min(1, max(0, jitterUnit)) : 0.5
     return .seconds(nominal * (0.5 + 0.5 * unit))
 }
@@ -36,7 +43,6 @@ public final class PlaybackRecoveryCoordinator {
     @ObservationIgnored private var cleanup: Task<Void, Never>?
     @ObservationIgnored private var delay: Task<Void, Error>?
     @ObservationIgnored private var deadline: Task<Void, Never>?
-    @ObservationIgnored private var stableReady: Task<Void, Never>?
     @ObservationIgnored private var wakeWaiter: AsyncStream<Void>.Continuation?
     @ObservationIgnored private var bootstrap: AsyncStream<BootstrapSignal>.Continuation?
     private enum BootstrapSignal: Sendable { case ready(PlaybackBootstrapOutcome), lost(SessionLossReason) }
@@ -46,8 +52,10 @@ public final class PlaybackRecoveryCoordinator {
     private var sleeping = false
     public private(set) var hasBeenReady = false
     private var snapshot: PlaybackRecoverySnapshot?
-    private var failureCount = 0
-    private var immediateRecoveryUsed = false
+    private var recentDrops: [TimeInterval] = []
+    private var connectFailures = 0
+    private var retryStep = 0
+    public private(set) var offersManualRetry = false
     private var retryBeforeCreate = false
     private var forcedRefreshUsed = false
     private var rejectedToken: String?
@@ -89,7 +97,6 @@ public final class PlaybackRecoveryCoordinator {
     public func retryNow() {
         guard active else { return }
         if case .needsReauthentication = status { return }
-        if case let .failed(error) = status, !error.canRetryCredentials { return }
         if status == .ready && !player.restorationUnavailable { return }
         retryBeforeCreate = false
         delay?.cancel()
@@ -127,12 +134,10 @@ public final class PlaybackRecoveryCoordinator {
         guard bootstrap != nil || status == .ready else { return }
         if snapshot == nil, hasBeenReady { snapshot = player.captureRecoverySnapshot(at: .now) }
         if bootstrap == nil {
-            if immediateRecoveryUsed {
-                failureCount = min(6, failureCount + 1)
-                retryBeforeCreate = true
-            } else { immediateRecoveryUsed = true }
+            recentDrops.append(now())
+            retryStep = dropStep()
+            retryBeforeCreate = retryStep > 0
         }
-        stableReady?.cancel()
         player.detachEngine()
         status = networkAvailable ? .reconnecting : .offline
         BopifyLog.playback.error("recovery requested reason=\(reason.rawValue, privacy: .public) epoch=\(epoch, privacy: .public)")
@@ -146,7 +151,7 @@ public final class PlaybackRecoveryCoordinator {
         generation &+= 1
         status = .stopped
         worker?.cancel()
-        delay?.cancel(); deadline?.cancel(); stableReady?.cancel()
+        delay?.cancel(); deadline?.cancel()
         wakeWaiter?.finish(); bootstrap?.finish()
         player.detachEngine()
         if let engine = currentEngine {
@@ -240,15 +245,8 @@ public final class PlaybackRecoveryCoordinator {
                     if outcome != .unavailable { snapshot = nil }
                     forcedRefreshUsed = false
                     rejectedToken = nil
+                    connectFailures = 0
                     status = .ready
-                    let readyEpoch = player.engineEpoch
-                    stableReady?.cancel()
-                    stableReady = Task { [weak self] in
-                        do { try await sleep(.seconds(60)) } catch { return }
-                        guard let self, generation == mine, status == .ready, player.engineEpoch == readyEpoch else { return }
-                        failureCount = 0
-                        immediateRecoveryUsed = false
-                    }
                     return
                 case let .lost(reason):
                     BopifyLog.playback.error("bootstrap lost reason=\(reason.rawValue, privacy: .public)")
@@ -272,7 +270,8 @@ public final class PlaybackRecoveryCoordinator {
                 }
                 if error == .authDenied { status = .needsReauthentication; return }
                 guard error == .networkUnavailable || error == .playbackSessionLost else { status = .failed(error); return }
-                failureCount = min(6, failureCount + 1)
+                connectFailures += 1
+                retryStep = dropStep() + connectFailures
                 status = networkAvailable ? .reconnecting : .offline
                 guard networkAvailable, !sleeping else { continue }
                 await waitForRetry()
@@ -280,9 +279,19 @@ public final class PlaybackRecoveryCoordinator {
         }
     }
 
+    /// Counts drops inside the window, so a session that keeps failing escalates however long each connection lasts.
+    private func dropStep() -> Int {
+        let cutoff = now() - recoveryDropWindow
+        recentDrops.removeAll { $0 <= cutoff }
+        return max(0, recentDrops.count - 1)
+    }
+
     private func waitForRetry() async {
-        let retry = recoveryRetryDelay(failureCount: failureCount, jitterUnit: randomUnit())
-        BopifyLog.playback.info("recovery retry failureCount=\(self.failureCount, privacy: .public) delay=\(String(describing: retry), privacy: .public)")
+        let step = min(retryStep, recoveryRetrySchedule.count - 1)
+        let retry = recoveryRetryDelay(step: step, jitterUnit: randomUnit())
+        BopifyLog.playback.info("recovery retry step=\(step, privacy: .public) delay=\(String(describing: retry), privacy: .public)")
+        offersManualRetry = recoveryRetrySchedule[step] >= manualRetryThreshold
+        defer { offersManualRetry = false }
         let sleep = self.sleep
         let waiting = Task { try await sleep(retry) }
         delay = waiting

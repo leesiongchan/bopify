@@ -29,10 +29,102 @@ struct PlaybackRecoveryCoordinatorTests {
     func coordinator(_ gate: RecoveryFactoryGate, _ clock: RecoveryTestClock) -> PlaybackRecoveryCoordinator {
         PlaybackRecoveryCoordinator(player: PlayerModel(), tokenProvider: { _ in "TOKEN_FAKE" }, makeEngine: { _, options in try await gate.create(configuration: options) }, deviceID: "stable", now: { clock.now }, sleep: { try await clock.sleep(for: $0) }, randomUnit: { 1 })
     }
-    @Test func retryDelaysStayWithinJitterBoundsAndCapWithoutOverflow() {
-        #expect(recoveryRetryDelay(failureCount: 1, jitterUnit: 0) == .milliseconds(500))
-        #expect(recoveryRetryDelay(failureCount: 6, jitterUnit: 1) == .seconds(30))
-        #expect(recoveryRetryDelay(failureCount: Int.max, jitterUnit: 0) == .seconds(15))
+    @Test func retryDelaysFollowTheScheduleWithinJitterBounds() {
+        #expect(recoveryRetryDelay(step: 0, jitterUnit: 1) == .zero)
+        #expect(recoveryRetryDelay(step: 1, jitterUnit: 0) == .seconds(1))
+        #expect(recoveryRetryDelay(step: 1, jitterUnit: 1) == .seconds(2))
+        #expect(recoveryRetryDelay(step: 7, jitterUnit: 1) == .seconds(300))
+        #expect(recoveryRetryDelay(step: Int.max, jitterUnit: 0) == .seconds(150))
+        #expect(recoveryRetryDelay(step: -1, jitterUnit: 1) == .zero)
+    }
+
+    /// Connect failures climb the whole ladder and stay at its cap instead of giving up.
+    @Test func connectFailuresClimbToTheFiveMinuteCap() async {
+        let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
+        let recovery = coordinator(gate, clock)
+        recovery.start()
+        for (attempt, seconds) in [2.0, 5, 15, 30, 60, 120, 300, 300].enumerated() {
+            await gate.waitForCreationCount(attempt + 1)
+            gate.failNext(with: .networkUnavailable); await settle()
+            #expect(clock.pendingDelays.contains(.seconds(seconds)), "attempt \(attempt)")
+            clock.advance(by: .seconds(seconds))
+        }
+        await gate.waitForCreationCount(9); gate.failNext(with: .networkUnavailable); await settle()
+        await recovery.stop()
+    }
+
+    /// The old 60-second reset let a session that dropped every minute reconnect instantly forever.
+    @Test func dropsEverySixtyOneSecondsStillEscalate() async {
+        let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
+        let recovery = coordinator(gate, clock)
+        recovery.start(); await gate.waitForCreationCount(1)
+        var engine = RecoveryStubEngine(); gate.succeedNext(with: engine); await settle()
+        engine.emit(.connectionReady(.remote)); await settle()
+        for (drop, seconds) in [0.0, 2, 5, 15, 30].enumerated() {
+            clock.advance(by: .seconds(61)); await settle()
+            engine.emit(.sessionLost(.spircEnded)); await settle()
+            if seconds > 0 {
+                #expect(clock.pendingDelays.contains(.seconds(seconds)), "drop \(drop)")
+                #expect(gate.configurations.count == drop + 1)
+                clock.advance(by: .seconds(seconds))
+            }
+            await gate.waitForCreationCount(drop + 2)
+            engine = RecoveryStubEngine(); gate.succeedNext(with: engine); await settle()
+            engine.emit(.connectionReady(.remote)); await settle()
+        }
+        await recovery.stop()
+    }
+
+    @Test func dropsOlderThanTenMinutesStopCounting() async {
+        let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
+        let recovery = coordinator(gate, clock)
+        recovery.start(); await gate.waitForCreationCount(1)
+        var engine = RecoveryStubEngine(); gate.succeedNext(with: engine); await settle()
+        engine.emit(.connectionReady(.remote)); await settle()
+        engine.emit(.sessionLost(.spircEnded)); await gate.waitForCreationCount(2)
+        engine = RecoveryStubEngine(); gate.succeedNext(with: engine); await settle(); engine.emit(.connectionReady(.remote)); await settle()
+        engine.emit(.sessionLost(.spircEnded)); await settle()
+        #expect(clock.pendingDelays.contains(.seconds(2)))
+        clock.advance(by: .seconds(2)); await gate.waitForCreationCount(3)
+        engine = RecoveryStubEngine(); gate.succeedNext(with: engine); await settle(); engine.emit(.connectionReady(.remote)); await settle()
+        clock.advance(by: .seconds(601)); await settle()
+        engine.emit(.sessionLost(.spircEnded)); await gate.waitForCreationCount(4)
+        #expect(clock.pendingDelays.isEmpty)
+        gate.failNext(with: .networkUnavailable); await settle()
+        await recovery.stop()
+    }
+
+    @Test func onlyLongWaitsOfferAManualRetry() async {
+        let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
+        let recovery = coordinator(gate, clock)
+        recovery.start()
+        for (attempt, seconds) in [2.0, 5, 15].enumerated() {
+            await gate.waitForCreationCount(attempt + 1); gate.failNext(with: .networkUnavailable); await settle()
+            #expect(!recovery.offersManualRetry)
+            clock.advance(by: .seconds(seconds))
+        }
+        await gate.waitForCreationCount(4); gate.failNext(with: .networkUnavailable); await settle()
+        #expect(clock.pendingDelays.contains(.seconds(30)))
+        #expect(recovery.offersManualRetry)
+        recovery.retryNow(); await gate.waitForCreationCount(5)
+        #expect(!recovery.offersManualRetry)
+        gate.failNext(with: .networkUnavailable); await settle()
+        await recovery.stop()
+    }
+
+    /// Wake and network changes must not loop on an account problem; an explicit Retry always tries again.
+    @Test(arguments: [PlayerError.premiumRequired, .unknown]) func onlyAnExplicitRetryLeavesAFailure(_ error: PlayerError) async {
+        let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
+        let recovery = coordinator(gate, clock)
+        recovery.start(); await gate.waitForCreationCount(1); gate.failNext(with: error); await settle()
+        #expect(recovery.status == .failed(error))
+        recovery.setNetworkAvailable(false); recovery.setNetworkAvailable(true); recovery.wake()
+        clock.advance(by: .seconds(600)); await settle()
+        #expect(gate.configurations.count == 1)
+        recovery.retryNow(); await gate.waitForCreationCount(2)
+        #expect(recovery.status == .connecting)
+        gate.failNext(with: error); await settle()
+        await recovery.stop()
     }
     @Test func hasBeenReadyDistinguishesFirstConnectionFromReconnection() async {
         let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
@@ -41,7 +133,7 @@ struct PlaybackRecoveryCoordinatorTests {
         gate.failNext(with: .networkUnavailable); await settle()
         #expect(recovery.status == .reconnecting)
         #expect(!recovery.hasBeenReady)
-        clock.advance(by: .seconds(1)); await gate.waitForCreationCount(2)
+        clock.advance(by: .seconds(2)); await gate.waitForCreationCount(2)
         let engine = RecoveryStubEngine(); gate.succeedNext(with: engine); await settle()
         engine.emit(.connectionReady(.remote)); await settle()
         #expect(recovery.hasBeenReady)
@@ -102,7 +194,7 @@ struct PlaybackRecoveryCoordinatorTests {
         let recovery = PlaybackRecoveryCoordinator(player: PlayerModel(), tokenProvider: { rejected in await calls.token(rejected) }, makeEngine: { _, options in try await gate.create(configuration: options) }, sleep: { try await clock.sleep(for: $0) }, randomUnit: { 1 })
         recovery.start(); await gate.waitForCreationCount(1); gate.failNext(with: .authExpired)
         await gate.waitForCreationCount(2); gate.failNext(with: .networkUnavailable); await settle()
-        clock.advance(by: .seconds(1)); await gate.waitForCreationCount(3); gate.failNext(with: .authExpired); await settle()
+        clock.advance(by: .seconds(2)); await gate.waitForCreationCount(3); gate.failNext(with: .authExpired); await settle()
         #expect(await calls.rejections == [nil, "OLD_FAKE", nil])
         #expect(recovery.status == .needsReauthentication)
         await recovery.stop()
@@ -156,7 +248,7 @@ struct PlaybackRecoveryCoordinatorTests {
         clock.advance(by: .seconds(20)); await settle()
         #expect(engine.shutdownCount == 1)
         #expect(recovery.status == .reconnecting)
-        #expect(clock.pendingDelays.contains(.seconds(1)))
+        #expect(clock.pendingDelays.contains(.seconds(2)))
         await recovery.stop()
     }
     @Test func stopDuringCreateDestroysLateEngineWithoutAttaching() async {
@@ -171,22 +263,6 @@ struct PlaybackRecoveryCoordinatorTests {
         #expect(recovery.currentEngine == nil)
         #expect(!recovery.player.isEngineReady)
         #expect(recovery.status == .stopped)
-    }
-    @Test func flappingKeepsBackoffAndSixtySecondsReadyResetsIt() async {
-        let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
-        let recovery = coordinator(gate, clock)
-        recovery.start(); await gate.waitForCreationCount(1); gate.failNext(with: .networkUnavailable); await settle()
-        #expect(clock.pendingDelays.contains(.seconds(1)))
-        clock.advance(by: .seconds(1)); await gate.waitForCreationCount(2)
-        let engine = RecoveryStubEngine(); gate.succeedNext(with: engine); await settle(); engine.emit(.connectionReady(.remote)); await settle()
-        engine.emit(.sessionLost(.spircEnded)); await gate.waitForCreationCount(3); gate.failNext(with: .networkUnavailable); await settle()
-        #expect(clock.pendingDelays.contains(.seconds(2)))
-        clock.advance(by: .seconds(2)); await gate.waitForCreationCount(4)
-        let stable = RecoveryStubEngine(); gate.succeedNext(with: stable); await settle(); stable.emit(.connectionReady(.remote)); await settle()
-        clock.advance(by: .seconds(60)); await settle()
-        stable.emit(.sessionLost(.spircEnded)); await gate.waitForCreationCount(5); gate.failNext(with: .networkUnavailable); await settle()
-        #expect(clock.pendingDelays.contains(.seconds(1)))
-        await recovery.stop()
     }
     @Test func sleepSuspendsDelayUntilWake() async {
         let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
@@ -211,17 +287,7 @@ struct PlaybackRecoveryCoordinatorTests {
         recovery.retryNow(); await settle(); #expect(gate.configurations.count == 2)
         await recovery.stop()
     }
-    @Test(arguments: [PlayerError.premiumRequired, .unknown]) func permanentErrorsDoNotLoop(_ error: PlayerError) async {
-        let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
-        let recovery = coordinator(gate, clock)
-        recovery.start(); await gate.waitForCreationCount(1); gate.failNext(with: error); await settle()
-        #expect(recovery.status == .failed(error))
-        recovery.retryNow(); clock.advance(by: .seconds(60)); await settle()
-        #expect(gate.configurations.count == 1)
-        await recovery.stop()
-    }
-
-    @Test(arguments: [PlayerError.authDenied, .authExpired, .premiumRequired]) func networkChangesPreservePermanentFailure(_ error: PlayerError) async {
+    @Test(arguments: [PlayerError.authDenied, .authExpired]) func networkChangesPreservePermanentFailure(_ error: PlayerError) async {
         let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
         let recovery = coordinator(gate, clock)
         recovery.start(); await gate.waitForCreationCount(1); gate.failNext(with: error)
@@ -229,7 +295,7 @@ struct PlaybackRecoveryCoordinatorTests {
             await gate.waitForCreationCount(2); gate.failNext(with: error)
         }
         await settle()
-        let expected: PlaybackConnectionStatus = error == .premiumRequired ? .failed(error) : .needsReauthentication
+        let expected: PlaybackConnectionStatus = .needsReauthentication
         let creations = gate.configurations.count
         #expect(recovery.status == expected)
         recovery.setNetworkAvailable(false); await settle()
@@ -284,33 +350,6 @@ struct PlaybackRecoveryCoordinatorTests {
         #expect(snapshot?.wasActive == true)
         #expect((snapshot?.positionMs ?? 0) >= 5000)
         gate.failNext(with: .networkUnavailable); await settle(); await recovery.stop()
-    }
-
-    @Test func readyThenDeadSessionsBackOffUntilStable() async {
-        let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
-        let recovery = coordinator(gate, clock)
-        recovery.start(); await gate.waitForCreationCount(1)
-        var engine = RecoveryStubEngine(); gate.succeedNext(with: engine); await settle()
-        engine.emit(.connectionReady(.remote)); await settle()
-        for interruption in 0..<8 {
-            engine.emit(.sessionLost(.spircEnded)); await settle()
-            if interruption > 0 {
-                let expected = recoveryRetryDelay(failureCount: interruption, jitterUnit: 1)
-                #expect(clock.pendingDelays.contains(expected))
-                #expect(gate.configurations.count == interruption + 1)
-                clock.advance(by: expected)
-            }
-            await gate.waitForCreationCount(interruption + 2)
-            #expect(engine.shutdownCount == 1)
-            engine = RecoveryStubEngine(); gate.succeedNext(with: engine); await settle()
-            engine.emit(.connectionReady(.remote)); await settle()
-        }
-        clock.advance(by: .seconds(60)); await settle()
-        engine.emit(.sessionLost(.spircEnded)); await gate.waitForCreationCount(10)
-        #expect(!clock.pendingDelays.contains(.seconds(30)))
-        gate.failNext(with: .networkUnavailable); await settle()
-        #expect(clock.pendingDelays.contains(.seconds(1)))
-        await recovery.stop()
     }
 }
 private actor TokenLookups {
