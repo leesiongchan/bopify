@@ -98,6 +98,45 @@ struct RecordAppearancePickerTests {
         c.show()
         #expect(c.model.selectedMaterial == .glass)
     }
+    @Test(.enabled("Requires native screen capture") { @MainActor in VinylRenderingFixture.canCapture },
+          arguments: [CGFloat(760), CGFloat(900)])
+    func nativeWindowAndSimultaneousUppermostExchanges(_ width: CGFloat) async throws {
+        let d = defaults()
+        d.set("glass", forKey: RecordDesign.preferenceKey)
+        d.set("bloom", forKey: VinylDesign.preferenceKey)
+        let c = RecordAppearanceWindowController(defaults: d)
+        c.model.isMotionPaused = true
+        c.show(); defer { c.close() }
+        let w = try window()
+        w.setFrame(CGRect(origin: w.frame.origin, size: CGSize(width: width, height: width == 900 ? 655 : 631)), display: true)
+        let prefix = "appearance-native-\(Int(width))"
+        func capture(_ stage: String) async throws -> NSBitmapImageRep {
+            try await VinylRenderingFixture.capture(w, to: VinylRenderingFixture.directory.appendingPathComponent("\(prefix)-\(stage).png"))
+        }
+        let initial = try await capture("mounted")
+        #expect(initial.pixelsWide >= Int(width))
+        #expect(w.standardWindowButton(.closeButton)?.isHidden == false)
+        #expect(c.model.isPreviewVisible)
+        c.model.select(.material(.classic))
+        c.model.select(.pattern(.original))
+        try await Task.sleep(for: .milliseconds(500))
+        _ = try await capture("crossing")
+        try await Task.sleep(for: .milliseconds(1400))
+        let stopped = try await capture("settled")
+        c.model.isMotionPaused = false
+        try await Task.sleep(for: .milliseconds(650))
+        let moving = try await capture("motor-resumed")
+        let g = RecordAppearanceGeometry(sceneWidth: width)
+        let scale = CGFloat(stopped.pixelsWide) / width
+        // Full-window capture includes the 38-pt title and 42-pt explanation above the scene.
+        let centre = g.platterCenter(in: .material)
+        let crop = CGRect(x: centre.x - g.recordDiameter / 2, y: centre.y + 80 - g.recordDiameter / 2,
+                          width: g.recordDiameter, height: g.recordDiameter).applying(CGAffineTransform(scaleX: scale, y: scale))
+        let a = NSBitmapImageRep(cgImage: try #require(stopped.cgImage?.cropping(to: crop)))
+        let b = NSBitmapImageRep(cgImage: try #require(moving.cgImage?.cropping(to: crop)))
+        #expect(VinylRenderingFixture.differingAnnulusFraction(a, b) > 0.01)
+    }
+
     @Test func occlusionStopsPreviewWork() async throws {
         let c = RecordAppearanceWindowController(defaults: defaults())
         c.show(); defer { c.close() }

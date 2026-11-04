@@ -150,3 +150,22 @@ Expected: `TEST SUCCEEDED` / `BUILD SUCCEEDED`, passing package tests, valid sig
 ## Approval and Execution
 
 The user approved this plan and native execution on 2026-11-01. Implement in this session with a fresh whole-change review at the end.
+
+## Native verification — 2026-11-04
+
+- Full `BopifyAppTests` through `scripts/test-vinyl-rendering.py --all --derived-data-path /tmp/bopify-appearance-tests`: **298 tests / 415 parameterized runs passed, 0 failures, 0 skipped**. Result: `/tmp/bopify-appearance-tests/Logs/Test/Test-BopifyAppTests-2026.11.04_22-28-14-+0800.xcresult`.
+- `swift test --package-path Packages/BopifyCore`: **460 tests passed** (210 playback, 119 library, 36 domain, 95 core).
+- Foreground native keyboard host: arrows, Home/End, Enter/Space, Tab/Shift-Tab, preview-only motion activation, Escape and window reuse passed. No user keyboard/accessibility settings were changed.
+- WindowServer/Metal Retina captures inspected at 760×631 and 900×655: `/tmp/bopify-vinyl-validation/appearance-native-{760,900}-{mounted,crossing,settled,motor-resumed}.png`. Also `appearance-{760,900}.png`. Both uppermost records exchanged simultaneously; full cartridges cleared, records kept their diameter/layers, names stayed on the wood, and motor restart changed the rendered record.
+- Native Glass transparency/opaque fallback and player label/rotation/handoff continuity passed through the capture bridge. Core Reduce Motion, pause, cancellation and hidden/resize/reopen behavior passed explicit-clock tests. One shared TimelineView; process-cached resources/fonts; no per-record clocks or per-frame pixel generation.
+- Debug build with unchanged project signing: passed.
+- Signed Release: blocked before compilation by missing configured Developer ID Application certificate/private key for team `6RS6K2N242`; no signing settings changed. Unsigned Release compilation with `CODE_SIGNING_ALLOWED=NO`: **passed**; a valid signed Release and signature verification remain unavailable in this environment.
+- Actual VoiceOver speech and whole-window system Reduce Motion/Transparency/Increased Contrast variants were not manually exercised. Native AX choice names, independent selected values, focus/activation and effective motion values were verified; read-only system environment propagation remains intact.
+- Existing framework QoS diagnostic in `MusicBrowserTests.swift` appeared in the test result; no test failed and that subsystem was not changed.
+
+## Execution decisions
+
+1. Conservative full-cartridge geometry initially required an 18-pt upward pivot adjustment; native capture then showed counterweight overhang. The final correction is a **6-pt upward pivot adjustment and 18-pt lower first edge slot**, with smaller counterweights. Full-silhouette clearance remains ≥8 pt. This changes edge-stack spacing slightly from the study; source y=876 keeps mounted names on the lower sunburst.
+2. SwiftUI's accessibility contrast/transparency environments are read-only on this SDK. Existing real renderer override tests verify opaque Glass; actual system variants and VoiceOver speech are reported as unverified rather than changing user settings.
+3. Explicit edit focus alone did not make native Tab traverse the hosted custom buttons. This window routes Tab/Shift-Tab across the fixed catalog and motion control, while synchronizing native FocusState. Modified shortcuts retain normal routing. New controls must be added to that order.
+4. Missing release signing credentials are an environment limitation; unsigned compilation is additional code verification, not evidence of distributable signing.

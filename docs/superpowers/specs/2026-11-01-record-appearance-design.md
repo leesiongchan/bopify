@@ -1,6 +1,6 @@
 # Unified record appearance settings
 
-Status: approved by the user on 2026-11-01, following approval of the final visual study and the request to proceed. Implementation planning is authorized; production implementation has not started.
+Status: approved by the user on 2026-11-01, following approval of the final visual study and the request to proceed. Native implementation is authorized; execution and verification evidence is recorded in the implementation plan.
 
 Builder check: a fresh macOS engineering reviewer read this design and the relevant integration context on 2026-11-01 and reported no important unanswered planning questions. The user subsequently approved this written design.
 
@@ -118,4 +118,4 @@ Tab/Shift-Tab moves between choices in material-then-pattern order and the motio
 
 The user approved the appearance, independent families, edge presentation, physical sequence, final fonts and small laser-style BOPIFY plate. Native composition, bundling, compatibility/default policy, menu consolidation, lifecycle handling and test organization originated as the author's proposals and were approved with this document. Exact Swift file boundaries, localized translations, safe asset-loading fallback, and small pixel/spacing corrections remain builder decisions, provided they preserve the approved appearance and behavior.
 
-Implementation plan: `docs/superpowers/plans/2026-11-01-record-appearance.md`. Plan review and execution-method selection are pending.
+Implementation plan: `docs/superpowers/plans/2026-11-01-record-appearance.md`. The user approved the plan and native inline execution; see that plan for actual verification evidence and execution decisions.
