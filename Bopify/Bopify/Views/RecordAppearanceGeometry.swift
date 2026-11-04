@@ -35,10 +35,10 @@ struct RecordAppearanceGeometry {
     }
     func tonearmPivot(in family: RecordAppearanceFamily) -> CGPoint {
         let point = sourcePoint(family == .material ? 635 : 874, 165)
-        return CGPoint(x: point.x, y: point.y - 18)
+        return CGPoint(x: point.x, y: point.y - 6)
     }
     func home(for choice: RecordAppearanceChoice) -> CGPoint {
-        let first = recordDiameter * 0.80 + 4
+        let first = recordDiameter * 0.80 + 22
         let last = sceneHeight - recordDiameter / 2 - 14
         let count = RecordAppearanceChoice.choices(in: choice.family).count
         return CGPoint(x: choice.family == .material ? 0 : sceneWidth,

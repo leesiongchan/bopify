@@ -1,6 +1,106 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "appearance.title" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record appearance"
+          }
+        }
+      }
+    },
+    "menu.recordAppearance" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record Appearance…"
+          }
+        }
+      }
+    },
+    "appearance.help" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a material for muted covers and a pattern for colorful covers."
+          }
+        }
+      }
+    },
+    "appearance.muted" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muted covers"
+          }
+        }
+      }
+    },
+    "appearance.colorful" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Colorful covers"
+          }
+        }
+      }
+    },
+    "appearance.pause" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pause motion"
+          }
+        }
+      }
+    },
+    "appearance.resume" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resume motion"
+          }
+        }
+      }
+    },
+    "appearance.summary" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ + %@"
+          }
+        }
+      }
+    },
+    "appearance.motionStopped" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview motion stopped"
+          }
+        }
+      }
+    },
+    "appearance.motionPlaying" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview motion playing"
+          }
+        }
+      }
+    },
     "menu.recordDesign" : {
       "localizations": {
         "en": {
