@@ -1,0 +1,48 @@
+{
+  "fonts": [
+    {
+      "family": "IBM Plex Sans Condensed Medium",
+      "file": "IBMPlexSansCondensed-Medium.ttf",
+      "license": "IBMPlexSansCondensed-OFL.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsanscondensed/IBMPlexSansCondensed-Medium.ttf",
+      "sha256": "426350c298277f7f9d1a93956572799ca3d16e2d43e7f60eec8382bcd795ec30"
+    },
+    {
+      "family": "Allura",
+      "file": "Allura-Regular.ttf",
+      "license": "Allura-OFL.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/allura/Allura-Regular.ttf",
+      "sha256": "9c142b2e515832c0dfc4ff8b8ea18f40314943bf937b72e2b23c4661bac14cc6"
+    }
+  ],
+  "choices": {
+    "plate": {
+      "family": "IBM Plex Sans Condensed Medium",
+      "size": 7,
+      "compactSize": 6.2,
+      "dimensions": [
+        54,
+        18
+      ],
+      "compactDimensions": [
+        48,
+        16
+      ],
+      "letterSpacing": 1.05,
+      "compactLetterSpacing": 0.85,
+      "textShadow": "none",
+      "color": "#cbd0c6"
+    },
+    "record": {
+      "family": "Allura",
+      "size": 24,
+      "compactSize": 22,
+      "rotation": 0
+    }
+  },
+  "references": [
+    "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsans/DESCRIPTION.en_us.html",
+    "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsanscondensed/METADATA.pb"
+  ],
+  "comparison": "IBM Plex Sans Condensed Medium replaces Michroma for simpler forms, a stronger small-size stroke and more room around the lettering. Plate dimensions and Allura record lettering are preserved."
+}

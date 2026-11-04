@@ -1,0 +1,68 @@
+{
+  "mode": "builtin imagegen",
+  "prompts": {
+    "deck": "Use case: product-mockup. Asset: top-down skeuomorphic turntable body with genuine transparent background for an interactive app.\nInput 1 is a MATERIAL AND HARDWARE reference: MoFi x Fender American Vintage turntable. Capture its essence: warm honey-amber alder wood grain, hand-sprayed tobacco/three-colour sunburst subtly deepening through russet to almost black at the outer edge, restrained satin lacquer, matte black Delrin platters, fine polished metal fittings, black glossy pickguard-like control surrounds, a hairline golden drive belt. This is classic guitar craftsmanship, not rustic furniture.\nInput 2 is a LAYOUT TEMPLATE ONLY. Preserve its exact overhead camera and twin circular platter layout, body proportions, platter sizes and mounting coordinates. Replace the entire silver body, silver strobe rims and controls with the refined material language of Input 1.\nA classic simple rectangular alder-wood plinth, small softly rounded corners, continuous fine horizontal wood grain clearly visible through the warm transparent sunburst finish. No metal faceplate, no chrome strobe dots. TWO identical empty flat matte charcoal black Delrin platter surfaces, very fine concentric machining visible only in grazing light, each surrounded by a thin black machined rim and an understated hairline amber belt around the outside. Small precise motor pulleys just above/inboard of the platters, with believable taut belt segments tangent to the platter rim. Tiny silver spindle in each centre.\nKeep the layout as close as possible to input2: canvas about1510x1042; body x40..1470 y104..938; circular BLACK PLAYING SURFACE diameter558, centres(407,545) and(1099,545). Tiny black tonearm mounting bosses at(248,199) and(1262,199), compact finely machined retaining rings and micro screws, each around44px diameter. No arms, no counterweights, no needles or cartridges: these will be animated separately. Leave the TOP CENTRE at(755,175) clear for a BOPIFY print to be added in code. Leave a clear narrow wood strip below each platter for labels to be added later.\nLower left and lower right: a small rectangular warm-metal push button each inset into a discrete black polished pickguard-like escutcheon, restrained fine screw heads, tiny amber pin lights, no text. Hardware stays purposeful and minimal.\nTruly orthographic 90 degree top down, NO visible sidewall, NO perspective, no legs or feet. Transparent outside body, entire product visible with clean alpha, no white fringe. No vinyl records, no logos or letters, no dust cover, no cables, no scene props. Neutral soft upper-left lighting, high quality detailed product photography, subtle satin finish and micro machining; perfectly sharp edges and fine grain, not blurry, not grungy, not CGI plastic.",
+    "corduroy": "Use case: photorealistic-natural. Asset: premium olive corduroy textile background. Create an exceptionally SHARP high-resolution 3072x3072 square photograph of a flat field of real olive corduroy, viewed straight down. The field contains approximately FORTY fine vertical ribs across its width. Each rib is clearly rounded, raised, soft cotton pile: crisp tiny short fibre tips catch soft grazing light on the left shoulder, gently shaded right shoulder, dark narrow recessed furrows with sharply resolved woven backing. Micro fibre detail is individually resolved throughout, rich real textile depth without harsh lighting.\nEvery point is in exact sharp focus from edge to edge: macro product photography with deep focus/focus stacking, no bokeh, no depth of field falloff, no blur, no denoised smearing, no upscaling softness. This must be a genuinely detailed textile capture rather than a low-resolution tile enlarged.\nColour is restrained dark olive moss green, not bright yellow or neon. Uniformly soft upper-left grazing illumination across the whole square, no global vignette, no hotspots, no uneven exposure, no big creases, no folds, no seams, no dirt. Cotton fibres and pile are natural and fine, not fuzz blobs or carpet. Vertical ribs run straight continuously through the entire image. Edge-to-edge textile, opaque. Seamless if possible but prioritize perfect sharpness and consistent scale. No text or objects. Output a 3072x3072 image."
+  },
+  "assets": {
+    "deck": {
+      "original": "/Users/leesiongchan/.codex/generated_images/01a192b1-d3af-7bd0-b966-581924591a3f/exec-62f201b4-0b04-4518-becd-3af949d06de2.png",
+      "local": "sunburst-deck.png",
+      "size": [
+        1509,
+        1042
+      ],
+      "platterCentres": [
+        [
+          428,
+          504
+        ],
+        [
+          1082,
+          504
+        ]
+      ],
+      "playingDiameter": 570,
+      "tonearmPivots": [
+        [
+          635,
+          165
+        ],
+        [
+          874,
+          165
+        ]
+      ]
+    },
+    "corduroy": {
+      "original": "/Users/leesiongchan/.codex/generated_images/01a192b1-d3af-7bd0-b966-581924591a3f/exec-82222d20-352b-41aa-bbcf-7bccb484b8cb.png",
+      "local": "corduroy-crisp.png",
+      "size": [
+        1254,
+        1254
+      ],
+      "cssSize": [
+        625,
+        625
+      ],
+      "sourcePixelsPerCssPixel": 2.0064
+    },
+    "reference": {
+      "local": "mofi-american-vintage-reference.jpg",
+      "source": "https://www.mofielectronics.com/cdn/shop/files/MoFi_Electronics_Fender_American_Vintage_Turntable_Right.jpg?v=1754585690&width=2400"
+    }
+  },
+  "research": {
+    "references": [
+      "https://futureaudiophile.com/mofi-electronics-x-fender-american-vintage-turntable-reviewed/",
+      "https://www.mofielectronics.com/products/mofi-electronics-x-fender-american-vintage-turntable",
+      "https://www.fender.com/products/fender-x-mofi-american-vintage-turntable",
+      "https://www.fender.com/articles/parts-and-accessories/mofi-turntable"
+    ],
+    "notes": [
+      "American Vintage uses sunburst alder; the earlier PrecisionDeck used ash.",
+      "Design interpretation carries the wood finish, dark Delrin-like platters, belt pulleys, black tonearms and pickguard-style control surrounds into a two-platter layout.",
+      "BOPIFY print is live text for crisp rendering."
+    ]
+  }
+}
