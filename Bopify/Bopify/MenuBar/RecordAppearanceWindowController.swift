@@ -4,9 +4,12 @@ import SwiftUI
 @MainActor final class RecordAppearanceWindowController: NSObject, NSWindowDelegate {
     let model: RecordAppearancePickerModel
     private var window: RecordAppearanceWindow?
+    private let reduceMotion: @MainActor () -> Bool
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard,
+         reduceMotion: @escaping @MainActor () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }) {
         model = RecordAppearancePickerModel(defaults: defaults)
+        self.reduceMotion = reduceMotion
     }
     func show() {
         model.refreshPreferences()
@@ -16,9 +19,10 @@ import SwiftUI
                                                 styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
             window.contentView = NSHostingView(rootView: RecordAppearancePicker(model: model, onClose: { [weak self] in self?.close() })
                 .environment(\.accessibilityEnabled, true))
+            let reduceMotion = self.reduceMotion
             window.onMove = { [weak model] in model?.move($0) }
-            window.onTab = { [weak model] in model?.moveTab(backward: $0) }
-            window.onActivate = { [weak model] in model?.activateFocused() }
+            window.onTab = { [weak model] in model?.moveTab(backward: $0, reduceMotion: reduceMotion()) }
+            window.onActivate = { [weak model] in model?.activateFocused(reduceMotion: reduceMotion()) }
             window.onHidden = { [weak model] in model?.isPreviewVisible = false }
             window.title = String(localized: "appearance.title", bundle: RecordAppearanceResources.bundle)
             window.identifier = NSUserInterfaceItemIdentifier("record-appearance")

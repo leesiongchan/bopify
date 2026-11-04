@@ -183,7 +183,7 @@ A fresh reviewer found two Important issues: scene-sized record pointer targets 
 - Animation captures explicitly control preview visibility because a background XCTest process can be on an inactive Space while its backing window remains capturable. The foreground input harness separately verifies real AppKit visibility; lifecycle tests retain hidden/close coverage.
 - No Critical findings or declined-to-judge items. No second review was dispatched; both Important fixes have RED→GREEN evidence and a passing full app suite.
 
-Deferred minor: under system Reduce Motion, custom keyboard traversal can still activate the disabled motion control and change latent preview pause intent. Reduce Motion continues to prevent motion; this affects the local preview intent after that system setting is turned off.
+Resolved on 2026-11-05: the previously deferred Reduce Motion keyboard issue is fixed. Tab/Shift-Tab skip the disabled motion control, and Space/Enter cannot change preview pause intent while Reduce Motion is enabled. Record choices remain available.
 
 The local implementation is preserved on `feat/record-appearance`. Ad-hoc Release signing and signature validation passed using the existing release workflow’s flags. Developer ID signing remains unavailable locally; it is not required by the current release workflow. Manual VoiceOver/full-window system accessibility variants remain unverified.
 
@@ -192,3 +192,13 @@ The local implementation is preserved on `feat/record-appearance`. Ad-hoc Releas
 The earlier report that “Release signing remains blocked” was too broad. `README.md` and `scripts/release.sh` specify an ad-hoc-signed, non-notarized release. The release script sets `CODE_SIGN_IDENTITY=-`, `CODE_SIGN_STYLE=Manual`, and an empty `DEVELOPMENT_TEAM`, overriding the Xcode project’s default Developer ID setting.
 
 Verified the Release app with those existing flags using `/tmp/bopify-appearance-release` derived data: **BUILD SUCCEEDED**. `codesign --verify --deep --strict --verbose=2 /tmp/bopify-appearance-release/Build/Products/Release/Bopify.app` reported **valid on disk** and **satisfies its Designated Requirement**. Logs: `/tmp/bopify-appearance-release-adhoc.log` and `/tmp/bopify-appearance-release-signature.log`. This validates the app build/signature, not the complete DMG packaging or publication workflow.
+
+## Reduce Motion keyboard follow-up — 2026-11-05
+
+The native keyboard route now reads the current accessibility setting on every Tab or activation event. The model excludes the disabled motion control from traversal and ignores activation from stale motion focus. Existing pause/resume intent survives Reduce Motion changes; activation of record choices is unaffected.
+
+Regression tests failed before the guard/traversal fix and passed afterward. Model tests cover both pause intents, forward/reverse wrapping, stale focus and record activation. A native window key-event test uses a controlled accessibility reader to exercise Space, Enter, Tab, Shift-Tab and turning Reduce Motion off without changing system accessibility preferences.
+
+Full native validation through `scripts/test-vinyl-rendering.py --all --derived-data-path /tmp/bopify-appearance-tests`: **304 tests / 427 parameterized runs passed, 0 failures, 0 skipped**. The foreground keyboard/pointer harness also passed. Result: `/tmp/bopify-appearance-tests/Logs/Test/Test-BopifyAppTests-2026.11.05_00-22-15-+0800.xcresult`; log: `/tmp/bopify-reduced-motion-full.log`.
+
+The updated ad-hoc Release build and `codesign --verify --deep --strict` both passed. Logs: `/tmp/bopify-reduced-motion-release.log` and `/tmp/bopify-reduced-motion-signature.log`. `git diff --check` passed.
