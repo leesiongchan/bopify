@@ -26,27 +26,27 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choose a material for muted covers and a pattern for colorful covers."
+            "value": "Choose a material for muted artwork and a pattern for colorful artwork."
           }
         }
       }
     },
-    "appearance.muted" : {
+    "appearance.material" : {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Muted covers"
+            "value": "Material"
           }
         }
       }
     },
-    "appearance.colorful" : {
+    "appearance.pattern" : {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Colorful covers"
+            "value": "Pattern"
           }
         }
       }

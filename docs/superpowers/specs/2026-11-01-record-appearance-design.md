@@ -36,14 +36,14 @@ Use an ideal content size near **900 × 655 pt**, with the demonstrated compact 
 The visible content is:
 
 1. Native window title **Record appearance**.
-2. One brief explanation: **Choose a material for muted covers and a pattern for colorful covers.**
+2. One brief explanation: **Choose a material for muted artwork and a pattern for colorful artwork.**
 3. The clipped record/turntable scene.
-4. Two labeled option groups, **Muted covers** and **Colorful covers**. Buttons are in horizontal rows and wrap when necessary. All six colorful options fit in one row at the ideal width and two rows at the compact width, matching the study.
+4. Two labeled option groups, **Material** and **Pattern**. Buttons are in horizontal rows and wrap when necessary. All six colorful options fit in one row at the ideal width and two rows at the compact width, matching the study.
 5. A compact footer showing the selected material/pattern and **Pause motion** / **Resume motion**.
 
 Use the existing localization system for menu, title, instructions, group headings, choice names, summary formatting, motion control, and accessibility copy. Do not ship the browser-only preview note, simulated traffic-light circles, motion-stage narration, decorative slogans, or extra marketing text.
 
-Use the native system UI font: title approximately 13 pt, group labels and buttons 12 pt, footer 11 pt. Buttons have 32 pt minimum height, 8 pt corners, subtle material/bevel treatment, a clearly distinct selected fill and border, and visible keyboard focus. Preserve readable contrast over the cloth. These ordinary controls do not use the decorative deck fonts.
+Use the native system UI font: title approximately 13 pt, group headings 22 pt semibold with restrained tight tracking, buttons 12 pt, footer 11 pt. Buttons have 32 pt minimum height, 8 pt corners, subtle material/bevel treatment, a clearly distinct selected fill and border, and visible keyboard focus. Preserve readable contrast over the cloth. These ordinary controls do not use the decorative deck fonts.
 
 ## Approved visual assets and lettering
 
@@ -63,7 +63,9 @@ At the top centre, retain the small black metal **BOPIFY** plate with a fine pal
 
 ### Corduroy
 
-Use `corduroy-crisp.png` (1254 × 1254) without blur, anisotropic stretching, or enlargement beyond its useful pixel density. The study displays it at **625 × 625 pt**, about two source pixels per point, with vertical ribs, fine cotton pile, darker woven channels, and soft grazing highlights. Start it below the title bar, repeat horizontally as needed, and crop vertically; avoid a visible horizontal tile seam. Apply only the study's subtle dark tint for UI contrast. The earlier `480 × 800` stretched treatment and earlier blurry cloth are rejected.
+Use `corduroy-crisp.png` (1254 × 1254) at two source pixels per point: a **592.5 × 627 pt** native tile at Retina scale, cropped at source x=33…1217 dark-furrow centres. Render it in a viewport-sized Canvas with nearest sampling and alternating mirrored edges, anchored at the leading edge below the 38-pt title region. This preserves the approved cotton pile, raised ribs and recessed woven channels without fractional 1254→1250 pixel resampling or mismatched repeated edges. The canvas has no intrinsic image-stack width, so it cannot expand/recenter the background. Apply the existing subtle dark tint for UI contrast. Preserve readable fallback colour if the image is unavailable.
+
+The user requested removal of the visible centre join and softness on 2026-11-05. The original study’s repeated 625-pt tiles are superseded by this native sampling correction; the source bitmap remains unchanged.
 
 ### Records
 

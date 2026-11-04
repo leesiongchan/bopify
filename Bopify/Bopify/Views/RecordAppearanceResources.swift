@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import CoreText
+import CoreGraphics
 import BopifyDomain
 import os
 
@@ -31,6 +32,11 @@ import os
     }
     static var deck: NSImage? { image(named: "sunburst-deck") }
     static var corduroy: NSImage? { image(named: "corduroy-crisp") }
+    static let corduroyTile: CGImage? = {
+        guard let source = corduroy?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        // End at the dark furrow centres so reflection does not create a doubled raised rib.
+        return source.cropping(to: CGRect(x: 33, y: 0, width: 1185, height: source.height))
+    }()
     static func plateFont(compact: Bool) -> Font {
         prepare()
         return .custom("IBMPlexSansCond-Medium", fixedSize: compact ? 6.2 : 7)

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct RecordAppearancePicker: View {
@@ -48,20 +49,14 @@ struct RecordAppearancePicker: View {
     private func cloth(width: CGFloat, height: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
             Color(red: 0.16, green: 0.19, blue: 0.09)
-            if let image = RecordAppearanceResources.corduroy {
-                HStack(spacing: 0) {
-                    ForEach(0..<max(1, Int(ceil(width / 625))), id: \.self) { _ in
-                        Image(nsImage: image).resizable().interpolation(.high).frame(width: 625, height: 625)
-                    }
-                }.offset(y: 38)
-            }
-            Color.black.opacity(0.14).offset(y: 38)
-        }.frame(width: width, height: height).clipped().accessibilityHidden(true)
+            RecordAppearanceCloth().frame(width: width, height: max(0, height - 38)).offset(y: 38)
+        }.frame(width: width, height: height, alignment: .topLeading).clipped().accessibilityHidden(true)
     }
     private func options(_ family: RecordAppearanceFamily) -> some View {
         VStack(alignment: .leading, spacing: 9) {
-            Text(LocalizedStringKey(family == .material ? "appearance.muted" : "appearance.colorful"), bundle: strings)
-                .font(.system(size: 12, weight: .medium))
+            Text(LocalizedStringKey(family == .material ? "appearance.material" : "appearance.pattern"), bundle: strings)
+                .font(.system(size: 22, weight: .semibold)).tracking(-0.4)
+                .accessibilityAddTraits(.isHeader)
             RecordAppearanceOptionLayout {
                 ForEach(RecordAppearanceChoice.choices(in: family), id: \.self) { choice in
                     let selected = isSelected(choice)
@@ -126,5 +121,32 @@ private struct RecordAppearanceButtonStyle: ButtonStyle {
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(focused ? Color.white.opacity(0.9) : Color.white.opacity(increasedContrast ? 0.65 : selected ? 0.55 : 0.23), lineWidth: focused ? 1.5 : 0.7))
             .opacity(configuration.isPressed ? 0.78 : 1)
             .contentShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+struct RecordAppearanceCloth: View {
+    var image: CGImage? = RecordAppearanceResources.corduroyTile
+
+    var body: some View {
+        Canvas { context, size in
+            guard let pixels = image else { return }
+            // One source pixel per Retina pixel; mirrored edges meet without a colour jump.
+            let tile = CGSize(width: CGFloat(pixels.width) / 2, height: CGFloat(pixels.height) / 2)
+            let texture = context.resolve(Image(decorative: pixels, scale: 2).interpolation(.none))
+            for row in 0..<Int(ceil(size.height / tile.height)) {
+                for column in 0..<Int(ceil(size.width / tile.width)) {
+                    let mirrorX = !column.isMultiple(of: 2)
+                    let mirrorY = !row.isMultiple(of: 2)
+                    var placement = context
+                    placement.translateBy(x: CGFloat(column + (mirrorX ? 1 : 0)) * tile.width,
+                                          y: CGFloat(row + (mirrorY ? 1 : 0)) * tile.height)
+                    placement.scaleBy(x: mirrorX ? -1 : 1, y: mirrorY ? -1 : 1)
+                    placement.draw(texture, in: CGRect(origin: .zero, size: tile))
+                }
+            }
+        }
+        .background(Color(red: 0.16, green: 0.19, blue: 0.09))
+        .overlay(Color.black.opacity(0.14))
+        .allowsHitTesting(false).accessibilityHidden(true)
     }
 }
