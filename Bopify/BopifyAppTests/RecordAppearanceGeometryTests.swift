@@ -33,9 +33,10 @@ struct RecordAppearanceGeometryTests {
         let home = RecordAppearanceMotion.RecordFrame(choice: choice, from: .edge, to: .edge)
         #expect(abs(g.pose(for: home, peek: true).centre.x - g.pose(for: home, peek: false).centre.x) <= 8)
     }
-    @Test(arguments: [CGFloat(758), CGFloat(898)])
-    func parkedFullSilhouetteClearsEveryCrossing(_ width: CGFloat) {
-        let g = RecordAppearanceGeometry(sceneWidth: width)
+    @Test(arguments: [CGSize(width: 758, height: 1000), CGSize(width: 898, height: 1000),
+                      CGSize(width: 850, height: 410), CGSize(width: 760, height: 335)])
+    func parkedFullSilhouetteClearsEveryCrossing(_ size: CGSize) {
+        let g = RecordAppearanceGeometry(sceneWidth: size.width, maximumHeight: size.height)
         for family in RecordAppearanceFamily.allCases {
             let choice = RecordAppearanceChoice.choices(in: family)[0]
             for step in 0...100 {

@@ -109,6 +109,11 @@ struct RecordAppearancePickerTests {
         c.show(); defer { c.close() }
         let w = try window()
         w.setFrame(CGRect(origin: w.frame.origin, size: CGSize(width: width, height: width == 900 ? 655 : 631)), display: true)
+        w.orderFrontRegardless()
+        // XCTest can be on an inactive Space even when its backing window is capturable.
+        // The foreground host verifies actual AppKit visibility; this fixture drives rendering.
+        try await Task.sleep(for: .milliseconds(80))
+        c.model.isPreviewVisible = true
         let prefix = "appearance-native-\(Int(width))"
         func capture(_ stage: String) async throws -> NSBitmapImageRep {
             try await VinylRenderingFixture.capture(w, to: VinylRenderingFixture.directory.appendingPathComponent("\(prefix)-\(stage).png"))
@@ -116,7 +121,6 @@ struct RecordAppearancePickerTests {
         let initial = try await capture("mounted")
         #expect(initial.pixelsWide >= Int(width))
         #expect(w.standardWindowButton(.closeButton)?.isHidden == false)
-        #expect(c.model.isPreviewVisible)
         c.model.select(.material(.classic))
         c.model.select(.pattern(.original))
         try await Task.sleep(for: .milliseconds(500))
@@ -135,6 +139,30 @@ struct RecordAppearancePickerTests {
         let a = NSBitmapImageRep(cgImage: try #require(stopped.cgImage?.cropping(to: crop)))
         let b = NSBitmapImageRep(cgImage: try #require(moving.cgImage?.cropping(to: crop)))
         #expect(VinylRenderingFixture.differingAnnulusFraction(a, b) > 0.01)
+    }
+
+    @Test(arguments: [CGSize(width: 900, height: 655), CGSize(width: 850, height: 655),
+                      CGSize(width: 820, height: 631), CGSize(width: 760, height: 580)])
+    func everyControlFitsIntermediateAndShortWindows(_ size: CGSize) async throws {
+        let c = RecordAppearanceWindowController(defaults: defaults())
+        c.model.isMotionPaused = true
+        c.show(); defer { c.close() }
+        let w = try window()
+        w.minSize = CGSize(width: 1, height: 1)
+        w.setFrame(CGRect(origin: w.frame.origin, size: size), display: true)
+        try await Task.sleep(for: .milliseconds(150))
+        let ids = RecordAppearanceFamily.allCases.flatMap { RecordAppearanceChoice.choices(in: $0) }.map(\.nameKey) + ["appearance.motion"]
+        for id in ids {
+            let node = try AppearanceTestAccessibility.element(id, in: w)
+            let rect = try #require(node.object.accessibilityFrame?())
+            #expect(w.frame.insetBy(dx: -0.5, dy: -0.5).contains(rect), "\(id) must stay in the window at \(size)")
+            #expect(rect.height >= 30, "\(id) must retain a comfortable target height")
+        }
+        if VinylRenderingFixture.canCapture {
+            w.orderFrontRegardless()
+            _ = try await VinylRenderingFixture.capture(w, to: VinylRenderingFixture.directory
+                .appendingPathComponent("appearance-fit-\(Int(size.width))x\(Int(size.height)).png"))
+        }
     }
 
     @Test func occlusionStopsPreviewWork() async throws {

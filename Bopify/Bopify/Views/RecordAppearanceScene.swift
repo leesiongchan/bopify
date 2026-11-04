@@ -13,7 +13,7 @@ struct RecordAppearanceScene: View {
     }
     var body: some View {
         GeometryReader { size in
-            let geometry = RecordAppearanceGeometry(sceneWidth: size.size.width)
+            let geometry = RecordAppearanceGeometry(sceneWidth: size.size.width, maximumHeight: size.size.height)
             TimelineView(.animation(minimumInterval: 1.0 / 60, paused: !motion.needsFrames)) { context in
                 ZStack(alignment: .topLeading) {
                     RecordAppearanceDeck(geometry: geometry, snapshot: motion.snapshot)
@@ -24,7 +24,7 @@ struct RecordAppearanceScene: View {
                 .clipped()
                 .onChange(of: context.date) { _, _ in motion.advance(to: .now) }
             }
-            .onChange(of: size.size.width) { _, _ in
+            .onChange(of: size.size) { _, _ in
                 motion.settle(material: model.selectedMaterial, pattern: model.selectedPattern, at: .now)
             }
         }
@@ -50,10 +50,10 @@ struct RecordAppearanceScene: View {
         return RecordAppearanceSample(choice: frame.choice, diameter: geometry.recordDiameter, angle: pose.angle)
             .compositingGroup()
             .shadow(color: .black.opacity(0.55), radius: 2 + pose.lift * 7, x: 1, y: 3 + pose.lift * 8)
-            .position(pose.centre).zIndex(frame.zIndex)
             .contentShape(Circle())
             .onHover { hovered = $0 ? frame.choice : nil }
             .onTapGesture { model.select(frame.choice) }
+            .position(pose.centre).zIndex(frame.zIndex)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: peek)
     }
 }

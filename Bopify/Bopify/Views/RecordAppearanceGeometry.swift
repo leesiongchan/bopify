@@ -18,9 +18,12 @@ struct RecordAppearanceGeometry {
     let recordDiameter: CGFloat
     var armLength: CGFloat { recordDiameter * 0.86 }
 
-    init(sceneWidth: CGFloat) {
+    init(sceneWidth: CGFloat, maximumHeight: CGFloat = .infinity) {
         self.sceneWidth = sceneWidth
-        let width = min(604, sceneWidth * 0.68)
+        // Fit the complete deck and edge stack after wrapping controls have taken their space.
+        let usableHeight = max(0, floor(maximumHeight) - 24)
+        let widthForHeight = min(usableHeight * 1509 / 1042, usableHeight * 1509 / (570 * 1.85))
+        let width = min(604, sceneWidth * 0.68, widthForHeight)
         let height = width * 1042 / 1509
         deckFrame = CGRect(x: (sceneWidth - width) / 2, y: 10, width: width, height: height)
         recordDiameter = width * 570 / 1509

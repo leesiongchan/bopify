@@ -58,7 +58,8 @@ def verify_keyboard(repo, derived_data):
         print('Native keyboard checks:', json.dumps(result), flush=True)
         expected = {'material': 'glass', 'pattern': 'carnival', 'tabForward': True, 'tabBackward': True,
                     'motionFocused': True, 'motionPaused': True, 'motionKeptChoices': True,
-                    'escapeCloses': True, 'reusesWindow': True, 'windowWasKey': True}
+                    'escapeCloses': True, 'reusesWindow': True, 'windowWasKey': True,
+                    'pointerMaterial': True, 'pointerPattern': True, 'blankKeepsChoices': True, 'previewVisible': True, 'pointerWindowKey': True}
         if result != expected:
             raise ValueError('Native appearance keyboard checks failed')
 

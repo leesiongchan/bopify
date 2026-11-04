@@ -24,12 +24,13 @@ struct RecordAppearancePicker: View {
                     .foregroundStyle(Color.white.opacity(0.78))
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20)
                     .frame(height: 42)
-                RecordAppearanceScene(model: model).frame(height: geometry.sceneHeight)
+                RecordAppearanceScene(model: model).frame(maxHeight: geometry.sceneHeight)
                 Spacer(minLength: 4)
                 HStack(alignment: .top, spacing: 20) {
                     options(.material).frame(width: (size.size.width - 60) * 0.38)
                     options(.pattern)
-                }.padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 14)
+                }.fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 14)
                 footer
             }
             .frame(width: size.size.width, height: size.size.height, alignment: .top)
