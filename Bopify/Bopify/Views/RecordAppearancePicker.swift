@@ -66,11 +66,8 @@ struct RecordAppearancePicker: View {
                 ForEach(RecordAppearanceChoice.choices(in: family), id: \.self) { choice in
                     let selected = isSelected(choice)
                     Button { model.select(choice) } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "checkmark").font(.system(size: 9, weight: .semibold))
-                                .opacity(selected ? 1 : 0).accessibilityHidden(true)
-                            Text(LocalizedStringKey(choice.nameKey), bundle: strings).fixedSize(horizontal: false, vertical: true)
-                        }
+                        Text(LocalizedStringKey(choice.nameKey), bundle: strings)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .buttonStyle(RecordAppearanceButtonStyle(selected: selected, focused: model.focused == .choice(choice), increasedContrast: contrast == .increased))
                     .focusable(interactions: .edit).focusEffectDisabled().focused($focused, equals: .choice(choice))

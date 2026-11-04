@@ -43,7 +43,7 @@ The visible content is:
 
 Use the existing localization system for menu, title, instructions, group headings, choice names, summary formatting, motion control, and accessibility copy. Do not ship the browser-only preview note, simulated traffic-light circles, motion-stage narration, decorative slogans, or extra marketing text.
 
-Use the native system UI font: title approximately 13 pt, group labels and buttons 12 pt, footer 11 pt. Buttons have 32 pt minimum height, 8 pt corners, subtle material/bevel treatment, a clearly distinct selected fill and checkmark, and visible keyboard focus. Preserve readable contrast over the cloth. These ordinary controls do not use the decorative deck fonts.
+Use the native system UI font: title approximately 13 pt, group labels and buttons 12 pt, footer 11 pt. Buttons have 32 pt minimum height, 8 pt corners, subtle material/bevel treatment, a clearly distinct selected fill and border, and visible keyboard focus. Preserve readable contrast over the cloth. These ordinary controls do not use the decorative deck fonts.
 
 ## Approved visual assets and lettering
 
