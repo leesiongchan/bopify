@@ -18,7 +18,10 @@ struct RecordContinuityTests {
         let before = try await fixture.record("material-playing-before")
         let started = ProcessInfo.processInfo.systemUptime
         let commands = fixture.engine.commands
-        fixture.defaults.set("nacre", forKey: RecordDesign.preferenceKey)
+        let queue = fixture.player.state.queue
+        let chooser = RecordAppearancePickerModel(defaults: fixture.defaults)
+        chooser.select(.material(.nacre))
+        chooser.select(.pattern(.bloom))
         try await Task.sleep(for: .milliseconds(850))
         let after = try await fixture.record("material-playing-after")
         let elapsed = ProcessInfo.processInfo.systemUptime - started
@@ -27,6 +30,8 @@ struct RecordContinuityTests {
         #expect(abs(angle - elapsed * .pi / 6) < 0.15)
         #expect(fixture.engine.commands == commands)
         #expect(fixture.player.state.phase == .playing)
+        #expect(fixture.player.state.queue == queue)
+        #expect(fixture.defaults.string(forKey: VinylDesign.preferenceKey) == "bloom")
     }
 
     @Test(.enabled("Requires native screen capture") { @MainActor in VinylRenderingFixture.canCapture }, arguments: [false, true])
@@ -133,10 +138,17 @@ struct RecordContinuityTests {
                 context: nil, eventNumber: 1, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0)))
         }
         try await waitUntil { fixture.engine.loadRequests.count == 1 }
-        fixture.defaults.set("classic", forKey: RecordDesign.preferenceKey)
-        fixture.defaults.set("nacre", forKey: RecordDesign.preferenceKey)
+        let commands = fixture.engine.commands
+        let queue = fixture.player.state.queue
+        let chooser = RecordAppearancePickerModel(defaults: fixture.defaults)
+        chooser.select(.material(.classic))
+        chooser.select(.pattern(.bloom))
+        chooser.select(.material(.nacre))
         try await Task.sleep(for: .milliseconds(800))
         let pending = try await fixture.record("material-flight-pending")
+        #expect(fixture.engine.commands == commands)
+        #expect(fixture.player.state.queue == queue)
+        #expect(fixture.defaults.string(forKey: VinylDesign.preferenceKey) == "bloom")
         #expect(VinylRenderingFixture.differingAnnulusFraction(before, pending) < 0.01)
         await fixture.show(fixture.next)
         try await Task.sleep(for: .milliseconds(900))

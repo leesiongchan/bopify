@@ -72,7 +72,7 @@ struct RecordAppearancePicker: View {
                         }
                     }
                     .buttonStyle(RecordAppearanceButtonStyle(selected: selected, focused: model.focused == .choice(choice), increasedContrast: contrast == .increased))
-                    .focusable().focused($focused, equals: .choice(choice))
+                    .focusable(interactions: .edit).focusEffectDisabled().focused($focused, equals: .choice(choice))
                     .accessibilityLabel(Text(LocalizedStringKey(choice.nameKey), bundle: strings))
                     .accessibilityValue(selected ? Text("vinyl.selected", bundle: strings) : Text("vinyl.notSelected", bundle: strings))
                     .accessibilityAddTraits(selected ? [.isSelected] : [])
@@ -97,7 +97,7 @@ struct RecordAppearancePicker: View {
                 Text(LocalizedStringKey(model.isMotionPaused ? "appearance.resume" : "appearance.pause"), bundle: strings)
             }
             .buttonStyle(RecordAppearanceButtonStyle(selected: false, focused: model.focused == .motion, increasedContrast: contrast == .increased))
-            .focusable().focused($focused, equals: .motion)
+            .focusable(interactions: .edit).focusEffectDisabled().focused($focused, equals: .motion)
             .disabled(reduceMotion)
             .accessibilityValue(Text(LocalizedStringKey(reduceMotion || model.isMotionPaused ? "appearance.motionStopped" : "appearance.motionPlaying"), bundle: strings))
             .accessibilityIdentifier("appearance.motion")

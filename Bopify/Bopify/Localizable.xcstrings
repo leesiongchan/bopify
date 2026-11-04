@@ -101,36 +101,6 @@
         }
       }
     },
-    "menu.recordDesign" : {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Record Design…"
-          }
-        }
-      }
-    },
-    "record.title" : {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Record Design"
-          }
-        }
-      }
-    },
-    "record.help" : {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choose the material used for muted covers."
-          }
-        }
-      }
-    },
     "record.design.classic" : {
       "localizations": {
         "en": {
@@ -2172,16 +2142,6 @@
         }
       }
     },
-    "menu.vinylDesign": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Record Style…"
-          }
-        }
-      }
-    },
     "vinyl.design.bloom": {
       "localizations": {
         "en": {
@@ -2242,16 +2202,6 @@
         }
       }
     },
-    "vinyl.mutedHelp": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Muted covers use your Record Design selection."
-          }
-        }
-      }
-    },
     "vinyl.notSelected": {
       "localizations": {
         "en": {
@@ -2262,32 +2212,12 @@
         }
       }
     },
-    "vinyl.paletteHelp": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Colors adapt to each cover. Previews use a sample palette."
-          }
-        }
-      }
-    },
     "vinyl.selected": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Selected"
-          }
-        }
-      }
-    },
-    "vinyl.title": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Record Style"
           }
         }
       }

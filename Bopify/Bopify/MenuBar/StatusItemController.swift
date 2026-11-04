@@ -15,8 +15,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     private var isWindowControllerAttached = false
     private let environment: AppEnvironment
     private let shortcutsWindow = KeyboardShortcutsWindowController()
-    private let vinylDesignWindow = VinylDesignWindowController()
-    private let recordDesignWindow = RecordDesignWindowController()
+    private let recordAppearanceWindow = RecordAppearanceWindowController()
 
     init<Content: View>(content: Content, environment: AppEnvironment) {
         self.environment = environment
@@ -246,14 +245,10 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         artworkBackground.target = self
         artworkBackground.state = (UserDefaults.standard.object(forKey: "player.artworkBackground") as? Bool ?? true) ? .on : .off
         menu.addItem(artworkBackground)
-        let vinylDesign = NSMenuItem(title: String(localized: "menu.vinylDesign"),
-                                     action: #selector(showVinylDesign(_:)), keyEquivalent: "")
-        vinylDesign.target = self
-        menu.addItem(vinylDesign)
-        let recordDesign = NSMenuItem(title: String(localized: "menu.recordDesign"),
-                                      action: #selector(showRecordDesign(_:)), keyEquivalent: "")
-        recordDesign.target = self
-        menu.addItem(recordDesign)
+        let appearance = NSMenuItem(title: String(localized: "menu.recordAppearance"),
+                                    action: #selector(showRecordAppearance(_:)), keyEquivalent: "")
+        appearance.target = self
+        menu.addItem(appearance)
         let libraryItem = NSMenuItem(title: String(localized: "menu.libraryAccess"),
                                      action: #selector(showLibraryAccess(_:)), keyEquivalent: "")
         libraryItem.target = self
@@ -299,8 +294,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     @objc private func cancelLibraryAuthorization(_ sender: Any?) { environment.cancelLibraryAuthorization() }
     @objc private func showLibraryAccess(_ sender: Any?) { environment.librarySetupWindow.show(environment: environment) }
     @objc private func showShortcuts(_ sender: Any?) { shortcutsWindow.show() }
-    @objc private func showVinylDesign(_ sender: Any?) { vinylDesignWindow.show() }
-    @objc private func showRecordDesign(_ sender: Any?) { recordDesignWindow.show() }
+    @objc private func showRecordAppearance(_ sender: Any?) { recordAppearanceWindow.show() }
     @objc private func toggleKeepOnTop(_ sender: Any?) { environment.presentation.keepOnTop.toggle() }
     @objc private func toggleArtworkBackground(_ sender: Any?) {
         let enabled = !(UserDefaults.standard.object(forKey: "player.artworkBackground") as? Bool ?? true)

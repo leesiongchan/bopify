@@ -50,6 +50,13 @@ final class RecordAppearancePickerModel {
         }
     }
 
+    func moveTab(backward: Bool) {
+        let order = RecordAppearanceFamily.allCases.flatMap { RecordAppearanceChoice.choices(in: $0) }
+            .map(RecordAppearanceFocus.choice) + [.motion]
+        let index = order.firstIndex(of: focused) ?? 0
+        focused = order[(index + (backward ? order.count - 1 : 1)) % order.count]
+    }
+
     func move(_ direction: NavigationDirection) {
         guard case .choice(let choice) = focused else { return }
         var family = choice.family

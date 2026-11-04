@@ -101,6 +101,19 @@ struct RecordAppearancePickerModelTests {
         #expect(defaults.writes.isEmpty)
     }
 
+    @Test func tabTraversalIncludesEveryChoiceAndMotion() {
+        let model = RecordAppearancePickerModel(defaults: isolated())
+        let expected = RecordAppearanceFamily.allCases.flatMap { RecordAppearanceChoice.choices(in: $0) }.map(RecordAppearanceFocus.choice) + [.motion]
+        for value in expected.dropFirst() {
+            model.moveTab(backward: false)
+            #expect(model.focused == value)
+        }
+        model.moveTab(backward: false)
+        #expect(model.focused == expected.first)
+        model.moveTab(backward: true)
+        #expect(model.focused == .motion)
+    }
+
     @Test func motionFocusActivatesOnlyPreviewPause() {
         let defaults = isolated()
         let model = RecordAppearancePickerModel(defaults: defaults)

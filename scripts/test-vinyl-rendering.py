@@ -31,15 +31,11 @@ def verify_keyboard(repo, derived_data):
             'Packages/BopifyCore/Sources/BopifyPlayback/ArtworkPalette.swift',
             'Packages/BopifyCore/Sources/BopifyDomain/BopifyLog.swift',
             'Bopify/Bopify/Views/VinylDesign.swift', 'Bopify/Bopify/Views/VinylDesignPalette.swift',
-            'Bopify/Bopify/Views/RecordDesign.swift',
-            'Bopify/Bopify/Views/RecordMaterialSheen.swift',
-            'Bopify/Bopify/Views/RecordDesignPickerModel.swift',
-            'Bopify/Bopify/Views/RecordDesignPicker.swift',
-            'Bopify/Bopify/MenuBar/RecordDesignWindowController.swift',
-            'Bopify/Bopify/Views/VinylDesignPickerModel.swift',
-            'Bopify/Bopify/Views/VinylPressingView.swift', 'Bopify/Bopify/Views/PlayerSurface.swift',
-            'Bopify/Bopify/Views/VinylDesignPicker.swift',
-            'Bopify/Bopify/MenuBar/VinylDesignWindowController.swift',
+            'Bopify/Bopify/Views/RecordDesign.swift', 'Bopify/Bopify/Views/RecordMaterialSheen.swift',
+            'Bopify/Bopify/Views/VinylPressingView.swift',
+            *[f'Bopify/Bopify/Views/RecordAppearance{name}.swift' for name in
+              ['Choice', 'PickerModel', 'Motion', 'Geometry', 'Resources', 'OptionLayout', 'Deck', 'Scene', 'Picker']],
+            'Bopify/Bopify/MenuBar/RecordAppearanceWindowController.swift',
             'scripts/fixtures/VinylKeyboardHost.swift',
         ]
         source = '\n'.join((repo / path).read_text().replace('import BopifyPlayback\n', '').replace('import BopifyDomain\n', '') for path in sources)
@@ -52,19 +48,20 @@ def verify_keyboard(repo, derived_data):
         resources = derived_data / 'Build/Products/Debug/BopifyAppTests.xctest/Contents/Resources'
         shutil.copy(resources / 'default.metallib', contents / 'Resources/default.metallib')
         shutil.copytree(resources / 'en.lproj', contents / 'Resources/en.lproj')
+        for resource in (repo / 'Bopify/Bopify/Resources/RecordAppearance').iterdir():
+            shutil.copy(resource, contents / 'Resources' / resource.name)
         subprocess.run(['xcrun', 'swiftc', '-O', '-swift-version', '6', '-parse-as-library', str(root / 'Host.swift'),
                         '-o', str(contents / 'MacOS/VinylKeyboardTests')], check=True)
         subprocess.run(['codesign', '--force', '--sign', '-', str(app)], check=True)
         subprocess.run(['open', '-n', '-W', str(app)], check=True, timeout=20)
         result = json.loads((root / 'keyboard-results.json').read_text())
         print('Native keyboard checks:', json.dumps(result), flush=True)
-        if result != {'keyboardStyle': 'bloom', 'returnStyle': 'rhapsody', 'escapeCloses': True, 'reusesWindow': True, 'windowWasKey': True}:
-            raise ValueError('Native chooser keyboard checks failed')
-        subprocess.run(['open', '-n', '-W', str(app), '--args', '--record'], check=True, timeout=20)
-        result = json.loads((root / 'keyboard-results.json').read_text())
-        print('Native record material keyboard checks:', json.dumps(result), flush=True)
-        if result != {'keyboardStyle': 'glass', 'returnStyle': 'nacre', 'escapeCloses': True, 'reusesWindow': True, 'windowWasKey': True}:
-            raise ValueError('Native record material keyboard checks failed')
+        expected = {'material': 'glass', 'pattern': 'carnival', 'tabForward': True, 'tabBackward': True,
+                    'motionFocused': True, 'motionPaused': True, 'motionKeptChoices': True,
+                    'escapeCloses': True, 'reusesWindow': True, 'windowWasKey': True}
+        if result != expected:
+            raise ValueError('Native appearance keyboard checks failed')
+
 
 
 def window_owner(window):
