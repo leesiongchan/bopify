@@ -1,32 +1,102 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "menu.recordDesign" : {
+    "appearance.title" : {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Record Design…"
+            "value": "Record appearance"
           }
         }
       }
     },
-    "record.title" : {
+    "menu.recordAppearance" : {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Record Design"
+            "value": "Record Appearance…"
           }
         }
       }
     },
-    "record.help" : {
+    "appearance.help" : {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choose the material used for muted covers."
+            "value": "Choose a material for muted artwork and a pattern for colorful artwork."
+          }
+        }
+      }
+    },
+    "appearance.material" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Material"
+          }
+        }
+      }
+    },
+    "appearance.pattern" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pattern"
+          }
+        }
+      }
+    },
+    "appearance.pause" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pause motion"
+          }
+        }
+      }
+    },
+    "appearance.resume" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resume motion"
+          }
+        }
+      }
+    },
+    "appearance.summary" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ + %@"
+          }
+        }
+      }
+    },
+    "appearance.motionStopped" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview motion stopped"
+          }
+        }
+      }
+    },
+    "appearance.motionPlaying" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview motion playing"
           }
         }
       }
@@ -2071,16 +2141,6 @@
         }
       }
     },
-    "menu.vinylDesign": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Record Style…"
-          }
-        }
-      }
-    },
     "vinyl.design.bloom": {
       "localizations": {
         "en": {
@@ -2141,16 +2201,6 @@
         }
       }
     },
-    "vinyl.mutedHelp": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Muted covers use your Record Design selection."
-          }
-        }
-      }
-    },
     "vinyl.notSelected": {
       "localizations": {
         "en": {
@@ -2161,32 +2211,12 @@
         }
       }
     },
-    "vinyl.paletteHelp": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Colors adapt to each cover. Previews use a sample palette."
-          }
-        }
-      }
-    },
     "vinyl.selected": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Selected"
-          }
-        }
-      }
-    },
-    "vinyl.title": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Record Style"
           }
         }
       }
