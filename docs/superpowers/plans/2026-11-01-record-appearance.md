@@ -159,7 +159,7 @@ The user approved this plan and native execution on 2026-11-01. Implement in thi
 - WindowServer/Metal Retina captures inspected at 760×631 and 900×655: `/tmp/bopify-vinyl-validation/appearance-native-{760,900}-{mounted,crossing,settled,motor-resumed}.png`. Also `appearance-{760,900}.png`. Both uppermost records exchanged simultaneously; full cartridges cleared, records kept their diameter/layers, names stayed on the wood, and motor restart changed the rendered record.
 - Native Glass transparency/opaque fallback and player label/rotation/handoff continuity passed through the capture bridge. Core Reduce Motion, pause, cancellation and hidden/resize/reopen behavior passed explicit-clock tests. One shared TimelineView; process-cached resources/fonts; no per-record clocks or per-frame pixel generation.
 - Debug build with unchanged project signing: passed.
-- Signed Release: blocked before compilation by missing configured Developer ID Application certificate/private key for team `6RS6K2N242`; no signing settings changed. Unsigned Release compilation with `CODE_SIGNING_ALLOWED=NO`: **passed**; a valid signed Release and signature verification remain unavailable in this environment.
+- Direct Xcode Release using the project’s Developer ID setting: no usable Developer ID Application certificate/private-key pair for team `6RS6K2N242` was found. This does not establish that a private key was lost. Unsigned Release compilation passed. The normal release script overrides that setting with ad-hoc signing; a subsequent Release build using its signing flags and `codesign --verify --deep --strict` both **passed**. No project signing configuration changed.
 - Actual VoiceOver speech and whole-window system Reduce Motion/Transparency/Increased Contrast variants were not manually exercised. Native AX choice names, independent selected values, focus/activation and effective motion values were verified; read-only system environment propagation remains intact.
 - Existing framework QoS diagnostic in `MusicBrowserTests.swift` appeared in the test result; no test failed and that subsystem was not changed.
 
@@ -168,7 +168,7 @@ The user approved this plan and native execution on 2026-11-01. Implement in thi
 1. Conservative full-cartridge geometry initially required an 18-pt upward pivot adjustment; native capture then showed counterweight overhang. The final correction is a **6-pt upward pivot adjustment and 18-pt lower first edge slot**, with smaller counterweights. Full-silhouette clearance remains ≥8 pt. This changes edge-stack spacing slightly from the study; source y=876 keeps mounted names on the lower sunburst.
 2. SwiftUI's accessibility contrast/transparency environments are read-only on this SDK. Existing real renderer override tests verify opaque Glass; actual system variants and VoiceOver speech are reported as unverified rather than changing user settings.
 3. Explicit edit focus alone did not make native Tab traverse the hosted custom buttons. This window routes Tab/Shift-Tab across the fixed catalog and motion control, while synchronizing native FocusState. Modified shortcuts retain normal routing. New controls must be added to that order.
-4. Missing release signing credentials are an environment limitation; unsigned compilation is additional code verification, not evidence of distributable signing.
+4. The optional Developer ID signing check lacked a usable local identity. The existing distribution flow uses ad-hoc signing (`scripts/release.sh`), which does not need that identity; the Release app’s ad-hoc signature was subsequently verified. Packaging and publishing were not performed.
 
 ## Final independent review and fix verification
 
@@ -185,4 +185,10 @@ A fresh reviewer found two Important issues: scene-sized record pointer targets 
 
 Deferred minor: under system Reduce Motion, custom keyboard traversal can still activate the disabled motion control and change latent preview pause intent. Reduce Motion continues to prevent motion; this affects the local preview intent after that system setting is turned off.
 
-The local implementation is preserved on `feat/record-appearance`. Release signature validation remains blocked by the missing configured Developer ID private key, and manual VoiceOver/full-window system accessibility variants remain unverified.
+The local implementation is preserved on `feat/record-appearance`. Ad-hoc Release signing and signature validation passed using the existing release workflow’s flags. Developer ID signing remains unavailable locally; it is not required by the current release workflow. Manual VoiceOver/full-window system accessibility variants remain unverified.
+
+## Signing clarification — 2026-11-04
+
+The earlier report that “Release signing remains blocked” was too broad. `README.md` and `scripts/release.sh` specify an ad-hoc-signed, non-notarized release. The release script sets `CODE_SIGN_IDENTITY=-`, `CODE_SIGN_STYLE=Manual`, and an empty `DEVELOPMENT_TEAM`, overriding the Xcode project’s default Developer ID setting.
+
+Verified the Release app with those existing flags using `/tmp/bopify-appearance-release` derived data: **BUILD SUCCEEDED**. `codesign --verify --deep --strict --verbose=2 /tmp/bopify-appearance-release/Build/Products/Release/Bopify.app` reported **valid on disk** and **satisfies its Designated Requirement**. Logs: `/tmp/bopify-appearance-release-adhoc.log` and `/tmp/bopify-appearance-release-signature.log`. This validates the app build/signature, not the complete DMG packaging or publication workflow.
