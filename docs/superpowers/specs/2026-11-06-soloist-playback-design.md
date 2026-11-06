@@ -3,6 +3,8 @@
 Date: 2026-11-06
 Status: Approved by the user on 2026-11-06 for feasibility planning. Live feasibility remains unverified.
 
+Continuation, 2026-11-07: the user explicitly requested an in-app test experience and confirmed proceeding after learning the installer/probe did not enable Soloist in Bopify. This authorizes implementation of native key entry, automatic installation, pairing, playback and librespot support now. Move the unresolved account/device and companion checks into the app's setup/runtime; do not require Terminal or claim that offline tests establish live coexistence. Existing account isolation, ownership, queue and failure requirements still apply. This supersedes the earlier restriction against planning/building the app integration before manual probe execution.
+
 ## Intent and decisions
 
 Use Soloist whenever possible, with librespot filling gaps. Preserve Bopify's existing player, library, lyrics, queue, shortcuts, and Spotify Connect behavior as far as the selected providers can faithfully support them.

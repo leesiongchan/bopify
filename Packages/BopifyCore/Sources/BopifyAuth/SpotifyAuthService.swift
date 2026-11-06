@@ -68,16 +68,17 @@ public actor SpotifyAuthService {
         return try await openAndFinish(consent, validateGrant: false)
     }
 
-    public func authorizeLibrary() async throws -> TokenSet {
+    public func authorizeLibrary(additionalScopes: Set<String> = []) async throws -> TokenSet {
+        let scopes = LibraryAuthorization.requiredScopes.union(additionalScopes)
         if let consent = preparedConsent {
             preparedConsent = nil
-            if consent.generation == generation, activeListener === consent.listener {
+            if consent.generation == generation, activeListener === consent.listener, scopes.isSubset(of: consent.scopes) {
                 BopifyLog.auth.info("library consent continues in the sign-in browser tab")
                 return try await finish(consent, validateGrant: true)
             }
         }
         try await prepareLibraryForConsent()
-        let consent = try await beginConsent(scopes: LibraryAuthorization.requiredScopes)
+        let consent = try await beginConsent(scopes: scopes)
         return try await openAndFinish(consent, validateGrant: true)
     }
 

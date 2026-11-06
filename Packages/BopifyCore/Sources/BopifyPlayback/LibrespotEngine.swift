@@ -20,8 +20,12 @@ public final class LibrespotEngine: ManagedPlaybackEngine, @unchecked Sendable {
     /// Blocks for the whole network login, so it runs on the global executor
     /// rather than the caller's actor.
     @concurrent
-    public init(accessToken: String, deviceName: String, configuration: PlaybackEngineConfiguration) async throws {
-        let options = String(decoding: try JSONEncoder().encode(configuration), as: UTF8.self)
+    public init(accessToken: String, deviceName: String, configuration: PlaybackEngineConfiguration, servicesOnly: Bool = false) async throws {
+        guard var object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(configuration)) as? [String: Any] else {
+            throw PlayerError.unknown
+        }
+        object["servicesOnly"] = servicesOnly
+        let options = String(decoding: try JSONSerialization.data(withJSONObject: object), as: UTF8.self)
         let bridge = EventBridge()
         // The +1 is taken before the pointer can reach Rust: the callback may
         // fire during login, before this call returns.

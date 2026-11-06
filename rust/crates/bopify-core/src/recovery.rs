@@ -8,6 +8,8 @@ pub struct EngineCreateOptions {
     pub startup: StartupMode,
     pub snapshot: Option<RecoveryCheckpoint>,
     pub initial_volume: Option<f64>,
+    #[serde(default)]
+    pub services_only: bool,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -132,6 +134,17 @@ impl From<RecoveryIdentity> for librespot_connect::RecoveryIdentity {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn services_only_is_explicit_and_defaults_to_audio() {
+        let audio =
+            EngineCreateOptions::parse(r#"{"deviceId":"own","startup":"coldLaunch"}"#).unwrap();
+        assert!(!audio.services_only);
+        let data = EngineCreateOptions::parse(
+            r#"{"deviceId":"own","startup":"coldLaunch","servicesOnly":true}"#,
+        )
+        .unwrap();
+        assert!(data.services_only);
+    }
     #[test]
     fn cold_launch_accepts_saved_volume_without_a_recovery_snapshot() {
         for volume in [0.0, 0.23, 1.0] {

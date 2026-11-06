@@ -87,9 +87,9 @@ public actor LibraryAuthorization {
         return id
     }
 
-    public func authorize() async throws {
+    public func authorize(additionalScopes: Set<String> = []) async throws {
         guard let auth else { throw LibraryError.authorizationRequired }
-        _ = try await auth.authorizeLibrary()
+        _ = try await auth.authorizeLibrary(additionalScopes: additionalScopes)
     }
 
     public func prepareConsent() async throws -> URL {
