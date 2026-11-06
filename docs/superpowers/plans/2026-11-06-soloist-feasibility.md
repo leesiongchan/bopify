@@ -66,7 +66,7 @@ All Swift probe interfaces below are internal to the new executable target. Exis
 - `ProbeVerdict: Equatable` is `passed`, `failed(reason: String)`, or `inconclusive(reason: String)`; `evaluateCorrelation(_ evidence: CorrelationEvidence) -> ProbeVerdict` never performs I/O. Fixed reasons include `accountMismatch`, `missingAccountID`, and `noNewDevice`.
 - `ProbeReport` is Codable and contains schema version `1`, platform/build versions, gate verdicts, counts/timings, and fixed reason codes. No tokens, keys, account/device IDs, raw URLs, titles, lyrics, or raw service responses.
 
-- [ ] **Step 1: Write offline behavioral tests.** Define test-local `validEvidence() -> CorrelationEvidence` with matching account IDs, a new unrestricted device, the owned lifecycle, and fresh advancing matched samples. Start with these assertions:
+- [x] **Step 1: Write offline behavioral tests.** Define test-local `validEvidence() -> CorrelationEvidence` with matching account IDs, a new unrestricted device, the owned lifecycle, and fresh advancing matched samples. Start with these assertions:
 
   ```swift
   @Test func aNameMatchWithoutANewDeviceIsInconclusive() {
@@ -87,8 +87,8 @@ All Swift probe interfaces below are internal to the new executable target. Exis
   ```
 
   Add a passing valid-evidence case and rejection cases for multiple candidates, null ID, restricted device, stale sample, mismatched item, process restart, unpairing, and remote takeover. Assert sentinel secrets and raw identifiers never appear in encoded reports or captured diagnostics.
-- [ ] **Step 2: Run the failing tests.** `swift test --package-path tools/SoloistFeasibility`. Expected: target builds far enough to identify missing probe interfaces/behavior, then fails. Build the existing native artifact with `./scripts/build-rust.sh` first if needed for the local package dependency; do not label a missing artifact as the intended behavioral failure.
-- [ ] **Step 3: Implement the probe.** Support only `--soloist PATH`, `--key-file PATH`, `--client-id ID`, and optional `--report PATH`. The key file must be a user-owned regular file with permissions `0600`; never print its content. Assess the selected arm64 executable with macOS trust checks before executing `--version`; do not download, import, replace, or re-sign it.
+- [x] **Step 2: Run the failing tests.** `swift test --package-path tools/SoloistFeasibility`. Expected: target builds far enough to identify missing probe interfaces/behavior, then fails. Build the existing native artifact with `./scripts/build-rust.sh` first if needed for the local package dependency; do not label a missing artifact as the intended behavioral failure.
+- [x] **Step 3: Implement the probe.** Support only `--soloist PATH`, `--key-file PATH`, `--client-id ID`, and optional `--report PATH`. The key file must be a user-owned regular file with permissions `0600`; never print its content. Assess the selected arm64 executable with macOS trust checks before executing `--version`; do not download, import, replace, or re-sign it.
 
   Use a fresh temporary `0700` data/cache directory and a unique `Bopify probe <UUID>` device name. Start Soloist with explicit directories, `--ws 127.0.0.1:0`, initial volume `0`, and a bounded cache of `100` MB. Keep the API key out of logs; acknowledge that Soloist requires it in its child-process arguments. Validate runtime endpoint files and connect only to the owned generation on loopback. Bound individual network/process operations to 30 seconds, interactive sign-in/pairing to five minutes, and WebSocket messages to 1 MiB.
 
@@ -97,8 +97,8 @@ All Swift probe interfaces below are internal to the new executable target. Exis
   Correlation is an experiment: record the device baseline before starting the fresh process; let the user pair it and initiate playback in Spotify; require a unique new nonrestricted device ID associated with the owned lifecycle, matched active state and item, and at least two advancing playback samples. Samples must be at most two seconds old and positions must agree within two seconds after timestamp adjustment. The unique name only narrows candidates. Revoke evidence on auth/process generation changes, stale observations, or a different active device. Record whether supported observations actually establish the claimed association; do not turn the hypothesis into a success assumption.
 
   After the first correlation, restart the owned daemon once with the same private data directory and revalidate the mapping from fresh observations. The previously established ID may now appear in the baseline; require the previously demonstrated mapping plus the new owned generation and matched playback, rather than falsely requiring a second newly created device. Do not reuse pre-restart evidence.
-- [ ] **Step 4: Verify boundaries offline.** Run `swift test --package-path tools/SoloistFeasibility`; expected all offline tests pass. Include canceled OAuth, denied scope, null playback, a lost WebSocket with a live process, malformed/oversize frames, wrong endpoint address, a failed trust check, and child exit. No test starts a real Spotify session or another audio engine. Use a test process under probe ownership to demonstrate that cleanup waits for termination and never signals a pre-existing process.
-- [ ] **Step 5: Commit this reusable developer probe.** Stage only the new tool; use `test: add Soloist account correlation probe`. Do not claim the live identity gate has passed.
+- [x] **Step 4: Verify boundaries offline.** Run `swift test --package-path tools/SoloistFeasibility`; expected all offline tests pass. Include canceled OAuth, denied scope, null playback, a lost WebSocket with a live process, malformed/oversize frames, wrong endpoint address, a failed trust check, and child exit. No test starts a real Spotify session or another audio engine. Use a test process under probe ownership to demonstrate that cleanup waits for termination and never signals a pre-existing process.
+- [x] **Step 5: Commit this reusable developer probe.** Stage only the new tool; use `test: add Soloist account correlation probe`. Do not claim the live identity gate has passed.
 
 ### Task 2: Fetch existing librespot services without constructing playback
 
@@ -114,7 +114,7 @@ All Swift probe interfaces below are internal to the new executable target. Exis
 - Explicit live entry: `soloist_feasibility::live_data_session` is an ignored Rust test invoked by the Swift runner with `cargo test --manifest-path rust/Cargo.toml --locked -p bopify-core --lib soloist_feasibility::live_data_session -- --ignored --exact --nocapture --test-threads=1`. Its only environment path is `BOPIFY_SOLOIST_PROBE_RESULT_PATH`, a new private result file; secrets travel through the runner-owned stdin pipe. An absent/invalid input fails when invoked. Ordinary CI never claims this opt-in test as live coverage.
 - `ProbeEvidence.runCompanion(accessToken: String, trackURI: String, repository: URL) async throws -> CompanionReport` invokes Cargo directly with `Process`, sends the private payload, captures and sanitizes diagnostics, bounds total execution to 150 seconds after precompilation, and removes its result file. The runner continues observing Soloist while the child works.
 
-- [ ] **Step 1: Write failing offline boundary tests.** Start with:
+- [x] **Step 1: Write failing offline boundary tests.** Start with:
 
   ```rust
   #[test]
@@ -125,10 +125,10 @@ All Swift probe interfaces below are internal to the new executable target. Exis
   ```
 
   Add `rejects_non_track_uri` asserting `InvalidTrack` for a valid JSON request containing an artist URI, and `report_excludes_sensitive_payloads` asserting sentinel token/lyric/account strings cannot occur in serialized results. Do not use a fake session to claim coexistence.
-- [ ] **Step 2: Run the tests and confirm behavioral failure.** `cargo test --manifest-path rust/Cargo.toml --locked -p bopify-core --lib soloist_feasibility::`. Expected: failures for the new boundary behavior while the live entry is explicitly ignored.
-- [ ] **Step 3: Implement the test-only session and Swift bridge.** Reuse existing response variants and normalization; retain only success/failure counts in the report. Call `session.shutdown()` on completion/error, then join the probe runtime on the test thread. On cancellation, Swift terminates only its Cargo/process group and waits for exit; never leave the ignored test holding an authenticated session. Do not install a logger that can print raw dependency responses. The probe requests data and never commands playback.
-- [ ] **Step 4: Verify.** Run the Rust filtered offline tests, the Swift probe tests including a canceled/failing companion child, and `./scripts/test-native.sh`. Expected: offline tests and existing native checks pass; live feasibility is still unverified. Confirm shipping source diff consists only of `#[cfg(test)]` registration and that the lockfile/FFI are unchanged.
-- [ ] **Step 5: Commit.** Stage only Task 2 files; use `test: probe librespot services without playback`.
+- [x] **Step 2: Run the tests and confirm behavioral failure.** `cargo test --manifest-path rust/Cargo.toml --locked -p bopify-core --lib soloist_feasibility::`. Expected: failures for the new boundary behavior while the live entry is explicitly ignored.
+- [x] **Step 3: Implement the test-only session and Swift bridge.** Reuse existing response variants and normalization; retain only success/failure counts in the report. Call `session.shutdown()` on completion/error, then join the probe runtime on the test thread. On cancellation, Swift terminates only its Cargo/process group and waits for exit; never leave the ignored test holding an authenticated session. Do not install a logger that can print raw dependency responses. The probe requests data and never commands playback.
+- [x] **Step 4: Verify.** Run the Rust filtered offline tests, the Swift probe tests including a canceled/failing companion child, and `./scripts/test-native.sh`. Expected: offline tests and existing native checks pass; live feasibility is still unverified. Confirm shipping source diff consists only of `#[cfg(test)]` registration and that the lockfile/FFI are unchanged.
+- [x] **Step 5: Commit.** Stage only Task 2 files; use `test: probe librespot services without playback`.
 
 ### Task 3: Run both live gates and record evidence
 
@@ -147,7 +147,7 @@ All Swift probe interfaces below are internal to the new executable target. Exis
 
 This plan deliberately does not implement the hybrid engine, change app authorization/scopes, ship an installer/updater, alter queue UI, or implement automatic audio handoffs. Those requirements are deferred by the approved design until the two live gates pass. A failure is a useful feasibility result; it must not be hidden behind a fallback or reported as a completed Soloist feature.
 
-Recommend **native execution**: the three tasks share one observation/report contract, require interactive live pairing, and are smaller than the full feature. Keep all user changes outside the task commits. Execution method and plan review are pending.
+Recommend **native execution**: the three tasks share one observation/report contract, require interactive live pairing, and are smaller than the full feature. Keep all user changes outside the task commits. The user approved native execution on 2026-11-06. Tasks 1 and 2 are implemented and verified offline; Task 3 live checks await explicitly supplied inputs.
 
 ## Research notes
 

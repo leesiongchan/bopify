@@ -129,6 +129,18 @@ The complete acceptance checks are:
 3. Snapshot/event ordering, duplicate queue rendering, active-device changes, output switching, sleep/wake, socket loss with continuing audio, process death, invalid key, and expired-build handling behave as designed.
 4. Automatic fallback never starts audio over a remote owner or a still-audible local process. Unsupported queue transfers are disclosed and require the explicit continuation described above.
 
+### Feasibility progress, 2026-11-06
+
+The separate developer probe is implemented under `tools/SoloistFeasibility`. Its offline Swift boundary tests, the Rust data-session boundary tests, the existing native Clippy/test script, and the native framework rebuild pass. The only shared Rust source change registers a test-only module; the shipping playback engine, FFI, dependency pins and app authorization remain unchanged.
+
+Both live feasibility gates remain **unverified**. No Soloist binary was downloaded or executed, no production credentials were read, and no Spotify sign-in/pairing or real data lookup was attempted. Live execution requires the user's selected Soloist executable path, a private key-file path, their public developer client ID, and interactive pairing. Broader engine implementation remains gated.
+
+The account probe uses the current `/me.account_id` field for OAuth account linkage; it does not substitute usernames or `/me.id`. Process/device association is still an experimental hypothesis based on fresh owned-process lifecycle and simultaneous playback observations. Actual live results must establish or reject it before it becomes the product's identity contract.
+
+For cancellation safety, the runner compiles the Rust test before sign-in, discovers the locked test artifact from Cargo's JSON output, and then runs that test executable directly with a private stdin pipe. This replaces the plan's initial Cargo-child invocation; it gives cleanup direct ownership of the authenticated process. Reports distinguish absent services, failures and unrun gates from actual retrievals. State observations do not certify audible continuity.
+
+Independent review identified and regression coverage now checks restart directory reuse, monitoring through the companion's full lifetime with a final observation, prompt sibling cancellation, terminal ownership/authentication changes after selection, and continuously received WebSocket state. The corrected probe has 35 passing offline Swift tests. One minor reporting distinction remains: the CLI labels an account mismatch inconclusive even though it rejects the mismatch; the pure evaluator labels it failed. This does not permit mixed-account requests.
+
 Use the user's own installed binary and authorized interactive account setup for live checks. Do not read stored credentials opportunistically, embed a key, download or run a binary for a design-only exercise, or use mocked results as evidence of live integration. If a gate fails, revise the design before claiming parity; do not add an unverified fallback.
 
 Add meaningful regression coverage for routing, isolated provider failures, command confirmation/ambiguity, stale epochs, queue duplicates, exact-selection rejection, permission migration, lifecycle cancellation, ownership races, secret redaction, artifact validation, logout cleanup, and volume/repeat conversion. Verify native setup/player behavior through app tests and before/after native screenshots, including keyboard access; this is a native app, not a browser UI.
