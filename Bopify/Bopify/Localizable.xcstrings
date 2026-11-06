@@ -1,6 +1,456 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "soloist.permission.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow Soloist Installation"
+          }
+        }
+      }
+    },
+    "soloist.permission.message": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow Bopify to install and run Soloist in this private Bopify folder. Keep the suggested folder and choose Allow. This permission is remembered for updates."
+          }
+        }
+      }
+    },
+    "soloist.permission.allow": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow"
+          }
+        }
+      }
+    },
+    "soloist.permission.waiting": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow installation in the macOS dialog…"
+          }
+        }
+      }
+    },
+    "soloist.error.installationPermission": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soloist needs installation permission. Retry and allow the suggested Bopify folder in the macOS dialog."
+          }
+        }
+      }
+    },
+    "soloist.adopting": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switching to Soloist…"
+          }
+        }
+      }
+    },
+    "soloist.limitedServices": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soloist is playing. Lyrics, radio, or artist services could not connect; audio is preserved."
+          }
+        }
+      }
+    },
+    "soloist.retryDataServices": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry data services"
+          }
+        }
+      }
+    },
+    "soloist.menu": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback Engine…"
+          }
+        }
+      }
+    },
+    "soloist.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback Engine"
+          }
+        }
+      }
+    },
+    "soloist.intro": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use Soloist for playback, with librespot providing lyrics, radio, and other missing features. Bopify downloads and updates Soloist automatically."
+          }
+        }
+      }
+    },
+    "soloist.currentSoloist": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Using Soloist"
+          }
+        }
+      }
+    },
+    "soloist.currentLibrespot": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Using librespot"
+          }
+        }
+      }
+    },
+    "soloist.signInFirst": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in to Bopify first, then return here to enable Soloist."
+          }
+        }
+      }
+    },
+    "soloist.getKey": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get your personal Soloist key from Spotify"
+          }
+        }
+      }
+    },
+    "soloist.key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soloist API key"
+          }
+        }
+      }
+    },
+    "soloist.replaceKey": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New key (leave empty to use the saved key)"
+          }
+        }
+      }
+    },
+    "soloist.keyPrivacy": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your key is saved in Keychain. Spotify requires it when Soloist starts."
+          }
+        }
+      }
+    },
+    "soloist.enable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enable Soloist"
+          }
+        }
+      }
+    },
+    "soloist.retry": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry Soloist"
+          }
+        }
+      }
+    },
+    "soloist.cancel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel setup"
+          }
+        }
+      }
+    },
+    "soloist.playHere": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Play here"
+          }
+        }
+      }
+    },
+    "soloist.useLibrespot": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use librespot for this session"
+          }
+        }
+      }
+    },
+    "soloist.authorizing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Approve playback access in your browser…"
+          }
+        }
+      }
+    },
+    "soloist.installing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparing the latest Soloist build…"
+          }
+        }
+      }
+    },
+    "soloist.checkingAccount": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking your Spotify account…"
+          }
+        }
+      }
+    },
+    "soloist.pairing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Spotify on the same network and select this device:"
+          }
+        }
+      }
+    },
+    "soloist.pairingHelp": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start a song in Spotify. Bopify keeps it muted briefly while checking that both connections belong together."
+          }
+        }
+      }
+    },
+    "soloist.verifying": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verifying your Spotify device…"
+          }
+        }
+      }
+    },
+    "soloist.verifyHelp": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep a song playing on the Bopify device. If it is already paired, choose Play here."
+          }
+        }
+      }
+    },
+    "soloist.ready": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soloist is ready"
+          }
+        }
+      }
+    },
+    "soloist.reconnecting": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconnecting to Soloist. Its audio may still be playing…"
+          }
+        }
+      }
+    },
+    "soloist.updateReady": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An update is ready and will be applied after Soloist stops."
+          }
+        }
+      }
+    },
+    "soloist.queueLimit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soloist supports next and previous. Selecting an exact queue entry currently requires librespot."
+          }
+        }
+      }
+    },
+    "soloist.switchNotice": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switching engines pauses playback. Queue edits are not transferred between engines."
+          }
+        }
+      }
+    },
+    "soloist.error.invalidKey": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a valid Soloist key without spaces."
+          }
+        }
+      }
+    },
+    "soloist.error.credentials": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bopify could not access your saved Soloist key. Retry or enter the key again."
+          }
+        }
+      }
+    },
+    "soloist.error.authorization": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback access needs approval. Retry Soloist and approve the requested permissions."
+          }
+        }
+      }
+    },
+    "soloist.error.accountMismatch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Spotify sign-ins belong to different accounts. Reconnect them using the same account before enabling Soloist."
+          }
+        }
+      }
+    },
+    "soloist.error.missingAccountID": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spotify did not provide the account identifier needed to verify this setup. Librespot remains available."
+          }
+        }
+      }
+    },
+    "soloist.error.pairing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback could not be verified. Retry, select the displayed Bopify device in Spotify, and keep a song playing."
+          }
+        }
+      }
+    },
+    "soloist.error.installation": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soloist could not be downloaded or verified. Check your connection and retry. Librespot remains available."
+          }
+        }
+      }
+    },
+    "soloist.error.startup": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soloist could not finish starting. Check your key and connection, then retry. Librespot remains available."
+          }
+        }
+      }
+    },
+    "soloist.error.rateLimited": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spotify asked Bopify to wait. Keep listening and retry setup later."
+          }
+        }
+      }
+    },
+    "queue.soloistSelection": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exact queue selection is available with librespot. Use next or previous with Soloist."
+          }
+        }
+      }
+    },
     "appearance.title" : {
       "localizations": {
         "en": {

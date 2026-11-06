@@ -25,6 +25,14 @@ Bopify requires **macOS 26 or later**, an **Apple silicon Mac**, and **Spotify P
 
 The release build is ad-hoc signed and not notarized; macOS may require you to approve opening it in Privacy & Security.
 
+## Soloist playback
+
+Open **Playback Engine…** from Bopify's menu. Follow the link to obtain your personal Soloist key, paste it into the secure field, and choose **Enable Soloist**. Allow the suggested Bopify installation folder in the native permission dialog and approve the additional Spotify playback access. Bopify downloads and validates Spotify's latest macOS build automatically.
+
+When prompted, open Spotify on the same network, select the device name shown by Bopify, and play a track. Bopify verifies the session before taking over playback. Subsequent launches reuse the saved key and pairing. Updates download in the background and take effect after the current Soloist process stops.
+
+Soloist handles audio; a data-only librespot session supplies lyrics, radio, and artist tracks. Exact queue-entry selection requires **Use librespot for this session** in Playback Engine. Switching engines pauses playback and does not copy queue edits. No Terminal setup is required.
+
 ## Build from source
 
 Install Xcode, Rust, and [mise](https://mise.jdx.dev/), then run:

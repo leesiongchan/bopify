@@ -1,7 +1,14 @@
 import BopifyDomain
 
 /// Metadata transport only; its native session creates no Player, Mixer or Spirc.
-public final class LibrespotServices: Sendable {
+protocol SoloistDataServices: Sendable {
+    func requestRadio(seed: SpotifyURI) async throws -> RadioMix
+    func requestLyrics(for track: SpotifyURI) async throws -> TrackLyrics
+    func requestArtistTopTracks(for track: SpotifyURI, artistIndex: Int) async throws -> ArtistTopTracks
+    func shutdown() async
+}
+
+public final class LibrespotServices: SoloistDataServices, Sendable {
     private let engine: LibrespotEngine
     public init(accessToken: String) async throws {
         engine = try await LibrespotEngine(accessToken: accessToken, deviceName: "Bopify services",

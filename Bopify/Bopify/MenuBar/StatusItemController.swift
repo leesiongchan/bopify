@@ -253,6 +253,10 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                                      action: #selector(showLibraryAccess(_:)), keyEquivalent: "")
         libraryItem.target = self
         menu.addItem(libraryItem)
+        let playbackEngine = NSMenuItem(title: String(localized: "soloist.menu"),
+            action: #selector(showPlaybackEngine(_:)), keyEquivalent: "")
+        playbackEngine.target = self
+        menu.addItem(playbackEngine)
         let shortcutsItem = NSMenuItem(title: String(localized: "shortcuts.title"),
                                       action: #selector(showShortcuts(_:)), keyEquivalent: "/")
         shortcutsItem.target = self
@@ -293,6 +297,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     @objc private func cancelPlaybackAuthorization(_ sender: Any?) { environment.cancelPlaybackAuthorization() }
     @objc private func cancelLibraryAuthorization(_ sender: Any?) { environment.cancelLibraryAuthorization() }
     @objc private func showLibraryAccess(_ sender: Any?) { environment.librarySetupWindow.show(environment: environment) }
+    @objc private func showPlaybackEngine(_ sender: Any?) { environment.soloistSetupWindow.show(environment: environment) }
     @objc private func showShortcuts(_ sender: Any?) { shortcutsWindow.show() }
     @objc private func showRecordAppearance(_ sender: Any?) { recordAppearanceWindow.show() }
     @objc private func toggleKeepOnTop(_ sender: Any?) { environment.presentation.keepOnTop.toggle() }

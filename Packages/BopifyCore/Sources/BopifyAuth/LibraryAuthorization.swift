@@ -17,6 +17,7 @@ public actor LibraryAuthorization {
         "user-library-read", "user-library-modify", "user-read-recently-played", "user-top-read",
         "playlist-read-private", "playlist-read-collaborative", "user-follow-read"
     ]
+    public static let playbackScopes: Set<String> = ["user-read-playback-state", "user-modify-playback-state"]
 
     private let defaults: UserDefaults
     private let makeAuth: @Sendable (String) -> SpotifyAuthService

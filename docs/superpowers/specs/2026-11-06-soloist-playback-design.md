@@ -161,6 +161,14 @@ A fresh native macOS/Rust reviewer identified two consequential questions. The s
 
 ## Research basis
 
+### Native sandbox continuation — 2026-11-07
+
+A signed sandbox smoke test found that extraction must preserve an OS-imposed quarantine tag rather than overwrite it. Publisher validation then succeeds, but execution without a user grant is denied. Explicit setup now requests access to Bopify's private installation folder through a native Open panel and retains an app-scoped security bookmark. Launch and background updates only restore that grant; they never display a panel. The app retains its sandbox and Spotify's original signature and quarantine. Actual execution after a real user grant remains a live acceptance check.
+
+Apple's [DTS explanation of downloaded executable access](https://developer.apple.com/forums/thread/767612) and [App Sandbox entitlement reference](https://developer.apple.com/library/archive/documentation/Miscellaneous/Reference/EntitlementKeyReference/Chapters/EnablingAppSandbox.html) inform the permission flow. The executable-file entitlement alone did not make the signed sandbox smoke test succeed. An independently scoped installer helper is a larger alternative; none was added.
+
+The implemented handoff prepares and verifies a muted Soloist process before stopping the outgoing librespot engine. Adoption waits for a fresh observation of the requested listening volume before publishing playback events. Data-service initialization is separate and recoverable; failure does not stop Soloist audio. These are automated integration results, not evidence of authenticated live playback.
+
 Official sources reviewed 2026-11-06. Documented-surface gaps are not proof that an internal capability is impossible.
 
 - [Soloist overview](https://developer.spotify.com/documentation/soloist): supported desktop platform, per-user key, redistribution restriction, and build lifetime.

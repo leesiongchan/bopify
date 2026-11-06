@@ -33,9 +33,9 @@ Files: Rust `engine.rs`/`recovery.rs`; Swift `LibrespotEngine.swift`, new `Libre
 
 Interfaces: optional `servicesOnly` engine creation flag (default false); native optional Spirc with playback commands rejected when absent. `LibrespotServices` exposes only radio/lyrics/artist and shutdown. Dedicated `SoloistKeyStoring` saves/loads/clears key; `.soloist` cleanup namespace includes owned pairing files. `LibraryAuthorization.authorize(additionalScopes:)` retains existing library scopes and adds read/modify playback only on request.
 
-- [ ] Add failing tests for services-only creation options/command rejection, key validation/storage boundaries and incremental consent.
-- [ ] Run targeted tests, observe failure, implement the mode before Player/Mixer/Spirc construction and separate Swift service facade.
-- [ ] Verify native checks and shared auth tests; rebuild framework/header as required. Commit focused changes.
+- [x] Add failing tests for services-only creation options/command rejection, key validation/storage boundaries and incremental consent.
+- [x] Run targeted tests, observe failure, implement the mode before Player/Mixer/Spirc construction and separate Swift service facade.
+- [x] Verify native checks and shared auth tests; rebuild framework/header as required. Commit focused changes.
 
 ### Task 2: Owned process, Web API and wire state
 
@@ -43,9 +43,9 @@ Files: new shared playback `SoloistProcess.swift`, `SoloistWebAPI.swift`, `Soloi
 
 Interfaces: process launch holds exclusive directory lock and owns termination/join; dynamic loopback endpoint only. Typed state decodes auth, playback, metadata, actions and duplicate queue occurrences into domain events. Web API exposes profile account IDs, fresh devices/playback and explicitly targeted play/transfer with fixed errors/Retry-After. Bound frames, HTTP bodies, subprocess output and deadlines; no raw diagnostics.
 
-- [ ] Add failing fixtures for wrong endpoints, malformed frames, inactive snapshots, duplicate tracks, permissions/capabilities, stale position and wrong account/device correlation.
-- [ ] Implement using verified official schemas and existing probe ownership principles, preserve data across restart.
-- [ ] Run playback tests, verify cancellation/owned-process cleanup and commit.
+- [x] Add failing fixtures for wrong endpoints, malformed frames, inactive snapshots, duplicate tracks, permissions/capabilities, stale position and wrong account/device correlation.
+- [x] Implement using verified official schemas and existing probe ownership principles, preserve data across restart.
+- [x] Run playback tests, verify cancellation/owned-process cleanup and commit.
 
 ### Task 3: Managed Soloist playback and provider selection
 
@@ -53,9 +53,9 @@ Files: new `SoloistEngine.swift`, app `SoloistPlaybackController.swift`; domain 
 
 Interfaces: `SoloistEngine: ManagedPlaybackEngine` implements supported socket controls, explicit targeted assisted loads, observation-based readiness and service composition. Reconnect to the live child on socket loss; fail visibly while retaining ownership rather than silently launching librespot. A provider controller chooses ready Soloist on startup and explicit retry, allows librespot selection, and exposes fixed setup status. Initial correlation gates data-only service creation; reauthentication invalidates association.
 
-- [ ] Add failing state/control routing, lifetime and setup tests, including no promotion after cancellation and no guessed queue selection.
-- [ ] Implement sequential outgoing teardown and incoming creation, epoch-safe state and service errors isolated from audio.
-- [ ] Run meaningful targeted suites and commit. Keep actual live behavior explicitly unverified.
+- [x] Add failing state/control routing, lifetime and setup tests, including no promotion after cancellation and no guessed queue selection.
+- [x] Implement sequential outgoing teardown and incoming creation, epoch-safe state and service errors isolated from audio.
+- [x] Run meaningful targeted suites and commit. Keep actual live behavior explicitly unverified.
 
 ### Task 4: Native setup, lifecycle and testable build
 
@@ -63,7 +63,20 @@ Files: new `SoloistSetupView.swift`/window controller, AppEnvironment, status me
 
 Interfaces: status menu `Playback Engine…` opens native window with secure key field, official key link, automatic install progress, pairing instructions, current engine, retry/cancel and explicit librespot action. Reuse current library client/grants and request added consent in-app. Sign-out records cleanup intent before clearing Soloist key/session; quit cancels setup and joins owned child without deleting grants.
 
-- [ ] Add failing app model tests for key/setup progress, cancellation/sign-out generations and engine selection; implement native flow and localized copy.
-- [ ] Run native checks, framework rebuild, all package/app tests and focused accessibility/UI verification with screenshots where available.
-- [ ] Request one independent review of the integration delta; reproduce/fix material findings in one pass, record deferred minors.
-- [ ] Build and signature-verify a fresh runnable app. Report exact tests and remaining live observations; no Terminal prerequisite for the user.
+- [x] Add failing app model tests for key/setup progress, cancellation/sign-out generations and engine selection; implement native flow and localized copy.
+- [x] Run native checks, framework rebuild, all package/app tests and focused accessibility/UI verification with screenshots where available.
+- [x] Request one independent review of the integration delta; reproduce/fix material findings in one pass, record deferred minors.
+- [x] Build and signature-verify a fresh runnable app. Report exact tests and remaining live observations; no Terminal prerequisite for the user.
+
+
+## Execution record — 2026-11-07
+
+Implemented in the isolated `codex/soloist-feasibility` branch. The six native Soloist setup/presentation tests pass, including secure field accessibility, keyboard editing, retry after failure, saved-key selection, cancellation, and no automatic permission/OAuth prompt on launch. Native view captures were inspected for text, wrapping and dynamic height; cached AppKit button/glass compositing is incomplete, and a WindowServer capture was unavailable. Actual appearance remains part of interactive testing.
+
+Verification: shared package 462 tests passed; feasibility probe 36 passed; native Clippy, 92 core tests, 93 Connect tests, 11 playback tests and doctests passed (existing opt-in live tests remain unrun); Rust formatting and framework rebuild passed. The full app run executed 273 tests with 24 GUI focus issues in existing search/player/window tests. The unchanged `69922b1` baseline independently reproduces the search-reopen focus failure (18 tests, one issue); no existing tests were changed or skipped.
+
+One independent integration review returned five Important findings; all received regression coverage and corrections in one pass. Deferred Minor: a capped queue broadcast may temporarily replace the full queue until the next ten-second full query. No invented selectable queue targets are exposed.
+
+Fresh Apple Development-signed arm64 build: `build/soloist-in-app-test-20261107/Build/Products/Debug/Bopify.app`. Deep strict signature verification passed. Effective entitlements retain the sandbox and network access and add user-selected executable/read-write and app-scoped bookmark access.
+
+Live acceptance remains open: a real native folder grant must permit the downloaded publisher-signed binary to execute, and the user's Spotify account must complete pairing, advancing-playback correlation, companion-session coexistence, controls, restart, sign-out and audio checks. No key or account credentials were accessed for automated verification. This is a test build, not a claim of verified live integration.

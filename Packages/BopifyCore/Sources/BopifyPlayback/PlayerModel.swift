@@ -94,7 +94,7 @@ public final class PlayerModel {
             // Clamped only to a reported duration, as the Rust extraction is.
             return Int64(remote.durationMs > 0 ? min(Double(remote.durationMs), position) : position)
         }
-        let elapsed = state.phase == .playing ? max(0, date.timeIntervalSince(positionUpdatedAt)) * 1000 : 0
+        let elapsed = state.phase == .playing ? max(0, date.timeIntervalSince(positionUpdatedAt)) * 1000 * state.playbackRate : 0
         let position = min(Double(max(0, state.durationMs)), max(0, Double(frozenDisplayPositionMs ?? state.positionMs) + elapsed))
         return Int64(position)
     }
@@ -102,7 +102,7 @@ public final class PlayerModel {
     public var displayDurationMs: Int64 { state.mirror?.durationMs ?? state.durationMs }
 
     /// Views run a display clock only while this is true.
-    public var isPositionAdvancing: Bool { isEngineReady && (state.mirror?.isPlaying ?? (state.phase == .playing)) }
+    public var isPositionAdvancing: Bool { isEngineReady && (state.mirror?.isPlaying ?? (state.phase == .playing && state.playbackRate > 0)) }
 
     /// One consumer for the model's lifetime. A per-view .task would
     /// resubscribe whenever view identity changed.
@@ -130,6 +130,8 @@ public final class PlayerModel {
     public func attachEngine(_ engine: any PlaybackEngine, epoch: UInt64) {
         detachEngine()
         engineEpoch = epoch
+        state.playbackRate = 1
+        state.supportsQueueSelection = true
         self.engine = engine
         managedAttachment = true
         reportedLoss = false
@@ -419,7 +421,9 @@ public final class PlayerModel {
                 if error as? PlayerError == .playbackSessionLost { reportSessionLoss(.commandFailed); return }
                 lastVolumeSent = nil
                 if volumeRequest == nil { volumeDraft = nil }
-                commandNotice = String(localized: "command.unavailable", defaultValue: "That action is unavailable.")
+                commandNotice = error as? SoloistPlaybackError == .unsupported
+                    ? String(localized: "command.requiresLibrespot", defaultValue: "Use librespot from Playback Engine to perform this action.")
+                    : String(localized: "command.unavailable", defaultValue: "That action is unavailable.")
                 BopifyLog.playback.error("volume command failed")
             }
             if generation == volumeGeneration, !isEditingVolume, volumeRequest == nil, volumeDraft == state.volume {
@@ -449,7 +453,9 @@ public final class PlayerModel {
                     guard queueSelection == selection else { return }
                     queueSelection = .failed
                 }
-                commandNotice = String(localized: "command.unavailable", defaultValue: "That action is unavailable.")
+                commandNotice = error as? SoloistPlaybackError == .unsupported
+                    ? String(localized: "command.requiresLibrespot", defaultValue: "Use librespot from Playback Engine to perform this action.")
+                    : String(localized: "command.unavailable", defaultValue: "That action is unavailable.")
                 BopifyLog.playback.error("command failed command=\(name, privacy: .public)")
             }
         }
@@ -525,6 +531,20 @@ public final class PlayerModel {
                 ? String(localized: "queue.changed", defaultValue: "The queue changed. Choose the track again.")
                 : String(localized: "command.unavailable", defaultValue: "That action is unavailable.")
             BopifyLog.playback.debug("player command rejected")
+        case let .availableActions(seek, next, previous):
+            state.canSeek = seek; state.canNext = next; state.canPrevious = previous
+        case let .queueSelectionSupported(supported): state.supportsQueueSelection = supported
+        case let .playbackRate(rate):
+            guard rate.isFinite, (0...4).contains(rate) else { return }
+            state.playbackRate = rate
+        case .playbackIdle:
+            cancelPlaybackIntent()
+            recoveryIdentity = nil
+            state.phase = .idle; state.currentTrack = nil
+            state.queue = nil
+            state.positionMs = 0; state.durationMs = 0
+            state.canSeek = false; state.canNext = false; state.canPrevious = false
+            frozenDisplayPositionMs = nil
         case let .trackChanged(track):
             cancelPlaybackIntent()
             playbackRevision &+= 1

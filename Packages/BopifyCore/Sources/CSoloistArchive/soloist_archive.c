@@ -119,7 +119,14 @@ int bopify_soloist_extract(const char *archive_path, const char *destination) {
                     }
                 }
             }
-            if (tag_size && fsetxattr(output, "com.apple.quarantine", tag, tag_size, 0, 0)) goto done;
+            if (tag_size) {
+                /* The sandbox may already impose quarantine and forbid replacing it.
+                 * Retain that OS policy; copy the source only when no tag exists. */
+                char existing[4096];
+                ssize_t existing_size = fgetxattr(output, "com.apple.quarantine", existing, sizeof existing, 0, 0);
+                if (existing_size < 0 && errno != ENOATTR) goto done;
+                if (existing_size <= 0 && fsetxattr(output, "com.apple.quarantine", tag, tag_size, 0, 0)) goto done;
+            }
             if (fsync(output)) goto done;
             close(output);
             output = -1;
