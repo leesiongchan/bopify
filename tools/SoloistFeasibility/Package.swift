@@ -10,6 +10,7 @@ let package = Package(
         .executableTarget(name: "SoloistFeasibility", dependencies: [
             .product(name: "BopifyAuth", package: "BopifyCore"),
             .product(name: "BopifyDomain", package: "BopifyCore"),
+            .product(name: "BopifyPlayback", package: "BopifyCore"),
         ]),
         .testTarget(name: "SoloistFeasibilityTests", dependencies: ["SoloistFeasibility"]),
     ]

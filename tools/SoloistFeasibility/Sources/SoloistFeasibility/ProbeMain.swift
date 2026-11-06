@@ -1,29 +1,40 @@
 import BopifyAuth
+import BopifyPlayback
 import Darwin
 import Foundation
 
 struct ProbeOptions: Sendable {
-    let executable: URL
-    let keyFile: URL
-    let clientID: String
+    let executable: URL?
+    let keyFile: URL?
+    let clientID: String?
     let report: URL?
+    let installOnly: Bool
 
     static func parse(_ arguments: [String]) throws -> Self {
         let flags = ["--soloist", "--key-file", "--client-id", "--report"]
         var values: [String: String] = [:]
-        guard arguments.count.isMultiple(of: 2) else { throw ProbeError(reason: .invalidInput) }
-        for index in stride(from: 0, to: arguments.count, by: 2) {
+        var installOnly = false
+        var index = 0
+        while index < arguments.count {
+            if arguments[index] == "--install-only" {
+                guard !installOnly else { throw ProbeError(reason: .invalidInput) }
+                installOnly = true
+                index += 1
+                continue
+            }
+            guard index + 1 < arguments.count else { throw ProbeError(reason: .invalidInput) }
             let flag = arguments[index], value = arguments[index + 1]
             guard flags.contains(flag), values[flag] == nil, !value.isEmpty else { throw ProbeError(reason: .invalidInput) }
             values[flag] = value
+            index += 2
         }
-        guard let executable = values["--soloist"], let key = values["--key-file"],
-              let rawID = values["--client-id"], let id = LibraryAuthorization.normalized(rawID) else {
+        let id = values["--client-id"].flatMap(LibraryAuthorization.normalized)
+        guard installOnly ? values["--soloist"] == nil : values["--key-file"] != nil && id != nil else {
             throw ProbeError(reason: .invalidInput)
         }
-        return Self(executable: URL(fileURLWithPath: executable).standardizedFileURL,
-            keyFile: URL(fileURLWithPath: key).standardizedFileURL, clientID: id,
-            report: values["--report"].map { URL(fileURLWithPath: $0).standardizedFileURL })
+        return Self(executable: values["--soloist"].map { URL(fileURLWithPath: $0).standardizedFileURL },
+            keyFile: values["--key-file"].map { URL(fileURLWithPath: $0).standardizedFileURL }, clientID: id,
+            report: values["--report"].map { URL(fileURLWithPath: $0).standardizedFileURL }, installOnly: installOnly)
     }
 }
 
@@ -79,7 +90,7 @@ func collectCorrelation(probe: OwnedSoloistProbe, http: ProbeObservation, stream
 enum ProbeMain {
     static func main() async {
         if CommandLine.arguments.dropFirst() == ["--help"] {
-            print("soloist-feasibility --soloist PATH --key-file PATH --client-id ID [--report PATH]")
+            print("soloist-feasibility --key-file PATH --client-id ID [--soloist PATH] [--report PATH]\nsoloist-feasibility --install-only [--report PATH]")
             return
         }
         let options: ProbeOptions
@@ -116,7 +127,9 @@ enum ProbeMain {
             probeMessage("Could not write the sanitized report.")
             exit(2)
         }
-        exit(report.correlation == .passed && report.restart == .passed && report.companion == .passed ? 0 : 2)
+        let passed = options.installOnly ? report.installation == .passed :
+            report.correlation == .passed && report.restart == .passed && report.companion == .passed
+        exit(passed ? 0 : 2)
     }
 
     private static func execute(_ options: ProbeOptions) async -> ProbeReport {
@@ -127,13 +140,35 @@ enum ProbeMain {
         let http = ProbeObservation()
         defer { http.session.invalidateAndCancel() }
         do {
-            try await ProbeObservation.validateArtifact(options.executable)
-            _ = try ProbeObservation.readKey(options.keyFile)
+            if let keyFile = options.keyFile { _ = try ProbeObservation.readKey(keyFile) }
+            let executable: URL
+            if let override = options.executable {
+                try await ProbeObservation.validateArtifact(override)
+                executable = override
+            } else {
+                probeMessage("Preparing the latest official Soloist build automatically.")
+                let installation = try await SoloistInstaller().ensureInstalled { progress in
+                    switch progress {
+                    case let .downloading(received, total):
+                        if let total { probeMessage("Downloading Soloist: \(received * 100 / max(1, total))%") }
+                        else { probeMessage("Downloading Soloist: \(received) bytes") }
+                    case .verifying: probeMessage("Verifying Spotify's signed player.")
+                    case .installed: probeMessage("Soloist installed.")
+                    case .updateReady: probeMessage("Soloist update staged.")
+                    }
+                }
+                executable = installation.current.executableURL
+                report.soloistVersion = installation.current.metadata.version
+                report.installationError = installation.updateError
+            }
+            report.installation = .passed
+            if options.installOnly { return report }
+            guard let keyFile = options.keyFile, let clientID = options.clientID else { throw ProbeError(reason: .invalidInput) }
             let repository = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
                 .appendingPathComponent("../../../..").standardizedFileURL
             probeMessage("Compiling the data-only companion before requesting credentials.")
             let companionExecutable = try await ProbeEvidence.prepareCompanion(repository: repository)
-            let versionChild = try ProbeChild(executable: options.executable, arguments: ["--version"])
+            let versionChild = try ProbeChild(executable: executable, arguments: ["--version"])
             let version = try await versionChild.wait(seconds: 30)
             guard version.status == 0 else { throw ProbeError(reason: .processFailed) }
             let versionText = String(decoding: version.output, as: UTF8.self)
@@ -144,7 +179,7 @@ enum ProbeMain {
             let streaming = try await ProbeAuthorization.authorize(clientID: librespotClientID, scopes: ["streaming"],
                 callbackPort: nil, callbackPath: "/login")
             probeMessage("Authorize playback observation/control with your developer client.")
-            let web = try await ProbeAuthorization.authorize(clientID: options.clientID,
+            let web = try await ProbeAuthorization.authorize(clientID: clientID,
                 scopes: ["user-read-playback-state", "user-modify-playback-state"],
                 callbackPort: LibraryAuthorization.callbackPort, callbackPath: LibraryAuthorization.callbackPath)
             let streamingID = try await http.account(accessToken: streaming.accessToken)
@@ -155,8 +190,8 @@ enum ProbeMain {
                 attributes: [.posixPermissions: 0o700])
             ownsDirectory = true
             let name = "Bopify probe \(UUID().uuidString)"
-            let probe = try await ProbeObservation.startSoloist(executable: options.executable,
-                keyFile: options.keyFile, directory: root, deviceName: name)
+            let probe = try await ProbeObservation.startSoloist(executable: executable,
+                keyFile: keyFile, directory: root, deviceName: name)
             owned = probe
             probeMessage("Select \(name) in Spotify, start a track, and choose your listening volume there. Probe starts muted.")
             let evidence = try await collectCorrelation(probe: probe, http: http,
@@ -168,8 +203,8 @@ enum ProbeMain {
             await probe.stop()
             owned = nil
             let restartBaseline = try await http.devices(accessToken: web.accessToken)
-            let restarted = try await ProbeObservation.startSoloist(executable: options.executable,
-                keyFile: options.keyFile, directory: root, deviceName: name)
+            let restarted = try await ProbeObservation.startSoloist(executable: executable,
+                keyFile: keyFile, directory: root, deviceName: name)
             owned = restarted
             probeMessage("Probe restarted with the same session. Select it and start playback again if needed.")
             let revalidated = try await collectCorrelation(probe: restarted, http: http,
@@ -189,6 +224,10 @@ enum ProbeMain {
             report.companion = result.allAvailable ? .passed : .inconclusive(reason: .servicesUnavailable)
             probeMessage("State observations do not prove audible continuity. Record whether you heard uninterrupted audio separately.")
         } catch {
+            if report.installation != .passed {
+                report.installation = .inconclusive(reason: .installationFailed)
+                report.installationError = error as? SoloistInstallationError
+            }
             let failure = error as? ProbeError ?? ProbeError(reason: error is CancellationError ? .cancelled : .processFailed)
             if report.correlation != .passed { report.correlation = .inconclusive(reason: failure.reason) }
             else if report.restart != .passed { report.restart = .inconclusive(reason: failure.reason) }

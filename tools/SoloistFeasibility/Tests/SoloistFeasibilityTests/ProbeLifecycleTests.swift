@@ -19,6 +19,16 @@ private func temporaryDirectory() throws -> URL {
     }
 }
 
+@Test func CLIInstallsAutomaticallyWithoutAnExecutablePath() throws {
+    let options = try ProbeOptions.parse(["--key-file", "/tmp/key", "--client-id", String(repeating: "a", count: 32)])
+    #expect(options.executable == nil)
+    #expect(!options.installOnly)
+    let install = try ProbeOptions.parse(["--install-only"])
+    #expect(install.installOnly)
+    #expect(install.keyFile == nil)
+    #expect(throws: ProbeError.self) { try ProbeOptions.parse(["--install-only", "--soloist", "/tmp/binary"]) }
+}
+
 @Test func reportingMustNotOverwriteAnExistingFile() async throws {
     let root = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }

@@ -39,7 +39,8 @@ let package = Package(
                 .linkedLibrary("iconv"),
             ]
         ),
-        .target(name: "BopifyPlayback", dependencies: ["BopifyDomain", "CBopifyCore"], swiftSettings: [.swiftLanguageMode(.v6)]),
+        .target(name: "CSoloistArchive", linkerSettings: [.linkedLibrary("archive")]),
+        .target(name: "BopifyPlayback", dependencies: ["BopifyDomain", "CBopifyCore", "CSoloistArchive"], swiftSettings: [.swiftLanguageMode(.v6)]),
         .target(name: "BopifyLibrary", dependencies: ["BopifyDomain", .product(name: "FuzzyMatch", package: "FuzzyMatch")], swiftSettings: [.swiftLanguageMode(.v6)]),
         .testTarget(name: "LibraryTests", dependencies: ["BopifyLibrary"], swiftSettings: [.swiftLanguageMode(.v6)]),
         .testTarget(name: "DomainTests", dependencies: ["BopifyDomain"], swiftSettings: [.swiftLanguageMode(.v6)]),

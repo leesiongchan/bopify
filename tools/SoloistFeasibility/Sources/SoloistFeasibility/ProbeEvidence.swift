@@ -1,4 +1,5 @@
 import Foundation
+import BopifyPlayback
 
 enum ProbeReason: String, Codable, Sendable, Error {
     case accountMismatch, missingAccountID, noNewDevice, ambiguousDevice, restrictedDevice
@@ -6,6 +7,7 @@ enum ProbeReason: String, Codable, Sendable, Error {
     case generationChanged, notPaired, invalidInput, invalidArtifact, trustFailed, invalidEndpoint
     case timeout, cancelled, processFailed, invalidResponse, httpStatus, rateLimited
     case consentDenied, companionFailed, servicesUnavailable, notRun
+    case installationFailed
 }
 
 struct ProbeError: Error, Sendable {
@@ -177,6 +179,8 @@ struct ProbeReport: Codable, Sendable {
     var schemaVersion = 1
     var platform = "macOS-arm64"
     var soloistVersion = "unknown"
+    var installation: ProbeVerdict = .inconclusive(reason: .notRun)
+    var installationError: SoloistInstallationError?
     var correlation: ProbeVerdict
     var restart: ProbeVerdict = .inconclusive(reason: .notRun)
     var companion: ProbeVerdict = .inconclusive(reason: .notRun)

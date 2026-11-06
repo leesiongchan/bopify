@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import BopifyPlayback
 
 struct ProbeObservation: Sendable {
     let session: URLSession
@@ -86,9 +87,8 @@ struct ProbeObservation: Sendable {
 
     static func validateArtifact(_ url: URL,
         assess: @Sendable (URL) async throws -> Bool = { url in
-            let check = try ProbeChild(executable: URL(fileURLWithPath: "/usr/sbin/spctl"),
-                arguments: ["--assess", "--type", "execute", url.path])
-            return try await check.wait(seconds: 30).status == 0
+            try SoloistCodeSignature.validate(url)
+            return true
         }) async throws {
         let header = try readOwnedFile(url, limit: 536_870_912, prefix: 8)
         guard header.elementsEqual([0xcf, 0xfa, 0xed, 0xfe, 0x0c, 0, 0, 1]),
