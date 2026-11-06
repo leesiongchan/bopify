@@ -14,3 +14,6 @@ mod radio;
 mod recovery;
 mod remote;
 mod terminal;
+
+#[cfg(test)]
+mod soloist_feasibility;

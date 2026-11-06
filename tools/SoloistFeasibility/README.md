@@ -21,7 +21,7 @@ The existing `artifacts/BopifyCoreFFI.xcframework` is required to configure the 
 - Your own Soloist API key in a regular, user-owned `0600` file, without embedded whitespace. Do not paste the key into commands or chat. The file must already exist; this tool does not write or erase it.
 - Your public developer client ID, with `http://127.0.0.1:8898/callback` registered and your account permitted. A running app may already occupy that port; stop it yourself before probing if necessary.
 
-The probe opens two fresh OAuth grants using existing BopifyAuth primitives: streaming and playback observation/control. Both remain in memory, separate from Bopify's stored credentials. No production Keychain entry is read, modified, or revoked. If either `/me` response lacks immutable `account_id`, the identity gate remains inconclusive; legacy usernames are not substituted.
+Before opening a browser, the probe compiles the Rust test with Cargo's locked dependencies and discovers its test executable from Cargo's JSON artifact output. It then opens two fresh OAuth grants using existing BopifyAuth primitives: streaming and playback observation/control. Both remain in memory, separate from Bopify's stored credentials. No production Keychain entry is read, modified, or revoked. If either `/me` response lacks immutable `account_id`, the identity gate remains inconclusive; legacy usernames are not substituted.
 
 ```sh
 swift run --package-path tools/SoloistFeasibility soloist-feasibility \
@@ -39,6 +39,19 @@ Individual operations are bounded to 30 seconds; each sign-in/pairing window is 
 
 ## Interpreting results
 
-Exit `0` currently means correlation and restart observations passed; `companion` remains `notRun` until the data-only probe is added. Exit `2` means failed/inconclusive observations or invalid input. An HTTP 429 stops the attempt and reports the available retry delay; it is never retried early. Request a new run after the delay.
+After restart correlation succeeds, the runner starts the compiled Rust test directly through a private stdin pipe. The token is not passed in arguments, environment variables, or files. The test constructs a librespot `Session` with no cache or credential storage and performs existing lyric/radio/artist requests without creating a player, mixer, Spirc, or Connect registration. Only service outcomes and counts cross back through a private result file, removed on completion. This direct child is stopped and joined on cancellation.
+
+Soloist's state, account playback, and device list are observed for at least 30 seconds during these requests. A different owner, lost observation, or new Connect device invalidates the attempt; the probe never takes playback back. Each service must actually return data for `companion` to pass. Missing lyrics or a missing radio mix remain an accurate absent result; choose another suitable track for a later run rather than treating absence as success.
+
+Exit `0` means correlation, restart correlation, and companion state observations all passed. Exit `2` means failed/inconclusive observations, an unavailable service, or invalid input. An HTTP 429 stops the attempt and reports the available retry delay; it is never retried early. Request a new run after the delay. Neither status certifies audible continuity; record that listening observation separately.
+
+The Rust live entry is explicitly ignored during normal tests. To precompile it without signing in:
+
+```sh
+cargo test --manifest-path rust/Cargo.toml --locked -p bopify-core --lib \
+  soloist_feasibility::live_data_session --no-run
+```
+
+Run live through the Swift tool, which manages the private input/output channel. Never put a real token into a shell command or the result file. The Rust test's exit status alone is insufficient: the runner checks the structured service outcomes and concurrent ownership observations.
 
 Even passing observations are experimental correlation evidence, not a cryptographic identity attestation. Record the Soloist version, procedure, actual outcomes and remaining limits in the design before claiming a supported association. Data-only companion coexistence, audible continuity, remote takeover and loss-of-observation cases must also be checked live before planning the shipping feature. No live results have been recorded yet.

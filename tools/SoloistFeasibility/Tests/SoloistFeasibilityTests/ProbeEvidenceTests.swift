@@ -123,3 +123,23 @@ func validEvidence() -> CorrelationEvidence {
         #expect(!text.contains(value))
     }
 }
+
+@Test func companionSuccessRequiresEveryServiceToActuallyReturnData() throws {
+    let report = try JSONDecoder().decode(CompanionReport.self, from: Data(#"{"schemaVersion":1,"elapsedMs":12,"lyrics":{"outcome":"available","count":3},"radio":{"outcome":"absent","count":0},"artist":{"outcome":"available","count":4},"failure":null}"#.utf8))
+    #expect(!report.allAvailable)
+    #expect(throws: ProbeError.self) {
+        try CompanionReport.decode(Data(#"{"schemaVersion":2,"elapsedMs":0,"lyrics":{"outcome":"available","count":1},"radio":{"outcome":"available","count":1},"artist":{"outcome":"available","count":1}}"#.utf8))
+    }
+}
+
+@Test func companionReportDoesNotAcceptUnknownSensitiveFields() {
+    let data = Data(#"{"schemaVersion":1,"elapsedMs":1,"lyrics":{"outcome":"available","count":1},"radio":{"outcome":"available","count":1},"artist":{"outcome":"available","count":1},"failure":null,"access_token":"sentinel"}"#.utf8)
+    #expect(throws: ProbeError.self) { try CompanionReport.decode(data) }
+}
+
+@Test func onlyOneExecutableForTheCoreTestTargetMayBeSelected() throws {
+    let valid = Data(#"{"reason":"compiler-artifact","target":{"name":"bopify_core"},"profile":{"test":true},"executable":"/tmp/owned-test"}"#.utf8)
+    #expect(try ProbeEvidence.testExecutable(from: valid).path == "/tmp/owned-test")
+    #expect(throws: ProbeError.self) { try ProbeEvidence.testExecutable(from: valid + Data("\n".utf8) + valid) }
+    #expect(throws: ProbeError.self) { try ProbeEvidence.testExecutable(from: Data(#"{"reason":"build-finished","success":true}"#.utf8)) }
+}

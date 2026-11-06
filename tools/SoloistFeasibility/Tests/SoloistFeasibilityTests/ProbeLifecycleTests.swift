@@ -121,6 +121,13 @@ private func temporaryDirectory() throws -> URL {
     #expect(result.status != 0)
 }
 
+@Test func aFailedCompanionDoesNotAcceptOrExposeThePrivateInput() async {
+    await #expect(throws: ProbeError.self) {
+        try await ProbeEvidence.runCompanion(accessToken: "sentinel-private-token",
+            trackURI: "spotify:track:1111111111111111111111", executable: URL(fileURLWithPath: "/usr/bin/false"))
+    }
+}
+
 @Test func cancelledAuthorizationDoesNotOpenABrowser() async {
     let task = Task {
         withUnsafeCurrentTask { $0?.cancel() }

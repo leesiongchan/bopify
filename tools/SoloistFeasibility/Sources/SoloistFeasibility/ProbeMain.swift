@@ -114,7 +114,7 @@ enum ProbeMain {
             probeMessage("Could not write the sanitized report.")
             exit(2)
         }
-        exit(report.correlation == .passed && report.restart == .passed ? 0 : 2)
+        exit(report.correlation == .passed && report.restart == .passed && report.companion == .passed ? 0 : 2)
     }
 
     private static func execute(_ options: ProbeOptions) async -> ProbeReport {
@@ -127,6 +127,10 @@ enum ProbeMain {
         do {
             try await ProbeObservation.validateArtifact(options.executable)
             _ = try ProbeObservation.readKey(options.keyFile)
+            let repository = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+                .appendingPathComponent("../../../..").standardizedFileURL
+            probeMessage("Compiling the data-only companion before requesting credentials.")
+            let companionExecutable = try await ProbeEvidence.prepareCompanion(repository: repository)
             let versionChild = try ProbeChild(executable: options.executable, arguments: ["--version"])
             let version = try await versionChild.wait(seconds: 30)
             guard version.status == 0 else { throw ProbeError(reason: .processFailed) }
@@ -171,10 +175,21 @@ enum ProbeMain {
                 baseline: restartBaseline, name: name, knownDeviceID: id)
             report.restart = .passed
             report.samples += revalidated.samples.count
+            guard let track = revalidated.samples.last?.soloist.itemURI else { throw ProbeError(reason: .invalidResponse) }
+            probeMessage("Fetching lyrics, radio and artist data while observing Soloist for at least 30 seconds.")
+            async let observed: Void = monitorCompanion(probe: restarted, http: http,
+                webToken: web.accessToken, evidence: revalidated)
+            async let services = ProbeEvidence.runCompanion(accessToken: streaming.accessToken,
+                trackURI: track, executable: companionExecutable)
+            let (result, _) = try await (services, observed)
+            report.services = result
+            report.companion = result.allAvailable ? .passed : .inconclusive(reason: .servicesUnavailable)
+            probeMessage("State observations do not prove audible continuity. Record whether you heard uninterrupted audio separately.")
         } catch {
             let failure = error as? ProbeError ?? ProbeError(reason: error is CancellationError ? .cancelled : .processFailed)
             if report.correlation != .passed { report.correlation = .inconclusive(reason: failure.reason) }
-            else { report.restart = .inconclusive(reason: failure.reason) }
+            else if report.restart != .passed { report.restart = .inconclusive(reason: failure.reason) }
+            else { report.companion = .inconclusive(reason: failure.reason) }
             report.httpStatus = failure.status
             report.retryAfterSeconds = failure.retryAfter
         }
