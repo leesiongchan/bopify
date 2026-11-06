@@ -67,6 +67,25 @@ private func temporaryDirectory() throws -> URL {
     #expect(throws: ProbeError.self) { try ProbeObservation.readKey(link) }
 }
 
+@Test func restartingReusesItsExistingPrivateDirectories() async throws {
+    let root = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let key = root.appendingPathComponent("key")
+    try Data("sentinel-key".utf8).write(to: key)
+    try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: key.path)
+    for _ in 0..<2 {
+        do {
+            _ = try await ProbeObservation.startSoloist(executable: URL(fileURLWithPath: "/usr/bin/false"),
+                keyFile: key, directory: root, deviceName: "probe")
+            Issue.record("A failing child unexpectedly became ready")
+        } catch let error as ProbeError {
+            #expect(error.reason == .processFailed)
+        } catch {
+            Issue.record("Directory preparation prevented restart")
+        }
+    }
+}
+
 @Test func trustRejectionPreventsExecutingTheSelectedArtifact() async throws {
     let root = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }
@@ -96,6 +115,63 @@ private func temporaryDirectory() throws -> URL {
     _ = try state.apply(Data(#"{"type":"auth_state","logged_in":false,"is_active":false,"device_name":"probe"}"#.utf8), at: date)
     #expect(state.authGeneration > first.authGeneration)
     #expect(!state.paired)
+}
+
+@Test func queuedFramesDoNotBecomeFreshResponsesToLaterQueries() throws {
+    var state = SoloistWireState(generation: UUID())
+    let date = Date(timeIntervalSince1970: 100)
+    _ = try state.apply(Data(#"{"type":"auth_state","logged_in":true,"is_active":true}"#.utf8), at: date)
+    let frame = Data(#"{"type":"playback_state","status":"playing","item":{"uri":"spotify:track:1111111111111111111111"},"is_active":true,"position":{"position_ms":1000,"timestamp_ms":1000,"speed":1}}"#.utf8)
+    _ = try state.apply(frame, at: date)
+    #expect(state.snapshot(after: date.addingTimeInterval(1)) == nil)
+    let stillFresh = try #require(state.snapshot(after: date.addingTimeInterval(-1)))
+    #expect(stillFresh.positionMs == 100_000, "Old position anchors remain valid interpolation inputs")
+    _ = try state.apply(Data(#"{"type":"device_changed","is_active":false,"device_name":"probe"}"#.utf8), at: date)
+    #expect(state.latest?.active == false)
+    _ = try state.apply(Data(#"{"type":"auth_state","logged_in":false,"is_active":false}"#.utf8), at: date)
+    #expect(state.latest == nil)
+}
+
+private actor ObservationEvents {
+    var started = false
+    var ended = false
+    var observedAfterEnd = false
+    var ticks = 0
+    func start() { started = true }
+    func end() { ended = true }
+    func tick() { ticks += 1; if ended { observedAfterEnd = true } }
+}
+
+@Test func observationContinuesUntilASlowCompanionEnds() async throws {
+    let events = ObservationEvents()
+    let result = try await runObservedCompanion(minimumDuration: .milliseconds(20), interval: .milliseconds(2), operation: {
+        await events.start()
+        try await Task.sleep(for: .milliseconds(80))
+        await events.end()
+        return 42
+    }, observe: { await events.tick() })
+    #expect(result == 42)
+    #expect(await events.observedAfterEnd)
+    #expect(await events.ticks > 2)
+}
+
+@Test func observationFailureCancelsAndJoinsTheAuthenticatedOperationPromptly() async throws {
+    let events = ObservationEvents()
+    let start = ContinuousClock.now
+    await #expect(throws: ProbeError.self) {
+        try await runObservedCompanion(minimumDuration: .seconds(30), interval: .milliseconds(2), operation: {
+            await events.start()
+            do { try await Task.sleep(for: .seconds(10)) }
+            catch { await events.end(); throw error }
+            await events.end()
+            return 42
+        }, observe: {
+            while await !events.started { await Task.yield() }
+            throw ProbeError(reason: .ownershipChanged)
+        })
+    }
+    #expect(start.duration(to: .now) < .seconds(1))
+    #expect(await events.ended)
 }
 
 @Test func cleanupStopsOnlyItsOwnedProcess() async throws {

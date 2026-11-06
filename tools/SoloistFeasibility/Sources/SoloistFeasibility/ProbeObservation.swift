@@ -100,8 +100,13 @@ struct ProbeObservation: Sendable {
                              deviceName: String) async throws -> OwnedSoloistProbe {
         let key = try readKey(keyFile)
         for name in ["data", "cache"] {
-            try FileManager.default.createDirectory(at: directory.appendingPathComponent(name),
-                withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+            let path = directory.appendingPathComponent(name).path
+            guard mkdir(path, 0o700) == 0 || errno == EEXIST else { throw ProbeError(reason: .invalidInput) }
+            var info = stat()
+            guard lstat(path, &info) == 0, info.st_mode & S_IFMT == S_IFDIR,
+                  info.st_uid == getuid(), info.st_mode & 0o777 == 0o700 else {
+                throw ProbeError(reason: .invalidInput)
+            }
         }
         let dataDirectory = directory.appendingPathComponent("data")
         let child = try ProbeChild(executable: executable, arguments: [
@@ -115,7 +120,9 @@ struct ProbeObservation: Sendable {
                 try Task.checkCancellation()
                 guard await child.isRunning else { throw ProbeError(reason: .processFailed) }
                 if let url = try? endpoint(in: dataDirectory) {
-                    return OwnedSoloistProbe(child: child, endpoint: url)
+                    let probe = OwnedSoloistProbe(child: child, endpoint: url)
+                    await probe.begin()
+                    return probe
                 }
                 try await Task.sleep(for: .milliseconds(50))
             }
@@ -131,6 +138,13 @@ struct SoloistWireState {
     let generation: UUID
     private(set) var authGeneration: UInt64 = 0
     private(set) var paired = false
+    private(set) var active = false
+    private(set) var latest: SoloistProbeSnapshot?
+
+    func snapshot(after requestedAt: Date) -> SoloistProbeSnapshot? {
+        guard let latest, latest.observedAt >= requestedAt else { return nil }
+        return latest
+    }
 
     mutating func apply(_ data: Data, at date: Date) throws -> SoloistProbeSnapshot? {
         guard data.count <= 1_048_576,
@@ -140,13 +154,46 @@ struct SoloistWireState {
             guard let loggedIn = object["logged_in"] as? Bool else { throw ProbeError(reason: .invalidResponse) }
             authGeneration &+= 1
             paired = loggedIn
+            active = object["is_active"] as? Bool ?? false
+            latest = nil
             return nil
         }
         if type == "error" { throw ProbeError(reason: paired ? .invalidResponse : .notPaired) }
+        if type == "device_changed" {
+            guard let value = object["is_active"] as? Bool else { throw ProbeError(reason: .invalidResponse) }
+            active = value
+            latest?.active = value
+            return nil
+        }
+        if type == "playback_changed" {
+            guard let status = object["status"] as? String else { throw ProbeError(reason: .invalidResponse) }
+            latest?.playing = status == "playing"
+            return nil
+        }
+        if type == "track_changed" { latest = nil; return nil }
+        if type == "position_sync", var snapshot = latest {
+            let position = try position(in: object, at: date)
+            snapshot.positionMs = position.milliseconds
+            snapshot.playing = snapshot.playing && position.speed > 0
+            snapshot.observedAt = date
+            latest = snapshot
+            return snapshot
+        }
         guard type == "playback_state" else { return nil }
         guard paired, let active = object["is_active"] as? Bool,
-              let status = object["status"] as? String,
-              let position = object["position"] as? [String: Any],
+              let status = object["status"] as? String else { throw ProbeError(reason: .invalidResponse) }
+        let position = try position(in: object, at: date)
+        let item = object["item"] as? [String: Any]
+        let snapshot = SoloistProbeSnapshot(generation: generation, authGeneration: authGeneration, paired: paired,
+            active: active, itemURI: item?["uri"] as? String, positionMs: position.milliseconds,
+            playing: status == "playing" && position.speed > 0, observedAt: date)
+        self.active = active
+        latest = snapshot
+        return snapshot
+    }
+
+    private func position(in object: [String: Any], at date: Date) throws -> (milliseconds: Double, speed: Double) {
+        guard let position = object["position"] as? [String: Any],
               let ms = position["position_ms"] as? Double,
               let timestamp = position["timestamp_ms"] as? Double,
               let speed = position["speed"] as? Double,
@@ -154,10 +201,7 @@ struct SoloistWireState {
               (0...4).contains(speed) else { throw ProbeError(reason: .invalidResponse) }
         let elapsed = date.timeIntervalSince1970 * 1000 - timestamp
         guard elapsed >= -2000, elapsed < 86_400_000 else { throw ProbeError(reason: .staleObservation) }
-        let item = object["item"] as? [String: Any]
-        return SoloistProbeSnapshot(generation: generation, authGeneration: authGeneration, paired: paired,
-            active: active, itemURI: item?["uri"] as? String, positionMs: ms + max(0, elapsed) * speed,
-            playing: status == "playing" && speed > 0, observedAt: date)
+        return (ms + max(0, elapsed) * speed, speed)
     }
 }
 
@@ -167,6 +211,8 @@ actor OwnedSoloistProbe {
     private let session: URLSession
     private let socket: URLSessionWebSocketTask
     private var state: SoloistWireState
+    private var receiver: Task<Void, Never>?
+    private var failure: ProbeError?
 
     init(child: ProbeChild, endpoint: URL) {
         self.child = child
@@ -177,22 +223,35 @@ actor OwnedSoloistProbe {
         socket.resume()
     }
 
+    func begin() {
+        guard receiver == nil else { return }
+        let socket = self.socket
+        receiver = Task { [weak self] in
+            do {
+                while !Task.isCancelled {
+                    let message = try await socket.receive()
+                    let receivedAt = Date()
+                    let data: Data
+                    switch message {
+                    case let .data(value): data = value
+                    case let .string(value): data = Data(value.utf8)
+                    @unknown default: throw ProbeError(reason: .invalidResponse)
+                    }
+                    try await self?.ingest(data, at: receivedAt)
+                }
+            } catch {
+                await self?.fail(error as? ProbeError ?? ProbeError(reason: .observationLost))
+            }
+        }
+    }
+
     func snapshot() async throws -> SoloistProbeSnapshot {
         let socket = self.socket
+        begin()
         do {
             return try await withProbeTimeout(seconds: 30) { [self] in
                 try await withTaskCancellationHandler {
-                    try await socket.send(.string(#"{"type":"command","command":"get_state"}"#))
-                    while true {
-                        let message = try await socket.receive()
-                        let data: Data
-                        switch message {
-                        case let .data(value): data = value
-                        case let .string(value): data = Data(value.utf8)
-                        @unknown default: throw ProbeError(reason: .invalidResponse)
-                        }
-                        if let snapshot = try await self.apply(data) { return snapshot }
-                    }
+                    try await self.requestSnapshot()
                 } onCancel: { socket.cancel(with: .goingAway, reason: nil) }
             }
         } catch let error as ProbeError { throw error }
@@ -200,11 +259,32 @@ actor OwnedSoloistProbe {
         catch { throw ProbeError(reason: .observationLost) }
     }
 
-    private func apply(_ data: Data) throws -> SoloistProbeSnapshot? { try state.apply(data, at: .now) }
+    private func requestSnapshot() async throws -> SoloistProbeSnapshot {
+        let requestedAt = Date()
+        try await socket.send(.string(#"{"type":"command","command":"get_state"}"#))
+        while true {
+            try Task.checkCancellation()
+            if let failure { throw failure }
+            guard await child.isRunning else { throw ProbeError(reason: .processFailed) }
+            if state.authGeneration > 0 && !state.paired { throw ProbeError(reason: .notPaired) }
+            if state.latest != nil && !state.active { throw ProbeError(reason: .ownershipChanged) }
+            if let snapshot = state.snapshot(after: requestedAt) { return snapshot }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
+    private func ingest(_ data: Data, at date: Date) throws {
+        do { _ = try state.apply(data, at: date) }
+        catch let error as ProbeError where error.reason == .notPaired { /* Waiting for initial pairing. */ }
+    }
+
+    private func fail(_ error: ProbeError) { failure = error }
 
     func stop() async {
         socket.cancel(with: .goingAway, reason: nil)
+        receiver?.cancel()
         session.invalidateAndCancel()
+        await receiver?.value
         await child.stop()
     }
 }

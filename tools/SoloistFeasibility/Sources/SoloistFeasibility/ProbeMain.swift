@@ -37,36 +37,38 @@ func collectCorrelation(probe: OwnedSoloistProbe, http: ProbeObservation, stream
     knownDeviceID: String? = nil) async throws -> CorrelationEvidence {
     let deadline = Date().addingTimeInterval(300)
     var samples: [ProbeSample] = []
+    var attempt = CorrelationAttempt()
     var lastReason = ProbeReason.timeout
     while Date() < deadline {
         try Task.checkCancellation()
         do {
-            async let local = probe.snapshot()
-            async let remote = http.playback(accessToken: webToken)
-            async let devices = http.devices(accessToken: webToken)
-            let (snapshot, playback, discovered) = try await (local, remote, devices)
-            guard let playback else {
+            let (sample, discovered) = try await readProbeState(probe: probe, http: http, webToken: webToken,
+                expectedID: attempt.deviceID, expectedAuth: attempt.authGeneration)
+            guard let sample else {
+                try attempt.record(nil, candidateID: nil)
                 try await Task.sleep(for: .milliseconds(500))
                 continue
             }
-            if let previous = samples.last,
-               previous.soloist.authGeneration != snapshot.authGeneration || previous.soloist.itemURI != snapshot.itemURI {
+            if let previous = samples.last, previous.soloist.itemURI != sample.soloist.itemURI {
                 samples = []
             }
-            samples.append(ProbeSample(soloist: snapshot, web: playback))
+            samples.append(sample)
             samples = Array(samples.suffix(2))
             let evidence = CorrelationEvidence(streamingAccountID: streamingAccountID, webAccountID: webAccountID,
                 beforeDevices: baseline, afterDevices: discovered, expectedName: name, generation: probe.generation,
                 knownDeviceID: knownDeviceID, processRunning: await probe.child.isRunning,
                 socketConnected: true, samples: samples, now: .now)
+            try attempt.record(sample, candidateID: evidence.candidates.count == 1 ? evidence.candidates[0].id : nil)
             switch evaluateCorrelation(evidence) {
             case .passed: return evidence
             case let .failed(reason): throw ProbeError(reason: reason)
-            case let .inconclusive(reason): lastReason = reason
+            case let .inconclusive(reason):
+                if attempt.established && reason != .notAdvancing { throw ProbeError(reason: reason) }
+                lastReason = reason
             }
-        } catch let error as ProbeError where error.reason == .notPaired {
+        } catch let error as ProbeError where !attempt.established && [.notPaired, .ownershipChanged].contains(error.reason) {
             samples = []
-            lastReason = .notPaired
+            lastReason = error.reason
         }
         try await Task.sleep(for: .milliseconds(500))
     }
@@ -177,11 +179,12 @@ enum ProbeMain {
             report.samples += revalidated.samples.count
             guard let track = revalidated.samples.last?.soloist.itemURI else { throw ProbeError(reason: .invalidResponse) }
             probeMessage("Fetching lyrics, radio and artist data while observing Soloist for at least 30 seconds.")
-            async let observed: Void = monitorCompanion(probe: restarted, http: http,
+            let observer = CompanionObservation(probe: restarted, http: http,
                 webToken: web.accessToken, evidence: revalidated)
-            async let services = ProbeEvidence.runCompanion(accessToken: streaming.accessToken,
-                trackURI: track, executable: companionExecutable)
-            let (result, _) = try await (services, observed)
+            let result = try await runObservedCompanion(operation: {
+                try await ProbeEvidence.runCompanion(accessToken: streaming.accessToken,
+                    trackURI: track, executable: companionExecutable)
+            }, observe: { try await observer.check() })
             report.services = result
             report.companion = result.allAvailable ? .passed : .inconclusive(reason: .servicesUnavailable)
             probeMessage("State observations do not prove audible continuity. Record whether you heard uninterrupted audio separately.")

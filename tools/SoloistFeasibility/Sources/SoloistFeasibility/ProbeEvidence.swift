@@ -79,6 +79,60 @@ struct CorrelationEvidence: Sendable {
     }
 }
 
+/// Initial selection may take time; an established attempt must not survive a takeover or re-pairing.
+struct CorrelationAttempt {
+    private(set) var deviceID: String?
+    private(set) var authGeneration: UInt64?
+    private var generation: UUID?
+    var established: Bool { deviceID != nil }
+
+    mutating func record(_ sample: ProbeSample?, candidateID: String?) throws {
+        if established {
+            guard let sample, sample.soloist.paired, sample.soloist.active,
+                  sample.web.deviceID == deviceID else { throw ProbeError(reason: .ownershipChanged) }
+            guard sample.soloist.authGeneration == authGeneration, sample.soloist.generation == generation else {
+                throw ProbeError(reason: .generationChanged)
+            }
+        } else if let sample, let candidateID, sample.soloist.paired, sample.soloist.active,
+                  sample.web.deviceID == candidateID {
+            deviceID = candidateID
+            authGeneration = sample.soloist.authGeneration
+            generation = sample.soloist.generation
+        }
+    }
+}
+
+private enum ProbeRead: Sendable {
+    case local(SoloistProbeSnapshot)
+    case web(ProbePlayback?)
+    case devices(Set<ProbeDevice>)
+}
+
+func readProbeState(probe: OwnedSoloistProbe, http: ProbeObservation, webToken: String,
+    expectedID: String? = nil, expectedAuth: UInt64? = nil) async throws -> (ProbeSample?, Set<ProbeDevice>) {
+    try await withThrowingTaskGroup(of: ProbeRead.self) { group in
+        group.addTask { .local(try await probe.snapshot()) }
+        group.addTask { .web(try await http.playback(accessToken: webToken)) }
+        group.addTask { .devices(try await http.devices(accessToken: webToken)) }
+        defer { group.cancelAll() }
+        var local: SoloistProbeSnapshot?, web: ProbePlayback?, devices: Set<ProbeDevice> = []
+        for try await result in group {
+            switch result {
+            case let .local(value):
+                if expectedID != nil && (!value.paired || !value.active) { throw ProbeError(reason: .ownershipChanged) }
+                if let expectedAuth, value.authGeneration != expectedAuth { throw ProbeError(reason: .generationChanged) }
+                local = value
+            case let .web(value):
+                if let expectedID, value?.deviceID != expectedID { throw ProbeError(reason: .ownershipChanged) }
+                web = value
+            case let .devices(value): devices = value
+            }
+        }
+        guard let local, let web else { return (nil, devices) }
+        return (ProbeSample(soloist: local, web: web), devices)
+    }
+}
+
 func evaluateCorrelation(_ evidence: CorrelationEvidence) -> ProbeVerdict {
     guard let first = evidence.streamingAccountID, !first.isEmpty,
           let second = evidence.webAccountID, !second.isEmpty else {
@@ -225,30 +279,78 @@ enum ProbeEvidence {
     }
 }
 
-func monitorCompanion(probe: OwnedSoloistProbe, http: ProbeObservation, webToken: String,
-    evidence initial: CorrelationEvidence) async throws {
-    let deadline = Date().addingTimeInterval(30)
-    let expectedIDs = Set(initial.afterDevices.compactMap(\.id))
-    let expectedAuth = initial.samples.last?.soloist.authGeneration
-    var evidence = initial
-    evidence.knownDeviceID = initial.candidates.first?.id
-    guard evidence.knownDeviceID != nil else { throw ProbeError(reason: .ambiguousDevice) }
-    while Date() < deadline {
-        async let local = probe.snapshot()
-        async let remote = http.playback(accessToken: webToken)
-        async let discovered = http.devices(accessToken: webToken)
-        let (snapshot, playback, devices) = try await (local, remote, discovered)
-        guard let playback, snapshot.paired, snapshot.active, playback.deviceID == evidence.knownDeviceID,
-              snapshot.authGeneration == expectedAuth else { throw ProbeError(reason: .ownershipChanged) }
+actor CompanionObservation {
+    private let probe: OwnedSoloistProbe
+    private let http: ProbeObservation
+    private let webToken: String
+    private let expectedIDs: Set<String>
+    private let expectedAuth: UInt64?
+    private var evidence: CorrelationEvidence
+
+    init(probe: OwnedSoloistProbe, http: ProbeObservation, webToken: String, evidence: CorrelationEvidence) {
+        self.probe = probe
+        self.http = http
+        self.webToken = webToken
+        expectedIDs = Set(evidence.afterDevices.compactMap(\.id))
+        expectedAuth = evidence.samples.last?.soloist.authGeneration
+        self.evidence = evidence
+        self.evidence.knownDeviceID = evidence.candidates.first?.id
+    }
+
+    func check() async throws {
+        guard let id = evidence.knownDeviceID else { throw ProbeError(reason: .ambiguousDevice) }
+        let (sample, devices) = try await readProbeState(probe: probe, http: http, webToken: webToken,
+            expectedID: id, expectedAuth: expectedAuth)
+        guard let sample else { throw ProbeError(reason: .observationLost) }
         guard Set(devices.compactMap(\.id)).isSubset(of: expectedIDs) else { throw ProbeError(reason: .ambiguousDevice) }
-        if evidence.samples.last?.soloist.itemURI != snapshot.itemURI { evidence.samples = [] }
-        evidence.samples.append(ProbeSample(soloist: snapshot, web: playback))
+        if evidence.samples.last?.soloist.itemURI != sample.soloist.itemURI { evidence.samples = [] }
+        evidence.samples.append(sample)
         evidence.samples = Array(evidence.samples.suffix(2))
         evidence.afterDevices = devices
         evidence.processRunning = await probe.child.isRunning
         evidence.now = .now
         let verdict = evaluateCorrelation(evidence)
         if evidence.samples.count >= 2 && verdict != .passed { throw ProbeError(reason: .observationLost) }
-        try await Task.sleep(for: .milliseconds(500))
+    }
+}
+
+private actor CompanionCompletion {
+    var finished = false
+    func finish() { finished = true }
+}
+
+private enum CompanionEvent<Value: Sendable>: Sendable {
+    case completed(Value)
+    case observed
+}
+
+/// A failure from either side cancels and joins the other, including its owned process cleanup.
+func runObservedCompanion<Value: Sendable>(minimumDuration: Duration = .seconds(30),
+    interval: Duration = .milliseconds(500), operation: @escaping @Sendable () async throws -> Value,
+    observe: @escaping @Sendable () async throws -> Void) async throws -> Value {
+    let completion = CompanionCompletion()
+    let deadline = ContinuousClock.now.advanced(by: minimumDuration)
+    return try await withThrowingTaskGroup(of: CompanionEvent<Value>.self) { group in
+        group.addTask {
+            let value = try await operation()
+            await completion.finish()
+            return .completed(value)
+        }
+        group.addTask {
+            while true {
+                // Check completion before observing so the last observation starts after child termination.
+                let finished = await completion.finished
+                try await observe()
+                if finished && ContinuousClock.now >= deadline { return .observed }
+                try await Task.sleep(for: interval)
+            }
+        }
+        defer { group.cancelAll() }
+        var value: Value?
+        for try await event in group {
+            if case let .completed(result) = event { value = result }
+        }
+        guard let value else { throw ProbeError(reason: .companionFailed) }
+        return value
     }
 }

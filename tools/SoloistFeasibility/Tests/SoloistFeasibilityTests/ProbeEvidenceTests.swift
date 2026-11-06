@@ -116,6 +116,19 @@ func validEvidence() -> CorrelationEvidence {
     #expect(evaluateCorrelation(e) == .passed)
 }
 
+@Test func anEstablishedCollectionAttemptCannotRecoverSilentlyFromTakeoverOrReauthentication() throws {
+    let sample = validEvidence().samples[0]
+    for next in ["phone", "unpaired", "reauthenticated"] {
+        var attempt = CorrelationAttempt()
+        try attempt.record(sample, candidateID: "owned-device")
+        var changed = sample
+        if next == "phone" { changed.web.deviceID = "phone" }
+        if next == "unpaired" { changed.soloist.paired = false }
+        if next == "reauthenticated" { changed.soloist.authGeneration += 1 }
+        #expect(throws: ProbeError.self) { try attempt.record(changed, candidateID: "owned-device") }
+    }
+}
+
 @Test func reportDoesNotContainAccountsDevicesOrContent() throws {
     let report = ProbeReport(correlation: evaluateCorrelation(validEvidence()))
     let text = String(decoding: try JSONEncoder().encode(report), as: UTF8.self)
