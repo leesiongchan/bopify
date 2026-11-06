@@ -1,13 +1,13 @@
 # Soloist preferred playback with librespot support
 
 Date: 2026-11-06
-Status: Proposed; approach selected, design approval pending.
+Status: Approved by the user on 2026-11-06 for feasibility planning. Live feasibility remains unverified.
 
 ## Intent and decisions
 
 Use Soloist whenever possible, with librespot filling gaps. Preserve Bopify's existing player, library, lyrics, queue, shortcuts, and Spotify Connect behavior as far as the selected providers can faithfully support them.
 
-The user selected the recommended hybrid approach: Soloist produces audio and handles its supported controls, librespot supplies missing services and playback fallback, and Spotify's Web API assists controls that can keep audio on Soloist. The user has not yet approved this document or implementation.
+The user selected the recommended hybrid approach: Soloist produces audio and handles its supported controls, librespot supplies missing services and playback fallback, and Spotify's Web API assists controls that can keep audio on Soloist. The user subsequently approved this document and planning its initial feasibility checks. Broader implementation remains gated on the results.
 
 The routing, recovery, installation, and queue policies below are the author's proposed defaults. They must not be represented as separately requested user decisions.
 
