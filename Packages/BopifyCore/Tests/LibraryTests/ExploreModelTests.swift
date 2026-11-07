@@ -143,7 +143,7 @@ struct ExploreModelTests {
         #expect(await history.topCalls == 4)
     }
 
-    @Test func requestsEachStationOnceAndPlaysFromTheMix() async {
+    @Test func requestsEachStationOnceAndPlaysTheExactSelectedTrack() async {
         let history = FakeHistory()
         let a = seed("track", "a"), b = seed("artist", "b")
         await history.setTop(.tracks, [a])
@@ -160,7 +160,7 @@ struct ExploreModelTests {
         #expect(explore.selectedURI == testTrack("y").uri)
         #expect(radio.requests == [a.uri, b.uri])
         #expect(explore.playRequest(for: testTrack("y")) ==
-                PlayRequest(contextURI: SpotifyURI("spotify:playlist:ma")!, startTrackURI: testTrack("y").uri))
+                PlayRequest(contextURI: testTrack("y").uri))
     }
 
     @Test func dropsAStationThatArrivesAfterAnotherChipWasChosen() async {

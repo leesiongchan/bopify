@@ -15,7 +15,6 @@ public final class RecentsModel: CoverFlowSource {
     private var visible: Bool { reveals > 0 }
     @ObservationIgnored private let service: any ListeningHistoryService
     @ObservationIgnored private let now: () -> Date
-    @ObservationIgnored private var contexts: [SpotifyURI: SpotifyURI] = [:]
     @ObservationIgnored private var loadedAt: Date?
     // Counted, not a flag: on a quick tab round trip the old view's hide can land after the new view's reveal.
     @ObservationIgnored private var reveals = 0
@@ -60,7 +59,6 @@ public final class RecentsModel: CoverFlowSource {
         pending = nil
         tracks = []
         selectedURI = nil
-        contexts = [:]
         loadedAt = nil
         isLoading = false
         error = nil
@@ -68,10 +66,9 @@ public final class RecentsModel: CoverFlowSource {
         BopifyLog.library.debug("recents cleared")
     }
 
-    /// Plays from the context Spotify reported for that play, else the track alone.
+    /// The selected song plays directly; a historical context cannot identify its current position.
     public func playRequest(for track: Track) -> PlayRequest {
-        guard let context = contexts[track.uri] else { return PlayRequest(contextURI: track.uri) }
-        return PlayRequest(contextURI: context, startTrackURI: track.uri)
+        PlayRequest(contextURI: track.uri)
     }
 
     private func load() async {
@@ -95,7 +92,6 @@ public final class RecentsModel: CoverFlowSource {
             guard generation == current, !Task.isCancelled else { return }
             var seen = Set<SpotifyURI>()
             let newest = plays.filter { seen.insert($0.track.uri).inserted }
-            contexts = Dictionary(uniqueKeysWithValues: newest.compactMap { play in play.contextURI.map { (play.track.uri, $0) } })
             tracks = newest.map(\.track)
             if !tracks.contains(where: { $0.uri == selectedURI }) { selectedURI = tracks.first?.uri }
             loadedAt = now()

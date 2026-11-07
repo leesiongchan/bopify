@@ -55,6 +55,7 @@ final class SoloistPlaybackController {
         authorize: @escaping @MainActor () async throws -> Void,
         webToken: @escaping @Sendable () async throws -> String = { throw PlayerError.authDenied },
         streamingToken: @escaping @Sendable () async throws -> String = { throw PlayerError.authDenied },
+        dataToken: (@Sendable () async throws -> String)? = nil,
         install: @escaping @MainActor (Bool, @escaping @Sendable (SoloistInstallProgress) -> Void) async throws -> URL,
         start: (@MainActor (SoloistLaunchRequest) async throws -> any PreparedPlaybackEngine)? = nil,
         clearSession: @escaping @MainActor () throws -> Void = { try SoloistEngine.clearStoredSession() }) {
@@ -66,7 +67,7 @@ final class SoloistPlaybackController {
         self.start = start ?? { request in
             let name = "Bopify \(UUID().uuidString.prefix(8))"
             let engine = try await SoloistEngine.launch(executable: request.executable, key: request.key, name: name,
-                webToken: webToken, streamingToken: streamingToken, progress: request.progress)
+                webToken: webToken, streamingToken: streamingToken, dataToken: dataToken, progress: request.progress)
             request.available(engine)
             do { try await engine.preparePairing(); return engine }
             catch { await engine.shutdown(); throw error }

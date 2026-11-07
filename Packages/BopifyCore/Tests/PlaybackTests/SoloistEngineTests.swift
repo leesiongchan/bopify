@@ -26,7 +26,9 @@ private final class SoloistSocketFixture: SoloistTransport, @unchecked Sendable 
     private var uri = "spotify:track:6rqhFgbbKwnb9MLmUQDhG6"
     private var volume: Double = 0
     private var active = true
+    private var playbackStatus = "playing"
     func setActive(_ value: Bool) { lock.withLock { active = value } }
+    func setPlaybackStatus(_ value: String) { lock.withLock { playbackStatus = value } }
     var currentURI: String { lock.withLock { uri } }
     func changeTrack() { lock.withLock { uri = "spotify:track:11dFghVXANMlKmJXsNCbNl" } }
     var position: Double { 1000 + Date().timeIntervalSince(anchor) * 1000 }
@@ -37,7 +39,7 @@ private final class SoloistSocketFixture: SoloistTransport, @unchecked Sendable 
             lock.withLock { sent.append(command) }
             if command == "set_volume", let value = value?["volume"] as? Double { lock.withLock { volume = value } }
             if command == "get_state" {
-                try emit(["type": "playback_state", "is_active": lock.withLock { active }, "status": "playing", "volume": lock.withLock { volume },
+                try emit(["type": "playback_state", "is_active": lock.withLock { active }, "status": lock.withLock { playbackStatus }, "volume": lock.withLock { volume },
                     "item": ["uri": currentURI, "decorations": ["identity": ["name": "Fixture"], "playback": ["duration_ms": 100000]]],
                     "position": ["position_ms": position, "timestamp_ms": Date().timeIntervalSince1970 * 1000, "speed": 1],
                     "available_actions": ["pause": [:], "play": [:], "seek": [:]]])
@@ -52,13 +54,21 @@ private final class SoloistSocketFixture: SoloistTransport, @unchecked Sendable 
 
 private final class SoloistHTTPFixture: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var status = 200
+    nonisolated(unsafe) static var playerStatus: Int?
     nonisolated(unsafe) static var handler: (@Sendable (URLRequest) -> Data)?
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var requests: [String] = []
+    static var paths: [String] { lock.withLock { requests } }
+    static func reset() { lock.withLock { requests = [] } }
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func stopLoading() {}
     override func startLoading() {
+        let path = request.url?.path ?? ""
+        Self.lock.withLock { Self.requests.append(path) }
         let data = Self.handler?(request) ?? Data()
-        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: Self.status, httpVersion: nil, headerFields: ["Retry-After": "3600"])!, cacheStoragePolicy: .notAllowed)
+        let status = path.hasPrefix("/v1/me/player") ? Self.playerStatus ?? Self.status : Self.status
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: ["Retry-After": "3600"])!, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: data)
         client?.urlProtocolDidFinishLoading(self)
     }
@@ -85,15 +95,19 @@ private func engineFixture(webStatus: Int = 200, diagnosticFailure: SoloistPlayb
     pairingPort: UInt16? = nil, publisherFactory: SoloistPairingPublisherFactory? = nil,
     webToken: @escaping @Sendable () async throws -> String = { "fixture" },
     streamingToken: @escaping @Sendable () async throws -> String = { "fixture" },
+    dataToken: (@Sendable () async throws -> String)? = nil,
+    playerStatus: Int? = nil, profile: [String: String]? = nil,
     serviceFactory: @escaping @Sendable (String) async throws -> any SoloistDataServices = { _ in throw PlayerError.networkUnavailable }) -> (SoloistEngine, SoloistChildFixture, SoloistSocketFixture) {
     let child = SoloistChildFixture(diagnosticFailure: diagnosticFailure, pairingPort: pairingPort), socket = SoloistSocketFixture()
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [SoloistHTTPFixture.self]
     SoloistHTTPFixture.status = webStatus
+    SoloistHTTPFixture.playerStatus = playerStatus
+    SoloistHTTPFixture.reset()
     SoloistHTTPFixture.handler = { request in
         let object: [String: Any]
         if request.url?.path == "/v1/me" {
-            object = ["account_id": request.value(forHTTPHeaderField: "Authorization") == "Bearer replacement" ? "other-account" : "fixture-account"]
+            object = profile ?? ["account_id": request.value(forHTTPHeaderField: "Authorization") == "Bearer replacement" ? "other-account" : "fixture-account"]
         } else if request.url?.path.hasSuffix("devices") == true {
             object = ["devices": [["id": "owned", "name": "Fixture", "is_restricted": false]]]
         } else {
@@ -105,7 +119,7 @@ private func engineFixture(webStatus: Int = 200, diagnosticFailure: SoloistPlayb
     let engine = SoloistEngine(child: child, api: SoloistWebAPI(session: URLSession(configuration: configuration)), baseline: [], name: "Fixture",
         webToken: webToken, streamingToken: streamingToken,
         transportFactory: { _ in socket }, serviceFactory: serviceFactory, progress: { _ in }, verificationInterval: .milliseconds(600),
-        publisherFactory: publisherFactory)
+        publisherFactory: publisherFactory, dataToken: dataToken)
     return (engine, child, socket)
 }
 
@@ -213,7 +227,8 @@ func unpairedSetupSurfacesSDKDiagnosticFailure(failure: SoloistPlaybackError) as
 }
 
 @Test func inactivePairedSoloistCanBeTheDefaultWithoutAutoplayOrWebAccess() async throws {
-    let (engine, child, socket) = engineFixture(webToken: { Issue.record("Inactive Core must not query the Web API"); throw SoloistPlaybackError.rateLimited })
+    let (engine, child, socket) = engineFixture(webToken: { Issue.record("Inactive Core must not request playback scope"); throw SoloistPlaybackError.rateLimited },
+        dataToken: { "fixture" })
     socket.setActive(false)
     let observations = SoloistEventFixture()
     let reader = Task { for await event in engine.events { await observations.append(event) } }
@@ -227,7 +242,9 @@ func unpairedSetupSurfacesSDKDiagnosticFailure(failure: SoloistPlaybackError) as
     #expect(child.stopCount == 1)
 }
 
-@Test func companionRequestsStayGatedUntilBackgroundAccountAndDeviceProofCompletes() async throws {
+// A metadata-only companion has no audio or Connect control. Its account proof
+// must work before playback; device correlation remains a Web playback gate.
+@Test func metadataRequestsWaitForAccountProofAndRemainGatedAfterLogout() async throws {
     let service = CompanionServiceFixture()
     let (engine, _, socket) = engineFixture(serviceFactory: { _ in service })
     await engine.begin()
@@ -236,14 +253,191 @@ func unpairedSetupSurfacesSDKDiagnosticFailure(failure: SoloistPlaybackError) as
     try await engine.adopt(initialVolume: 0.25)
     let uri = SpotifyURI("spotify:track:6rqhFgbbKwnb9MLmUQDhG6")!
     await #expect(throws: LyricFailure.unavailable) { try await engine.requestLyrics(for: uri) }
-    #expect(await service.lyricRequests == 0)
+    #expect(await service.lyricRequests == 1)
     await engine.retryDataServices()
     await #expect(throws: LyricFailure.unavailable) { try await engine.requestLyrics(for: uri) }
-    #expect(await service.lyricRequests == 1)
+    #expect(await service.lyricRequests == 2)
     try socket.emit(["type": "auth_state", "logged_in": false, "is_active": false])
     for _ in 0..<1000 { if await !engine.isPaired { break }; await Task.yield() }
     await #expect(throws: LyricFailure.unavailable) { try await engine.requestLyrics(for: uri) }
-    #expect(await service.lyricRequests == 1)
+    #expect(await service.lyricRequests == 2)
+    await engine.shutdown()
+}
+
+@Test(arguments: ["idle", "paused", "inactive"])
+func metadataWorksBeforePlaybackWithoutPlaybackScope(state: String) async throws {
+    let service = ReadableCompanionFixture()
+    let (engine, _, socket) = engineFixture(webToken: { throw SoloistPlaybackError.authorizationRequired },
+        dataToken: { "fixture" }, serviceFactory: { _ in service })
+    socket.setPlaybackStatus(state == "inactive" ? "playing" : state)
+    socket.setActive(state != "inactive")
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": state != "inactive"])
+    try await engine.preparePairing(); try await engine.adopt(initialVolume: 0.25)
+    let track = SpotifyURI("spotify:track:6rqhFgbbKwnb9MLmUQDhG6")!
+    let radio = try await engine.requestRadio(seed: track)
+    let lyrics = try await engine.requestLyrics(for: track)
+    let artist = try await engine.requestArtistTopTracks(for: track, artistIndex: 0)
+    #expect(radio.contextURI.rawValue == "spotify:playlist:fixture")
+    #expect(lyrics.lines.map(\.text) == ["Fixture lyric"])
+    #expect(artist.trackURI == track)
+    #expect(!SoloistHTTPFixture.paths.contains { $0.hasPrefix("/v1/me/player") })
+    #expect(!socket.commands.contains("play") && !socket.commands.contains("activate"))
+    await engine.shutdown()
+}
+
+@Test func simultaneousMetadataRequestsJoinTheInitialSessionWarmup() async throws {
+    let service = ReadableCompanionFixture(), creation = CompanionCreationGate()
+    let (engine, _, socket) = engineFixture(dataToken: { "fixture" }, serviceFactory: { _ in
+        await creation.wait(); return service
+    })
+    socket.setPlaybackStatus("idle")
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    try await engine.preparePairing(); try await engine.adopt(initialVolume: 0.25)
+    let track = SpotifyURI("spotify:track:6rqhFgbbKwnb9MLmUQDhG6")!
+    let requests = Task {
+        async let radio = engine.requestRadio(seed: track)
+        async let lyrics = engine.requestLyrics(for: track)
+        async let artist = engine.requestArtistTopTracks(for: track, artistIndex: 0)
+        return try await (radio, lyrics, artist)
+    }
+    for _ in 0..<100 { if await creation.starts > 0 { break }; try await Task.sleep(for: .milliseconds(10)) }
+    #expect(await creation.starts == 1)
+    await creation.release()
+    let outcome = await requests.result
+    await engine.shutdown()
+    let (radio, lyrics, artist) = try outcome.get()
+    #expect(radio.contextURI.rawValue == "spotify:playlist:fixture")
+    #expect(lyrics.trackURI == track && artist.trackURI == track)
+    #expect(await creation.starts == 1)
+}
+
+@Test func optionalPlaybackRateLimitDoesNotRevokeMetadata() async throws {
+    let service = ReadableCompanionFixture()
+    let (engine, child, socket) = engineFixture(dataToken: { "fixture" }, playerStatus: 429, serviceFactory: { _ in service })
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    try await engine.preparePairing(); try await engine.adopt(initialVolume: 0.25)
+    await engine.retryDataServices()
+    let track = SpotifyURI("spotify:track:6rqhFgbbKwnb9MLmUQDhG6")!
+    let radio = try await engine.requestRadio(seed: track)
+    #expect(radio.contextURI.rawValue == "spotify:playlist:fixture")
+    #expect(SoloistHTTPFixture.paths.contains("/v1/me/player"))
+    await #expect(throws: SoloistPlaybackError.pairingRequired) {
+        try await engine.load(PlayRequest(contextURI: track, startPositionMs: 1000))
+    }
+    #expect(await service.shutdowns == 0 && child.isRunning)
+    await engine.shutdown()
+}
+
+@Test func changingTheOptionalPlaybackGrantRevokesRemoteObservationButKeepsMetadata() async throws {
+    let token = ServiceTokenFixture(), service = ReadableCompanionFixture()
+    let (engine, _, socket) = engineFixture(webToken: { token.value }, dataToken: { "fixture" }, serviceFactory: { _ in service })
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    try await engine.preparePairing(); try await engine.adopt(initialVolume: 0.25)
+    await engine.retryDataServices()
+    let track = SpotifyURI("spotify:track:6rqhFgbbKwnb9MLmUQDhG6")!
+    try await engine.load(PlayRequest(contextURI: track, startPositionMs: 1000))
+    let before = SoloistHTTPFixture.paths.filter { $0 == "/v1/me/player" }.count
+    token.replace()
+    socket.setActive(false)
+    for _ in 0..<35 { await engine.poll(); await Task.yield() }
+    #expect(SoloistHTTPFixture.paths.filter { $0 == "/v1/me/player" }.count == before)
+    let radio = try await engine.requestRadio(seed: track)
+    #expect(radio.contextURI.rawValue == "spotify:playlist:fixture")
+    #expect(await service.shutdowns == 0)
+    await engine.shutdown()
+}
+
+@Test(arguments: [["id": "legacy-only"], ["account_id": ""]])
+func metadataIdentityNeverSubstitutesALegacyUsername(profile: [String: String]) async throws {
+    let creation = CompanionCreationGate(), service = ReadableCompanionFixture()
+    await creation.release()
+    let (engine, _, socket) = engineFixture(dataToken: { "fixture" }, profile: profile, serviceFactory: { _ in
+        await creation.wait(); return service
+    })
+    socket.setPlaybackStatus("idle")
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    try await engine.preparePairing(); try await engine.adopt(initialVolume: 0.25)
+    await #expect(throws: RadioFailure.unavailable) { _ = try await engine.requestRadio(seed: SpotifyURI("spotify:track:fixture")!) }
+    #expect(await creation.starts == 0)
+    await engine.shutdown()
+}
+
+@Test func mismatchedLibraryAndStreamingAccountsCannotCreateMetadataSession() async throws {
+    let creation = CompanionCreationGate(), service = ReadableCompanionFixture()
+    await creation.release()
+    let (engine, _, socket) = engineFixture(dataToken: { "replacement" }, serviceFactory: { _ in
+        await creation.wait(); return service
+    })
+    socket.setPlaybackStatus("idle")
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    try await engine.preparePairing(); try await engine.adopt(initialVolume: 0.25)
+    await #expect(throws: RadioFailure.unavailable) { _ = try await engine.requestRadio(seed: SpotifyURI("spotify:track:fixture")!) }
+    #expect(await creation.starts == 0)
+    await engine.shutdown()
+}
+
+@Test(arguments: ["radio", "lyrics", "artist"], ["library", "streaming"])
+func metadataReplyCannotOutliveCredentialReplacement(operation: String, credential: String) async throws {
+    let gate = CompanionCreationGate(), token = ServiceTokenFixture(), service = ReadableCompanionFixture()
+    await service.hold(on: gate)
+    let (engine, _, socket) = engineFixture(streamingToken: { credential == "streaming" ? token.value : "fixture" },
+        dataToken: { credential == "library" ? token.value : "fixture" }, serviceFactory: { _ in service })
+    socket.setPlaybackStatus("idle")
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    try await engine.preparePairing(); try await engine.adopt(initialVolume: 0.25)
+    let request = Task { try await metadataRequest(operation, engine: engine) }
+    for _ in 0..<100 { if await gate.starts > 0 { break }; try await Task.sleep(for: .milliseconds(10)) }
+    #expect(await gate.starts == 1)
+    token.replace()
+    await gate.release()
+    await expectUnavailable(request, operation: operation)
+    #expect(await service.shutdowns > 0)
+    await engine.shutdown()
+}
+
+@Test(arguments: ["radio", "lyrics", "artist"])
+func metadataReplyCannotOutliveAuthorizationSuspension(operation: String) async throws {
+    let gate = CompanionCreationGate(), service = ReadableCompanionFixture()
+    await service.hold(on: gate)
+    let (engine, _, socket) = engineFixture(dataToken: { "fixture" }, serviceFactory: { _ in service })
+    socket.setPlaybackStatus("idle")
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    try await engine.preparePairing(); try await engine.adopt(initialVolume: 0.25)
+    let request = Task { try await metadataRequest(operation, engine: engine) }
+    for _ in 0..<100 { if await gate.starts > 0 { break }; try await Task.sleep(for: .milliseconds(10)) }
+    #expect(await gate.starts == 1)
+    await engine.suspendDataServices()
+    await gate.release()
+    await expectUnavailable(request, operation: operation)
+    #expect(await service.shutdowns > 0)
+    await engine.shutdown()
+}
+
+@Test func aMetadataSessionCreatedAfterSuspensionIsDestroyedWithoutPublication() async throws {
+    let gate = CompanionCreationGate(), service = ReadableCompanionFixture()
+    let (engine, _, socket) = engineFixture(dataToken: { "fixture" }, serviceFactory: { _ in await gate.wait(); return service })
+    socket.setPlaybackStatus("idle")
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    try await engine.preparePairing(); try await engine.adopt(initialVolume: 0.25)
+    let request = Task { try await metadataRequest("radio", engine: engine) }
+    for _ in 0..<100 { if await gate.starts > 0 { break }; try await Task.sleep(for: .milliseconds(10)) }
+    #expect(await gate.starts == 1)
+    let suspension = Task { await engine.suspendDataServices() }
+    for _ in 0..<100 { await Task.yield() }
+    await gate.release()
+    await suspension.value
+    await expectUnavailable(request, operation: "radio")
+    #expect(await service.shutdowns > 0)
+    #expect(await service.requests == 0)
     await engine.shutdown()
 }
 
@@ -380,4 +574,56 @@ private final class ServiceTokenFixture: @unchecked Sendable {
     private var token = "fixture"
     var value: String { lock.withLock { token } }
     func replace() { lock.withLock { token = "replacement" } }
+}
+
+private actor CompanionCreationGate {
+    private(set) var starts = 0
+    private var released = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    func wait() async {
+        starts += 1
+        if !released { await withCheckedContinuation { waiters.append($0) } }
+    }
+    func release() { released = true; waiters.forEach { $0.resume() }; waiters = [] }
+}
+
+private actor ReadableCompanionFixture: SoloistDataServices {
+    private(set) var shutdowns = 0
+    private(set) var requests = 0
+    private var gate: CompanionCreationGate?
+    func hold(on gate: CompanionCreationGate) { self.gate = gate }
+    func requestLyrics(for track: SpotifyURI) async throws -> TrackLyrics {
+        requests += 1
+        await gate?.wait()
+        return TrackLyrics(trackURI: track, synchronization: .unsynced, lines: [TrackLyricLine(text: "Fixture lyric", startTimeMs: nil)],
+            provider: "fixture", providerDisplayName: "Fixture", isRightToLeft: false)
+    }
+    func requestRadio(seed: SpotifyURI) async throws -> RadioMix {
+        requests += 1
+        await gate?.wait()
+        return RadioMix(contextURI: SpotifyURI("spotify:playlist:fixture")!, tracks: [])
+    }
+    func requestArtistTopTracks(for track: SpotifyURI, artistIndex: Int) async throws -> ArtistTopTracks {
+        requests += 1
+        await gate?.wait()
+        return ArtistTopTracks(trackURI: track, tracks: [])
+    }
+    func shutdown() { shutdowns += 1 }
+}
+
+private func metadataRequest(_ operation: String, engine: SoloistEngine) async throws -> String {
+    let track = SpotifyURI("spotify:track:6rqhFgbbKwnb9MLmUQDhG6")!
+    switch operation {
+    case "radio": return try await engine.requestRadio(seed: track).contextURI.rawValue
+    case "lyrics": return try await engine.requestLyrics(for: track).trackURI.rawValue
+    default: return try await engine.requestArtistTopTracks(for: track, artistIndex: 0).trackURI.rawValue
+    }
+}
+
+private func expectUnavailable(_ request: Task<String, any Error>, operation: String) async {
+    switch operation {
+    case "radio": await #expect(throws: RadioFailure.unavailable) { _ = try await request.value }
+    case "lyrics": await #expect(throws: LyricFailure.unavailable) { _ = try await request.value }
+    default: await #expect(throws: ArtistTopTracksFailure.unavailable) { _ = try await request.value }
+    }
 }

@@ -6,6 +6,7 @@ import BopifyDomain
 struct PlaybackOnboardingView: View {
     let environment: AppEnvironment
     @State private var key = ""
+    @FocusState private var keyFocused: Bool
     @State private var discovery = SoloistDiscovery()
     private var controller: SoloistPlaybackController { environment.soloist }
     private var busy: Bool {
@@ -22,18 +23,26 @@ struct PlaybackOnboardingView: View {
     private var copy: PlaybackOnboardingCopy { PlaybackOnboardingCopy(phase: controller.phase) }
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(alignment: .leading, spacing: 20) {
             StartupHeading(title: text(LocalizedStringKey(copy.title)),
                            message: text(LocalizedStringKey(copy.message)), isCompact: true)
             if !busy {
                 Link(SoloistResources.string("soloist.getKey"), destination: URL(string: "https://developer.spotify.com/dashboard/soloist")!)
-                    .font(.callout)
-                SecureField(SoloistResources.string(controller.hasSavedKey ? "soloist.replaceKey" : "soloist.key"), text: $key)
-                    .textFieldStyle(.roundedBorder)
-                    .accessibilityLabel(SoloistResources.string("soloist.key"))
-                    .accessibilityIdentifier("soloist.apiKey")
-                    .onSubmit(enable)
-                text("soloist.keyPrivacy").font(.caption).foregroundStyle(.secondary)
+                    .font(.body).foregroundStyle(.tint)
+                StartupInput(label: "soloist.key", labelIdentifier: "soloist.keyLabel",
+                             isFocused: keyFocused, onActivate: { keyFocused = true }) {
+                    SecureField(SoloistResources.string(controller.hasSavedKey ? "soloist.savedKeyPlaceholder" : "soloist.keyPlaceholder"), text: $key)
+                        .focused($keyFocused)
+                        .accessibilityLabel(SoloistResources.string("soloist.key"))
+                        .accessibilityIdentifier("soloist.apiKey")
+                        .onSubmit(enable)
+                }
+                if controller.hasSavedKey {
+                    text("soloist.savedKeyHint").font(.body).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                text("soloist.keyPrivacy").font(.body).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             status
             if busy {
@@ -48,11 +57,11 @@ struct PlaybackOnboardingView: View {
                 }
             }
             Button(SoloistResources.string("onboarding.library")) { environment.showOnboarding(section: .library) }
-                .buttonStyle(.plain).font(.caption).foregroundStyle(.secondary)
+                .buttonStyle(.plain).font(.callout).foregroundStyle(.secondary)
                 .accessibilityIdentifier("onboarding.library")
         }
-        .frame(maxWidth: 340)
-        .multilineTextAlignment(.center)
+        .frame(maxWidth: 380, alignment: .leading)
+        .multilineTextAlignment(.leading)
         .task(id: pairingName) {
             if pairingName != nil { discovery.start() } else { discovery.stop() }
         }
@@ -82,12 +91,14 @@ struct PlaybackOnboardingView: View {
             }
         case .verifying:
             progress("soloist.verifying")
-            text("soloist.verifyHelp").font(.caption).foregroundStyle(.secondary)
+            text("soloist.verifyHelp").font(.body).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             Button(SoloistResources.string("soloist.playHere")) { Task { await controller.playHere() } }
                 .accessibilityIdentifier("soloist.playHere")
         case .prepared: progress("soloist.adopting")
         case .limitedServices:
-            Label(SoloistResources.string("soloist.limitedServices"), systemImage: "info.circle").font(.caption)
+            Label(SoloistResources.string("soloist.limitedServices"), systemImage: "info.circle").font(.body)
+                .fixedSize(horizontal: false, vertical: true)
         case .ready:
             Label(SoloistResources.string("soloist.ready"), systemImage: "checkmark.circle").font(.callout)
         case .reconnecting: progress("soloist.reconnecting")
@@ -173,23 +184,26 @@ struct SoloistPairingGuidance: View {
             switch state {
             case .denied:
                 Text("soloist.discoveryDenied", bundle: SoloistResources.bundle)
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.body).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("soloist.discoveryDenied")
                 Button(SoloistResources.string("soloist.localNetworkSettings"), action: openSettings)
                     .accessibilityIdentifier("soloist.localNetworkSettings")
             case .unavailable:
                 Text("soloist.discoveryUnavailable", bundle: SoloistResources.bundle)
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.body).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("soloist.discoveryUnavailable")
             case .idle, .browsing:
                 Text("soloist.pairingHelp", bundle: SoloistResources.bundle)
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.body).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("soloist.pairingHelp")
             }
             Button(SoloistResources.string("onboarding.openSpotify"), action: openSpotify)
                 .accessibilityIdentifier("soloist.openSpotify")
             Button(SoloistResources.string("soloist.retryDiscovery"), action: onRetry)
-                .buttonStyle(.plain).font(.caption)
+                .buttonStyle(.plain).font(.callout)
                 .accessibilityIdentifier("soloist.retryDiscovery")
                 .disabled(isRetrying)
         }

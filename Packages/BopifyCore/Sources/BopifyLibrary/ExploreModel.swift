@@ -105,8 +105,7 @@ public final class ExploreModel: CoverFlowSource {
     }
 
     public func playRequest(for track: Track) -> PlayRequest {
-        guard let seed = selectedSeed, let mix = mixes[seed] else { return PlayRequest(contextURI: track.uri) }
-        return PlayRequest(contextURI: mix.contextURI, startTrackURI: track.uri)
+        PlayRequest(contextURI: track.uri)
     }
 
     /// Alternates tracks and artists so both kinds lead, without repeats, ten at most.

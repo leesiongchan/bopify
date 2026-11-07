@@ -16,6 +16,7 @@ public actor SoloistEngine: PreparedPlaybackEngine {
     private let name: String
     private let webToken: @Sendable () async throws -> String
     private let streamingToken: @Sendable () async throws -> String
+    private let dataToken: @Sendable () async throws -> String
     private let transportFactory: @Sendable (URL) -> any SoloistTransport
     private let progress: @Sendable (SoloistEngineStatus) -> Void
     private let publisherFactory: SoloistPairingPublisherFactory?
@@ -34,14 +35,21 @@ public actor SoloistEngine: PreparedPlaybackEngine {
     private var verifiedRevision: UInt64?
     private var deviceID: String?
     private var verifiedCredentials: (web: String, streaming: String)?
+    private struct DataCredentials: Equatable, Sendable {
+        let library: String
+        let streaming: String
+    }
+    private var dataCredentials: DataCredentials?
     private var dataRevision: UInt64 = 0
     private var dataAuthorizationPaused = false
     private var services: (any SoloistDataServices)?
     private var servicesFlight: Task<any SoloistDataServices, any Error>?
     private var serviceFlightID: UUID?
+    private var serviceFlightCredentials: DataCredentials?
     private var servicesWarmup: Task<Void, Never>?
     private var servicesWarmupID: UUID?
     private var nextServiceAttempt = Date.distantPast
+    private var nextPlaybackAttempt = Date.distantPast
     private let verificationInterval: Duration
     private var adopted = false
     private let serviceFactory: @Sendable (String) async throws -> any SoloistDataServices
@@ -58,10 +66,12 @@ public actor SoloistEngine: PreparedPlaybackEngine {
         transportFactory: @escaping @Sendable (URL) -> any SoloistTransport = { SoloistSocket(endpoint: $0) },
         serviceFactory: @escaping @Sendable (String) async throws -> any SoloistDataServices = { try await LibrespotServices(accessToken: $0) },
         progress: @escaping @Sendable (SoloistEngineStatus) -> Void,
-        verificationInterval: Duration = .seconds(5), publisherFactory: SoloistPairingPublisherFactory? = nil) {
+        verificationInterval: Duration = .seconds(5), publisherFactory: SoloistPairingPublisherFactory? = nil,
+        dataToken: (@Sendable () async throws -> String)? = nil) {
         self.verificationInterval = verificationInterval
         self.child = child; self.api = api; self.baseline = baseline; self.name = name
         self.webToken = webToken; self.streamingToken = streamingToken
+        self.dataToken = dataToken ?? webToken
         self.transportFactory = transportFactory; self.progress = progress; self.serviceFactory = serviceFactory
         self.publisherFactory = publisherFactory
         let pair = AsyncStream<PlaybackEvent>.makeStream(bufferingPolicy: .bufferingNewest(512))
@@ -71,6 +81,7 @@ public actor SoloistEngine: PreparedPlaybackEngine {
     public static func launch(executable: URL, key: String, name: String,
         webToken: @escaping @Sendable () async throws -> String,
         streamingToken: @escaping @Sendable () async throws -> String,
+        dataToken: (@Sendable () async throws -> String)? = nil,
         progress: @escaping @Sendable (SoloistEngineStatus) -> Void) async throws -> SoloistEngine {
         let api = SoloistWebAPI()
         do {
@@ -78,7 +89,7 @@ public actor SoloistEngine: PreparedPlaybackEngine {
             let child = try await SoloistProcess.start(executable: executable, key: key, name: name, volume: 0)
             let engine = SoloistEngine(child: child, api: api, baseline: [], name: name,
                 webToken: webToken, streamingToken: streamingToken, progress: progress,
-                publisherFactory: { port, name in try await SoloistBonjourPublisher.publish(port: port, name: name) })
+                publisherFactory: { port, name in try await SoloistBonjourPublisher.publish(port: port, name: name) }, dataToken: dataToken)
             await engine.begin()
             return engine
         } catch { await api.close(); throw error }
@@ -200,10 +211,16 @@ public actor SoloistEngine: PreparedPlaybackEngine {
 
     private func revokeDataProof() {
         dataRevision &+= 1
-        verifiedRevision = nil; deviceID = nil; verifiedCredentials = nil
+        dataCredentials = nil
+        revokePlaybackProof()
         servicesWarmup?.cancel()
         nextServiceAttempt = .distantPast
         if isLocallyReady, adopted { setStatus(.servicesUnavailable) }
+    }
+
+    private func revokePlaybackProof() {
+        verifiedRevision = nil; deviceID = nil; verifiedCredentials = nil
+        nextPlaybackAttempt = .distantPast
     }
 
     public func retryDataServices() async {
@@ -225,42 +242,62 @@ public actor SoloistEngine: PreparedPlaybackEngine {
         guard isLocallyReady, adopted, !dataAuthorizationPaused else { return }
         let revision = state.authRevision, scope = dataRevision
         do {
-            if !isVerified {
-                nextServiceAttempt = max(nextServiceAttempt, await api.retryDate())
-                guard Date() >= nextServiceAttempt, state.active, state.playing else {
-                    setStatus(.servicesUnavailable); return
-                }
-                nextServiceAttempt = Date().addingTimeInterval(30)
-                let web = try await webToken(), streaming = try await streamingToken()
-                let first = try await api.account(token: web), second = try await api.account(token: streaming)
-                guard first == second else { throw SoloistPlaybackError.accountMismatch }
-                var proof = SoloistCorrelation(baseline: baseline, name: name)
-                for attempt in 0..<2 {
-                    try Task.checkCancellation()
-                    guard isLocallyReady, adopted, state.authRevision == revision, dataRevision == scope else { return }
-                    try await query("get_state")
-                    let playback = try await api.playback(token: web)
-                    let devices = try await api.devices(token: web)
-                    guard isLocallyReady, adopted, state.authRevision == revision, dataRevision == scope else { return }
-                    if let id = try proof.observe(state, devices: devices, playback: playback, at: .now) {
-                        deviceID = id; verifiedRevision = revision
-                        verifiedCredentials = (web, streaming)
-                        break
-                    }
-                    if attempt == 0 { try await Task.sleep(for: verificationInterval) }
-                }
-            }
-            guard isVerified else { throw SoloistPlaybackError.pairingRequired }
             _ = try await dataService()
-            if isVerified && adopted { setStatus(.ready) }
+            guard dataScopeIsCurrent(revision: revision, scope: scope) else { return }
+            nextServiceAttempt = .distantPast
+            setStatus(.ready)
         } catch {
             guard !Task.isCancelled, isLocallyReady, adopted, state.authRevision == revision, dataRevision == scope else { return }
             nextServiceAttempt = max(Date().addingTimeInterval(30), await api.retryDate())
             setStatus(.servicesUnavailable)
+            return
+        }
+        await preparePlaybackProof()
+    }
+
+    /// Device correlation authorizes Web API playback and remote observation,
+    /// independently of the already-authorized read-only metadata session.
+    private func preparePlaybackProof() async {
+        guard isDataAuthorized, !isVerified, state.active, state.playing, Date() >= nextPlaybackAttempt,
+              let credentials = dataCredentials else { return }
+        let revision = state.authRevision, scope = dataRevision
+        nextPlaybackAttempt = Date().addingTimeInterval(30)
+        do {
+            let web = try await webToken(), streaming = try await streamingToken()
+            guard streaming == credentials.streaming else { throw SoloistPlaybackError.pairingRequired }
+            let first = try await api.account(token: web), second = try await api.account(token: streaming)
+            guard first == second else { throw SoloistPlaybackError.accountMismatch }
+            var proof = SoloistCorrelation(baseline: baseline, name: name)
+            for attempt in 0..<2 {
+                try Task.checkCancellation()
+                guard dataScopeIsCurrent(revision: revision, scope: scope) else { return }
+                try await query("get_state")
+                let playback = try await api.playback(token: web)
+                let devices = try await api.devices(token: web)
+                guard dataScopeIsCurrent(revision: revision, scope: scope) else { return }
+                if let id = try proof.observe(state, devices: devices, playback: playback, at: .now) {
+                    guard try await readDataCredentials(revision: revision, scope: scope) == credentials else {
+                        throw SoloistPlaybackError.pairingRequired
+                    }
+                    guard try await webToken() == web, dataScopeIsCurrent(revision: revision, scope: scope) else {
+                        throw SoloistPlaybackError.pairingRequired
+                    }
+                    deviceID = id; verifiedRevision = revision
+                    verifiedCredentials = (web, streaming)
+                    return
+                }
+                if attempt == 0 { try await Task.sleep(for: verificationInterval) }
+            }
+        } catch {
+            guard !Task.isCancelled, dataScopeIsCurrent(revision: revision, scope: scope) else { return }
+            revokePlaybackProof()
+            nextPlaybackAttempt = max(Date().addingTimeInterval(30), await api.retryDate())
+            BopifyLog.playback.debug("Soloist optional Web playback proof unavailable")
         }
     }
 
     private var isLocallyReady: Bool { !stopped && child.isRunning && connected && state.paired }
+    private var isDataAuthorized: Bool { isLocallyReady && adopted && !dataAuthorizationPaused && dataCredentials != nil }
     private var isVerified: Bool { isLocallyReady && !dataAuthorizationPaused && verifiedCredentials != nil && deviceID != nil && verifiedRevision == state.authRevision }
 
     private func setStatus(_ status: SoloistEngineStatus) {
@@ -321,7 +358,7 @@ public actor SoloistEngine: PreparedPlaybackEngine {
         // The child may still be audible. Recovery reconnects to it instead of declaring session loss.
     }
 
-    private func poll() async {
+    func poll() async {
         guard !stopped, child.isRunning else { return }
         if !connected { await connect(); return }
         do {
@@ -331,13 +368,24 @@ public actor SoloistEngine: PreparedPlaybackEngine {
             if bootstrapped, !adopted, verifier == nil, state.paired {
                 verifier = Task { [weak self] in await self?.reverify() }
             }
-            if adopted, !dataAuthorizationPaused, !isVerified || services == nil, servicesWarmup == nil, state.active, state.playing, Date() >= nextServiceAttempt {
+            if adopted, !dataAuthorizationPaused, servicesWarmup == nil, Date() >= nextServiceAttempt,
+               !isDataAuthorized || services == nil || (!isVerified && state.active && state.playing && Date() >= nextPlaybackAttempt) {
                 _ = startDataSetup()
             }
             if isVerified, bootstrapped, !state.active, polls % 30 == 0 {
-                let token = try await webToken()
+                let revision = state.authRevision, scope = dataRevision
+                let token = try await webToken(), streaming = try await streamingToken()
+                guard isVerified, state.authRevision == revision, dataRevision == scope, !state.active else { return }
+                guard token == verifiedCredentials?.web, streaming == verifiedCredentials?.streaming else {
+                    revokePlaybackProof(); continuation.yield(.remotePlayback(nil)); return
+                }
                 let playback = try await api.playback(token: token)
-                guard !state.active, !stopped else { return }
+                guard isVerified, state.authRevision == revision, dataRevision == scope, !state.active else { return }
+                let currentWeb = try await webToken(), currentStreaming = try await streamingToken()
+                guard isVerified, state.authRevision == revision, dataRevision == scope, !state.active else { return }
+                guard currentWeb == token, currentStreaming == streaming else {
+                    revokePlaybackProof(); continuation.yield(.remotePlayback(nil)); return
+                }
                 if let playback, let raw = playback.uri, let uri = SpotifyURI(raw) {
                     continuation.yield(.remotePlayback(RemotePlayback(deviceName: playback.deviceName,
                         trackURI: uri, track: playback.track, isPlaying: playback.playing,
@@ -346,7 +394,7 @@ public actor SoloistEngine: PreparedPlaybackEngine {
             }
         } catch {
             if !state.active { continuation.yield(.remotePlayback(nil)) }
-            if error as? SoloistPlaybackError == .rateLimited { setStatus(.servicesUnavailable) }
+            if error as? SoloistPlaybackError == .rateLimited, services == nil { setStatus(.servicesUnavailable) }
             // HTTP/service errors do not change the audio owner.
         }
     }
@@ -414,53 +462,87 @@ public actor SoloistEngine: PreparedPlaybackEngine {
         if request.startTrackURI != nil || request.startPositionMs != 0 {
             guard isVerified, let deviceID else { throw SoloistPlaybackError.pairingRequired }
             let revision = state.authRevision, scope = dataRevision
-            let token = try await webToken()
+            let token = try await webToken(), streaming = try await streamingToken()
             guard isVerified, state.authRevision == revision, dataRevision == scope else { throw SoloistPlaybackError.pairingRequired }
-            guard token == verifiedCredentials?.web else {
-                revokeDataProof(); await releaseServices()
+            guard token == verifiedCredentials?.web, streaming == verifiedCredentials?.streaming else {
+                revokePlaybackProof()
                 throw SoloistPlaybackError.pairingRequired
             }
             try await api.play(request, deviceID: deviceID, token: token)
+            guard isVerified, state.authRevision == revision, dataRevision == scope else { throw SoloistPlaybackError.pairingRequired }
             try await query("get_state")
         } else { try await control("play", values: ["uri": request.contextURI.rawValue], local: false) }
     }
 
     private func dataService() async throws -> any SoloistDataServices {
-        guard isVerified, adopted, let credentials = verifiedCredentials else { throw SoloistPlaybackError.pairingRequired }
         let revision = state.authRevision, scope = dataRevision
-        let web = try await webToken(), streaming = try await streamingToken()
-        guard isVerified, state.authRevision == revision, dataRevision == scope else { throw SoloistPlaybackError.pairingRequired }
-        guard web == credentials.web, streaming == credentials.streaming else {
+        let credentials = try await readDataCredentials(revision: revision, scope: scope)
+        if dataCredentials.map({ $0 != credentials }) == true || serviceFlightCredentials.map({ $0 != credentials }) == true {
             revokeDataProof(); await releaseServices()
             throw SoloistPlaybackError.pairingRequired
         }
-        if let services { return services }
+        if let services, dataCredentials == credentials { return services }
         let task: Task<any SoloistDataServices, any Error>
         let flightID: UUID
         if let flight = servicesFlight, let id = serviceFlightID { task = flight; flightID = id }
         else {
-            let factory = serviceFactory
-            task = Task { try await factory(credentials.streaming) }
+            task = Task { try await self.createDataService(credentials: credentials, revision: revision, scope: scope) }
             flightID = UUID(); servicesFlight = task; serviceFlightID = flightID
+            serviceFlightCredentials = credentials
         }
         let service: any SoloistDataServices
-        do { service = try await task.value }
-        catch {
-            if serviceFlightID == flightID { servicesFlight = nil; serviceFlightID = nil }
-            throw error
+        defer {
+            if serviceFlightID == flightID { servicesFlight = nil; serviceFlightID = nil; serviceFlightCredentials = nil }
         }
-        guard isVerified, adopted, state.authRevision == revision, dataRevision == scope else {
-            await service.shutdown(); throw SoloistPlaybackError.unavailable
-        }
-        services = service
-        if serviceFlightID == flightID { servicesFlight = nil; serviceFlightID = nil }
+        service = try await task.value
+        guard dataScopeIsCurrent(revision: revision, scope: scope) else { throw SoloistPlaybackError.unavailable }
+        try await validateDataCredentials(credentials, revision: revision, scope: scope)
         try Task.checkCancellation()
         return service
     }
 
+    private func dataScopeIsCurrent(revision: UInt64, scope: UInt64) -> Bool {
+        isLocallyReady && adopted && !dataAuthorizationPaused && state.authRevision == revision && dataRevision == scope
+    }
+
+    private func readDataCredentials(revision: UInt64, scope: UInt64) async throws -> DataCredentials {
+        guard dataScopeIsCurrent(revision: revision, scope: scope) else { throw SoloistPlaybackError.pairingRequired }
+        let library = try await dataToken()
+        guard dataScopeIsCurrent(revision: revision, scope: scope) else { throw SoloistPlaybackError.pairingRequired }
+        let streaming = try await streamingToken()
+        guard dataScopeIsCurrent(revision: revision, scope: scope) else { throw SoloistPlaybackError.pairingRequired }
+        return DataCredentials(library: library, streaming: streaming)
+    }
+
+    private func createDataService(credentials: DataCredentials, revision: UInt64, scope: UInt64) async throws -> any SoloistDataServices {
+        try Task.checkCancellation()
+        let libraryAccount = try await api.account(token: credentials.library)
+        guard dataScopeIsCurrent(revision: revision, scope: scope) else { throw SoloistPlaybackError.pairingRequired }
+        let streamingAccount = try await api.account(token: credentials.streaming)
+        guard libraryAccount == streamingAccount else { throw SoloistPlaybackError.accountMismatch }
+        guard try await readDataCredentials(revision: revision, scope: scope) == credentials else { throw SoloistPlaybackError.pairingRequired }
+        try Task.checkCancellation()
+        let service = try await serviceFactory(credentials.streaming)
+        do {
+            try Task.checkCancellation()
+            guard try await readDataCredentials(revision: revision, scope: scope) == credentials else { throw SoloistPlaybackError.pairingRequired }
+            try Task.checkCancellation()
+            dataCredentials = credentials
+            services = service
+            return service
+        } catch { await service.shutdown(); throw error }
+    }
+
+    private func validateDataCredentials(_ credentials: DataCredentials, revision: UInt64, scope: UInt64) async throws {
+        guard try await readDataCredentials(revision: revision, scope: scope) == credentials else {
+            revokeDataProof(); await releaseServices()
+            throw SoloistPlaybackError.pairingRequired
+        }
+    }
+
     private func releaseServices() async {
         servicesFlight?.cancel()
-        let flight = servicesFlight; servicesFlight = nil; serviceFlightID = nil
+        let flight = servicesFlight; servicesFlight = nil; serviceFlightID = nil; serviceFlightCredentials = nil
         let service = services; services = nil
         await service?.shutdown()
         if let flight, let result = try? await flight.value { await result.shutdown() }
@@ -469,29 +551,44 @@ public actor SoloistEngine: PreparedPlaybackEngine {
     public func requestRadio(seed: SpotifyURI) async throws -> RadioMix {
         let revision = state.authRevision, scope = dataRevision
         do {
-            let result = try await dataService().requestRadio(seed: seed)
-            guard isVerified, state.authRevision == revision, dataRevision == scope else { throw RadioFailure.unavailable }
+            let service = try await dataService()
+            guard let credentials = dataCredentials else { throw RadioFailure.unavailable }
+            let result = try await service.requestRadio(seed: seed)
+            try await validateDataCredentials(credentials, revision: revision, scope: scope)
             return result
         }
-        catch { if error is PlayerError { await releaseServices() }; throw error as? RadioFailure ?? .unavailable }
+        catch {
+            if error is PlayerError, state.authRevision == revision, dataRevision == scope { await releaseServices() }
+            throw error as? RadioFailure ?? .unavailable
+        }
     }
     public func requestLyrics(for track: SpotifyURI) async throws -> TrackLyrics {
         let revision = state.authRevision, scope = dataRevision
         do {
-            let result = try await dataService().requestLyrics(for: track)
-            guard isVerified, state.authRevision == revision, dataRevision == scope else { throw LyricFailure.unavailable }
+            let service = try await dataService()
+            guard let credentials = dataCredentials else { throw LyricFailure.unavailable }
+            let result = try await service.requestLyrics(for: track)
+            try await validateDataCredentials(credentials, revision: revision, scope: scope)
             return result
         }
-        catch { if error is PlayerError { await releaseServices() }; throw error as? LyricFailure ?? .unavailable }
+        catch {
+            if error is PlayerError, state.authRevision == revision, dataRevision == scope { await releaseServices() }
+            throw error as? LyricFailure ?? .unavailable
+        }
     }
     public func requestArtistTopTracks(for track: SpotifyURI, artistIndex: Int) async throws -> ArtistTopTracks {
         let revision = state.authRevision, scope = dataRevision
         do {
-            let result = try await dataService().requestArtistTopTracks(for: track, artistIndex: artistIndex)
-            guard isVerified, state.authRevision == revision, dataRevision == scope else { throw ArtistTopTracksFailure.unavailable }
+            let service = try await dataService()
+            guard let credentials = dataCredentials else { throw ArtistTopTracksFailure.unavailable }
+            let result = try await service.requestArtistTopTracks(for: track, artistIndex: artistIndex)
+            try await validateDataCredentials(credentials, revision: revision, scope: scope)
             return result
         }
-        catch { if error is PlayerError { await releaseServices() }; throw error as? ArtistTopTracksFailure ?? .unavailable }
+        catch {
+            if error is PlayerError, state.authRevision == revision, dataRevision == scope { await releaseServices() }
+            throw error as? ArtistTopTracksFailure ?? .unavailable
+        }
     }
 
     public func shutdown() async {

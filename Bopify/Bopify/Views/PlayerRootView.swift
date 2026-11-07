@@ -13,7 +13,7 @@ struct PlayerRootView: View {
                                    presentation: environment.presentation, windowController: environment.playerWindowController)
                     .id(ObjectIdentifier(player))
             } else {
-                PlayerSurface {
+                StartupSurface {
                     VStack(spacing: 8) {
                         header
                         if let step = startupStep {
@@ -22,12 +22,6 @@ struct PlayerRootView: View {
                     }
                     .padding(16)
                     .modifier(ScrollablePlayerContent())
-                    .background {
-                        if let step = startupStep {
-                            AuroraBackground(isAnimating: environment.presentation.isVisible, isDimmed: step.recordPose == .tucked)
-                                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-                        }
-                    }
                 }
             }
         }
@@ -48,19 +42,18 @@ struct PlayerRootView: View {
     private var header: some View {
         HStack {
             Label {
-                Text("app.name")
+                Text("app.name", bundle: SoloistResources.bundle)
             } icon: {
                 Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 18, height: 18)
             }
                 .font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
             WindowDragRegion().frame(maxWidth: .infinity)
-            if let step = startupStep {
+            if startupStep != nil {
                 // Search and Favorite need a ready player, and reconnecting still counts as signed in.
-                if let progress = step.progress { StartupStepPips(current: progress, total: 3) }
                 if environment.authState == .signedIn, environment.requestedOnboardingSection != nil,
                    environment.soloist.hasUsablePlayback {
                     Button(SoloistResources.string("onboarding.done"), action: environment.closeOnboarding)
-                        .buttonStyle(.plain).font(.caption)
+                        .buttonStyle(.plain).font(.callout)
                 }
             } else {
                 if environment.authState == .signedIn { SearchButton(environment: environment) }

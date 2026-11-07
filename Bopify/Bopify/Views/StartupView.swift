@@ -9,8 +9,19 @@ struct StartupView<Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 20) {
+            if let progress = step.progress {
+                StartupStepIndicator(current: progress, total: 3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             SignInRecordView(step: step, isVisible: isVisible)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background {
+                    AuroraBackground(isAnimating: isVisible, isDimmed: step.recordPose == .tucked)
+                        .opacity(0.2)
+                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                }
             // Stacked, so outgoing and incoming copy cross-fade in place instead of pushing each other.
             ZStack {
                 content()
@@ -31,20 +42,47 @@ extension AppEnvironment {
     }
 }
 
-struct StartupStepPips: View {
+struct StartupStepIndicator: View {
     let current: Int
     let total: Int
 
+    private var name: String {
+        switch current {
+        case 1: "onboarding.step.account"
+        case 2: "onboarding.step.library"
+        default: "onboarding.step.playback"
+        }
+    }
+
     var body: some View {
-        HStack(spacing: 5) {
-            ForEach(1...total, id: \.self) { step in
-                Capsule().fill(.primary.opacity(step <= current ? 0.9 : 0.25))
-                    .frame(width: 14, height: 4)
+        Text("onboarding.step \(current) \(total) \(SoloistResources.string(name))", bundle: SoloistResources.bundle)
+            .font(.callout.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("onboarding.step")
+    }
+}
+
+struct StartupInstruction<Content: View>: View {
+    let number: Int
+    let title: LocalizedStringKey
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(verbatim: "\(number)")
+                .font(.body.weight(.semibold))
+                .frame(width: 26, height: 26)
+                .background(Color(nsColor: .controlBackgroundColor), in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title, bundle: SoloistResources.bundle)
+                    .font(.body.weight(.semibold)).foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                content().font(.body)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .animation(.easeInOut(duration: 0.5), value: current)
-        .accessibilityElement()
-        .accessibilityLabel(Text("onboarding.progress \(current) \(total)"))
     }
 }
 
@@ -54,17 +92,20 @@ struct StartupHeading: View {
     var isCompact = false
 
     var body: some View {
-        VStack(spacing: 6) {
-            title.font(.system(size: isCompact ? 21 : 24, weight: .semibold))
+        VStack(alignment: .leading, spacing: 8) {
+            title.font(.system(isCompact ? .title2 : .title, weight: .semibold))
+                .foregroundStyle(.primary)
+                .accessibilityAddTraits(.isHeader)
             if let message {
                 message
-                    .font(.callout)
-                    .foregroundStyle(.primary.opacity(0.7))
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .multilineTextAlignment(.center)
-        .frame(maxWidth: 300)
+        .multilineTextAlignment(.leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -75,15 +116,22 @@ struct StartupButton: View {
     let action: () -> Void
 
     var body: some View {
+        if isSecondary {
+            button.buttonStyle(.glass)
+        } else {
+            button.buttonStyle(.glassProminent)
+        }
+    }
+
+    private var button: some View {
         Button(action: action) {
             Text(key, bundle: SoloistResources.bundle)
-                .font(.system(size: isSecondary ? 12 : 13, weight: isSecondary ? .medium : .semibold))
-                .padding(.horizontal, isSecondary ? 16 : 24)
-                .frame(height: isSecondary ? 30 : 44)
+                .font(.body.weight(isSecondary ? .medium : .semibold))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
         }
-        .buttonStyle(.plain)
+        .controlSize(.large)
         .accessibilityIdentifier(identifier)
-        .playerGlass()
     }
 }
 

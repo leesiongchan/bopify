@@ -179,7 +179,9 @@ final class AppEnvironment {
             }
         }, webToken: {
             try await libraryAuth.validAccessToken(requiredScopes: LibraryAuthorization.playbackScopes)
-        }, streamingToken: { try await auth.validAccessToken() }, install: { activate, progress in
+        }, streamingToken: { try await auth.validAccessToken() }, dataToken: {
+            try await libraryAuth.validAccessToken(requiredScopes: LibraryAuthorization.requiredScopes)
+        }, install: { activate, progress in
             let forceCheck = !hasCheckedSoloistThisLaunch
             hasCheckedSoloistThisLaunch = true
             return try await soloistInstaller.ensureInstalled(canActivateUpdate: activate, forceCheck: forceCheck,

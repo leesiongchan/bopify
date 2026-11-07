@@ -84,6 +84,106 @@ struct SoloistSetupRenderingTests {
         #expect(retry.object.isAccessibilityEnabled?() == !isRetrying)
     }
 
+    @Test(arguments: [(true, false), (false, true)])
+    func accessibilitySettingsGiveInputsOpaqueBacking(reduceTransparency: Bool, increasedContrast: Bool) throws {
+        let renderer = ImageRenderer(content: StartupInputBackground(reduceTransparency: reduceTransparency,
+            increasedContrast: increasedContrast).frame(width: 100, height: 44).padding(4))
+        renderer.scale = 2
+        let bitmap = NSBitmapImageRep(cgImage: try #require(renderer.cgImage))
+        let center = try #require(bitmap.colorAt(x: bitmap.pixelsWide / 2, y: bitmap.pixelsHigh / 2))
+        let outside = try #require(bitmap.colorAt(x: 0, y: 0))
+        #expect(center.alphaComponent > 0.99)
+        #expect(outside.alphaComponent < 0.01)
+    }
+
+    @Test func smallHighContrastSetupKeepsLabelsAndSecureKeyboardEntry() async throws {
+        _ = NSApplication.shared
+        let environment = makePreviewEnvironment(.playing)
+        environment.showOnboarding(section: .playback)
+        let window = NSWindow(contentRect: CGRect(x: 300, y: 300, width: 320, height: 480),
+            styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.appearance = NSAppearance(named: .accessibilityHighContrastDarkAqua)
+        defer { window.close(); environment.player?.stop() }
+        let host = NSHostingView(rootView: PlayerRootView(environment: environment)
+            .frame(width: 320, height: 480)
+            .dynamicTypeSize(.accessibility2)
+            .environment(\.accessibilityEnabled, true))
+        host.sizingOptions = []
+        window.contentView = host
+        window.makeKeyAndOrderFront(nil)
+        try await Task.sleep(for: .milliseconds(180))
+        let field = try #require(secureField(in: host))
+        let cell = try #require(field.cell as? NSSecureTextFieldCell)
+        #expect(cell.echosBullets && cell.accessibilitySubrole() == .secureTextField)
+        #expect(!field.isBezeled, "The native field must not stack its old bezel over the glass control")
+        #expect((field.font?.pointSize ?? 0) >= 13)
+        _ = try AppearanceTestAccessibility.element("soloist.keyLabel", in: host)
+        let step = try AppearanceTestAccessibility.element("onboarding.step", in: host)
+        #expect(step.object.accessibilityRole?() == .staticText)
+        field.selectText(nil)
+        let editor = try #require(field.currentEditor() as? NSTextView)
+        editor.insertText("fixture-key", replacementRange: editor.selectedRange())
+        field.delegate?.controlTextDidChange?(Notification(name: NSControl.textDidChangeNotification, object: field))
+        editor.insertTab(nil)
+        try await Task.sleep(for: .milliseconds(80))
+        #expect(environment.soloist.hasUsablePlayback, "Tab must not submit playback setup")
+        #expect(secureField(in: host) === field && field.stringValue == "fixture-key")
+        field.selectText(nil)
+        #expect(field.currentEditor() != nil)
+        let scroll = try #require(scrollView(in: host))
+        let document = try #require(scroll.documentView)
+        #expect(document.frame.width <= scroll.contentView.bounds.width + 1)
+        document.scroll(NSPoint(x: 0, y: max(0, document.frame.height - scroll.contentView.bounds.height)))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        _ = try AppearanceTestAccessibility.element("soloist.enable", in: host)
+        let artifacts = try captureDirectory()
+        try capture(host, at: artifacts.appendingPathComponent("high-contrast-key.png"))
+        print("Readable onboarding capture: \(artifacts.path)")
+    }
+
+    @Test(arguments: [false, true])
+    func onboardingRemainsReadableInLightAndDarkLayouts(dark: Bool) async throws {
+        _ = NSApplication.shared
+        let artifacts = try captureDirectory()
+        for compact in [false, true] {
+            for library in [false, true] {
+                let width: CGFloat = compact ? 320 : 410
+                let height: CGFloat = compact ? 480 : 700
+                let environment = makePreviewEnvironment(.playing, libraryClientID: library ? nil : String(repeating: "0", count: 32))
+                environment.showOnboarding(section: library ? .library : .playback)
+                let window = NSWindow(contentRect: CGRect(x: 300, y: 300, width: width, height: height),
+                    styleMask: [.titled], backing: .buffered, defer: false)
+                window.isReleasedWhenClosed = false
+                window.appearance = NSAppearance(named: dark
+                    ? compact ? .accessibilityHighContrastDarkAqua : .darkAqua
+                    : compact ? .accessibilityHighContrastAqua : .aqua)
+                defer { window.close(); environment.player?.stop() }
+                let host = NSHostingView(rootView: PlayerRootView(environment: environment)
+                    .frame(width: width, height: height)
+                    .environment(\.colorScheme, dark ? .dark : .light)
+                    .environment(\.accessibilityEnabled, true))
+                host.sizingOptions = []
+                window.contentView = host
+                window.makeKeyAndOrderFront(nil)
+                try await Task.sleep(for: .milliseconds(120))
+                let stem = "\(dark ? "dark" : "light")-\(compact ? "compact-high-contrast" : "regular")-\(library ? "library" : "key")"
+                let scroll = try #require(scrollView(in: host))
+                let document = try #require(scroll.documentView)
+                #expect(document.frame.width <= scroll.contentView.bounds.width + 1)
+                _ = try AppearanceTestAccessibility.element("onboarding.step", in: host)
+                _ = try AppearanceTestAccessibility.element(library ? "onboarding.clientIDLabel" : "soloist.keyLabel", in: host)
+                document.scroll(.zero)
+                scroll.reflectScrolledClipView(scroll.contentView)
+                try capture(host, at: artifacts.appendingPathComponent(stem + "-top.png"))
+                document.scroll(NSPoint(x: 0, y: max(0, document.frame.height - scroll.contentView.bounds.height)))
+                scroll.reflectScrolledClipView(scroll.contentView)
+                try capture(host, at: artifacts.appendingPathComponent(stem + "-bottom.png"))
+            }
+        }
+        print("Onboarding light/dark capture matrix: \(artifacts.path)")
+    }
+
     @Test func keyEntryIsSecureAndKeyboardSetupFailureKeepsThePlayerAndOffersRetry() async throws {
         _ = NSApplication.shared
         let environment = makePreviewEnvironment(.playing)
@@ -105,7 +205,7 @@ struct SoloistSetupRenderingTests {
         let cell = try #require(field.cell as? NSSecureTextFieldCell)
         #expect(cell.echosBullets)
         #expect(cell.accessibilitySubrole() == .secureTextField)
-        #expect(cell.accessibilityPlaceholderValue() == SoloistResources.string("soloist.key"))
+        #expect(cell.accessibilityPlaceholderValue() == SoloistResources.string("soloist.keyPlaceholder"))
         #expect(field.isEditable)
         let artifacts = try captureDirectory()
         try capture(content, at: artifacts.appendingPathComponent("initial.png"))
@@ -153,6 +253,7 @@ struct SoloistSetupRenderingTests {
         let content = try #require(window.contentView)
         try await Task.sleep(for: .milliseconds(180))
         let field = try #require(editableField(in: content))
+        _ = try AppearanceTestAccessibility.element("onboarding.clientIDLabel", in: content)
         let save = try AppearanceTestAccessibility.element("onboarding.saveLibrary", in: content)
         #expect(save.object.isAccessibilityEnabled?() == false)
         field.selectText(nil)

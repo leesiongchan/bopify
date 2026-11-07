@@ -18,24 +18,24 @@ struct SignInView: View {
     var onRetryCleanup: () -> Void = {}
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
             switch status {
             case .idle:
-                StartupHeading(title: Text("signIn.title"), message: Text("signIn.subtitle"))
+                StartupHeading(title: Text("signIn.title", bundle: SoloistResources.bundle), message: Text("signIn.subtitle", bundle: SoloistResources.bundle))
                 StartupButton(key: "signIn.button", action: onSignIn).padding(.top, 20)
-                Text("signIn.premium")
-                    .font(.caption)
-                    .foregroundStyle(.primary.opacity(0.7))
+                Text("signIn.premium", bundle: SoloistResources.bundle)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
                     .padding(.top, 12)
             case .authenticating:
-                StartupHeading(title: Text("onboarding.signingIn"), message: Text("signIn.browser"))
+                StartupHeading(title: Text("onboarding.signingIn", bundle: SoloistResources.bundle), message: Text("signIn.browser", bundle: SoloistResources.bundle))
                 if let onCancel {
                     StartupButton(key: "onboarding.cancel", isSecondary: true, action: onCancel).padding(.top, 16)
                 }
             case .removingCredentials:
-                StartupHeading(title: Text("signIn.removingCredentials"))
+                StartupHeading(title: Text("signIn.removingCredentials", bundle: SoloistResources.bundle))
             case .restoring:
-                StartupHeading(title: Text("signIn.restoring"))
+                StartupHeading(title: Text("signIn.restoring", bundle: SoloistResources.bundle))
             case let .error(error):
                 let isCleanup = error == .credentialCleanupRequired || error == .credentialCleanupNotRecorded
                 StartupHeading(title: Text(LocalizedStringKey(isCleanup ? "signIn.cleanupError" :
@@ -55,5 +55,6 @@ struct SignInView: View {
                 .padding(.top, 20)
             }
         }
+        .frame(maxWidth: 380, alignment: .leading)
     }
 }
