@@ -8,7 +8,7 @@ struct PlayerRootView: View {
 
     var body: some View {
         Group {
-            if environment.isListening || environment.isLiveLyricsVisible, let player = environment.player {
+            if !environment.isShowingOnboarding, environment.isListening || environment.isLiveLyricsVisible, let player = environment.player {
                 RecordPlayerView(player: player, artworkStore: environment.artworkStore,
                                    presentation: environment.presentation, windowController: environment.playerWindowController)
                     .id(ObjectIdentifier(player))
@@ -58,7 +58,12 @@ struct PlayerRootView: View {
             WindowDragRegion().frame(maxWidth: .infinity)
             if let step = startupStep {
                 // Search and Favorite need a ready player, and reconnecting still counts as signed in.
-                if let progress = step.progress { StartupStepPips(current: progress, total: 2) }
+                if let progress = step.progress { StartupStepPips(current: progress, total: 3) }
+                if environment.authState == .signedIn, environment.requestedOnboardingSection != nil,
+                   environment.soloist.sessionUsesLibrespot || environment.soloist.hasUsablePlayback {
+                    Button(SoloistResources.string("onboarding.done"), action: environment.closeOnboarding)
+                        .buttonStyle(.plain).font(.caption)
+                }
             } else {
                 if environment.authState == .signedIn { SearchButton(environment: environment) }
                 FavoriteButton()
@@ -92,18 +97,11 @@ struct PlayerRootView: View {
     }
 
     private var startupStep: StartupStep? {
-        switch environment.authState {
-        case .signedOut: return .signIn(environment.isRemovingCredentials ? .removingCredentials : .idle)
-        case .authenticating: return .signIn(.authenticating)
-        case .refreshing: return .signIn(.restoring)
-        case let .error(error): return .signIn(.error(error))
-        case .needsLibraryAuthorization: return .library(environment.librarySetupStatus)
-        case .signedIn:
-            guard let player = environment.player else { return .signIn(.authenticating) }
-            guard environment.connectionStatus != .ready || player.restorationUnavailable else { return nil }
-            let status = connection(for: player)
-            return .connection(messageKey: status.messageKey, isFailure: status.isFailure)
-        }
+        if let step = environment.onboardingStep { return step }
+        guard let player = environment.player,
+              environment.connectionStatus != .ready || player.restorationUnavailable else { return nil }
+        let status = connection(for: player)
+        return .connection(messageKey: status.messageKey, isFailure: status.isFailure)
     }
 
     private func connection(for player: PlayerModel) -> PlaybackConnectionStatusView {
@@ -125,6 +123,8 @@ struct PlayerRootView: View {
                        onRetryCleanup: { Task { await environment.signOut() } })
         case let .library(status):
             LibraryAuthorizationSetupView(status: status, environment: environment)
+        case .playback:
+            PlaybackOnboardingView(environment: environment)
         case .connection:
             if let player = environment.player { StartupConnectionView(connection: connection(for: player)) }
         }
@@ -216,14 +216,46 @@ private struct StartupContent: View {
 
 private struct ScrollablePlayerContent: ViewModifier {
     func body(content: Content) -> some View {
-        GeometryReader { geometry in
-            ScrollView {
-                content.frame(height: max(560, geometry.size.height))
-            }
-            .scrollDisabled(geometry.size.height >= 560)
-            .scrollIndicators(.never)
-        }
+        StartupScrollView(content: content)
     }
+}
+
+/// A native scroll area preserves the hosted form's accessibility nodes on macOS.
+private struct StartupScrollView<Content: View>: NSViewRepresentable {
+    let content: Content
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scroll = NSScrollView()
+        scroll.drawsBackground = false
+        scroll.borderType = .noBorder
+        scroll.hasVerticalScroller = true
+        scroll.scrollerStyle = .overlay
+        scroll.autohidesScrollers = true
+        scroll.horizontalScrollElasticity = .none
+        let clip = StartupClipView()
+        clip.drawsBackground = false
+        scroll.contentView = clip
+        let host = NSHostingView(rootView: AnyView(content.environment(\.self, context.environment)))
+        host.sizingOptions = [.intrinsicContentSize]
+        host.translatesAutoresizingMaskIntoConstraints = false
+        scroll.documentView = host
+        NSLayoutConstraint.activate([
+            host.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
+            host.topAnchor.constraint(equalTo: clip.topAnchor),
+            host.widthAnchor.constraint(equalTo: clip.widthAnchor),
+            host.heightAnchor.constraint(greaterThanOrEqualTo: clip.heightAnchor),
+        ])
+        return scroll
+    }
+
+    func updateNSView(_ scroll: NSScrollView, context: Context) {
+        guard let host = scroll.documentView as? NSHostingView<AnyView> else { return }
+        host.rootView = AnyView(content.environment(\.self, context.environment))
+    }
+}
+
+private final class StartupClipView: NSClipView {
+    override var isFlipped: Bool { true }
 }
 
 #Preview("Small display · sign in") {

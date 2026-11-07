@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Testing
 import BopifyDomain
+import BopifyAuth
 import BopifyPlayback
 
 @MainActor @Suite("Startup record")
@@ -26,6 +27,44 @@ struct SignInRecordTests {
     @Test func librarySetupIsTheSecondSideOfTheRecord() {
         #expect(StartupStep.signIn(.idle).progress == 1 && StartupStep.signIn(.idle).side == .a)
         #expect(StartupStep.library(.idle).progress == 2 && StartupStep.library(.idle).side == .b)
+    }
+
+    @Test func playbackIsTheThirdInlineStage() {
+        #expect(StartupStep.playback(.entry).progress == 3)
+        #expect(StartupStep.playback(.working).recordPose == .spinning)
+        #expect(StartupStep.playback(.failure).recordPose == .tucked)
+        #expect(StartupStep.playback(.entry).identity == StartupStep.playback(.working).identity)
+    }
+
+    @Test func reopeningSetupUsesTheMainSurfaceAndExpandedGeometry() {
+        let environment = makePreviewEnvironment(.playing)
+        defer { environment.player?.stop() }
+        environment.showOnboarding(section: .playback)
+        #expect(environment.isShowingOnboarding)
+        #expect(environment.playerMode == .expanded)
+        #expect(environment.onboardingStep == .playback(.entry))
+        environment.closeOnboarding()
+        #expect(!environment.isShowingOnboarding)
+    }
+
+    @Test func missingSoloistKeyRequiresSetupDespiteAnExistingTrack() async throws {
+        let suite = "onboarding-\(UUID())"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let controller = SoloistPlaybackController(defaults: defaults, keys: OnboardingKeys(), authorize: {},
+            install: { _, _ in throw SoloistPlaybackError.unavailable }, clearSession: {})
+        let environment = makePreviewEnvironment(.playing, soloistController: controller)
+        let track = environment.player?.state.currentTrack
+        defer { environment.player?.stop() }
+        #expect(environment.isListening)
+        #expect(environment.onboardingStep == .playback(.entry))
+        #expect(environment.playerMode == .expanded)
+        await environment.enableSoloist(key: "fixture-key")
+        #expect(environment.onboardingStep == .playback(.failure))
+        #expect(environment.player?.state.currentTrack == track)
+        await environment.useLibrespotForSession()
+        #expect(!environment.isShowingOnboarding)
+        #expect(controller.prefersSoloist, "Session fallback must preserve next-launch Soloist preference")
     }
 
     @Test func connectingKeepsWhicheverSideIsShowing() {
@@ -85,6 +124,31 @@ struct StartupConnectionTests {
 
 @MainActor @Suite("Startup shell", .serialized)
 struct StartupShellTests {
+    @Test func openingSetupExpandsTheExistingRecordPanel() async throws {
+        _ = NSApplication.shared
+        let keys = ["player.frame", "player.keepOnTop", "player.recordCenter"]
+        let saved = keys.map { UserDefaults.standard.object(forKey: $0) }
+        defer {
+            for (key, value) in zip(keys, saved) {
+                if let value { UserDefaults.standard.set(value, forKey: key) }
+                else { UserDefaults.standard.removeObject(forKey: key) }
+            }
+        }
+        let existing = Set(NSApp.windows.map(ObjectIdentifier.init))
+        let environment = makePreviewEnvironment(.playing)
+        let controller = StatusItemController(content: PlayerRootView(environment: environment), environment: environment)
+        let panel = try #require(NSApp.windows.compactMap { $0 as? StatusPanel }
+            .first { !existing.contains(ObjectIdentifier($0)) })
+        panel.isReleasedWhenClosed = false
+        defer { withExtendedLifetime(controller) { panel.close() }; environment.player?.stop() }
+        environment.showOnboarding()
+        try await liveLyricEventually { panel.frame.width >= 410 && panel.frame.height >= 560 }
+        #expect(environment.isShowingOnboarding)
+        #expect(!panel.hasShadow)
+        environment.closeOnboarding()
+        try await liveLyricEventually { panel.frame.width < 410 }
+    }
+
     @Test func startupGlassHasNoNativeOutline() throws {
         _ = NSApplication.shared
         let keys = ["player.frame", "player.keepOnTop", "player.recordCenter"]
@@ -106,4 +170,12 @@ struct StartupShellTests {
         defer { withExtendedLifetime(controller) { panel.close() } }
         #expect(!panel.hasShadow, "The native shadow traces the startup glass as a hard rectangular outline")
     }
+}
+
+private nonisolated final class OnboardingKeys: SoloistKeyStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: String?
+    func load() throws -> String? { lock.withLock { value } }
+    func save(_ key: String) throws { lock.withLock { value = key } }
+    func clear() throws { lock.withLock { value = nil } }
 }

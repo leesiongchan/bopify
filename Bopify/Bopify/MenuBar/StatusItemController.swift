@@ -79,7 +79,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     private func configure(mode: PlayerMode, keepOnTop: Bool) {
         guard !environment.isPreparingForQuit, let panel else { return }
         let floatingLyrics = environment.isLiveLyricsVisible && environment.presentation.mode == .compact
-        let onboarding = environment.authState != .signedIn
+        let onboarding = environment.isShowingOnboarding
+            || environment.authState != .signedIn
             || (!environment.hasPlaybackConnected && environment.connectionStatus != .ready)
         let level: NSWindow.Level = keepOnTop || floatingLyrics || onboarding ? .floating : .normal
         if panel.level != level {
@@ -87,7 +88,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             BopifyLog.playback.debug("player window level changed floating=\(level == .floating, privacy: .public)")
         }
         UserDefaults.standard.set(keepOnTop, forKey: "player.keepOnTop")
-        if environment.isListening || environment.isLiveLyricsVisible {
+        if !environment.isShowingOnboarding, environment.isListening || environment.isLiveLyricsVisible {
             if !isWindowControllerAttached {
                 if !hasPosition, PlayerWindowController.restoredAnchor(defaults: .standard) == nil,
                    let button = statusItem.button,
@@ -124,7 +125,12 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         let compact = mode == .compact
         let oldFrame = panel.frame
         let crossingCompact = (appliedMode == .compact) != compact
-        let size = appliedMode == nil || !crossingCompact ? oldFrame.size : NSSize(width: compact ? 380 : 410, height: compact ? 88 : 560)
+        let size: NSSize
+        if onboarding {
+            size = NSSize(width: max(410, oldFrame.width), height: max(560, oldFrame.height))
+        } else {
+            size = appliedMode == nil || !crossingCompact ? oldFrame.size : NSSize(width: compact ? 380 : 410, height: compact ? 88 : 560)
+        }
         appliedMode = mode
         setReachableFrame(origin: NSPoint(x: oldFrame.minX, y: oldFrame.maxY - size.height), size: size,
                           animate: panel.isVisible && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
@@ -249,14 +255,9 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                                     action: #selector(showRecordAppearance(_:)), keyEquivalent: "")
         appearance.target = self
         menu.addItem(appearance)
-        let libraryItem = NSMenuItem(title: String(localized: "menu.libraryAccess"),
-                                     action: #selector(showLibraryAccess(_:)), keyEquivalent: "")
-        libraryItem.target = self
-        menu.addItem(libraryItem)
-        let playbackEngine = NSMenuItem(title: String(localized: "soloist.menu"),
-            action: #selector(showPlaybackEngine(_:)), keyEquivalent: "")
-        playbackEngine.target = self
-        menu.addItem(playbackEngine)
+        let setup = NSMenuItem(title: String(localized: "menu.setup"), action: #selector(showSetup(_:)), keyEquivalent: "")
+        setup.target = self
+        menu.addItem(setup)
         let shortcutsItem = NSMenuItem(title: String(localized: "shortcuts.title"),
                                       action: #selector(showShortcuts(_:)), keyEquivalent: "/")
         shortcutsItem.target = self
@@ -296,8 +297,10 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
     @objc private func cancelPlaybackAuthorization(_ sender: Any?) { environment.cancelPlaybackAuthorization() }
     @objc private func cancelLibraryAuthorization(_ sender: Any?) { environment.cancelLibraryAuthorization() }
-    @objc private func showLibraryAccess(_ sender: Any?) { environment.librarySetupWindow.show(environment: environment) }
-    @objc private func showPlaybackEngine(_ sender: Any?) { environment.soloistSetupWindow.show(environment: environment) }
+    @objc private func showSetup(_ sender: Any?) {
+        environment.showOnboarding()
+        showPlayer()
+    }
     @objc private func showShortcuts(_ sender: Any?) { shortcutsWindow.show() }
     @objc private func showRecordAppearance(_ sender: Any?) { recordAppearanceWindow.show() }
     @objc private func toggleKeepOnTop(_ sender: Any?) { environment.presentation.keepOnTop.toggle() }

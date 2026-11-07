@@ -22,6 +22,31 @@ extension LiveLyricTestEngine: PreparedPlaybackEngine {
 
 @MainActor @Suite("Soloist native setup", .serialized)
 struct SoloistSetupTests {
+    @Test func usablePlaybackRequiresAReadyCoreAndSurvivesOnlyCompanionFailure() async throws {
+        let suite = "soloist-usable-\(UUID())"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let engine = LiveLyricTestEngine()
+        var report: (@Sendable (SoloistEngineStatus) -> Void)?
+        let controller = SoloistPlaybackController(defaults: defaults, keys: SetupKeys(), authorize: {},
+            install: { _, _ in URL(fileURLWithPath: "/fixture/soloist") },
+            start: { request in report = request.progress; return engine }, clearSession: {})
+        #expect(!controller.hasUsablePlayback)
+        #expect(await controller.enable(key: "fixture-key"))
+        #expect(controller.phase == .prepared && !controller.hasUsablePlayback)
+        _ = try await controller.makeEngine(accessToken: "fixture", configuration:
+            PlaybackEngineConfiguration(deviceID: "fixture", startup: .coldLaunch),
+            fallback: { _, _ in throw PlayerError.unknown })
+        #expect(controller.hasUsablePlayback)
+        report?(.servicesUnavailable)
+        try await liveLyricEventually { controller.phase == .limitedServices }
+        #expect(controller.hasUsablePlayback)
+        report?(.failed(.startupFailed))
+        try await liveLyricEventually { controller.phase == .failed(.startup) }
+        #expect(controller.provider == .soloist && !controller.hasUsablePlayback)
+        await controller.stop()
+    }
+
     @Test func aSavedKeySelectsSoloistByDefaultBeforeSetupHasEverSucceeded() async throws {
         let suite = "soloist-default-\(UUID())"
         let defaults = UserDefaults(suiteName: suite)!

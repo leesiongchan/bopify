@@ -1,6 +1,186 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "soloist.error.endpoint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soloist started but its local connection didn’t become ready. Retry setup."
+          }
+        }
+      }
+    },
+    "soloist.error.launch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS couldn’t launch Soloist. Retry to check the installation."
+          }
+        }
+      }
+    },
+    "soloist.error.storage": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bopify couldn’t access its playback files. Check folder permissions, then retry."
+          }
+        }
+      }
+    },
+    "soloist.error.processInUse": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Another playback session is still running. Close the other copy of Bopify, then retry."
+          }
+        }
+      }
+    },
+    "menu.setup": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setup…"
+          }
+        }
+      }
+    },
+    "onboarding.done": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        }
+      }
+    },
+    "onboarding.library": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Library access"
+          }
+        }
+      }
+    },
+    "onboarding.playback": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback setup"
+          }
+        }
+      }
+    },
+    "onboarding.playbackTitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ready for your first spin"
+          }
+        }
+      }
+    },
+    "onboarding.playbackDescription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add your personal Soloist key. Bopify takes care of installation, updates, and playback."
+          }
+        }
+      }
+    },
+    "onboarding.startListening": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set up playback"
+          }
+        }
+      }
+    },
+    "onboarding.listenWithLibrespot": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue with librespot for now"
+          }
+        }
+      }
+    },
+    "onboarding.openSpotify": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Spotify"
+          }
+        }
+      }
+    },
+    "librarySetup.registrationIntro": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect your own Spotify app to browse your library, discover music, and save favorites."
+          }
+        }
+      }
+    },
+    "librarySetup.registrationInstructions": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create an app with Web API access, then add this redirect URI in its settings:"
+          }
+        }
+      }
+    },
+    "librarySetup.connected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Library access is connected"
+          }
+        }
+      }
+    },
+    "librarySetup.editRegistration": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit Spotify app"
+          }
+        }
+      }
+    },
+    "librarySetup.saveAndContinue": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save and continue"
+          }
+        }
+      }
+    },
     "soloist.preparing": {
       "localizations": {
         "en": {
@@ -81,66 +261,6 @@
         }
       }
     },
-    "soloist.menu": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Playback Engine…"
-          }
-        }
-      }
-    },
-    "soloist.title": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Playback Engine"
-          }
-        }
-      }
-    },
-    "soloist.intro": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Soloist is the default playback engine. Librespot supplies lyrics, radio, and other missing features. Bopify downloads and updates Soloist automatically."
-          }
-        }
-      }
-    },
-    "soloist.currentSoloist": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Using Soloist"
-          }
-        }
-      }
-    },
-    "soloist.currentLibrespot": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Using librespot"
-          }
-        }
-      }
-    },
-    "soloist.signInFirst": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sign in to Bopify first, then return here to enable Soloist."
-          }
-        }
-      }
-    },
     "soloist.getKey": {
       "localizations": {
         "en": {
@@ -181,16 +301,6 @@
         }
       }
     },
-    "soloist.enable": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enable Soloist"
-          }
-        }
-      }
-    },
     "soloist.retry": {
       "localizations": {
         "en": {
@@ -201,32 +311,12 @@
         }
       }
     },
-    "soloist.cancel": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancel setup"
-          }
-        }
-      }
-    },
     "soloist.playHere": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Play here"
-          }
-        }
-      }
-    },
-    "soloist.useLibrespot": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Use librespot for this session"
           }
         }
       }
@@ -331,26 +421,6 @@
         }
       }
     },
-    "soloist.queueLimit": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Soloist supports next and previous. Selecting an exact queue entry currently requires librespot."
-          }
-        }
-      }
-    },
-    "soloist.switchNotice": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Switching engines pauses playback. Queue edits are not transferred between engines."
-          }
-        }
-      }
-    },
     "soloist.error.invalidKey": {
       "localizations": {
         "en": {
@@ -426,7 +496,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Soloist could not finish starting. Check your key and connection, then retry. Librespot remains available."
+            "value": "Soloist could not finish starting. Retry playback setup, or continue with librespot for now."
           }
         }
       }
@@ -1426,16 +1496,6 @@
         }
       }
     },
-    "librarySetup.intro" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "To finish setup, create your own free Spotify app and approve library access. This connects your saved music, playlists, followed artists and listening history, and lets you save or remove favorites. All requested access is required to use Bopify."
-          }
-        }
-      }
-    },
     "librarySetup.invalid" : {
       "localizations" : {
         "en" : {
@@ -1526,36 +1586,6 @@
         }
       }
     },
-    "librarySetup.save" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Save and authorize"
-          }
-        }
-      }
-    },
-    "librarySetup.step1" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "1. Open the Spotify Developer Dashboard and click Create app. Your account needs Premium."
-          }
-        }
-      }
-    },
-    "librarySetup.step2" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "2. Add this Redirect URI and tick Web API:"
-          }
-        }
-      }
-    },
     "librarySetup.step3" : {
       "localizations" : {
         "en" : {
@@ -1566,42 +1596,12 @@
         }
       }
     },
-    "librarySetup.step4" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "4. Paste the app's Client ID below — not the Client secret."
-          }
-        }
-      }
-    },
-    "librarySetup.title" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Library Access"
-          }
-        }
-      }
-    },
     "menu.artworkBackground" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Artwork Background"
-          }
-        }
-      }
-    },
-    "menu.libraryAccess" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Library Access…"
           }
         }
       }

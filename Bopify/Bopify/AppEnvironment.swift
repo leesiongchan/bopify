@@ -39,14 +39,49 @@ final class AppEnvironment {
     }
 
     var playerMode: PlayerMode {
-        isListening || isLiveLyricsVisible ? presentation.mode : .expanded
+        !isShowingOnboarding && (isListening || isLiveLyricsVisible) ? presentation.mode : .expanded
     }
+
+    private(set) var requestedOnboardingSection: OnboardingSection?
+
+    var onboardingStep: StartupStep? {
+        switch authState {
+        case .signedOut: return .signIn(isRemovingCredentials ? .removingCredentials : .idle)
+        case .authenticating: return .signIn(.authenticating)
+        case .refreshing: return .signIn(.restoring)
+        case let .error(error): return .signIn(.error(error))
+        case .needsLibraryAuthorization: return .library(librarySetupStatus)
+        case .signedIn:
+            if requestedOnboardingSection == .library { return .library(librarySetupStatus) }
+            if case .failed = soloist.phase, !soloist.sessionUsesLibrespot { return .playback(.failure) }
+            if requestedOnboardingSection == .playback || !soloist.sessionUsesLibrespot && !soloist.hasUsablePlayback {
+                if soloist.isPreparing { return .playback(.working) }
+                return switch soloist.phase {
+                case .failed: .playback(.failure)
+                case .installing, .authorizing, .checkingAccount, .pairing, .verifying, .prepared, .reconnecting: .playback(.working)
+                default: .playback(.entry)
+                }
+            }
+            return nil
+        }
+    }
+
+    var isShowingOnboarding: Bool { onboardingStep != nil }
+
+    func showOnboarding(section: OnboardingSection = .playback) {
+        guard !isPreparingForQuit, !isRemovingCredentials else { return }
+        requestedOnboardingSection = section
+        searchPopover.close()
+        hideLiveLyrics()
+        presentation.isVisible = true
+        playerWindowController.show()
+    }
+
+    func closeOnboarding() { requestedOnboardingSection = nil }
 
     @ObservationIgnored private let auth: SpotifyAuthService
     @ObservationIgnored private let libraryAuth: LibraryAuthorization
     private(set) var libraryClientID: String?
-    let librarySetupWindow = LibrarySetupWindowController()
-    let soloistSetupWindow = SoloistSetupWindowController()
     let soloist: SoloistPlaybackController
     @ObservationIgnored private var soloistAction: Task<Void, Never>?
     private(set) var librarySetupError: PlayerError?
@@ -164,7 +199,7 @@ final class AppEnvironment {
         authorizeLibrary = { try await libraryAuth.authorize() }
         soloist.needsAttention = { [weak self] in
             guard let self, !self.isPreparingForQuit, !self.isRemovingCredentials else { return }
-            self.soloistSetupWindow.show(environment: self)
+            self.showOnboarding(section: .playback)
         }
     }
 
@@ -178,6 +213,7 @@ final class AppEnvironment {
          playbackAuth: SpotifyAuthService? = nil,
          libraryAuth: SpotifyAuthService? = nil,
          previewLibraryClientID: String? = String(repeating: "0", count: 32),
+         soloistController: SoloistPlaybackController? = nil,
          logoutIntent: LogoutIntentStore? = nil,
          artworkStore: ArtworkStore = ArtworkStore(),
          radioEngine: (any PlaybackEngine)? = nil,
@@ -196,7 +232,7 @@ final class AppEnvironment {
         self.libraryAuth = LibraryAuthorization(suiteName: previewSuite) { _ in previewLibraryAuth }
         previewDefaults.removePersistentDomain(forName: previewSuite)
         consentDefaults = previewDefaults
-        soloist = SoloistPlaybackController(defaults: previewDefaults, keys: PreviewSoloistKeys(), authorize: {},
+        soloist = soloistController ?? SoloistPlaybackController(defaults: previewDefaults, sessionUsesLibrespot: true, keys: PreviewSoloistKeys(), authorize: {},
             install: { _, _ in throw SoloistPlaybackError.unavailable },
             start: { _ in throw SoloistPlaybackError.unavailable }, clearSession: {})
         libraryClientID = previewLibraryClientID
@@ -267,7 +303,6 @@ final class AppEnvironment {
         guard !isPreparingForQuit, !isRemovingCredentials, !isAuthorizingLibrary,
               authState == .needsLibraryAuthorization else { return nil }
         guard libraryClientID != nil else {
-            librarySetupWindow.show(environment: self)
             BopifyLog.library.info("library setup requested")
             return nil
         }
@@ -355,7 +390,6 @@ final class AppEnvironment {
         guard session == sessionGeneration, !isPreparingForQuit else { return }
         BopifyLog.library.info("library setup saved; pendingConsent=\(hadPendingConsent, privacy: .public)")
         libraryClientID = id
-        librarySetupWindow.close()
         if id != previous {
             if authState == .signedIn { await requireLibrarySetup() }
             else if previous != nil { clearLibrary() }
@@ -549,7 +583,7 @@ final class AppEnvironment {
         let session = sessionGeneration
         let task = Task { [self] in
             defer { soloistAction = nil }
-            if soloist.provider == .soloist, key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if soloist.hasUsablePlayback, key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 await soloist.retryDataServices()
                 return
             }
@@ -617,6 +651,7 @@ final class AppEnvironment {
 
     func signOut() async {
         guard !isRemovingCredentials else { return }
+        requestedOnboardingSection = nil
         isRemovingCredentials = true
         recovery?.invalidate()
         soloistAction?.cancel()
@@ -632,8 +667,6 @@ final class AppEnvironment {
         recovery?.invalidate()
         authState = .signedOut
         libraryConsentRequired = false
-        librarySetupWindow.close()
-        soloistSetupWindow.close()
         do { try logoutIntent?.begin([.playback, .library, .soloist]) }
         catch { BopifyLog.auth.error("logout intent could not be persisted; retrying intent for both stores") }
         let clearingAuth = Task { [auth] in
@@ -674,14 +707,13 @@ final class AppEnvironment {
     }
 
     func prepareForQuit() async {
+        requestedOnboardingSection = nil
         isPreparingForQuit = true
         recovery?.invalidate()
         soloistAction?.cancel()
         await soloist.stop()
         playerWindowController.hide()
         presentation.isVisible = false
-        librarySetupWindow.close()
-        soloistSetupWindow.close()
         BopifyLog.playback.info("prepare for quit starting")
         stopLiveLyrics()
         searchPopover.close()
@@ -739,7 +771,7 @@ final class AppEnvironment {
             connectionMonitor = monitor
             monitor.start()
         }
-        coordinator.start()
+        if soloist.hasSavedKey || soloist.sessionUsesLibrespot { coordinator.start() }
         BopifyLog.auth.info("credentials restored; playback connection scheduled")
     }
 

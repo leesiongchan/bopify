@@ -10,7 +10,10 @@ enum SoloistSetupPhase: Equatable {
     case idle, authorizing, installing(Double?), checkingAccount, pairing(String), verifying, prepared, ready, limitedServices, reconnecting
     case failed(SoloistSetupFailure)
 }
-enum SoloistSetupFailure { case invalidKey, credentials, authorization, accountMismatch, missingAccountID, pairing, installation, startup, rateLimited }
+enum SoloistSetupFailure {
+    case invalidKey, credentials, authorization, accountMismatch, missingAccountID, pairing, installation, startup, rateLimited
+    case processInUse, storage, launch, endpoint
+}
 
 struct SoloistLaunchRequest: Sendable {
     let executable: URL
@@ -30,6 +33,7 @@ private nonisolated final class SoloistStatusSequence: @unchecked Sendable {
 final class SoloistPlaybackController {
     private(set) var phase: SoloistSetupPhase = .idle
     private(set) var provider: PlaybackProvider = .librespot
+    var hasUsablePlayback: Bool { provider == .soloist && (phase == .ready || phase == .limitedServices) }
     private(set) var hasSavedKey: Bool
     private(set) var isPreparing = false
     private(set) var hasPendingUpdate = false
@@ -50,13 +54,14 @@ final class SoloistPlaybackController {
     @ObservationIgnored private var deliveredStatus = 0
     @ObservationIgnored private let statusSequence = SoloistStatusSequence()
 
-    init(defaults: UserDefaults = .standard, keys: any SoloistKeyStoring = SoloistKeyStore(),
+    init(defaults: UserDefaults = .standard, sessionUsesLibrespot: Bool = false, keys: any SoloistKeyStoring = SoloistKeyStore(),
         authorize: @escaping @MainActor () async throws -> Void,
         webToken: @escaping @Sendable () async throws -> String = { throw PlayerError.authDenied },
         streamingToken: @escaping @Sendable () async throws -> String = { throw PlayerError.authDenied },
         install: @escaping @MainActor (Bool, @escaping @Sendable (SoloistInstallProgress) -> Void) async throws -> URL,
         start: (@MainActor (SoloistLaunchRequest) async throws -> any PreparedPlaybackEngine)? = nil,
         clearSession: @escaping @MainActor () throws -> Void = { try SoloistEngine.clearStoredSession() }) {
+        self.sessionUsesLibrespot = sessionUsesLibrespot
         self.defaults = defaults; self.keys = keys; self.authorize = authorize; self.clearSession = clearSession
         hasSavedKey = defaults.bool(forKey: "soloist.hasKey")
         self.install = install
@@ -250,6 +255,20 @@ final class SoloistPlaybackController {
     }
 
     private static func failure(_ error: any Error) -> SoloistSetupFailure {
+        if let startup = error as? SoloistStartupError {
+            switch startup {
+            case .processInUse:
+                BopifyLog.playback.error("Soloist startup blocked reason=processInUse")
+                return .processInUse
+            case .storageUnavailable:
+                BopifyLog.playback.error("Soloist startup blocked reason=storageUnavailable")
+                return .storage
+            case .launchFailed: return .launch
+            case .endpointUnavailable: return .endpoint
+            case .exited(10): return .installation
+            case .exited: return .startup
+            }
+        }
         if error is SoloistInstallationError { return .installation }
         if let player = error as? PlayerError, player == .authDenied || player == .authExpired || player == .credentialCorrupt { return .authorization }
         if error as? LibraryError == .authorizationRequired { return .authorization }

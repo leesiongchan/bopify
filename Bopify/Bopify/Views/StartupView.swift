@@ -14,7 +14,7 @@ struct StartupView<Content: View>: View {
             // Stacked, so outgoing and incoming copy cross-fade in place instead of pushing each other.
             ZStack {
                 content()
-                    .id(step)
+                    .id(step.identity)
                     .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 6)))
             }
         }
@@ -71,16 +71,18 @@ struct StartupHeading: View {
 struct StartupButton: View {
     let key: LocalizedStringKey
     var isSecondary = false
+    var identifier = ""
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Text(key)
+            Text(key, bundle: SoloistResources.bundle)
                 .font(.system(size: isSecondary ? 12 : 13, weight: isSecondary ? .medium : .semibold))
                 .padding(.horizontal, isSecondary ? 16 : 24)
                 .frame(height: isSecondary ? 30 : 44)
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
         .playerGlass()
     }
 }

@@ -1,7 +1,8 @@
 import Darwin
 import Foundation
+import BopifyDomain
 
-/// Owns exactly the child it launches. A PID file is only a reason to refuse a second launch.
+/// Owns exactly the child it launches; stale runtime files never authorize adopting a process.
 protocol SoloistProcessHandle: Sendable {
     var endpointURL: URL { get }
     var isRunning: Bool { get }
@@ -21,31 +22,32 @@ final class SoloistProcess: SoloistProcessHandle, @unchecked Sendable {
         self.process = process; self.lockFD = lockFD; endpointURL = endpoint
     }
 
-    @concurrent static func start(executable: URL, key: String, name: String, volume: Double) async throws -> SoloistProcess {
+    @concurrent static func start(executable: URL, key: String, name: String, volume: Double,
+                                  directory root: URL = directory) async throws -> SoloistProcess {
         try Task.checkCancellation()
-        let root = directory
         for folder in [root, root.appendingPathComponent("data"), root.appendingPathComponent("cache")] {
-            if mkdir(folder.path, 0o700) != 0 && errno != EEXIST { throw SoloistPlaybackError.startupFailed }
+            if mkdir(folder.path, 0o700) != 0 && errno != EEXIST { throw SoloistStartupError.storageUnavailable }
             var info = stat()
             guard lstat(folder.path, &info) == 0, info.st_mode & S_IFMT == S_IFDIR,
-                  info.st_uid == getuid(), info.st_mode & 0o777 == 0o700 else { throw SoloistPlaybackError.startupFailed }
+                  info.st_uid == getuid(), info.st_mode & 0o777 == 0o700 else { throw SoloistStartupError.storageUnavailable }
         }
         let fd = open(root.appendingPathComponent("process.lock").path, O_CREAT | O_RDWR | O_NOFOLLOW, 0o600)
-        guard fd >= 0 else { throw SoloistPlaybackError.startupFailed }
+        guard fd >= 0 else { throw SoloistStartupError.storageUnavailable }
         var transferred = false
         defer { if !transferred { close(fd) } }
         var info = stat()
         guard fstat(fd, &info) == 0, info.st_mode & S_IFMT == S_IFREG, info.st_uid == getuid(),
-              info.st_mode & 0o777 == 0o600, flock(fd, LOCK_EX | LOCK_NB) == 0 else { throw SoloistPlaybackError.startupFailed }
+              info.st_mode & 0o777 == 0o600 else { throw SoloistStartupError.storageUnavailable }
+        guard flock(fd, LOCK_EX | LOCK_NB) == 0 else { throw SoloistStartupError.processInUse }
         let data = root.appendingPathComponent("data")
         if let text = try? read(data.appendingPathComponent("soloist.pid"), limit: 32),
            let pid = Int32(text.trimmingCharacters(in: .whitespacesAndNewlines)), pid > 0,
            kill(pid, 0) == 0 || errno == EPERM {
-            throw SoloistPlaybackError.startupFailed
+            try await SoloistOrphanRecovery.retire(pid: pid, root: root, executable: executable)
         }
         for name in ["ws.addr", "ws.port"] {
             let path = data.appendingPathComponent(name)
-            if unlink(path.path) != 0 && errno != ENOENT { throw SoloistPlaybackError.startupFailed }
+            if unlink(path.path) != 0 && errno != ENOENT { throw SoloistStartupError.storageUnavailable }
         }
         let child = Process()
         child.executableURL = executable
@@ -54,19 +56,27 @@ final class SoloistProcess: SoloistProcessHandle, @unchecked Sendable {
             "--initial-volume", String(Int((max(0, min(1, volume)) * 100).rounded())), "--ws", "127.0.0.1:0"]
         child.standardOutput = FileHandle.nullDevice; child.standardError = FileHandle.nullDevice
         child.standardInput = FileHandle.nullDevice
-        do { try child.run() } catch { throw SoloistPlaybackError.startupFailed }
+        do { try child.run() } catch {
+            BopifyLog.playback.error("Soloist launch failed before process creation")
+            throw SoloistStartupError.launchFailed
+        }
         do {
             let deadline = Date().addingTimeInterval(30)
             while Date() < deadline {
                 try Task.checkCancellation()
-                guard child.isRunning else { throw SoloistPlaybackError.startupFailed }
+                guard child.isRunning else {
+                    child.waitUntilExit()
+                    BopifyLog.playback.error("Soloist exited during startup status=\(child.terminationStatus, privacy: .public)")
+                    throw SoloistStartupError.exited(child.terminationStatus)
+                }
                 if let endpoint = try? endpoint(in: data) {
                     transferred = true
                     return SoloistProcess(process: child, lockFD: fd, endpoint: endpoint)
                 }
                 try await Task.sleep(for: .milliseconds(50))
             }
-            throw SoloistPlaybackError.startupFailed
+            BopifyLog.playback.error("Soloist startup timed out waiting for loopback endpoint")
+            throw SoloistStartupError.endpointUnavailable
         } catch {
             await terminate(child)
             throw error

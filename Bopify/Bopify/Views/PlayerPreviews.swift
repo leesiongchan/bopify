@@ -55,7 +55,9 @@ enum PreviewLibrary {
 }
 
 /// An environment whose player runs `scenario` on the preview engine, with library services that never touch the network.
-func makePreviewEnvironment(_ scenario: PreviewScenario = .playing, library: PreviewLibrary = .samples) -> AppEnvironment {
+func makePreviewEnvironment(_ scenario: PreviewScenario = .playing, library: PreviewLibrary = .samples,
+                            libraryClientID: String? = String(repeating: "0", count: 32),
+                            soloistController: SoloistPlaybackController? = nil) -> AppEnvironment {
     let engine = PreviewPlaybackEngine(tracks: Array(previewTracks.prefix(5)))
     let player = PlayerModel(engine: engine)
     let events: [PlaybackEvent] = switch scenario {
@@ -75,6 +77,7 @@ func makePreviewEnvironment(_ scenario: PreviewScenario = .playing, library: Pre
     let services = PreviewLibraryServices(library)
     return AppEnvironment(previewPlayer: player, favoriteService: services, savedTracksService: services, historyService: services,
                           searchService: services, collectionsService: services,
+                          previewLibraryClientID: libraryClientID, soloistController: soloistController,
                           artworkStore: makePreviewArtworkStore(), radioEngine: engine)
 }
 

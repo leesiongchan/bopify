@@ -6,42 +6,55 @@ enum SignInRecordPose: Equatable { case out, spinning, tucked }
 enum RecordSide: Equatable { case a, b }
 enum LibrarySetupStatus: Hashable { case idle, authorizing, refused }
 
-/// Everything shown before the player, on one record: sign-in and library setup are its two sides, so moving
-/// between them, or on to connecting, never swaps the scene.
+enum OnboardingSection { case library, playback }
+enum PlaybackSetupStatus: Hashable { case entry, working, failure }
+
+/// One persistent record accompanies sign-in, library access, and playback preparation.
 enum StartupStep: Hashable {
     case signIn(SignInStatus)
     case library(LibrarySetupStatus)
-    /// The message key is part of the step so a change of wording cross-fades like any other step.
+    case playback(PlaybackSetupStatus)
     case connection(messageKey: String, isFailure: Bool)
 
-    /// The setup step shown in the header, or nil for returning users who are only being reconnected.
+    /// Form identity is independent of download progress and error changes.
+    var identity: String {
+        switch self {
+        case .signIn: "signIn"
+        case .library: "library"
+        case .playback: "playback"
+        case .connection: "connection"
+        }
+    }
+
     var progress: Int? {
         switch self {
         case .signIn(.idle), .signIn(.authenticating), .signIn(.error): 1
         case .library: 2
+        case .playback: 3
         case .signIn(.restoring), .signIn(.removingCredentials), .connection: nil
         }
     }
 
-    /// Nil keeps whichever side is showing, so connecting after setup doesn't flip the record back.
     var side: RecordSide? {
         switch self {
         case .signIn: .a
         case .library: .b
-        case .connection: nil
+        case .playback, .connection: nil
         }
     }
 
-    /// Library setup needs the room for its list, so the record steps back rather than leaving.
     var isCompact: Bool {
-        if case .library = self { true } else { false }
+        switch self {
+        case .library, .playback: true
+        default: false
+        }
     }
 
     var recordPose: SignInRecordPose {
         switch self {
-        case .signIn(.idle), .library(.idle): .out
-        case .signIn(.authenticating), .signIn(.restoring), .signIn(.removingCredentials), .library(.authorizing): .spinning
-        case .signIn(.error), .library(.refused): .tucked
+        case .signIn(.idle), .library(.idle), .playback(.entry): .out
+        case .signIn(.authenticating), .signIn(.restoring), .signIn(.removingCredentials), .library(.authorizing), .playback(.working): .spinning
+        case .signIn(.error), .library(.refused), .playback(.failure): .tucked
         case let .connection(_, isFailure): isFailure ? .tucked : .spinning
         }
     }

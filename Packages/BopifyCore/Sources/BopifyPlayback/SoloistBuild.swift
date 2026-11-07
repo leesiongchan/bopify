@@ -43,6 +43,7 @@ enum SoloistArchive {
 }
 
 public enum SoloistCodeSignature {
+    static let publisherRequirement = #"anchor apple generic and identifier "com.spotify.soloist" and certificate leaf[subject.OU] = "2FNC3A47ZF""#
     /// Verify the standalone CLI's publisher; app-bundle Gatekeeper assessment does not apply here.
     public static func validate(_ executable: URL) throws {
         let fd = open(executable.path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)
@@ -54,9 +55,8 @@ public enum SoloistCodeSignature {
             throw SoloistInstallationError.invalidExecutable
         }
         var code: SecStaticCode?, requirement: SecRequirement?
-        let rule = #"anchor apple generic and identifier "com.spotify.soloist" and certificate leaf[subject.OU] = "2FNC3A47ZF""#
         guard SecStaticCodeCreateWithPath(executable as CFURL, [], &code) == errSecSuccess, let code,
-              SecRequirementCreateWithString(rule as CFString, [], &requirement) == errSecSuccess, let requirement,
+              SecRequirementCreateWithString(publisherRequirement as CFString, [], &requirement) == errSecSuccess, let requirement,
               SecStaticCodeCheckValidity(code, SecCSFlags(rawValue: kSecCSStrictValidate), requirement) == errSecSuccess else {
             throw SoloistInstallationError.signatureInvalid
         }
