@@ -23,7 +23,7 @@ struct PlaybackOnboardingView: View {
     private var copy: PlaybackOnboardingCopy { PlaybackOnboardingCopy(phase: controller.phase) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(spacing: 14) {
             StartupHeading(title: text(LocalizedStringKey(copy.title)),
                            message: text(LocalizedStringKey(copy.message)), isCompact: true)
             if !busy {
@@ -38,10 +38,10 @@ struct PlaybackOnboardingView: View {
                         .onSubmit(enable)
                 }
                 if controller.hasSavedKey {
-                    text("soloist.savedKeyHint").font(.body).foregroundStyle(.secondary)
+                    text("soloist.savedKeyHint").font(.body).foregroundStyle(.primary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                text("soloist.keyPrivacy").font(.body).foregroundStyle(.secondary)
+                text("soloist.keyPrivacy").font(.body).foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             status
@@ -57,11 +57,11 @@ struct PlaybackOnboardingView: View {
                 }
             }
             Button(SoloistResources.string("onboarding.library")) { environment.showOnboarding(section: .library) }
-                .buttonStyle(.plain).font(.callout).foregroundStyle(.secondary)
+                .buttonStyle(.plain).font(.callout).foregroundStyle(.primary)
                 .accessibilityIdentifier("onboarding.library")
         }
-        .frame(maxWidth: 380, alignment: .leading)
-        .multilineTextAlignment(.leading)
+        .frame(maxWidth: 340)
+        .multilineTextAlignment(.center)
         .task(id: pairingName) {
             if pairingName != nil { discovery.start() } else { discovery.stop() }
         }
@@ -91,7 +91,7 @@ struct PlaybackOnboardingView: View {
             }
         case .verifying:
             progress("soloist.verifying")
-            text("soloist.verifyHelp").font(.body).foregroundStyle(.secondary)
+            text("soloist.verifyHelp").font(.body).foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
             Button(SoloistResources.string("soloist.playHere")) { Task { await controller.playHere() } }
                 .accessibilityIdentifier("soloist.playHere")
@@ -184,19 +184,19 @@ struct SoloistPairingGuidance: View {
             switch state {
             case .denied:
                 Text("soloist.discoveryDenied", bundle: SoloistResources.bundle)
-                    .font(.body).foregroundStyle(.secondary)
+                    .font(.body).foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("soloist.discoveryDenied")
                 Button(SoloistResources.string("soloist.localNetworkSettings"), action: openSettings)
                     .accessibilityIdentifier("soloist.localNetworkSettings")
             case .unavailable:
                 Text("soloist.discoveryUnavailable", bundle: SoloistResources.bundle)
-                    .font(.body).foregroundStyle(.secondary)
+                    .font(.body).foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("soloist.discoveryUnavailable")
             case .idle, .browsing:
                 Text("soloist.pairingHelp", bundle: SoloistResources.bundle)
-                    .font(.body).foregroundStyle(.secondary)
+                    .font(.body).foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("soloist.pairingHelp")
             }

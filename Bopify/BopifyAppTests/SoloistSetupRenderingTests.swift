@@ -240,18 +240,17 @@ struct SoloistSetupRenderingTests {
         let environment = makePreviewEnvironment(.playing, libraryClientID: nil)
         let track = environment.player?.state.currentTrack
         environment.showOnboarding(section: .library)
-        let window = NSWindow(contentRect: CGRect(x: 300, y: 300, width: 410, height: 480),
-            styleMask: [.titled], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        defer { window.close(); environment.player?.stop() }
-        let host = NSHostingView(rootView: PlayerRootView(environment: environment)
+        // Match the app's non-activating panel so native glass editing keeps keyboard focus.
+        let window = StatusPanel(content: PlayerRootView(environment: environment)
             .frame(width: 410, height: 480)
             .environment(\.accessibilityEnabled, true))
-        host.sizingOptions = []
-        window.contentView = host
+        window.setFrame(CGRect(x: 300, y: 300, width: 410, height: 480), display: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close(); environment.player?.stop() }
         window.makeKeyAndOrderFront(nil)
         let content = try #require(window.contentView)
         try await Task.sleep(for: .milliseconds(180))
+        try #require(window.isKeyWindow, "Keyboard entry requires an active native test window")
         let field = try #require(editableField(in: content))
         _ = try AppearanceTestAccessibility.element("onboarding.clientIDLabel", in: content)
         let save = try AppearanceTestAccessibility.element("onboarding.saveLibrary", in: content)

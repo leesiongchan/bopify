@@ -9,24 +9,20 @@ struct StartupView<Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 20) {
-            if let progress = step.progress {
-                StartupStepIndicator(current: progress, total: 3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+        VStack(spacing: 18) {
             SignInRecordView(step: step, isVisible: isVisible)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background {
-                    AuroraBackground(isAnimating: isVisible, isDimmed: step.recordPose == .tucked)
-                        .opacity(0.2)
-                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                }
             // Stacked, so outgoing and incoming copy cross-fade in place instead of pushing each other.
             ZStack {
                 content()
                     .id(step.identity)
                     .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 6)))
+            }
+            .frame(maxWidth: .infinity)
+            .background {
+                StartupReadabilityBackdrop()
+                    .padding(.horizontal, -24)
+                    .padding(.top, -28)
+                    .padding(.bottom, -40)
             }
         }
         .frame(maxHeight: .infinity)
@@ -55,33 +51,33 @@ struct StartupStepIndicator: View {
     }
 
     var body: some View {
-        Text("onboarding.step \(current) \(total) \(SoloistResources.string(name))", bundle: SoloistResources.bundle)
-            .font(.callout.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityIdentifier("onboarding.step")
+        HStack(spacing: 5) {
+            ForEach(1...total, id: \.self) { step in
+                Capsule().fill(.primary.opacity(step <= current ? 0.9 : 0.3))
+                    .frame(width: 14, height: 4)
+            }
+        }
+        .accessibilityRepresentation {
+            Text("onboarding.step \(current) \(total) \(SoloistResources.string(name))", bundle: SoloistResources.bundle)
+                .accessibilityIdentifier("onboarding.step")
+        }
     }
 }
 
-struct StartupInstruction<Content: View>: View {
-    let number: Int
-    let title: LocalizedStringKey
-    @ViewBuilder let content: () -> Content
+/// A soft tint follows the instructions as they scroll, leaving the Aurora and record visible.
+private struct StartupReadabilityBackdrop: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text(verbatim: "\(number)")
-                .font(.body.weight(.semibold))
-                .frame(width: 26, height: 26)
-                .background(Color(nsColor: .controlBackgroundColor), in: Circle())
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 8) {
-                Text(title, bundle: SoloistResources.bundle)
-                    .font(.body.weight(.semibold)).foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                content().font(.body)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        if !reduceTransparency && contrast != .increased {
+            LinearGradient(stops: [
+                .init(color: .clear, location: 0),
+                .init(color: .black.opacity(0.42), location: 0.14),
+                .init(color: .black.opacity(0.42), location: 1),
+            ], startPoint: .top, endPoint: .bottom)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
     }
 }
@@ -92,20 +88,20 @@ struct StartupHeading: View {
     var isCompact = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            title.font(.system(isCompact ? .title2 : .title, weight: .semibold))
+        VStack(spacing: 8) {
+            title.font(.system(size: isCompact ? 21 : 24, weight: .semibold))
                 .foregroundStyle(.primary)
                 .accessibilityAddTraits(.isHeader)
             if let message {
                 message
                     .font(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary)
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .multilineTextAlignment(.leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: 340)
     }
 }
 
@@ -116,22 +112,15 @@ struct StartupButton: View {
     let action: () -> Void
 
     var body: some View {
-        if isSecondary {
-            button.buttonStyle(.glass)
-        } else {
-            button.buttonStyle(.glassProminent)
-        }
-    }
-
-    private var button: some View {
         Button(action: action) {
             Text(key, bundle: SoloistResources.bundle)
                 .font(.body.weight(isSecondary ? .medium : .semibold))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
+                .padding(.horizontal, isSecondary ? 16 : 24)
+                .frame(minHeight: isSecondary ? 32 : 44)
         }
-        .controlSize(.large)
+        .buttonStyle(.plain)
         .accessibilityIdentifier(identifier)
+        .playerGlass()
     }
 }
 

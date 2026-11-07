@@ -75,7 +75,7 @@ struct SignInRecordView: View {
     @State private var flip: CGFloat = 1
 
     private var pose: SignInRecordPose { step.recordPose }
-    private var scale: CGFloat { step.isCompact ? 0.44 : 0.88 }
+    private var scale: CGFloat { step.isCompact ? 0.55 : 0.88 }
 
     private enum Metrics {
         static let stage = CGSize(width: 250, height: 324)

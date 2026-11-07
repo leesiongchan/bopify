@@ -13,7 +13,7 @@ struct PlayerRootView: View {
                                    presentation: environment.presentation, windowController: environment.playerWindowController)
                     .id(ObjectIdentifier(player))
             } else {
-                StartupSurface {
+                StartupSurface(isAnimating: environment.presentation.isVisible, isDimmed: startupStep?.recordPose == .tucked) {
                     VStack(spacing: 8) {
                         header
                         if let step = startupStep {
@@ -48,8 +48,9 @@ struct PlayerRootView: View {
             }
                 .font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
             WindowDragRegion().frame(maxWidth: .infinity)
-            if startupStep != nil {
+            if let step = startupStep {
                 // Search and Favorite need a ready player, and reconnecting still counts as signed in.
+                if let progress = step.progress { StartupStepIndicator(current: progress, total: 3) }
                 if environment.authState == .signedIn, environment.requestedOnboardingSection != nil,
                    environment.soloist.hasUsablePlayback {
                     Button(SoloistResources.string("onboarding.done"), action: environment.closeOnboarding)

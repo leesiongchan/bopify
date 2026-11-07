@@ -18,14 +18,14 @@ struct SignInView: View {
     var onRetryCleanup: () -> Void = {}
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(spacing: 0) {
             switch status {
             case .idle:
                 StartupHeading(title: Text("signIn.title", bundle: SoloistResources.bundle), message: Text("signIn.subtitle", bundle: SoloistResources.bundle))
                 StartupButton(key: "signIn.button", action: onSignIn).padding(.top, 20)
                 Text("signIn.premium", bundle: SoloistResources.bundle)
                     .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary)
                     .padding(.top, 12)
             case .authenticating:
                 StartupHeading(title: Text("onboarding.signingIn", bundle: SoloistResources.bundle), message: Text("signIn.browser", bundle: SoloistResources.bundle))
@@ -55,6 +55,7 @@ struct SignInView: View {
                 .padding(.top, 20)
             }
         }
-        .frame(maxWidth: 380, alignment: .leading)
+        .frame(maxWidth: 340)
+        .multilineTextAlignment(.center)
     }
 }

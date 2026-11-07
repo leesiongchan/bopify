@@ -9,6 +9,7 @@ struct StartupInput<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -21,9 +22,9 @@ struct StartupInput<Content: View>: View {
                 .textFieldStyle(.plain)
                 .font(.body)
                 .foregroundStyle(.primary)
-                .frame(minHeight: 22)
+                .frame(minHeight: 20)
                 .padding(.horizontal, 14)
-                .padding(.vertical, 11)
+                .padding(.vertical, 10)
                 .background {
                     StartupInputBackground(reduceTransparency: reduceTransparency, increasedContrast: contrast == .increased)
                 }
@@ -34,6 +35,7 @@ struct StartupInput<Content: View>: View {
                         .allowsHitTesting(false)
                 }
                 .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .environment(\.colorScheme, reduceTransparency || contrast == .increased ? colorScheme : .dark)
                 .simultaneousGesture(TapGesture().onEnded { _ in onActivate() })
         }
     }
@@ -53,14 +55,25 @@ struct StartupInputBackground: View {
     }
 }
 
-/// Content remains opaque; the record's decorative light never sits behind instructional text.
+/// Preserve the original full-window Aurora and glass, with semantic solid accessibility fallbacks.
 struct StartupSurface<Content: View>: View {
+    var isAnimating = true
+    var isDimmed = false
     @ViewBuilder let content: () -> Content
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    private var usesSolidSurface: Bool { reduceTransparency || contrast == .increased }
 
     var body: some View {
-        content()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(nsColor: .windowBackgroundColor),
-                        in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        PlayerSurface {
+            content()
+                .background {
+                    AuroraBackground(isAnimating: isAnimating, isDimmed: isDimmed)
+                        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                }
+        }
+        .foregroundStyle(usesSolidSurface ? Color.primary : .white)
+        .tint(usesSolidSurface ? .accentColor : Color(red: 0.69, green: 0.86, blue: 1))
     }
 }

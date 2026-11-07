@@ -16,12 +16,12 @@ struct LibraryAuthorizationSetupView: View {
     private var validClient: Bool { LibraryAuthorization.normalized(clientID) != nil }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(spacing: 14) {
             StartupHeading(title: Text("librarySetup.requiredTitle", bundle: SoloistResources.bundle),
                            message: Text(needsRegistration ? "librarySetup.registrationIntro" : "librarySetup.requiredDescription", bundle: SoloistResources.bundle),
                            isCompact: true)
             if status == .authorizing {
-                Text("librarySetup.approveInBrowser", bundle: SoloistResources.bundle).font(.callout).foregroundStyle(.secondary)
+                Text("librarySetup.approveInBrowser", bundle: SoloistResources.bundle).font(.body)
                 StartupButton(key: "onboarding.cancel", isSecondary: true, action: environment.cancelLibraryAuthorization)
             } else if needsRegistration {
                 registration
@@ -32,7 +32,7 @@ struct LibraryAuthorizationSetupView: View {
                     Label(SoloistResources.string("librarySetup.need.recent"), systemImage: "clock.arrow.circlepath")
                     Label(SoloistResources.string("librarySetup.need.likes"), systemImage: "plus")
                 }
-                .font(.callout).foregroundStyle(.secondary)
+                .font(.body)
                 if status == .refused { failure }
                 if environment.authState == .needsLibraryAuthorization {
                     StartupButton(key: status == .refused ? "signIn.retry" : "librarySetup.continue", action: connect)
@@ -40,7 +40,7 @@ struct LibraryAuthorizationSetupView: View {
                     Label(SoloistResources.string("librarySetup.connected"), systemImage: "checkmark.circle").font(.callout)
                 }
                 Button(SoloistResources.string("librarySetup.editRegistration")) { isEditingClient = true }
-                    .buttonStyle(.plain).font(.callout).foregroundStyle(.secondary)
+                    .buttonStyle(.plain).font(.callout)
                     .accessibilityIdentifier("onboarding.editLibrary")
             }
             if environment.authState == .signedIn {
@@ -49,37 +49,34 @@ struct LibraryAuthorizationSetupView: View {
                     .accessibilityIdentifier("onboarding.playback")
             }
         }
-        .frame(maxWidth: 380, alignment: .leading)
+        .frame(maxWidth: 340)
+        .multilineTextAlignment(.center)
         .onAppear { clientID = environment.libraryClientID ?? "" }
     }
 
     private var registration: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            StartupInstruction(number: 1, title: "librarySetup.guide.create") {
-                Text("librarySetup.guide.createDetail", bundle: SoloistResources.bundle).foregroundStyle(.secondary)
-                Link(SoloistResources.string("librarySetup.openDashboard"),
-                     destination: URL(string: "https://developer.spotify.com/dashboard")!)
-                    .foregroundStyle(.tint)
-            }
-            StartupInstruction(number: 2, title: "librarySetup.guide.redirect") {
-                Text("librarySetup.guide.redirectDetail", bundle: SoloistResources.bundle).foregroundStyle(.secondary)
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(verbatim: LibraryAuthorization.redirectURI)
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundStyle(.primary)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("onboarding.redirectURI")
-                    Button(SoloistResources.string("librarySetup.copy")) {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(LibraryAuthorization.redirectURI, forType: .string)
-                    }
-                    .accessibilityIdentifier("onboarding.copyRedirect")
+        VStack(spacing: 14) {
+            Text("librarySetup.guide.createDetail", bundle: SoloistResources.bundle)
+                .fixedSize(horizontal: false, vertical: true)
+            Link(SoloistResources.string("librarySetup.openDashboard"),
+                 destination: URL(string: "https://developer.spotify.com/dashboard")!)
+                .foregroundStyle(.tint)
+            Text("librarySetup.guide.redirectDetail", bundle: SoloistResources.bundle)
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(spacing: 8) {
+                Text(verbatim: LibraryAuthorization.redirectURI)
+                    .font(.system(.body, design: .monospaced))
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("onboarding.redirectURI")
+                Button(SoloistResources.string("librarySetup.copy")) {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(LibraryAuthorization.redirectURI, forType: .string)
                 }
+                .accessibilityIdentifier("onboarding.copyRedirect")
             }
-            StartupInstruction(number: 3, title: "librarySetup.guide.connect") {
-                Text("librarySetup.guide.connectDetail", bundle: SoloistResources.bundle).foregroundStyle(.secondary)
-            }
+            Text("librarySetup.guide.connectDetail", bundle: SoloistResources.bundle)
+                .fixedSize(horizontal: false, vertical: true)
             StartupInput(label: "librarySetup.clientID", labelIdentifier: "onboarding.clientIDLabel",
                          isFocused: clientIDFocused, onActivate: { clientIDFocused = true }) {
                 TextField(SoloistResources.string("librarySetup.clientIDPlaceholder"), text: $clientID)
@@ -92,7 +89,7 @@ struct LibraryAuthorizationSetupView: View {
             }
             if !clientID.isEmpty && !validClient {
                 Text("librarySetup.invalid", bundle: SoloistResources.bundle)
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(.callout)
             }
             failure
             StartupButton(key: "librarySetup.saveAndContinue", identifier: "onboarding.saveLibrary", action: save)
@@ -105,6 +102,7 @@ struct LibraryAuthorizationSetupView: View {
                 .buttonStyle(.plain).font(.body)
             }
         }
+        .font(.body)
     }
 
     @ViewBuilder private var failure: some View {
