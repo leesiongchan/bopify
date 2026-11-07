@@ -22,7 +22,7 @@ struct DesktopDataMigrationTests {
         let (root, old, new, defaults) = try fixture()
         defer { try? FileManager.default.removeItem(at: root) }
         let preferences = old.appendingPathComponent("Library/Preferences/com.leesiongchan.bopify.plist")
-        try write(["library.clientID": String(repeating: "a", count: 32), "soloist.enabled": true,
+        try write(["library.clientID": String(repeating: "a", count: 32), "soloist.hasKey": true,
                    "player.volume": 0.7, "record.hasScrubbed": true, "soloist.installationBookmark": Data([1])], to: preferences, plist: true)
         let support = old.appendingPathComponent("Library/Application Support/com.leesiongchan.bopify")
         try write(["version": 1, "pending": ["soloist"]], to: support.appendingPathComponent("logout-intent.json"))
@@ -42,10 +42,10 @@ struct DesktopDataMigrationTests {
         #expect(!FileManager.default.fileExists(atPath: new.appendingPathComponent("Soloist/current.json").path))
         let intent = LogoutIntentStore(url: new.appendingPathComponent("logout-intent.json"))
         #expect(try intent.isPending(.soloist) && intent.isPending(.playback))
-        defaults.set(false, forKey: "soloist.enabled")
+        defaults.set(false, forKey: "soloist.hasKey")
         try intent.complete(.soloist); try intent.complete(.playback)
         try migration.run()
-        #expect(!defaults.bool(forKey: "soloist.enabled"))
+        #expect(!defaults.bool(forKey: "soloist.hasKey"))
         #expect(try !LogoutIntentStore(url: new.appendingPathComponent("logout-intent.json")).hasPendingCleanup())
     }
     @Test(arguments: ["live", "locked", "conflict"])

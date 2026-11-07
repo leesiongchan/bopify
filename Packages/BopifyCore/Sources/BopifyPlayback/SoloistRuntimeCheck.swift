@@ -2,17 +2,19 @@ import Foundation
 
 /// Credential-free acceptance check for the installed daemon and its actual loopback protocol.
 public enum SoloistRuntimeCheck {
-    public static func verify(executable: URL) async throws {
+    public static func verify(executable: URL, includeDiscovery: Bool = false) async throws {
         try SoloistCodeSignature.validate(executable)
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("Bopify-runtime-check-\(UUID())")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
         defer { try? FileManager.default.removeItem(at: root) }
         for _ in 0..<2 {
+            let name = "Bopify installation check \(UUID().uuidString.prefix(8))"
             let child = try await SoloistProcess.start(executable: executable, key: "synthetic-invalid-key",
-                name: "Bopify installation check", volume: 0, directory: root)
+                name: name, volume: 0, directory: root)
             let socket = SoloistSocket(endpoint: child.endpointURL)
+            var publication: (any SoloistPairingPublishing)?
             do {
-                try await socket.send(Data(#"{"type":"command","command":"get_state"}"#.utf8))
+                try await socket.send(Data(#"{"type":"command","command":"get_auth_state"}"#.utf8))
                 try await withThrowingTaskGroup(of: Void.self) { group in
                     group.addTask {
                         for try await frame in socket.messages {
@@ -28,9 +30,19 @@ public enum SoloistRuntimeCheck {
                     do { _ = try await group.next(); group.cancelAll() }
                     catch { group.cancelAll(); await socket.close(); throw error }
                 }
+                if includeDiscovery {
+                    let deadline = Date().addingTimeInterval(5)
+                    while child.pairingPort == nil, child.isRunning, Date() < deadline {
+                        try await Task.sleep(for: .milliseconds(50))
+                    }
+                    guard let port = child.pairingPort else { throw SoloistPlaybackError.discoveryUnavailable }
+                    publication = try await SoloistBonjourPublisher.publish(port: port, name: name)
+                }
+                await publication?.stop()
                 await socket.close()
                 await child.stop()
             } catch {
+                await publication?.stop()
                 await socket.close()
                 await child.stop()
                 throw error

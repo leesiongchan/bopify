@@ -5,14 +5,13 @@ import BopifyAuth
 import BopifyDomain
 import BopifyPlayback
 
-enum PlaybackProvider { case soloist, librespot }
 enum SoloistSetupPhase: Equatable {
     case idle, authorizing, installing(Double?), checkingAccount, pairing(String), verifying, prepared, ready, limitedServices, reconnecting
     case failed(SoloistSetupFailure)
 }
 enum SoloistSetupFailure {
     case invalidKey, credentials, authorization, accountMismatch, missingAccountID, pairing, installation, startup, rateLimited
-    case processInUse, storage, launch, endpoint
+    case processInUse, storage, launch, endpoint, discovery
 }
 
 struct SoloistLaunchRequest: Sendable {
@@ -32,14 +31,11 @@ private nonisolated final class SoloistStatusSequence: @unchecked Sendable {
 @MainActor @Observable
 final class SoloistPlaybackController {
     private(set) var phase: SoloistSetupPhase = .idle
-    private(set) var provider: PlaybackProvider = .librespot
-    var hasUsablePlayback: Bool { provider == .soloist && (phase == .ready || phase == .limitedServices) }
+    var hasUsablePlayback: Bool { adoptedEngine != nil && (phase == .ready || phase == .limitedServices) }
     private(set) var hasSavedKey: Bool
     private(set) var isPreparing = false
     private(set) var hasPendingUpdate = false
     var needsAttention: (@MainActor () -> Void)?
-    var prefersSoloist: Bool { hasSavedKey || defaults.bool(forKey: "soloist.enabled") }
-    private(set) var sessionUsesLibrespot = false
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let keys: any SoloistKeyStoring
     @ObservationIgnored private let authorize: @MainActor () async throws -> Void
@@ -48,20 +44,22 @@ final class SoloistPlaybackController {
     @ObservationIgnored private let clearSession: @MainActor () throws -> Void
     @ObservationIgnored private var preparation: Task<Void, any Error>?
     @ObservationIgnored private var updating: Task<Void, Never>?
+    private var adoptedEngine: (any PreparedPlaybackEngine)?
     @ObservationIgnored private var setupEngine: (any PreparedPlaybackEngine)?
     @ObservationIgnored private var preparedEngine: (any PreparedPlaybackEngine)?
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var deliveredStatus = 0
     @ObservationIgnored private let statusSequence = SoloistStatusSequence()
 
-    init(defaults: UserDefaults = .standard, sessionUsesLibrespot: Bool = false, keys: any SoloistKeyStoring = SoloistKeyStore(),
+    init(defaults: UserDefaults = .standard, readyEngine: (any PreparedPlaybackEngine)? = nil, keys: any SoloistKeyStoring = SoloistKeyStore(),
         authorize: @escaping @MainActor () async throws -> Void,
         webToken: @escaping @Sendable () async throws -> String = { throw PlayerError.authDenied },
         streamingToken: @escaping @Sendable () async throws -> String = { throw PlayerError.authDenied },
         install: @escaping @MainActor (Bool, @escaping @Sendable (SoloistInstallProgress) -> Void) async throws -> URL,
         start: (@MainActor (SoloistLaunchRequest) async throws -> any PreparedPlaybackEngine)? = nil,
         clearSession: @escaping @MainActor () throws -> Void = { try SoloistEngine.clearStoredSession() }) {
-        self.sessionUsesLibrespot = sessionUsesLibrespot
+        adoptedEngine = readyEngine; setupEngine = readyEngine
+        if readyEngine != nil { phase = .ready }
         self.defaults = defaults; self.keys = keys; self.authorize = authorize; self.clearSession = clearSession
         hasSavedKey = defaults.bool(forKey: "soloist.hasKey")
         self.install = install
@@ -95,8 +93,6 @@ final class SoloistPlaybackController {
             guard generation == mine, !Task.isCancelled else { await engine.shutdown(); throw CancellationError() }
             preparedEngine = engine; setupEngine = engine
             phase = .prepared
-            defaults.set(true, forKey: "soloist.enabled")
-            sessionUsesLibrespot = false
         }
         preparation = task
         defer { if generation == mine { isPreparing = false; preparation = nil } }
@@ -139,16 +135,12 @@ final class SoloistPlaybackController {
             })
     }
 
-    func makeEngine(accessToken: String, configuration: PlaybackEngineConfiguration,
-        fallback: @escaping @Sendable (String, PlaybackEngineConfiguration) async throws -> any ManagedPlaybackEngine) async throws -> any ManagedPlaybackEngine {
-        guard prefersSoloist, !sessionUsesLibrespot else {
-            provider = .librespot
-            return try await fallback(accessToken, configuration)
-        }
+    func makeEngine(configuration: PlaybackEngineConfiguration) async throws -> any ManagedPlaybackEngine {
         if preparedEngine == nil { generation += 1 }
         let mine = generation
         var candidate = preparedEngine
         preparedEngine = nil
+        adoptedEngine = nil
         do {
             if candidate == nil {
                 guard let key = try keys.load() else { throw SoloistKeyError.unavailable }
@@ -160,10 +152,10 @@ final class SoloistPlaybackController {
             }
             guard let engine = candidate, generation == mine, !Task.isCancelled else { throw CancellationError() }
             setupEngine = engine
-            // Recovery calls this factory only after joining the outgoing engine.
+            // Recovery joins the outgoing engine before adopting this Soloist instance.
             try await engine.adopt(initialVolume: configuration.snapshot?.volume ?? configuration.initialVolume ?? 0.5)
             guard generation == mine, !Task.isCancelled else { throw CancellationError() }
-            provider = .soloist
+            adoptedEngine = engine
             switch phase {
             case .idle, .prepared, .installing, .checkingAccount, .pairing, .verifying: phase = .ready
             default: break
@@ -173,14 +165,12 @@ final class SoloistPlaybackController {
         } catch {
             if let candidate { await candidate.shutdown() }
             else if generation == mine { await setupEngine?.shutdown() }
-            if generation == mine { setupEngine = nil }
+            if generation == mine { setupEngine = nil; adoptedEngine = nil }
             if Task.isCancelled || generation != mine || error is CancellationError { throw CancellationError() }
             generation += 1
-            phase = .failed(Self.failure(error)); provider = .librespot
+            phase = .failed(Self.failure(error))
             needsAttention?()
-            let inactive = PlaybackEngineConfiguration(deviceID: configuration.deviceID, startup: .recovery,
-                initialVolume: configuration.initialVolume)
-            return try await fallback(accessToken, inactive)
+            throw error
         }
     }
 
@@ -203,7 +193,7 @@ final class SoloistPlaybackController {
         updating = Task { [weak self] in
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(86_400)) } catch { return }
-                guard let self, self.generation == mine, self.provider == .soloist else { return }
+                guard let self, self.generation == mine, self.hasUsablePlayback else { return }
                 do { _ = try await self.install(false, self.installProgress(generation: mine)) }
                 catch { BopifyLog.playback.notice("Soloist update deferred; current audio preserved") }
             }
@@ -216,42 +206,40 @@ final class SoloistPlaybackController {
     }
 
     func retryDataServices() async {
-        guard provider == .soloist, let engine = setupEngine else { return }
+        guard hasUsablePlayback, let engine = adoptedEngine else { return }
         let mine = generation
         await engine.suspendDataServices()
         do {
             try await authorize()
-            guard generation == mine, provider == .soloist else { return }
+            guard generation == mine, hasUsablePlayback else { return }
             await engine.retryDataServices()
-        } catch { if generation == mine, provider == .soloist { phase = .limitedServices } }
+        } catch { if generation == mine, hasUsablePlayback { phase = .limitedServices } }
     }
 
-    func useLibrespotForSession() async {
-        generation += 1
-        sessionUsesLibrespot = true; provider = .librespot
-        preparation?.cancel(); updating?.cancel()
-        let preparation = self.preparation; self.preparation = nil
-        let owned = setupEngine ?? preparedEngine; setupEngine = nil; preparedEngine = nil
-        _ = await preparation?.result
-        await owned?.shutdown()
-        isPreparing = false; phase = .idle
+    func cancelSetup() async {
+        guard !hasUsablePlayback else { return }
+        await stop()
     }
 
     func stop() async {
         generation += 1
         preparation?.cancel(); updating?.cancel()
-        let owned = setupEngine ?? preparedEngine; setupEngine = nil; preparedEngine = nil
+        let preparation = self.preparation
+        self.preparation = nil; updating = nil
+        let owned = [setupEngine, preparedEngine, adoptedEngine].compactMap { $0 }
+        setupEngine = nil; preparedEngine = nil; adoptedEngine = nil
+        var stopped = Set<ObjectIdentifier>()
+        // Joining preparation cannot make a late candidate eligible for adoption.
         _ = await preparation?.result
-        await owned?.shutdown()
-        preparation = nil; updating = nil; isPreparing = false
+        for engine in owned where stopped.insert(ObjectIdentifier(engine as AnyObject)).inserted { await engine.shutdown() }
+        isPreparing = false; phase = .idle
     }
 
     func clearCredentials() throws {
-        defaults.set(false, forKey: "soloist.enabled")
         try keys.clear()
         try clearSession()
         hasSavedKey = false; defaults.removeObject(forKey: "soloist.hasKey")
-        provider = .librespot; phase = .idle
+        phase = .idle
     }
 
     private static func failure(_ error: any Error) -> SoloistSetupFailure {
@@ -274,11 +262,13 @@ final class SoloistPlaybackController {
         if error as? LibraryError == .authorizationRequired { return .authorization }
         if let key = error as? SoloistKeyError { return key == .invalid ? .invalidKey : .credentials }
         switch error as? SoloistPlaybackError {
+        case .invalidKey: return .invalidKey
         case .accountMismatch: return .accountMismatch
         case .missingAccountID: return .missingAccountID
         case .authorizationRequired: return .authorization
         case .ambiguousDevice, .pairingRequired: return .pairing
         case .rateLimited: return .rateLimited
+        case .discoveryUnavailable: return .discovery
         default: return .startup
         }
     }

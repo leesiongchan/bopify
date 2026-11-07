@@ -11,7 +11,7 @@ public enum QueueSelectionStatus: Equatable, Sendable {
 }
 
 /// Lives on the main actor rather than being an actor because SwiftUI observes its state.
-/// Blocking FFI work stays off the main actor because `LibrespotEngine`'s methods are `@concurrent`.
+/// Playback and metadata work run asynchronously through the attached engine.
 @MainActor
 @Observable
 public final class PlayerModel {
@@ -422,7 +422,7 @@ public final class PlayerModel {
                 lastVolumeSent = nil
                 if volumeRequest == nil { volumeDraft = nil }
                 commandNotice = error as? SoloistPlaybackError == .unsupported
-                    ? String(localized: "command.requiresLibrespot", defaultValue: "Use librespot from Playback Engine to perform this action.")
+                    ? String(localized: "command.unsupported", defaultValue: "This action is unavailable with Soloist.")
                     : String(localized: "command.unavailable", defaultValue: "That action is unavailable.")
                 BopifyLog.playback.error("volume command failed")
             }
@@ -454,7 +454,7 @@ public final class PlayerModel {
                     queueSelection = .failed
                 }
                 commandNotice = error as? SoloistPlaybackError == .unsupported
-                    ? String(localized: "command.requiresLibrespot", defaultValue: "Use librespot from Playback Engine to perform this action.")
+                    ? String(localized: "command.unsupported", defaultValue: "This action is unavailable with Soloist.")
                     : String(localized: "command.unavailable", defaultValue: "That action is unavailable.")
                 BopifyLog.playback.error("command failed command=\(name, privacy: .public)")
             }

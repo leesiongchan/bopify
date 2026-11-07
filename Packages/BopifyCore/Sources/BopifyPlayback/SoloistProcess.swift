@@ -6,7 +6,14 @@ import BopifyDomain
 protocol SoloistProcessHandle: Sendable {
     var endpointURL: URL { get }
     var isRunning: Bool { get }
+    var diagnosticFailure: SoloistPlaybackError? { get }
+    var pairingPort: UInt16? { get }
     func stop() async
+}
+
+extension SoloistProcessHandle {
+    var diagnosticFailure: SoloistPlaybackError? { nil }
+    var pairingPort: UInt16? { nil }
 }
 
 final class SoloistProcess: SoloistProcessHandle, @unchecked Sendable {
@@ -14,12 +21,16 @@ final class SoloistProcess: SoloistProcessHandle, @unchecked Sendable {
     let endpointURL: URL
     private let process: Process
     private let lockFD: Int32
+    private let output: SoloistDiagnosticOutput
     private let lock = NSLock()
     private var stopping: Task<Void, Never>?
     var isRunning: Bool { process.isRunning }
+    var diagnosticFailure: SoloistPlaybackError? { output.diagnostics.failure }
+    var pairingPort: UInt16? { output.diagnostics.pairingPort }
+    var diagnosticEvents: [SoloistDiagnosticEvent] { output.diagnostics.events }
 
-    private init(process: Process, lockFD: Int32, endpoint: URL) {
-        self.process = process; self.lockFD = lockFD; endpointURL = endpoint
+    private init(process: Process, lockFD: Int32, endpoint: URL, output: SoloistDiagnosticOutput) {
+        self.process = process; self.lockFD = lockFD; endpointURL = endpoint; self.output = output
     }
 
     @concurrent static func start(executable: URL, key: String, name: String, volume: Double,
@@ -50,16 +61,19 @@ final class SoloistProcess: SoloistProcessHandle, @unchecked Sendable {
             if unlink(path.path) != 0 && errno != ENOENT { throw SoloistStartupError.storageUnavailable }
         }
         let child = Process()
+        let output = try SoloistDiagnosticOutput()
         child.executableURL = executable
         child.arguments = ["--device-name", name, "--api-key", key, "--data-dir", data.path,
             "--cache-dir", root.appendingPathComponent("cache").path, "--cache-size", "100",
-            "--initial-volume", String(Int((max(0, min(1, volume)) * 100).rounded())), "--ws", "127.0.0.1:0"]
-        child.standardOutput = FileHandle.nullDevice; child.standardError = FileHandle.nullDevice
+            "--initial-volume", String(Int((max(0, min(1, volume)) * 100).rounded())), "--ws", "127.0.0.1:0", "--verbose"]
+        child.standardOutput = output.pipe; child.standardError = output.pipe
         child.standardInput = FileHandle.nullDevice
         do { try child.run() } catch {
+            await output.stop()
             BopifyLog.playback.error("Soloist launch failed before process creation")
             throw SoloistStartupError.launchFailed
         }
+        output.closeWriter()
         do {
             let deadline = Date().addingTimeInterval(30)
             while Date() < deadline {
@@ -71,7 +85,7 @@ final class SoloistProcess: SoloistProcessHandle, @unchecked Sendable {
                 }
                 if let endpoint = try? endpoint(in: data) {
                     transferred = true
-                    return SoloistProcess(process: child, lockFD: fd, endpoint: endpoint)
+                    return SoloistProcess(process: child, lockFD: fd, endpoint: endpoint, output: output)
                 }
                 try await Task.sleep(for: .milliseconds(50))
             }
@@ -79,6 +93,7 @@ final class SoloistProcess: SoloistProcessHandle, @unchecked Sendable {
             throw SoloistStartupError.endpointUnavailable
         } catch {
             await terminate(child)
+            await output.stop()
             throw error
         }
     }
@@ -86,8 +101,8 @@ final class SoloistProcess: SoloistProcessHandle, @unchecked Sendable {
     func stop() async {
         let task = lock.withLock { () -> Task<Void, Never> in
             if let stopping { return stopping }
-            let process = self.process, fd = lockFD
-            let task = Task.detached { await Self.terminate(process); close(fd) }
+            let process = self.process, fd = lockFD, output = self.output
+            let task = Task.detached { await Self.terminate(process); await output.stop(); close(fd) }
             stopping = task
             return task
         }

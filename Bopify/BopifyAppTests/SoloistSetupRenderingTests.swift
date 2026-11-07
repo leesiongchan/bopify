@@ -84,7 +84,7 @@ struct SoloistSetupRenderingTests {
         #expect(retry.object.isAccessibilityEnabled?() == !isRetrying)
     }
 
-    @Test func keyEntryIsSecureAndKeyboardSetupFailurePreservesTheExistingPlayer() async throws {
+    @Test func keyEntryIsSecureAndKeyboardSetupFailureKeepsThePlayerAndOffersRetry() async throws {
         _ = NSApplication.shared
         let environment = makePreviewEnvironment(.playing)
         let originalTrack = environment.player?.state.currentTrack
@@ -125,11 +125,11 @@ struct SoloistSetupRenderingTests {
         try await liveLyricEventually {
             if case .failed = environment.soloist.phase { return true }; return false
         }
-        _ = try AppearanceTestAccessibility.element("soloist.useLibrespot", in: content)
+        _ = try AppearanceTestAccessibility.element("soloist.cancelSetup", in: content)
         #expect(environment.isShowingOnboarding)
         #expect(environment.playerMode == .expanded)
         #expect(environment.player?.state.currentTrack == originalTrack)
-        #expect(environment.player?.state.phase == .playing)
+        #expect(!environment.soloist.hasUsablePlayback)
         content.layoutSubtreeIfNeeded()
         try capture(content, at: artifacts.appendingPathComponent("retry.png"))
         print("Soloist UI captures: \(artifacts.path)")

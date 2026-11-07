@@ -59,6 +59,21 @@ struct AppEnvironmentAuthorizationTests {
         await fixture.stop()
     }
 
+    @Test func restoredAccountWithNoSoloistKeyWaitsWithoutStartingAudio() async throws {
+        let fixture = AuthorizationFixture(libraryScopes: allLibraryScopes, startSignedOut: true,
+            usesInjectedPlaybackEngine: false)
+        fixture.store.save(TokenSet(accessToken: "PLAYBACK", refreshToken: "REFRESH",
+            expiresAt: .distantFuture, grantedScopes: ["streaming"]))
+        await fixture.environment.restoreOrPromptSignIn()
+        #expect(fixture.environment.authState == .signedIn)
+        #expect(fixture.environment.onboardingStep == .playback(.entry))
+        #expect(fixture.environment.soloist.phase == .idle && !fixture.environment.soloist.hasSavedKey)
+        #expect(fixture.environment.recovery?.currentEngine == nil)
+        #expect(fixture.environment.player?.isEngineReady == false)
+        #expect(fixture.browser.count == 0 && fixture.libraryBrowser.count == 0)
+        await fixture.stop()
+    }
+
     @Test func revokedAccessReturnsToSetupAndRequiresANewCompleteGrant() async throws {
         let fixture = AuthorizationFixture(libraryScopes: allLibraryScopes, approvedScopes: allLibraryScopes,
             startSignedOut: true, libraryRevoked: true)
@@ -340,7 +355,8 @@ private struct AuthorizationFixture {
 
     init(libraryScopes: Set<String>? = ["user-library-read"], approvedScopes: Set<String>? = nil,
          startSignedOut: Bool = false, libraryClientID: String? = String(repeating: "0", count: 32),
-         libraryRevoked: Bool = false, completesSignIn: Bool = false, libraryCallbackPort: UInt16? = nil) {
+         libraryRevoked: Bool = false, completesSignIn: Bool = false, libraryCallbackPort: UInt16? = nil,
+         usesInjectedPlaybackEngine: Bool = true) {
         libraryStore = AuthorizationStore(libraryScopes.map { TokenSet(accessToken: "LIBRARY", refreshToken: "REFRESH",
             expiresAt: .distantFuture, grantedScopes: $0) })
         let consentStore = libraryStore
@@ -386,7 +402,7 @@ private struct AuthorizationFixture {
                 }
             },
             playbackAuth: playback, libraryAuth: library, previewLibraryClientID: libraryClientID,
-            recoveryEngineFactory: { _, _ in throw PlayerError.networkUnavailable })
+            recoveryEngineFactory: usesInjectedPlaybackEngine ? { @Sendable _, _ in throw PlayerError.networkUnavailable } : nil)
     }
 
     func stop() async {

@@ -3,7 +3,7 @@ import BopifyDomain
 
 public enum SoloistPlaybackError: Error, Equatable, Sendable {
     case invalidState, unavailable, invalidKey, pairingRequired, accountMismatch, missingAccountID
-    case ambiguousDevice, authorizationRequired, rateLimited, unsupported, startupFailed
+    case ambiguousDevice, authorizationRequired, rateLimited, unsupported, startupFailed, discoveryUnavailable
 }
 
 /// Socket state belongs to one owned process. Nothing here invents playback confirmations.

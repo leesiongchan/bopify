@@ -1,6 +1,26 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "soloist.error.discovery": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spotify Connect discovery could not start. Check this Mac’s network and Bopify’s Local Network permission in System Settings, then retry setup."
+          }
+        }
+      }
+    },
+    "onboarding.cancelSetup": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel setup"
+          }
+        }
+      }
+    },
     "onboarding.attentionTitle": {
       "localizations": {
         "en": {
@@ -16,7 +36,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Retry playback setup, or continue with librespot for now."
+            "value": "Retry playback setup to continue listening."
           }
         }
       }
@@ -231,16 +251,6 @@
         }
       }
     },
-    "onboarding.listenWithLibrespot": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Continue with librespot for now"
-          }
-        }
-      }
-    },
     "onboarding.openSpotify": {
       "localizations": {
         "en": {
@@ -356,7 +366,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Switching to Soloist…"
+            "value": "Starting playback…"
           }
         }
       }
@@ -366,7 +376,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Soloist remains available. Spotify services could not connect yet; Bopify retries automatically while music plays."
+            "value": "Playback is ready; some Spotify features could not connect yet. Bopify retries them automatically."
           }
         }
       }
@@ -546,7 +556,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enter a valid Soloist key without spaces."
+            "value": "Check your personal Soloist key from Spotify and try again."
           }
         }
       }
@@ -586,7 +596,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Spotify did not provide the account identifier needed to verify this setup. Librespot remains available."
+            "value": "Spotify did not provide the account identifier needed to verify this setup. Reconnect Spotify and retry."
           }
         }
       }
@@ -596,7 +606,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Playback could not be verified. Retry, select the displayed Bopify device in Spotify, and keep a song playing."
+            "value": "Spotify has not connected to this device. Open the Spotify desktop app, select Bopify in the device picker, and retry setup."
           }
         }
       }
@@ -606,7 +616,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Soloist could not be downloaded or verified. Check your connection and retry. Librespot remains available."
+            "value": "Soloist could not be downloaded or verified. Check your connection and retry."
           }
         }
       }
@@ -616,7 +626,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Soloist could not finish starting. Retry playback setup, or continue with librespot for now."
+            "value": "Soloist could not finish starting. Retry playback setup."
           }
         }
       }
@@ -626,7 +636,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Spotify asked Bopify to wait. Keep listening and retry setup later."
+            "value": "Spotify asked Bopify to wait. Retry setup later."
           }
         }
       }
@@ -636,7 +646,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Exact queue selection is available with librespot. Use next or previous with Soloist."
+            "value": "Use next or previous to move through the queue."
           }
         }
       }

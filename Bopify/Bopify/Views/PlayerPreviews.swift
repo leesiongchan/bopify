@@ -2,6 +2,7 @@
 import SwiftUI
 import Observation
 import BopifyDomain
+import BopifyAuth
 import BopifyPlayback
 
 // Original vector samples for native previews; never used for missing live artwork.
@@ -75,10 +76,21 @@ func makePreviewEnvironment(_ scenario: PreviewScenario = .playing, library: Pre
     // Commands from the canvas still arrive through the engine's stream.
     player.start()
     let services = PreviewLibraryServices(library)
+    let suite = FileManager.default.temporaryDirectory.appendingPathComponent("bopify.preview.playback.\(UUID())").path
+    let defaults = UserDefaults(suiteName: suite)!
+    defaults.removePersistentDomain(forName: suite)
+    let controller = soloistController ?? SoloistPlaybackController(defaults: defaults, readyEngine: engine, keys: PreviewPlaybackKeys(),
+        authorize: {}, install: { _, _ in throw SoloistPlaybackError.unavailable }, clearSession: {})
     return AppEnvironment(previewPlayer: player, favoriteService: services, savedTracksService: services, historyService: services,
                           searchService: services, collectionsService: services,
-                          previewLibraryClientID: libraryClientID, soloistController: soloistController,
+                          previewLibraryClientID: libraryClientID, soloistController: controller,
                           artworkStore: makePreviewArtworkStore(), radioEngine: engine)
+}
+
+private nonisolated struct PreviewPlaybackKeys: SoloistKeyStoring {
+    func load() throws -> String? { nil }
+    func save(_ key: String) throws {}
+    func clear() throws {}
 }
 
 /// The player as the window shows it once revealed, in a fixed frame of that mode's layout.

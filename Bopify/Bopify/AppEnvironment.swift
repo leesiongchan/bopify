@@ -53,8 +53,8 @@ final class AppEnvironment {
         case .needsLibraryAuthorization: return .library(librarySetupStatus)
         case .signedIn:
             if requestedOnboardingSection == .library { return .library(librarySetupStatus) }
-            if case .failed = soloist.phase, !soloist.sessionUsesLibrespot { return .playback(.failure) }
-            if requestedOnboardingSection == .playback || !soloist.sessionUsesLibrespot && !soloist.hasUsablePlayback {
+            if case .failed = soloist.phase { return .playback(.failure) }
+            if requestedOnboardingSection == .playback || !hasConfiguredPlayback {
                 if soloist.isPreparing { return .playback(.working) }
                 return switch soloist.phase {
                 case .failed: .playback(.failure)
@@ -66,6 +66,7 @@ final class AppEnvironment {
         }
     }
 
+    private var hasConfiguredPlayback: Bool { soloist.hasUsablePlayback || suppliedEngineFactory != nil }
     var isShowingOnboarding: Bool { onboardingStep != nil }
 
     func showOnboarding(section: OnboardingSection = .playback) {
@@ -98,9 +99,7 @@ final class AppEnvironment {
     var hasPlaybackConnected: Bool { recovery?.hasBeenReady ?? false }
     @ObservationIgnored private var connectionMonitor: PlaybackConnectionMonitor?
     @ObservationIgnored private var sessionGeneration = 0
-    @ObservationIgnored private var makeRecoveryEngine: @Sendable (String, PlaybackEngineConfiguration) async throws -> any ManagedPlaybackEngine = { token, options in
-        try await LibrespotEngine(accessToken: token, deviceName: "Bopify", configuration: options)
-    }
+    @ObservationIgnored private var suppliedEngineFactory: (@Sendable (String, PlaybackEngineConfiguration) async throws -> any ManagedPlaybackEngine)?
     @ObservationIgnored private var monitorEnabled = true
 
     private(set) var liveLyricRibbon: LiveLyricRibbonSession?
@@ -172,6 +171,7 @@ final class AppEnvironment {
         self.auth = auth
         self.libraryAuth = libraryAuth
         let soloistInstaller = SoloistInstaller()
+        var hasCheckedSoloistThisLaunch = false
         soloist = SoloistPlaybackController(authorize: {
             let scopes = LibraryAuthorization.requiredScopes.union(LibraryAuthorization.playbackScopes)
             do { _ = try await libraryAuth.validAccessToken(requiredScopes: scopes) }
@@ -182,7 +182,10 @@ final class AppEnvironment {
         }, webToken: {
             try await libraryAuth.validAccessToken(requiredScopes: LibraryAuthorization.playbackScopes)
         }, streamingToken: { try await auth.validAccessToken() }, install: { activate, progress in
-            return try await soloistInstaller.ensureInstalled(canActivateUpdate: activate, progress: progress).current.executableURL
+            let forceCheck = !hasCheckedSoloistThisLaunch
+            hasCheckedSoloistThisLaunch = true
+            return try await soloistInstaller.ensureInstalled(canActivateUpdate: activate, forceCheck: forceCheck,
+                                                              progress: progress).current.executableURL
         })
         libraryClientID = LibraryAuthorization.storedClientID(in: .standard)
         consentDefaults = .standard
@@ -234,7 +237,7 @@ final class AppEnvironment {
         self.libraryAuth = LibraryAuthorization(suiteName: previewSuite) { _ in previewLibraryAuth }
         previewDefaults.removePersistentDomain(forName: previewSuite)
         consentDefaults = previewDefaults
-        soloist = soloistController ?? SoloistPlaybackController(defaults: previewDefaults, sessionUsesLibrespot: true, keys: PreviewSoloistKeys(), authorize: {},
+        soloist = soloistController ?? SoloistPlaybackController(defaults: previewDefaults, keys: PreviewSoloistKeys(), authorize: {},
             install: { _, _ in throw SoloistPlaybackError.unavailable },
             start: { _ in throw SoloistPlaybackError.unavailable }, clearSession: {})
         libraryClientID = previewLibraryClientID
@@ -253,7 +256,7 @@ final class AppEnvironment {
         self.authorizeLibrary = authorizeLibrary ?? { throw LibraryError.unavailable }
         player = previewPlayer
         authState = previewPlayer == nil ? .signedOut : .signedIn
-        if let recoveryEngineFactory { makeRecoveryEngine = recoveryEngineFactory; monitorEnabled = false }
+        if let recoveryEngineFactory { suppliedEngineFactory = recoveryEngineFactory; monitorEnabled = false }
     }
     #endif
 
@@ -582,19 +585,20 @@ final class AppEnvironment {
 
     func enableSoloist(key: String) async {
         guard authState == .signedIn, !isRemovingCredentials, !isPreparingForQuit, soloistAction == nil else { return }
-        let session = sessionGeneration
+        let session = sessionGeneration, setup = soloistPairingRetryGeneration
         let task = Task { [self] in
             defer { soloistAction = nil }
             if soloist.hasUsablePlayback, key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 await soloist.retryDataServices()
                 return
             }
-            if soloist.provider == .soloist {
-                await serialize { [self] in await recovery?.stop() }.value
-                await soloist.stop()
-            }
-            guard await soloist.enable(key: key), !Task.isCancelled, session == sessionGeneration else { return }
-            await restartPlaybackProvider(session: session)
+            await serialize { [self] in await recovery?.stop() }.value
+            await soloist.stop()
+            guard !Task.isCancelled, session == sessionGeneration, setup == soloistPairingRetryGeneration, authState == .signedIn,
+                  !isRemovingCredentials, !isPreparingForQuit else { return }
+            guard await soloist.enable(key: key), !Task.isCancelled, session == sessionGeneration,
+                  setup == soloistPairingRetryGeneration else { return }
+            await restartPlayback(session: session, setup: setup)
         }
         soloistAction = task
         await task.value
@@ -617,24 +621,30 @@ final class AppEnvironment {
         await enableSoloist(key: "")
     }
 
-    func useLibrespotForSession() async {
+    func cancelSoloistSetup() async {
         guard !isRemovingCredentials, !isPreparingForQuit else { return }
         soloistPairingRetryGeneration += 1
-        let preserveCurrent = soloist.provider == .librespot && recovery?.currentEngine != nil
-        if !preserveCurrent { recovery?.invalidate() }
-        soloistAction?.cancel()
-        await soloist.useLibrespotForSession()
-        if preserveCurrent { return }
-        guard authState == .signedIn else { return }
-        await restartPlaybackProvider(session: sessionGeneration)
+        let action = soloistAction
+        action?.cancel()
+        if soloist.hasUsablePlayback {
+            await action?.value
+            closeOnboarding()
+            return
+        }
+        recovery?.invalidate()
+        await soloist.cancelSetup()
+        await action?.value
+        await serialize { [self] in await recovery?.stop() }.value
     }
 
-    private func restartPlaybackProvider(session: Int) async {
+    private func restartPlayback(session: Int, setup: Int) async {
         await serialize { [self] in
-            guard session == sessionGeneration, authState == .signedIn, !isPreparingForQuit else { return }
+            guard session == sessionGeneration, setup == soloistPairingRetryGeneration, authState == .signedIn,
+                  !isRemovingCredentials, !isPreparingForQuit else { return }
             let coordinator = recovery
             await coordinator?.stop()
-            guard session == sessionGeneration, authState == .signedIn, !isPreparingForQuit else { return }
+            guard session == sessionGeneration, setup == soloistPairingRetryGeneration, authState == .signedIn,
+                  !isRemovingCredentials, !isPreparingForQuit else { return }
             coordinator?.start()
         }.value
     }
@@ -764,17 +774,22 @@ final class AppEnvironment {
 
     // Called only inside serialize; the retry loop returns immediately and owns its lifetime.
     private func connect() {
-        if recovery != nil { recovery?.start(); authState = .signedIn; return }
+        if recovery != nil {
+            if soloist.hasSavedKey || suppliedEngineFactory != nil { recovery?.start() }
+            authState = .signedIn
+            return
+        }
         let model = player ?? PlayerModel(volumeDefaults: .standard)
         player = model
         let auth = self.auth
         let soloist = self.soloist
-        let fallback = makeRecoveryEngine
+        let suppliedEngineFactory = self.suppliedEngineFactory
         let coordinator = PlaybackRecoveryCoordinator(player: model, tokenProvider: { rejected in
             if let rejected { return try await auth.validAccessToken(rejecting: rejected) }
             return try await auth.validAccessToken()
         }, makeEngine: { token, options in
-            try await soloist.makeEngine(accessToken: token, configuration: options, fallback: fallback)
+            if let suppliedEngineFactory { return try await suppliedEngineFactory(token, options) }
+            return try await soloist.makeEngine(configuration: options)
         })
         coordinator.onEngineChange = { [weak stations, weak coordinator] engine in
             stations?.engine = engine
@@ -791,7 +806,7 @@ final class AppEnvironment {
             connectionMonitor = monitor
             monitor.start()
         }
-        if soloist.hasSavedKey || soloist.sessionUsesLibrespot { coordinator.start() }
+        if soloist.hasSavedKey || suppliedEngineFactory != nil { coordinator.start() }
         BopifyLog.auth.info("credentials restored; playback connection scheduled")
     }
 

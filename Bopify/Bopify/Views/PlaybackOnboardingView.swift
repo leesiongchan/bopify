@@ -37,14 +37,14 @@ struct PlaybackOnboardingView: View {
             }
             status
             if busy {
-                StartupButton(key: "onboarding.listenWithLibrespot", isSecondary: true, identifier: "soloist.useLibrespot", action: fallback)
+                StartupButton(key: "onboarding.cancelSetup", isSecondary: true, identifier: "soloist.cancelSetup", action: cancelSetup)
             } else {
                 StartupButton(key: controller.hasUsablePlayback && key.isEmpty ? "soloist.retryDataServices"
                               : controller.hasSavedKey ? "soloist.retry" : "onboarding.startListening",
                               identifier: "soloist.enable", action: enable)
                     .disabled(key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !controller.hasSavedKey)
-                if case .failed = controller.phase {
-                    StartupButton(key: "onboarding.listenWithLibrespot", isSecondary: true, identifier: "soloist.useLibrespot", action: fallback)
+                if !controller.hasUsablePlayback {
+                    StartupButton(key: "onboarding.cancelSetup", isSecondary: true, identifier: "soloist.cancelSetup", action: cancelSetup)
                 }
             }
             Button(SoloistResources.string("onboarding.library")) { environment.showOnboarding(section: .library) }
@@ -57,8 +57,8 @@ struct PlaybackOnboardingView: View {
             if pairingName != nil { discovery.start() } else { discovery.stop() }
         }
         .onDisappear { key = ""; discovery.stop() }
-        .onChange(of: controller.provider) { _, provider in
-            if provider == .soloist { environment.closeOnboarding() }
+        .onChange(of: controller.hasUsablePlayback) { _, ready in
+            if ready { environment.closeOnboarding() }
         }
     }
 
@@ -94,6 +94,10 @@ struct PlaybackOnboardingView: View {
         case let .failed(failure):
             text(failure.message).foregroundStyle(.red).font(.callout)
                 .fixedSize(horizontal: false, vertical: true)
+            if failure == .discovery {
+                Button(SoloistResources.string("soloist.localNetworkSettings"), action: Self.openLocalNetworkSettings)
+                    .accessibilityIdentifier("soloist.localNetworkSettings")
+            }
         }
     }
 
@@ -117,15 +121,16 @@ struct PlaybackOnboardingView: View {
     private func progress(_ key: LocalizedStringKey) -> some View {
         HStack(spacing: 10) { ProgressView().controlSize(.small); text(key).font(.callout) }
     }
-    private func fallback() {
-        Task { await environment.useLibrespotForSession(); environment.closeOnboarding() }
+    private func cancelSetup() {
+        key = ""
+        Task { await environment.cancelSoloistSetup() }
     }
     private func enable() {
         guard !busy else { return }
         let value = key; key = ""
         Task {
             await environment.enableSoloist(key: value)
-            if controller.provider == .soloist { environment.closeOnboarding() }
+            if controller.hasUsablePlayback { environment.closeOnboarding() }
         }
     }
 }
@@ -206,6 +211,7 @@ extension SoloistSetupFailure {
         case .storage: "soloist.error.storage"
         case .launch: "soloist.error.launch"
         case .endpoint: "soloist.error.endpoint"
+        case .discovery: "soloist.error.discovery"
         case .rateLimited: "soloist.error.rateLimited"
         }
     }

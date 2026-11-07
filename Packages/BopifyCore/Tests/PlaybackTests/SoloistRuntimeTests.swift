@@ -51,6 +51,13 @@ func soloistSignedDaemonRecoversOrphanAndRestarts() async throws {
             name: "Bopify isolated fixture", volume: 0, directory: session)
         #expect(process.isRunning)
         #expect(process.endpointURL.host == "127.0.0.1")
+        let diagnosticDeadline = Date().addingTimeInterval(10)
+        while (process.pairingPort == nil || !process.diagnosticEvents.contains(.mdnsReady)), Date() < diagnosticDeadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(process.diagnosticFailure == nil)
+        #expect(process.diagnosticEvents.contains(.mdnsReady))
+        #expect(process.pairingPort.map { $0 > 0 } == true)
         await process.stop()
         #expect(!process.isRunning)
     }

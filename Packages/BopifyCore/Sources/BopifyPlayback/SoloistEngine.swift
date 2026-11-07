@@ -18,6 +18,9 @@ public actor SoloistEngine: PreparedPlaybackEngine {
     private let streamingToken: @Sendable () async throws -> String
     private let transportFactory: @Sendable (URL) -> any SoloistTransport
     private let progress: @Sendable (SoloistEngineStatus) -> Void
+    private let publisherFactory: SoloistPairingPublisherFactory?
+    private var pairingPublication: (any SoloistPairingPublishing)?
+    private var publicationTask: Task<any SoloistPairingPublishing, any Error>?
     private var transport: (any SoloistTransport)?
     private var receiver: Task<Void, Never>?
     private var poller: Task<Void, Never>?
@@ -55,11 +58,12 @@ public actor SoloistEngine: PreparedPlaybackEngine {
         transportFactory: @escaping @Sendable (URL) -> any SoloistTransport = { SoloistSocket(endpoint: $0) },
         serviceFactory: @escaping @Sendable (String) async throws -> any SoloistDataServices = { try await LibrespotServices(accessToken: $0) },
         progress: @escaping @Sendable (SoloistEngineStatus) -> Void,
-        verificationInterval: Duration = .seconds(5)) {
+        verificationInterval: Duration = .seconds(5), publisherFactory: SoloistPairingPublisherFactory? = nil) {
         self.verificationInterval = verificationInterval
         self.child = child; self.api = api; self.baseline = baseline; self.name = name
         self.webToken = webToken; self.streamingToken = streamingToken
         self.transportFactory = transportFactory; self.progress = progress; self.serviceFactory = serviceFactory
+        self.publisherFactory = publisherFactory
         let pair = AsyncStream<PlaybackEvent>.makeStream(bufferingPolicy: .bufferingNewest(512))
         events = pair.stream; continuation = pair.continuation
     }
@@ -73,7 +77,8 @@ public actor SoloistEngine: PreparedPlaybackEngine {
             try Task.checkCancellation()
             let child = try await SoloistProcess.start(executable: executable, key: key, name: name, volume: 0)
             let engine = SoloistEngine(child: child, api: api, baseline: [], name: name,
-                webToken: webToken, streamingToken: streamingToken, progress: progress)
+                webToken: webToken, streamingToken: streamingToken, progress: progress,
+                publisherFactory: { port, name in try await SoloistBonjourPublisher.publish(port: port, name: name) })
             await engine.begin()
             return engine
         } catch { await api.close(); throw error }
@@ -99,6 +104,7 @@ public actor SoloistEngine: PreparedPlaybackEngine {
 
     public func preparePairing() async throws {
         let deadline = Date().addingTimeInterval(300)
+        let publicationDeadline = Date().addingTimeInterval(10)
         while Date() < deadline {
             try Task.checkCancellation()
             guard !stopped, child.isRunning else { throw SoloistPlaybackError.startupFailed }
@@ -107,10 +113,41 @@ public actor SoloistEngine: PreparedPlaybackEngine {
                 setStatus(.prepared)
                 return
             }
+            if state.authRevision > 0, !state.paired {
+                if let failure = child.diagnosticFailure, failure != .discoveryUnavailable || publisherFactory == nil { throw failure }
+                if let factory = publisherFactory {
+                    if let port = child.pairingPort {
+                        do { try await ensurePairingPublication(port: port, factory: factory) }
+                        catch { if !isLocallyReady { throw error } }
+                    } else if Date() >= publicationDeadline { throw SoloistPlaybackError.discoveryUnavailable }
+                }
+            }
             setStatus(.pairing(name))
             try await Task.sleep(for: .milliseconds(250))
         }
         throw SoloistPlaybackError.pairingRequired
+    }
+
+    private func ensurePairingPublication(port: UInt16, factory: @escaping SoloistPairingPublisherFactory) async throws {
+        if let pairingPublication {
+            guard await pairingPublication.isPublished else { throw SoloistPlaybackError.discoveryUnavailable }
+            return
+        }
+        let task: Task<any SoloistPairingPublishing, any Error>
+        if let publicationTask { task = publicationTask }
+        else {
+            let name = self.name
+            task = Task { try await factory(port, name) }
+            publicationTask = task
+        }
+        do {
+            let publication = try await task.value
+            guard !stopped, !Task.isCancelled else { await publication.stop(); throw CancellationError() }
+            pairingPublication = publication; publicationTask = nil
+        } catch {
+            if error is CancellationError { throw error }
+            throw SoloistPlaybackError.discoveryUnavailable
+        }
     }
 
     public func adopt(initialVolume: Double) async throws {
@@ -464,10 +501,14 @@ public actor SoloistEngine: PreparedPlaybackEngine {
         let receiver = self.receiver, poller = self.poller, watcher = self.watcher, verifier = self.verifier, warmup = servicesWarmup
         let transport = self.transport, child = self.child, api = self.api
         let services = self.services, flight = servicesFlight, continuation = self.continuation
+        let publication = pairingPublication, publishing = publicationTask
+        pairingPublication = nil; publicationTask = nil; publishing?.cancel()
         self.services = nil; servicesFlight = nil
         let task = Task {
             await transport?.close()
             await receiver?.value; await poller?.value; await watcher?.value; await verifier?.value; await warmup?.value
+            await publication?.stop()
+            if let publishing, let pending = try? await publishing.value { await pending.stop() }
             await child.stop()
             await services?.shutdown()
             if let flight, let service = try? await flight.value { await service.shutdown() }

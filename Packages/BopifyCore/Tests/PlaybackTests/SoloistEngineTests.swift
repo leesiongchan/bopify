@@ -5,10 +5,15 @@ import BopifyDomain
 
 private final class SoloistChildFixture: SoloistProcessHandle, @unchecked Sendable {
     let endpointURL = URL(string: "ws://127.0.0.1:12345")!
+    let diagnosticFailure: SoloistPlaybackError?
+    let pairingPort: UInt16?
     private let lock = NSLock()
     private var stops = 0
     var stopCount: Int { lock.withLock { stops } }
     var isRunning: Bool { stopCount == 0 }
+    init(diagnosticFailure: SoloistPlaybackError? = nil, pairingPort: UInt16? = nil) {
+        self.diagnosticFailure = diagnosticFailure; self.pairingPort = pairingPort
+    }
     func stop() async { lock.withLock { stops += 1 } }
 }
 
@@ -66,10 +71,22 @@ private actor SoloistEventFixture {
     func report(_ status: SoloistEngineStatus) { statuses.append(status) }
 }
 
-private func engineFixture(webStatus: Int = 200, webToken: @escaping @Sendable () async throws -> String = { "fixture" },
+private actor SoloistPublicationFixture: SoloistPairingPublishing {
+    private(set) var isPublished = true
+    private(set) var starts = 0
+    private(set) var stops = 0
+    private(set) var canFail = false
+    func started() { starts += 1 }
+    func releaseFailure() { canFail = true }
+    func stop() { isPublished = false; stops += 1 }
+}
+
+private func engineFixture(webStatus: Int = 200, diagnosticFailure: SoloistPlaybackError? = nil,
+    pairingPort: UInt16? = nil, publisherFactory: SoloistPairingPublisherFactory? = nil,
+    webToken: @escaping @Sendable () async throws -> String = { "fixture" },
     streamingToken: @escaping @Sendable () async throws -> String = { "fixture" },
     serviceFactory: @escaping @Sendable (String) async throws -> any SoloistDataServices = { _ in throw PlayerError.networkUnavailable }) -> (SoloistEngine, SoloistChildFixture, SoloistSocketFixture) {
-    let child = SoloistChildFixture(), socket = SoloistSocketFixture()
+    let child = SoloistChildFixture(diagnosticFailure: diagnosticFailure, pairingPort: pairingPort), socket = SoloistSocketFixture()
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [SoloistHTTPFixture.self]
     SoloistHTTPFixture.status = webStatus
@@ -87,11 +104,99 @@ private func engineFixture(webStatus: Int = 200, webToken: @escaping @Sendable (
     }
     let engine = SoloistEngine(child: child, api: SoloistWebAPI(session: URLSession(configuration: configuration)), baseline: [], name: "Fixture",
         webToken: webToken, streamingToken: streamingToken,
-        transportFactory: { _ in socket }, serviceFactory: serviceFactory, progress: { _ in }, verificationInterval: .milliseconds(600))
+        transportFactory: { _ in socket }, serviceFactory: serviceFactory, progress: { _ in }, verificationInterval: .milliseconds(600),
+        publisherFactory: publisherFactory)
     return (engine, child, socket)
 }
 
 @Suite("Soloist managed engine", .serialized) struct SoloistEngineTests {
+@Test func completedPairingSurvivesAConcurrentBonjourFailure() async throws {
+    let publication = SoloistPublicationFixture()
+    let (engine, _, socket) = engineFixture(pairingPort: 1234, publisherFactory: { _, _ in
+        await publication.started()
+        while !(await publication.canFail) { try await Task.sleep(for: .milliseconds(5)) }
+        throw SoloistPlaybackError.discoveryUnavailable
+    })
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": false, "is_active": false])
+    let preparation = Task { try await engine.preparePairing() }
+    for _ in 0..<100 {
+        if await publication.starts == 1 { break }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(await publication.starts == 1)
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    for _ in 0..<10000 { if await engine.isPaired { break }; await Task.yield() }
+    #expect(await engine.isPaired)
+    await publication.releaseFailure()
+    let result = await preparation.result
+    await engine.shutdown()
+    try result.get()
+}
+
+@Test func nativePublicationReplacesFailedSDKMulticastAndStopsWithItsChild() async throws {
+    let publication = SoloistPublicationFixture()
+    let (engine, child, socket) = engineFixture(diagnosticFailure: .discoveryUnavailable, pairingPort: 1234,
+        publisherFactory: { port, name in
+            #expect(port == 1234 && name == "Fixture")
+            await publication.started()
+            return publication
+        })
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": false, "is_active": false])
+    let preparation = Task { try await engine.preparePairing() }
+    for _ in 0..<100 {
+        if await publication.starts == 1 { break }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(await publication.starts == 1)
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    try await preparation.value
+    #expect(await publication.isPublished)
+    await engine.shutdown()
+    #expect(await publication.stops == 1 && child.stopCount == 1)
+}
+
+@Test(arguments: [SoloistPlaybackError.invalidKey, .discoveryUnavailable])
+func unpairedSetupSurfacesSDKDiagnosticFailure(failure: SoloistPlaybackError) async throws {
+    let (engine, _, socket) = engineFixture(diagnosticFailure: failure)
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": false, "is_active": false])
+    let prepare = Task { try await engine.preparePairing() }
+    let timeout = Task {
+        do { try await Task.sleep(for: .seconds(1)) } catch { return }
+        prepare.cancel()
+    }
+    await #expect(throws: failure) { try await prepare.value }
+    timeout.cancel()
+    await engine.shutdown()
+}
+
+@Test func discoveryFailureWaitsForTheInitialRestoredAuthenticationState() async throws {
+    let (engine, _, socket) = engineFixture(diagnosticFailure: .discoveryUnavailable)
+    await engine.begin()
+    let prepare = Task { try await engine.preparePairing() }
+    try await Task.sleep(for: .milliseconds(20))
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    let outcome = await prepare.result
+    await engine.shutdown()
+    try outcome.get()
+}
+
+@Test func restoredPairedAudioIgnoresDiscoveryDiagnosticFailure() async throws {
+    let (engine, child, socket) = engineFixture(diagnosticFailure: .discoveryUnavailable, publisherFactory: { _, _ in
+        Issue.record("A restored paired session must not wait for LAN publication")
+        throw SoloistPlaybackError.discoveryUnavailable
+    })
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    for _ in 0..<10000 { if await engine.isPaired { break }; await Task.yield() }
+    try #require(await engine.isPaired)
+    try await engine.preparePairing()
+    #expect(child.isRunning)
+    await engine.shutdown()
+}
+
 @Test func localSoloistRemainsReadyWhenSpotifyWebAccessIsThrottled() async throws {
     let (engine, child, socket) = engineFixture(webStatus: 429)
     await engine.begin()

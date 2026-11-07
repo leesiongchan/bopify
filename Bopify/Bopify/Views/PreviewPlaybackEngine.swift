@@ -1,10 +1,11 @@
 #if DEBUG
 import Foundation
 import BopifyDomain
+import BopifyPlayback
 
-/// Plays a fixed sample queue for previews. Each command answers with the events librespot would send,
+/// Plays a fixed sample queue for previews. Each command answers with playback events,
 /// so transport, queue selection and stations stay interactive in the canvas.
-nonisolated final class PreviewPlaybackEngine: PlaybackEngine, @unchecked Sendable {
+nonisolated final class PreviewPlaybackEngine: PreparedPlaybackEngine, @unchecked Sendable {
     let events: AsyncStream<PlaybackEvent>
     private let continuation: AsyncStream<PlaybackEvent>.Continuation
     private let lock = NSLock()
@@ -19,6 +20,12 @@ nonisolated final class PreviewPlaybackEngine: PlaybackEngine, @unchecked Sendab
         self.tracks = tracks
         (events, continuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
     }
+
+    func shutdown() async { continuation.finish() }
+    func adopt(initialVolume: Double) async throws { try await setVolume(initialVolume) }
+    func activateForSetup() async throws { try await playHere() }
+    func suspendDataServices() async {}
+    func retryDataServices() async {}
 
     private func emit(_ event: PlaybackEvent) { continuation.yield(event) }
 

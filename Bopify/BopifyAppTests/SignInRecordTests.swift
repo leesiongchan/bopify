@@ -62,9 +62,10 @@ struct SignInRecordTests {
         await environment.enableSoloist(key: "fixture-key")
         #expect(environment.onboardingStep == .playback(.failure))
         #expect(environment.player?.state.currentTrack == track)
-        await environment.useLibrespotForSession()
-        #expect(!environment.isShowingOnboarding)
-        #expect(controller.prefersSoloist, "Session fallback must preserve next-launch Soloist preference")
+        await environment.cancelSoloistSetup()
+        #expect(environment.isShowingOnboarding)
+        #expect(environment.onboardingStep == .playback(.entry))
+        #expect(controller.hasSavedKey && !controller.hasUsablePlayback)
     }
 
     @Test func connectingKeepsWhicheverSideIsShowing() {

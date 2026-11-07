@@ -60,7 +60,7 @@ struct PlayerRootView: View {
                 // Search and Favorite need a ready player, and reconnecting still counts as signed in.
                 if let progress = step.progress { StartupStepPips(current: progress, total: 3) }
                 if environment.authState == .signedIn, environment.requestedOnboardingSection != nil,
-                   environment.soloist.sessionUsesLibrespot || environment.soloist.hasUsablePlayback {
+                   environment.soloist.hasUsablePlayback {
                     Button(SoloistResources.string("onboarding.done"), action: environment.closeOnboarding)
                         .buttonStyle(.plain).font(.caption)
                 }

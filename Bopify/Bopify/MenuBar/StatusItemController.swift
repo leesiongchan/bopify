@@ -311,11 +311,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 
     @objc private func quit(_ sender: Any?) {
-        // `bopify_engine_destroy` (inside `shutdown()`) joins the Rust
-        // runtime and then librespot's audio thread, with no timeout, so
-        // this await can hang. Do the teardown here, not in
-        // `applicationWillTerminate`, which is synchronous and cannot
-        // await it.
+        // Shutdown joins the owned Soloist process and companion data tasks.
+        // applicationWillTerminate is synchronous and cannot await that teardown.
         Task {
             await environment.prepareForQuit()
             NSApp.terminate(nil)
