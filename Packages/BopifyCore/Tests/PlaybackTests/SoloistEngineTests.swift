@@ -20,6 +20,8 @@ private final class SoloistSocketFixture: SoloistTransport, @unchecked Sendable 
     let anchor = Date()
     private var uri = "spotify:track:6rqhFgbbKwnb9MLmUQDhG6"
     private var volume: Double = 0
+    private var active = true
+    func setActive(_ value: Bool) { lock.withLock { active = value } }
     var currentURI: String { lock.withLock { uri } }
     func changeTrack() { lock.withLock { uri = "spotify:track:11dFghVXANMlKmJXsNCbNl" } }
     var position: Double { 1000 + Date().timeIntervalSince(anchor) * 1000 }
@@ -30,7 +32,7 @@ private final class SoloistSocketFixture: SoloistTransport, @unchecked Sendable 
             lock.withLock { sent.append(command) }
             if command == "set_volume", let value = value?["volume"] as? Double { lock.withLock { volume = value } }
             if command == "get_state" {
-                try emit(["type": "playback_state", "is_active": true, "status": "playing", "volume": lock.withLock { volume },
+                try emit(["type": "playback_state", "is_active": lock.withLock { active }, "status": "playing", "volume": lock.withLock { volume },
                     "item": ["uri": currentURI, "decorations": ["identity": ["name": "Fixture"], "playback": ["duration_ms": 100000]]],
                     "position": ["position_ms": position, "timestamp_ms": Date().timeIntervalSince1970 * 1000, "speed": 1],
                     "available_actions": ["pause": [:], "play": [:], "seek": [:]]])
@@ -44,13 +46,14 @@ private final class SoloistSocketFixture: SoloistTransport, @unchecked Sendable 
 }
 
 private final class SoloistHTTPFixture: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var status = 200
     nonisolated(unsafe) static var handler: (@Sendable (URLRequest) -> Data)?
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func stopLoading() {}
     override func startLoading() {
         let data = Self.handler?(request) ?? Data()
-        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: Self.status, httpVersion: nil, headerFields: ["Retry-After": "3600"])!, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: data)
         client?.urlProtocolDidFinishLoading(self)
     }
@@ -63,13 +66,18 @@ private actor SoloistEventFixture {
     func report(_ status: SoloistEngineStatus) { statuses.append(status) }
 }
 
-private func engineFixture() -> (SoloistEngine, SoloistChildFixture, SoloistSocketFixture) {
+private func engineFixture(webStatus: Int = 200, webToken: @escaping @Sendable () async throws -> String = { "fixture" },
+    streamingToken: @escaping @Sendable () async throws -> String = { "fixture" },
+    serviceFactory: @escaping @Sendable (String) async throws -> any SoloistDataServices = { _ in throw PlayerError.networkUnavailable }) -> (SoloistEngine, SoloistChildFixture, SoloistSocketFixture) {
     let child = SoloistChildFixture(), socket = SoloistSocketFixture()
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [SoloistHTTPFixture.self]
+    SoloistHTTPFixture.status = webStatus
     SoloistHTTPFixture.handler = { request in
         let object: [String: Any]
-        if request.url?.path.hasSuffix("devices") == true {
+        if request.url?.path == "/v1/me" {
+            object = ["account_id": request.value(forHTTPHeaderField: "Authorization") == "Bearer replacement" ? "other-account" : "fixture-account"]
+        } else if request.url?.path.hasSuffix("devices") == true {
             object = ["devices": [["id": "owned", "name": "Fixture", "is_restricted": false]]]
         } else {
             object = ["device": ["id": "owned", "name": "Fixture"],
@@ -78,12 +86,101 @@ private func engineFixture() -> (SoloistEngine, SoloistChildFixture, SoloistSock
         return try! JSONSerialization.data(withJSONObject: object)
     }
     let engine = SoloistEngine(child: child, api: SoloistWebAPI(session: URLSession(configuration: configuration)), baseline: [], name: "Fixture",
-        webToken: { "fixture" }, streamingToken: { "fixture" },
-        transportFactory: { _ in socket }, serviceFactory: { _ in throw PlayerError.networkUnavailable }, progress: { _ in })
+        webToken: webToken, streamingToken: streamingToken,
+        transportFactory: { _ in socket }, serviceFactory: serviceFactory, progress: { _ in }, verificationInterval: .milliseconds(600))
     return (engine, child, socket)
 }
 
 @Suite("Soloist managed engine", .serialized) struct SoloistEngineTests {
+@Test func localSoloistRemainsReadyWhenSpotifyWebAccessIsThrottled() async throws {
+    let (engine, child, socket) = engineFixture(webStatus: 429)
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    try await engine.preparePairing()
+    try await engine.adopt(initialVolume: 0.25)
+    try await engine.pause()
+    #expect(socket.commands.contains("pause") && child.isRunning)
+    let uri = SpotifyURI("spotify:track:6rqhFgbbKwnb9MLmUQDhG6")!
+    try await engine.load(PlayRequest(contextURI: uri))
+    #expect(socket.commands.contains("play"))
+    await #expect(throws: LyricFailure.unavailable) { try await engine.requestLyrics(for: uri) }
+    await engine.shutdown()
+}
+
+@Test func inactivePairedSoloistCanBeTheDefaultWithoutAutoplayOrWebAccess() async throws {
+    let (engine, child, socket) = engineFixture(webToken: { Issue.record("Inactive Core must not query the Web API"); throw SoloistPlaybackError.rateLimited })
+    socket.setActive(false)
+    let observations = SoloistEventFixture()
+    let reader = Task { for await event in engine.events { await observations.append(event) } }
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": false])
+    try await engine.preparePairing()
+    try await engine.adopt(initialVolume: 0.25)
+    #expect(!socket.commands.contains("play") && !socket.commands.contains("activate"))
+    await engine.shutdown(); await reader.value
+    #expect(await observations.events.contains(.connectionReady(.remote)))
+    #expect(child.stopCount == 1)
+}
+
+@Test func companionRequestsStayGatedUntilBackgroundAccountAndDeviceProofCompletes() async throws {
+    let service = CompanionServiceFixture()
+    let (engine, _, socket) = engineFixture(serviceFactory: { _ in service })
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    try await engine.preparePairing()
+    try await engine.adopt(initialVolume: 0.25)
+    let uri = SpotifyURI("spotify:track:6rqhFgbbKwnb9MLmUQDhG6")!
+    await #expect(throws: LyricFailure.unavailable) { try await engine.requestLyrics(for: uri) }
+    #expect(await service.lyricRequests == 0)
+    await engine.retryDataServices()
+    await #expect(throws: LyricFailure.unavailable) { try await engine.requestLyrics(for: uri) }
+    #expect(await service.lyricRequests == 1)
+    try socket.emit(["type": "auth_state", "logged_in": false, "is_active": false])
+    for _ in 0..<1000 { if await !engine.isPaired { break }; await Task.yield() }
+    await #expect(throws: LyricFailure.unavailable) { try await engine.requestLyrics(for: uri) }
+    #expect(await service.lyricRequests == 1)
+    await engine.shutdown()
+}
+
+@Test func replacingAStreamingGrantCannotReuseThePreviousAccountsCachedServices() async throws {
+    let token = ServiceTokenFixture(), service = CompanionServiceFixture()
+    let (engine, _, socket) = engineFixture(streamingToken: { token.value }, serviceFactory: { _ in service })
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    try await engine.preparePairing(); try await engine.adopt(initialVolume: 0.25)
+    await engine.retryDataServices()
+    let uri = SpotifyURI("spotify:track:6rqhFgbbKwnb9MLmUQDhG6")!
+    await #expect(throws: LyricFailure.unavailable) { try await engine.requestLyrics(for: uri) }
+    #expect(await service.lyricRequests == 1)
+    token.replace()
+    await #expect(throws: LyricFailure.unavailable) { try await engine.requestLyrics(for: uri) }
+    #expect(await service.lyricRequests == 1, "A replacement credential must revoke cached companion access")
+    try await engine.pause()
+    await engine.shutdown()
+}
+
+@Test func reauthorizingServicesRevokesAssistedLoadsWithoutStoppingLocalCore() async throws {
+    let token = ServiceTokenFixture(), service = CompanionServiceFixture()
+    let (engine, child, socket) = engineFixture(webToken: { token.value }, serviceFactory: { _ in service })
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    try await engine.preparePairing(); try await engine.adopt(initialVolume: 0.25)
+    await engine.retryDataServices()
+    await engine.suspendDataServices()
+    token.replace()
+    let uri = SpotifyURI("spotify:track:6rqhFgbbKwnb9MLmUQDhG6")!
+    await #expect(throws: SoloistPlaybackError.pairingRequired) {
+        try await engine.load(PlayRequest(contextURI: uri, startPositionMs: 1000))
+    }
+    await engine.retryDataServices()
+    await #expect(throws: LyricFailure.unavailable) { try await engine.requestLyrics(for: uri) }
+    #expect(await service.lyricRequests == 0)
+    #expect(child.isRunning)
+    try await engine.pause()
+    try await engine.load(PlayRequest(contextURI: uri))
+    await engine.shutdown()
+}
+
 @Test func soloistCommandsUseTheOwnedSocketAndRejectGuessedQueueSelection() async throws {
     let (engine, child, socket) = engineFixture()
     await engine.begin()
@@ -103,7 +200,7 @@ private func engineFixture() -> (SoloistEngine, SoloistChildFixture, SoloistSock
     #expect(child.stopCount == 1)
 }
 
-@Test func unverifiedPairingCannotPublishOrControlAnotherAccountsPlayback() async throws {
+@Test func repairingRevokesCompanionAccessAndClearsPublishedState() async throws {
     let (engine, child, socket) = engineFixture()
     let observations = SoloistEventFixture()
     let reader = Task { for await event in engine.events { await observations.append(event) } }
@@ -133,6 +230,7 @@ private func engineFixture() -> (SoloistEngine, SoloistChildFixture, SoloistSock
     try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
     try await engine.preparePairing()
     try await engine.adopt(initialVolume: 0.25)
+    await engine.retryDataServices()
     let uri = SpotifyURI("spotify:track:6rqhFgbbKwnb9MLmUQDhG6")!
     await #expect(throws: LyricFailure.unavailable) { try await engine.requestLyrics(for: uri) }
     #expect(child.isRunning && child.stopCount == 0)
@@ -147,7 +245,6 @@ private func engineFixture() -> (SoloistEngine, SoloistChildFixture, SoloistSock
     }
     #expect(value == String(decoding: data, as: UTF8.self))
 }
-}
 
 @Test func lostSoloistSocketDoesNotDeclareTheStillRunningChildSilent() async throws {
     let (engine, child, socket) = engineFixture()
@@ -161,4 +258,21 @@ private func engineFixture() -> (SoloistEngine, SoloistChildFixture, SoloistSock
     await #expect(throws: SoloistPlaybackError.self) { try await engine.pause() }
     await engine.shutdown()
     #expect(child.stopCount == 1)
+}
+
+}
+
+private actor CompanionServiceFixture: SoloistDataServices {
+    var lyricRequests = 0
+    func requestLyrics(for track: SpotifyURI) async throws -> TrackLyrics { lyricRequests += 1; throw LyricFailure.unavailable }
+    func requestRadio(seed: SpotifyURI) async throws -> RadioMix { throw RadioFailure.unavailable }
+    func requestArtistTopTracks(for track: SpotifyURI, artistIndex: Int) async throws -> ArtistTopTracks { throw ArtistTopTracksFailure.unavailable }
+    func shutdown() async {}
+}
+
+private final class ServiceTokenFixture: @unchecked Sendable {
+    private let lock = NSLock()
+    private var token = "fixture"
+    var value: String { lock.withLock { token } }
+    func replace() { lock.withLock { token = "replacement" } }
 }

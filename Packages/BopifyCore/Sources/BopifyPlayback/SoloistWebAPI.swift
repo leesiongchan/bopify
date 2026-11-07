@@ -25,9 +25,10 @@ private final class SoloistHTTPPolicy: NSObject, URLSessionTaskDelegate, Sendabl
 /// Requests are always scoped to the user's own grant and an explicitly verified local device.
 actor SoloistWebAPI {
     private let session: URLSession
-    private var retryAt = Date.distantPast
+    private let rateLimit: SoloistRateLimit
 
-    init(session: URLSession? = nil) {
+    init(session: URLSession? = nil, rateLimit: SoloistRateLimit? = nil) {
+        self.rateLimit = rateLimit ?? (session == nil ? .shared : SoloistRateLimit())
         if let session { self.session = session }
         else {
             let configuration = URLSessionConfiguration.ephemeral
@@ -38,11 +39,12 @@ actor SoloistWebAPI {
     }
 
     func close() { session.invalidateAndCancel() }
+    func retryDate() async -> Date { await rateLimit.retryAt }
 
     private func request(_ path: String, token: String, method: String = "GET", body: Data? = nil,
         device: String? = nil) async throws -> Data? {
         try Task.checkCancellation()
-        guard Date() >= retryAt else { throw SoloistPlaybackError.rateLimited }
+        try await rateLimit.check()
         var url = URLComponents(string: "https://api.spotify.com/v1" + path)!
         if let device {
             guard !device.isEmpty, device.utf8.count <= 256 else { throw SoloistPlaybackError.ambiguousDevice }
@@ -58,7 +60,7 @@ actor SoloistWebAPI {
         guard let http = response as? HTTPURLResponse else { throw SoloistPlaybackError.invalidState }
         if http.statusCode == 429 {
             let seconds = Double(http.value(forHTTPHeaderField: "Retry-After") ?? "") ?? 60
-            retryAt = Date().addingTimeInterval(seconds.isFinite ? max(1, seconds) : 60)
+            await rateLimit.postpone(seconds: seconds)
             throw SoloistPlaybackError.rateLimited
         }
         if http.statusCode == 401 || http.statusCode == 403 { throw SoloistPlaybackError.authorizationRequired }

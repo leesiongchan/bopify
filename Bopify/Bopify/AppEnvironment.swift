@@ -549,6 +549,10 @@ final class AppEnvironment {
         let session = sessionGeneration
         let task = Task { [self] in
             defer { soloistAction = nil }
+            if soloist.provider == .soloist, key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                await soloist.retryDataServices()
+                return
+            }
             if soloist.provider == .soloist {
                 await serialize { [self] in await recovery?.stop() }.value
                 await soloist.stop()

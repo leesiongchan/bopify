@@ -9,5 +9,6 @@ public protocol ManagedPlaybackEngine: PlaybackEngine {
 public protocol PreparedPlaybackEngine: ManagedPlaybackEngine {
     func adopt(initialVolume: Double) async throws
     func activateForSetup() async throws
+    func suspendDataServices() async
     func retryDataServices() async
 }

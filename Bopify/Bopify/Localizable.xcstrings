@@ -1,6 +1,16 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "soloist.preparing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparing Soloist"
+          }
+        }
+      }
+    },
     "desktopMigration.title": {
       "localizations": {
         "en": {
@@ -56,7 +66,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Soloist is playing. Lyrics, radio, or artist services could not connect; audio is preserved."
+            "value": "Soloist remains available. Spotify services could not connect yet; Bopify retries automatically while music plays."
           }
         }
       }
@@ -66,7 +76,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Retry data services"
+            "value": "Connect Spotify features"
           }
         }
       }
@@ -96,7 +106,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Use Soloist for playback, with librespot providing lyrics, radio, and other missing features. Bopify downloads and updates Soloist automatically."
+            "value": "Soloist is the default playback engine. Librespot supplies lyrics, radio, and other missing features. Bopify downloads and updates Soloist automatically."
           }
         }
       }

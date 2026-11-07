@@ -174,3 +174,18 @@ func soloistReactivationPublishesMetadataThatWasNotVisibleDuringAnInterruption(i
     _ = try state.ingest(frame(["type": "device_changed", "is_active": false]), at: secondDate)
     #expect(throws: SoloistPlaybackError.self) { try proof.observe(state, devices: [device], playback: second, at: secondDate) }
 }
+
+@Test func soloistCorrelationRejectsFreshButStationaryWebPlayback() throws {
+    let device = SoloistDevice(id: "owned", name: "Fixture", is_restricted: false)
+    var proof = SoloistCorrelation(baseline: [], name: device.name), state = SoloistState()
+    _ = try state.ingest(frame(["type": "auth_state", "logged_in": true, "is_active": true]), at: stateDate)
+    for (offset, position) in [(0.0, 7500.0), (5.0, 12500.0)] {
+        let date = stateDate.addingTimeInterval(offset)
+        var value = snapshot()
+        value["position"] = ["position_ms": position, "timestamp_ms": date.timeIntervalSince1970 * 1000, "speed": 1]
+        _ = try state.ingest(frame(value), at: date)
+        let web = SoloistWebPlayback(deviceID: "owned", deviceName: device.name, uri: sampleURI,
+            positionMs: 10000, playing: true, observedAt: date, track: nil)
+        #expect(try proof.observe(state, devices: [device], playback: web, at: date) == nil)
+    }
+}

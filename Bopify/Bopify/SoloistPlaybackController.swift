@@ -34,7 +34,7 @@ final class SoloistPlaybackController {
     private(set) var isPreparing = false
     private(set) var hasPendingUpdate = false
     var needsAttention: (@MainActor () -> Void)?
-    var prefersSoloist: Bool { defaults.bool(forKey: "soloist.enabled") }
+    var prefersSoloist: Bool { hasSavedKey || defaults.bool(forKey: "soloist.enabled") }
     private(set) var sessionUsesLibrespot = false
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let keys: any SoloistKeyStoring
@@ -61,7 +61,7 @@ final class SoloistPlaybackController {
         hasSavedKey = defaults.bool(forKey: "soloist.hasKey")
         self.install = install
         self.start = start ?? { request in
-            let name = "Bopify \(UUID().uuidString.prefix(4))"
+            let name = "Bopify \(UUID().uuidString.prefix(8))"
             let engine = try await SoloistEngine.launch(executable: request.executable, key: request.key, name: name,
                 webToken: webToken, streamingToken: streamingToken, progress: request.progress)
             request.available(engine)
@@ -82,10 +82,6 @@ final class SoloistPlaybackController {
             else { key = try SoloistKeyStore.validated(raw) }
             try keys.save(key)
             hasSavedKey = true; defaults.set(true, forKey: "soloist.hasKey")
-            phase = .authorizing
-            try await authorize()
-            try Task.checkCancellation()
-            guard generation == mine else { throw CancellationError() }
             phase = .installing(nil)
             let executable = try await install(setupEngine == nil, installProgress(generation: mine))
             try Task.checkCancellation()
@@ -163,7 +159,10 @@ final class SoloistPlaybackController {
             try await engine.adopt(initialVolume: configuration.snapshot?.volume ?? configuration.initialVolume ?? 0.5)
             guard generation == mine, !Task.isCancelled else { throw CancellationError() }
             provider = .soloist
-            reporter(generation: mine)(.ready)
+            switch phase {
+            case .idle, .prepared, .installing, .checkingAccount, .pairing, .verifying: phase = .ready
+            default: break
+            }
             scheduleUpdates(generation: mine)
             return engine
         } catch {
@@ -211,7 +210,16 @@ final class SoloistPlaybackController {
         catch { phase = .failed(Self.failure(error)) }
     }
 
-    func retryDataServices() async { await setupEngine?.retryDataServices() }
+    func retryDataServices() async {
+        guard provider == .soloist, let engine = setupEngine else { return }
+        let mine = generation
+        await engine.suspendDataServices()
+        do {
+            try await authorize()
+            guard generation == mine, provider == .soloist else { return }
+            await engine.retryDataServices()
+        } catch { if generation == mine, provider == .soloist { phase = .limitedServices } }
+    }
 
     func useLibrespotForSession() async {
         generation += 1

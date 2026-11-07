@@ -6,7 +6,7 @@ struct SoloistCorrelation {
     let name: String
     private var candidate: String?
     private var authRevision: UInt64?
-    private var previous: (uri: String, position: Int64, date: Date)?
+    private var previous: (uri: String, position: Int64, webPosition: Double, webDate: Date, date: Date)?
 
     init(baseline: Set<SoloistDevice>, name: String) { self.baseline = baseline; self.name = name }
 
@@ -31,9 +31,10 @@ struct SoloistCorrelation {
         }
         if let candidate, candidate != id { throw SoloistPlaybackError.ambiguousDevice }
         candidate = id; authRevision = state.authRevision
-        defer { previous = (uri, state.positionMs, date) }
+        defer { previous = (uri, state.positionMs, playback.positionMs, playback.observedAt, date) }
         if let previous, previous.uri == uri, date.timeIntervalSince(previous.date) >= 0.5,
-           state.positionMs > previous.position + 200 { return id }
+           state.positionMs > previous.position + 200,
+           playback.observedAt > previous.webDate, playback.positionMs > previous.webPosition + 200 { return id }
         return nil
     }
 }

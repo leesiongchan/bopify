@@ -14,12 +14,17 @@ struct SoloistSetupView: View {
         default: return false
         }
     }
+    private var providerLabel: String {
+        if controller.provider == .soloist { return "soloist.currentSoloist" }
+        if busy, controller.prefersSoloist, !controller.sessionUsesLibrespot { return "soloist.preparing" }
+        return "soloist.currentLibrespot"
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             text("soloist.title").font(.title2.weight(.semibold))
             text("soloist.intro").fixedSize(horizontal: false, vertical: true)
-            Label(SoloistResources.string(controller.provider == .soloist ? "soloist.currentSoloist" : "soloist.currentLibrespot"),
+            Label(SoloistResources.string(providerLabel),
                   systemImage: "speaker.wave.2")
                 .font(.callout.weight(.medium))
             Divider()
@@ -39,7 +44,8 @@ struct SoloistSetupView: View {
                     if busy {
                         Button(SoloistResources.string("soloist.cancel")) { Task { await environment.useLibrespotForSession() } }
                     } else {
-                        Button(SoloistResources.string(controller.hasSavedKey ? "soloist.retry" : "soloist.enable"), action: enable)
+                        Button(SoloistResources.string(controller.provider == .soloist && key.isEmpty
+                            ? "soloist.retryDataServices" : controller.hasSavedKey ? "soloist.retry" : "soloist.enable"), action: enable)
                             .keyboardShortcut(.defaultAction)
                             .disabled(key.isEmpty && !controller.hasSavedKey)
                             .accessibilityIdentifier("soloist.enable")
@@ -92,7 +98,6 @@ struct SoloistSetupView: View {
         case .prepared: progress("soloist.adopting")
         case .limitedServices:
             Label(SoloistResources.string("soloist.limitedServices"), systemImage: "info.circle").font(.callout)
-            Button(SoloistResources.string("soloist.retryDataServices")) { Task { await controller.retryDataServices() } }
         case .ready:
             Label(SoloistResources.string("soloist.ready"), systemImage: "checkmark.circle.fill").foregroundStyle(.green)
             if controller.hasPendingUpdate { text("soloist.updateReady").font(.caption).foregroundStyle(.secondary) }

@@ -27,9 +27,9 @@ The release build is ad-hoc signed and not notarized; macOS may require you to a
 
 ## Soloist playback
 
-Open **Playback Engine…** from Bopify's menu. Follow the link to obtain your personal Soloist key, paste it into the secure field, and choose **Enable Soloist**. Approve the additional Spotify playback access. Bopify downloads and validates Spotify's latest macOS build automatically.
+Open **Playback Engine…** from Bopify's menu. Follow the link to obtain your personal Soloist key, paste it into the secure field, and choose **Enable Soloist**. Bopify downloads and validates Spotify's latest macOS build automatically. Choose **Connect Spotify features** to approve additional Spotify access for companion features; this does not stop Soloist playback.
 
-When prompted, open Spotify on the same network, select the device name shown by Bopify, and play a track. Bopify verifies the session before taking over playback. Subsequent launches reuse the saved key and pairing. Updates download in the background and take effect after the current Soloist process stops.
+When prompted, open Spotify on the same network, select the device name shown by Bopify, and play a track. Bopify verifies the session before taking over playback. A saved key makes Soloist the default on subsequent launches, reusing its pairing. Local controls and supported song loads keep working if Spotify’s Web API is throttled; verified companion services reconnect separately. Updates download in the background and take effect after the current Soloist process stops.
 
 Soloist handles audio; a data-only librespot session supplies lyrics, radio, and artist tracks. Exact queue-entry selection requires **Use librespot for this session** in Playback Engine. Switching engines pauses playback and does not copy queue edits. No Terminal setup or installation-folder permission is required. Bopify uses the ordinary hardened desktop model, with publisher validation before running downloaded Soloist code.
 
