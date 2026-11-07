@@ -21,16 +21,6 @@ extension LiveLyricTestEngine: PreparedPlaybackEngine {
 
 @MainActor @Suite("Soloist native setup", .serialized)
 struct SoloistSetupTests {
-    @Test func missingInstallationGrantNeverOpensADialogDuringRestore() throws {
-        let suite = "soloist-scope-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let access = SoloistInstallationAccess(defaults: defaults)
-        #expect(throws: SoloistInstallationAccessError.self) { try access.restore() }
-        #expect(defaults.data(forKey: SoloistInstallationAccess.bookmarkKey) == nil)
-        defaults.set(Data("invalid-bookmark".utf8), forKey: SoloistInstallationAccess.bookmarkKey)
-        #expect(throws: (any Error).self) { try access.restore() }
-    }
     @Test func invalidKeyNeverStartsConsentOrInstallation() async throws {
         let suite = "soloist-setup-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!

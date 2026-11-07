@@ -1,4 +1,5 @@
 import SwiftUI
+import Darwin
 import BopifyDomain
 import KeyboardShortcuts
 import os
@@ -15,6 +16,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var shortcutTasks: [Task<Void, Never>] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if CommandLine.arguments.contains(SoloistInstallationCheck.argument) {
+            Task { exit(await SoloistInstallationCheck.run()) }
+            return
+        }
+        finishDesktopMigrationAndStart()
+    }
+
+    private func finishDesktopMigrationAndStart() {
+        do { try DesktopDataMigration().run() }
+        catch {
+            BopifyLog.auth.error("desktop data migration blocked; authentication deferred")
+            let alert = NSAlert()
+            alert.messageText = SoloistResources.string("desktopMigration.title")
+            alert.informativeText = SoloistResources.string("desktopMigration.message")
+            alert.addButton(withTitle: SoloistResources.string("desktopMigration.retry"))
+            alert.addButton(withTitle: SoloistResources.string("desktopMigration.quit"))
+            NSApp.activate()
+            if alert.runModal() == .alertFirstButtonReturn {
+                Task { @MainActor in self.finishDesktopMigrationAndStart() }
+            } else { NSApp.terminate(nil) }
+            return
+        }
         let environment = AppEnvironment()
         let controller = StatusItemController(content: PlayerRootView(environment: environment), environment: environment)
         statusItemController = controller

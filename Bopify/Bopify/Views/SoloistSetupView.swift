@@ -10,7 +10,7 @@ struct SoloistSetupView: View {
     private var busy: Bool {
         if controller.isPreparing { return true }
         switch controller.phase {
-        case .requestingPermission, .authorizing, .installing, .checkingAccount, .pairing, .verifying, .prepared, .reconnecting: return true
+        case .authorizing, .installing, .checkingAccount, .pairing, .verifying, .prepared, .reconnecting: return true
         default: return false
         }
     }
@@ -73,7 +73,6 @@ struct SoloistSetupView: View {
     @ViewBuilder private var status: some View {
         switch controller.phase {
         case .idle: EmptyView()
-        case .requestingPermission: progress("soloist.permission.waiting")
         case .authorizing: progress("soloist.authorizing")
         case let .installing(fraction):
             VStack(alignment: .leading, spacing: 8) {
@@ -122,7 +121,6 @@ extension SoloistSetupFailure {
         switch self {
         case .invalidKey: "soloist.error.invalidKey"
         case .credentials: "soloist.error.credentials"
-        case .installationPermission: "soloist.error.installationPermission"
         case .authorization: "soloist.error.authorization"
         case .accountMismatch: "soloist.error.accountMismatch"
         case .missingAccountID: "soloist.error.missingAccountID"

@@ -134,9 +134,8 @@ final class AppEnvironment {
         }
         self.auth = auth
         self.libraryAuth = libraryAuth
-        let installationAccess = SoloistInstallationAccess()
         let soloistInstaller = SoloistInstaller()
-        soloist = SoloistPlaybackController(requestInstallationAccess: { try await installationAccess.request() }, authorize: {
+        soloist = SoloistPlaybackController(authorize: {
             let scopes = LibraryAuthorization.requiredScopes.union(LibraryAuthorization.playbackScopes)
             do { _ = try await libraryAuth.validAccessToken(requiredScopes: scopes) }
             catch LibraryError.authorizationRequired { try await libraryAuth.authorize(additionalScopes: LibraryAuthorization.playbackScopes) }
@@ -146,7 +145,6 @@ final class AppEnvironment {
         }, webToken: {
             try await libraryAuth.validAccessToken(requiredScopes: LibraryAuthorization.playbackScopes)
         }, streamingToken: { try await auth.validAccessToken() }, install: { activate, progress in
-            try installationAccess.restore()
             return try await soloistInstaller.ensureInstalled(canActivateUpdate: activate, progress: progress).current.executableURL
         })
         libraryClientID = LibraryAuthorization.storedClientID(in: .standard)

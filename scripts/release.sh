@@ -104,6 +104,7 @@ ditto "$archive_path/Products/Applications/Bopify.app" "$app"
 
 echo "Verifying release app signature."
 codesign --verify --deep --strict "$app"
+./scripts/verify-desktop-app.sh "$app"
 cmp "$resources_dir/LICENSE.txt" "$app/Contents/Resources/LICENSE.txt"
 cmp "$resources_dir/Third-Party Licenses.html" "$app/Contents/Resources/Third-Party Licenses.html"
 

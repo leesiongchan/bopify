@@ -7,10 +7,10 @@ import BopifyPlayback
 
 enum PlaybackProvider { case soloist, librespot }
 enum SoloistSetupPhase: Equatable {
-    case idle, requestingPermission, authorizing, installing(Double?), checkingAccount, pairing(String), verifying, prepared, ready, limitedServices, reconnecting
+    case idle, authorizing, installing(Double?), checkingAccount, pairing(String), verifying, prepared, ready, limitedServices, reconnecting
     case failed(SoloistSetupFailure)
 }
-enum SoloistSetupFailure { case invalidKey, credentials, installationPermission, authorization, accountMismatch, missingAccountID, pairing, installation, startup, rateLimited }
+enum SoloistSetupFailure { case invalidKey, credentials, authorization, accountMismatch, missingAccountID, pairing, installation, startup, rateLimited }
 
 struct SoloistLaunchRequest: Sendable {
     let executable: URL
@@ -39,7 +39,6 @@ final class SoloistPlaybackController {
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let keys: any SoloistKeyStoring
     @ObservationIgnored private let authorize: @MainActor () async throws -> Void
-    @ObservationIgnored private let requestInstallationAccess: @MainActor () async throws -> Void
     @ObservationIgnored private let install: @MainActor (Bool, @escaping @Sendable (SoloistInstallProgress) -> Void) async throws -> URL
     @ObservationIgnored private let start: @MainActor (SoloistLaunchRequest) async throws -> any PreparedPlaybackEngine
     @ObservationIgnored private let clearSession: @MainActor () throws -> Void
@@ -52,7 +51,6 @@ final class SoloistPlaybackController {
     @ObservationIgnored private let statusSequence = SoloistStatusSequence()
 
     init(defaults: UserDefaults = .standard, keys: any SoloistKeyStoring = SoloistKeyStore(),
-        requestInstallationAccess: @escaping @MainActor () async throws -> Void = {},
         authorize: @escaping @MainActor () async throws -> Void,
         webToken: @escaping @Sendable () async throws -> String = { throw PlayerError.authDenied },
         streamingToken: @escaping @Sendable () async throws -> String = { throw PlayerError.authDenied },
@@ -60,7 +58,6 @@ final class SoloistPlaybackController {
         start: (@MainActor (SoloistLaunchRequest) async throws -> any PreparedPlaybackEngine)? = nil,
         clearSession: @escaping @MainActor () throws -> Void = { try SoloistEngine.clearStoredSession() }) {
         self.defaults = defaults; self.keys = keys; self.authorize = authorize; self.clearSession = clearSession
-        self.requestInstallationAccess = requestInstallationAccess
         hasSavedKey = defaults.bool(forKey: "soloist.hasKey")
         self.install = install
         self.start = start ?? { request in
@@ -85,10 +82,6 @@ final class SoloistPlaybackController {
             else { key = try SoloistKeyStore.validated(raw) }
             try keys.save(key)
             hasSavedKey = true; defaults.set(true, forKey: "soloist.hasKey")
-            phase = .requestingPermission
-            try await requestInstallationAccess()
-            try Task.checkCancellation()
-            guard generation == mine else { throw CancellationError() }
             phase = .authorizing
             try await authorize()
             try Task.checkCancellation()
@@ -250,7 +243,6 @@ final class SoloistPlaybackController {
 
     private static func failure(_ error: any Error) -> SoloistSetupFailure {
         if error is SoloistInstallationError { return .installation }
-        if error is SoloistInstallationAccessError { return .installationPermission }
         if let player = error as? PlayerError, player == .authDenied || player == .authExpired || player == .credentialCorrupt { return .authorization }
         if error as? LibraryError == .authorizationRequired { return .authorization }
         if let key = error as? SoloistKeyError { return key == .invalid ? .invalidKey : .credentials }

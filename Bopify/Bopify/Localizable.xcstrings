@@ -1,52 +1,42 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "soloist.permission.title": {
+    "desktopMigration.title": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Allow Soloist Installation"
+            "value": "Finish updating Bopify"
           }
         }
       }
     },
-    "soloist.permission.message": {
+    "desktopMigration.message": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Allow Bopify to install and run Soloist in this private Bopify folder. Keep the suggested folder and choose Allow. This permission is remembered for updates."
+            "value": "Bopify could not safely transfer its previous saved settings. Your saved data has been kept. Close any other copy of Bopify and allow access if macOS asks, then retry."
           }
         }
       }
     },
-    "soloist.permission.allow": {
+    "desktopMigration.retry": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Allow"
+            "value": "Retry"
           }
         }
       }
     },
-    "soloist.permission.waiting": {
+    "desktopMigration.quit": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Allow installation in the macOS dialog…"
-          }
-        }
-      }
-    },
-    "soloist.error.installationPermission": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Soloist needs installation permission. Retry and allow the suggested Bopify folder in the macOS dialog."
+            "value": "Quit"
           }
         }
       }
