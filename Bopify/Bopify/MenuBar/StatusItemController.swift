@@ -130,7 +130,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         let crossingCompact = (appliedMode == .compact) != compact
         let size: NSSize
         if onboarding {
-            size = NSSize(width: max(410, oldFrame.width), height: max(560, oldFrame.height))
+            size = NSSize(width: max(410, oldFrame.width), height: max(680, oldFrame.height))
         } else {
             size = appliedMode == nil || !crossingCompact ? oldFrame.size : NSSize(width: compact ? 380 : 410, height: compact ? 88 : 560)
         }
@@ -150,7 +150,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         } ?? NSScreen.main
         guard let visible = screen?.visibleFrame else { return }
         let compact = appliedMode == .compact
-        let minimum = NSSize(width: compact ? 340 : 390, height: compact ? 88 : 560)
+        let minimum = NSSize(width: compact ? 340 : 390, height: compact ? 88 : 680)
         let maximum = NSSize(width: compact ? 420 : 430, height: compact ? 88 : 800)
         let requested = NSSize(width: min(maximum.width, max(minimum.width, size.width)),
                                height: min(maximum.height, max(minimum.height, size.height)))

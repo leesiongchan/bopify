@@ -9,40 +9,46 @@ struct PlayerRootView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            if environment.isShowingPlayer, let player = environment.player {
-                RecordPlayerView(player: player, artworkStore: environment.artworkStore,
-                                   presentation: environment.presentation, windowController: environment.playerWindowController)
-                    .id(ObjectIdentifier(player))
-                    .transition(.opacity)
-            }
-            if !environment.isShowingPlayer || environment.onboarding.phase == .handoff {
-                StartupSurface(isAnimating: environment.presentation.isVisible, isDimmed: startupStep?.recordPose == .tucked) {
-                    VStack(spacing: 8) {
-                        header
-                        if let step = startupStep {
-                            StartupView(step: step, isVisible: environment.presentation.isVisible,
-                                        onRecordFrameChanged: { environment.onboardingRecordFrame = $0 }) {
-                                startupContent(step)
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                                    .modifier(ScrollablePlayerContent())
+        GeometryReader { viewport in
+            ZStack(alignment: .topLeading) {
+                if environment.isShowingPlayer, let player = environment.player {
+                    RecordPlayerView(player: player, artworkStore: environment.artworkStore,
+                                       presentation: environment.presentation, windowController: environment.playerWindowController)
+                        .id(ObjectIdentifier(player))
+                        .transition(.opacity)
+                }
+                if !environment.isShowingPlayer || environment.onboarding.phase == .handoff {
+                    StartupSurface(isAnimating: environment.presentation.isVisible, isDimmed: startupStep?.recordPose == .tucked) {
+                        VStack(spacing: 8) {
+                            header
+                            if let step = startupStep {
+                                StartupView(step: step, isVisible: environment.presentation.isVisible,
+                                            onRecordFrameChanged: { environment.onboardingRecordFrame = $0 }) {
+                                    startupContent(step)
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                                        .modifier(NativeStartupContent())
+                                }
                             }
                         }
+                        .padding(16)
                     }
-                    .padding(16)
+                    .frame(width: environment.onboarding.phase == .handoff ? startupSize?.width : viewport.size.width,
+                           height: environment.onboarding.phase == .handoff ? startupSize?.height : viewport.size.height)
+                    .offset(x: handoffOffset.x, y: handoffOffset.y)
+                    .animation(nil, value: handoffOffset)
+                    .opacity(environment.isShowingPlayer ? 0 : 1)
+                    .allowsHitTesting(!environment.isShowingPlayer)
+                    .accessibilityHidden(environment.isShowingPlayer)
+                    .zIndex(1)
                 }
-                .frame(width: startupSize?.width, height: startupSize?.height)
-                .offset(x: handoffOffset.x, y: handoffOffset.y)
-                .animation(nil, value: handoffOffset)
-                .opacity(environment.isShowingPlayer ? 0 : 1)
-                .allowsHitTesting(!environment.isShowingPlayer)
-                .accessibilityHidden(environment.isShowingPlayer)
-                .zIndex(1)
             }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
-            if !environment.isShowingPlayer { startupSize = size }
+            .frame(width: viewport.size.width, height: viewport.size.height, alignment: .topLeading)
+            .onChange(of: viewport.size, initial: true) { _, size in
+                if !environment.isShowingPlayer { startupSize = size }
+            }
+            .onChange(of: environment.isShowingPlayer) { wasShowing, isShowing in
+                if wasShowing && !isShowing { startupSize = viewport.size }
+            }
         }
         .environment(environment)
         .animation(.easeInOut(duration: reduceMotion ? 0.15 : 0.5), value: environment.isShowingPlayer)
@@ -77,11 +83,6 @@ struct PlayerRootView: View {
             if let step = startupStep {
                 // Search and Favorite need a ready player, and reconnecting still counts as signed in.
                 if let progress = step.progress { StartupStepIndicator(current: progress, total: 3) }
-                if environment.authState == .signedIn, environment.requestedOnboardingSection != nil,
-                   environment.soloist.hasUsablePlayback, !environment.onboarding.isArmed {
-                    Button(SoloistResources.string("onboarding.done"), action: environment.closeOnboarding)
-                        .buttonStyle(.plain).font(.callout)
-                }
             } else {
                 if environment.authState == .signedIn { SearchButton(environment: environment) }
                 FavoriteButton()
@@ -163,50 +164,27 @@ struct PlayerRootView: View {
     PlayerRootView(environment: AppEnvironment()).frame(width: 410, height: 560)
 }
 
-private struct ScrollablePlayerContent: ViewModifier {
+private struct NativeStartupContent: ViewModifier {
     func body(content: Content) -> some View {
-        StartupScrollView(content: content)
+        StartupFormHost(content: content)
     }
 }
 
-/// A native scroll area preserves the hosted form's accessibility nodes on macOS.
-private struct StartupScrollView<Content: View>: NSViewRepresentable {
+/// Keep native editor accessibility without introducing a scrolling document or its saved offset.
+private struct StartupFormHost<Content: View>: NSViewRepresentable {
     let content: Content
 
-    func makeNSView(context: Context) -> NSScrollView {
-        let scroll = NSScrollView()
-        scroll.drawsBackground = false
-        scroll.borderType = .noBorder
-        scroll.hasVerticalScroller = true
-        scroll.scrollerStyle = .overlay
-        scroll.autohidesScrollers = true
-        scroll.horizontalScrollElasticity = .none
-        let clip = StartupClipView()
-        clip.drawsBackground = false
-        scroll.contentView = clip
+    func makeNSView(context: Context) -> NSHostingView<AnyView> {
         let host = NSHostingView(rootView: AnyView(content.environment(\.self, context.environment)))
-        host.sizingOptions = [.intrinsicContentSize]
-        host.translatesAutoresizingMaskIntoConstraints = false
-        scroll.documentView = host
-        NSLayoutConstraint.activate([
-            host.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
-            host.topAnchor.constraint(equalTo: clip.topAnchor),
-            host.widthAnchor.constraint(equalTo: clip.widthAnchor),
-            host.heightAnchor.constraint(greaterThanOrEqualTo: clip.heightAnchor),
-        ])
-        return scroll
+        host.sizingOptions = []
+        return host
     }
 
-    func updateNSView(_ scroll: NSScrollView, context: Context) {
-        guard let host = scroll.documentView as? NSHostingView<AnyView> else { return }
+    func updateNSView(_ host: NSHostingView<AnyView>, context: Context) {
         withTransaction(context.transaction) {
             host.rootView = AnyView(content.environment(\.self, context.environment))
         }
     }
-}
-
-private final class StartupClipView: NSClipView {
-    override var isFlipped: Bool { true }
 }
 
 #Preview("Small display · sign in") {

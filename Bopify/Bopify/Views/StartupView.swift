@@ -10,29 +10,33 @@ struct StartupView<Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 18) {
-            SignInRecordView(step: step, isVisible: isVisible,
-                             onRecordFrameChanged: onRecordFrameChanged)
-                .overlay(alignment: .bottomTrailing) {
-                    if step == .completion {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 24, weight: .medium))
-                            .foregroundStyle(.green)
-                            .symbolRenderingMode(.hierarchical)
-                            .accessibilityHidden(true)
-                            .transition(.opacity)
+        GeometryReader { geometry in
+            // Reserve the same readable form area at every step; adapt artwork only to the viewport.
+            let scale = min(0.88, max(0.25, (geometry.size.height - 312 - 18) / 324))
+            VStack(spacing: 18) {
+                SignInRecordView(step: step, isVisible: isVisible,
+                                 onRecordFrameChanged: onRecordFrameChanged, scale: scale)
+                    .overlay(alignment: .bottomTrailing) {
+                        if step == .completion {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 24, weight: .medium))
+                                .foregroundStyle(.green)
+                                .symbolRenderingMode(.hierarchical)
+                                .accessibilityHidden(true)
+                                .transition(.opacity)
+                        }
                     }
+                // Stacked, so outgoing and incoming copy cross-fade in place instead of pushing each other.
+                ZStack {
+                    content()
+                        .id(step.contentIdentity)
+                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 6)))
                 }
-            // Stacked, so outgoing and incoming copy cross-fade in place instead of pushing each other.
-            ZStack {
-                content()
-                    .id(step.contentIdentity)
-                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 6)))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .frame(maxHeight: .infinity)
+            .animation(.easeInOut(duration: reduceMotion ? 0.16 : 0.3), value: step)
         }
-        .frame(maxHeight: .infinity)
-        .animation(.easeInOut(duration: reduceMotion ? 0.16 : 0.3), value: step)
     }
 }
 
@@ -80,6 +84,7 @@ struct StartupHeading: View {
             title.font(.system(size: isCompact ? 21 : 24, weight: .semibold))
                 .startupPrimary()
                 .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("onboarding.title")
             if let message {
                 message
                     .font(.body)

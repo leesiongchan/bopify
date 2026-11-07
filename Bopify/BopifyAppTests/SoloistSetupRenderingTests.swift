@@ -233,12 +233,10 @@ struct SoloistSetupRenderingTests {
         #expect(secureField(in: host) === field && field.stringValue == "fixture-key")
         field.selectText(nil)
         #expect(field.currentEditor() != nil)
-        let scroll = try #require(scrollView(in: host))
-        let document = try #require(scroll.documentView)
-        #expect(document.frame.width <= scroll.contentView.bounds.width + 1)
-        document.scroll(NSPoint(x: 0, y: max(0, document.frame.height - scroll.contentView.bounds.height)))
-        scroll.reflectScrolledClipView(scroll.contentView)
-        _ = try AppearanceTestAccessibility.element("soloist.enable", in: host)
+        #expect(scrollView(in: host) == nil)
+        try expectVisible("onboarding.title", in: host)
+        try expectVisible("soloist.apiKey", in: host)
+        try expectVisible("soloist.enable", in: host)
         let artifacts = try captureDirectory()
         try capture(host, at: artifacts.appendingPathComponent("high-contrast-key.png"))
         print("Readable onboarding capture: \(artifacts.path)")
@@ -270,19 +268,15 @@ struct SoloistSetupRenderingTests {
                 window.makeKeyAndOrderFront(nil)
                 try await Task.sleep(for: .milliseconds(120))
                 let stem = "\(dark ? "dark" : "light")-\(compact ? "compact-high-contrast" : "regular")-\(library ? "library" : "key")"
-                let scroll = try #require(scrollView(in: host))
-                let document = try #require(scroll.documentView)
-                #expect(document.frame.width <= scroll.contentView.bounds.width + 1)
+                #expect(scrollView(in: host) == nil)
                 _ = try AppearanceTestAccessibility.element("onboarding.step", in: host)
                 let input = try AppearanceTestAccessibility.element(library ? "onboarding.libraryClientID" : "soloist.apiKey", in: host)
                 #expect(input.object.accessibilityRole?() == .textField)
                 #expect(input.object.accessibilityLabel?() == SoloistResources.string(library ? "librarySetup.clientID" : "soloist.key"))
-                document.scroll(.zero)
-                scroll.reflectScrolledClipView(scroll.contentView)
-                try capture(host, at: artifacts.appendingPathComponent(stem + "-top.png"))
-                document.scroll(NSPoint(x: 0, y: max(0, document.frame.height - scroll.contentView.bounds.height)))
-                scroll.reflectScrolledClipView(scroll.contentView)
-                try capture(host, at: artifacts.appendingPathComponent(stem + "-bottom.png"))
+                try expectVisible("onboarding.title", in: host)
+                try expectVisible(library ? "onboarding.libraryClientID" : "soloist.apiKey", in: host)
+                try expectVisible(library ? "onboarding.saveLibrary" : "soloist.enable", in: host)
+                try capture(host, at: artifacts.appendingPathComponent(stem + ".png"))
             }
         }
         print("Onboarding light/dark capture matrix: \(artifacts.path)")
@@ -346,7 +340,7 @@ struct SoloistSetupRenderingTests {
         print("Soloist UI captures: \(artifacts.path)")
     }
 
-    @Test func libraryRegistrationIsInlineAndValidatesBeforeConsent() async throws {
+    @Test func libraryRegistrationFitsAndValidatesBeforeConsent() async throws {
         _ = NSApplication.shared
         let environment = makePreviewEnvironment(.playing, libraryClientID: nil)
         let track = environment.player?.state.currentTrack
@@ -369,7 +363,7 @@ struct SoloistSetupRenderingTests {
         let accessibleClient = try AppearanceTestAccessibility.element("onboarding.libraryClientID", in: content)
         #expect(accessibleClient.object.accessibilityRole?() == .textField)
         #expect(accessibleClient.object.accessibilityLabel?() == SoloistResources.string("librarySetup.clientID"))
-        #expect(!hasAccessibilityElement("onboarding.redirectURI", in: content), "Registration help starts collapsed")
+        #expect(!hasAccessibilityElement("onboarding.redirectURI", in: content), "Registration help has a separate page")
         let save = try AppearanceTestAccessibility.element("onboarding.saveLibrary", in: content)
         #expect(save.object.isAccessibilityEnabled?() == false)
         field.selectText(nil)
@@ -390,22 +384,28 @@ struct SoloistSetupRenderingTests {
         #expect(environment.player?.state.currentTrack == track)
         let help = try AppearanceTestAccessibility.element("onboarding.registrationHelp", in: content)
         #expect(help.press())
-        try await Task.sleep(for: .milliseconds(100))
+        try await liveLyricEventually { editableField(in: content) == nil && hasAccessibilityElement("onboarding.redirectURI", in: content) }
         content.layoutSubtreeIfNeeded()
         let redirect = try AppearanceTestAccessibility.element("onboarding.redirectURI", in: content)
         #expect(redirect.object.accessibilityRole?() == .staticText)
         #expect(redirect.value == LibraryAuthorization.redirectURI)
         let copy = try AppearanceTestAccessibility.element("onboarding.copyRedirect", in: content)
         #expect(copy.object.accessibilityRole?() == .button)
-        #expect(editableField(in: content) === field, "Expanding registration help must preserve the native editor")
+        #expect(editableField(in: content) == nil, "Help replaces the form instead of pushing it offscreen")
+        try expectVisible("onboarding.redirectURI", in: content)
+        try expectVisible("onboarding.registrationBack", in: content)
         let artifacts = try captureDirectory()
         try capture(content, at: artifacts.appendingPathComponent("library-registration.png"))
-        let scroll = try #require(scrollView(in: content))
-        let document = try #require(scroll.documentView)
-        #expect(document.frame.height > scroll.contentView.bounds.height)
-        document.scroll(NSPoint(x: 0, y: document.frame.height - scroll.contentView.bounds.height))
-        scroll.reflectScrolledClipView(scroll.contentView)
-        #expect(scroll.contentView.bounds.origin.y > 0)
+        #expect(scrollView(in: content) == nil)
+        let back = try AppearanceTestAccessibility.element("onboarding.registrationBack", in: content)
+        #expect(back.press())
+        try await liveLyricEventually {
+            hasAccessibilityElement("onboarding.saveLibrary", in: content) && !hasAccessibilityElement("onboarding.redirectURI", in: content)
+        }
+        let returnedField = try #require(editableField(in: content))
+        #expect(returnedField.stringValue == String(repeating: "a", count: 32))
+        try expectVisible("onboarding.title", in: content)
+        try expectVisible("onboarding.saveLibrary", in: content)
         #expect(!hasAccessibilityElement("onboarding.playback", in: content))
         environment.closeOnboarding()
         #expect(!environment.isShowingOnboarding)
@@ -431,6 +431,15 @@ struct SoloistSetupRenderingTests {
             return (object as? NSView)?.subviews.contains(where: contains) ?? false
         }
         return contains(root)
+    }
+
+    private func expectVisible(_ identifier: String, in host: NSView) throws {
+        let element = try AppearanceTestAccessibility.element(identifier, in: host)
+        let screenFrame = try #require(element.object.accessibilityFrame?())
+        let window = try #require(host.window)
+        let frame = host.convert(window.convertFromScreen(screenFrame), from: nil)
+        #expect(!frame.isEmpty && host.bounds.insetBy(dx: -1, dy: -1).contains(frame),
+                "The entire control must fit without scrolling")
     }
 
     private func scrollView(in view: NSView) -> NSScrollView? {

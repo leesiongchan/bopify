@@ -4,12 +4,14 @@ import Foundation
 
 // Run before the selected native rendering tests. Pass the same UUID to the test runner as
 // TEST_RUNNER_BOPIFY_NATIVE_CAPTURE_TOKEN. Capture is restricted to fixture requests for that run.
-guard CommandLine.arguments.count == 2, UUID(uuidString: CommandLine.arguments[1]) != nil else {
-    fputs("Usage: swift scripts/capture-native-onboarding.swift <run UUID>\n", stderr)
+guard (2...3).contains(CommandLine.arguments.count), UUID(uuidString: CommandLine.arguments[1]) != nil else {
+    fputs("Usage: swift scripts/capture-native-onboarding.swift <run UUID> [capture count]\n", stderr)
     exit(2)
 }
 
 let token = CommandLine.arguments[1]
+let expectedCaptures = CommandLine.arguments.count == 3 ? Int(CommandLine.arguments[2]) ?? 0 : 7
+guard (1...16).contains(expectedCaptures) else { exit(2) }
 let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
 let artifacts = root.appendingPathComponent("build/test-artifacts/onboarding-composited").standardizedFileURL
 let bridge = artifacts.appendingPathComponent("capture-bridge/\(token)")
@@ -28,7 +30,7 @@ func capture(_ request: [String: Any], requestID: String) throws -> String {
     guard request["token"] as? String == token,
           request["requestID"] as? String == requestID,
           let name = request["name"] as? String,
-          ["key-entry", "completion", "handoff", "player"].contains(name),
+          ["key-entry", "completion", "handoff", "player", "resized", "library", "library-help"].contains(name),
           let pid = request["processID"] as? Int, pid > 0,
           let number = request["windowNumber"] as? Int, number > 0,
           let path = request["destination"] as? String else {
@@ -64,7 +66,7 @@ func capture(_ request: [String: Any], requestID: String) throws -> String {
 var handled = Set<String>()
 var successfulCaptures = 0
 let deadline = Date().addingTimeInterval(180)
-while handled.count < 4, Date() < deadline {
+while handled.count < expectedCaptures, Date() < deadline {
     let requests = try FileManager.default.contentsOfDirectory(at: bridge, includingPropertiesForKeys: nil)
         .filter { $0.lastPathComponent.hasSuffix(".request.json") }
     for url in requests {
@@ -89,7 +91,7 @@ while handled.count < 4, Date() < deadline {
     }
     Thread.sleep(forTimeInterval: 0.025)
 }
-guard successfulCaptures == 4 else {
-    fputs("Captured \(successfulCaptures) of 4 fixture stages successfully.\n", stderr)
+guard successfulCaptures == expectedCaptures else {
+    fputs("Captured \(successfulCaptures) of \(expectedCaptures) fixture stages successfully.\n", stderr)
     exit(1)
 }

@@ -99,6 +99,8 @@ struct AppEnvironmentAuthorizationTests {
         await fixture.environment.completeLibrarySetup()
         #expect(fixture.environment.authState == .signedIn)
         #expect(fixture.libraryStore.load()?.accessToken == "AUTHORIZED_LIBRARY")
+        #expect(fixture.environment.onboarding.phase == .libraryConnected)
+        #expect(fixture.environment.onboarding.isArmed)
         await fixture.stop()
     }
 

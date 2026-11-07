@@ -70,6 +70,7 @@ struct SignInRecordView: View {
     let step: StartupStep
     var isVisible = true
     var onRecordFrameChanged: ((CGRect) -> Void)?
+    var scale: CGFloat = 0.88
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var lift = Metrics.insideLift
@@ -80,7 +81,6 @@ struct SignInRecordView: View {
     @State private var flip: CGFloat = 1
 
     private var pose: SignInRecordPose { step.recordPose }
-    private let scale: CGFloat = 0.88
 
     private enum Metrics {
         static let stage = CGSize(width: 250, height: 324)

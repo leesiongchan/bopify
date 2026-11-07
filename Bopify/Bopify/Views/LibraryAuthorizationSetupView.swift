@@ -18,7 +18,9 @@ struct LibraryAuthorizationSetupView: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            if status == .connected {
+            if showsRegistrationHelp {
+                registrationHelp
+            } else if status == .connected {
                 StartupHeading(title: Text("librarySetup.connected", bundle: SoloistResources.bundle),
                                message: Text("librarySetup.connectedDescription", bundle: SoloistResources.bundle), isCompact: true)
                 Label(SoloistResources.string("onboarding.continuing"), systemImage: "checkmark.circle")
@@ -68,37 +70,11 @@ struct LibraryAuthorizationSetupView: View {
                     .onSubmit(save)
                     .disabled(isSaving)
             }
-            DisclosureGroup(isExpanded: $showsRegistrationHelp) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Link(SoloistResources.string("librarySetup.openDashboard"),
-                         destination: URL(string: "https://developer.spotify.com/dashboard")!)
-                        .foregroundStyle(.tint)
-                    Text("librarySetup.guide.createDetail", bundle: SoloistResources.bundle)
-                    Text("librarySetup.guide.redirectDetail", bundle: SoloistResources.bundle)
-                    Text(verbatim: LibraryAuthorization.redirectURI)
-                        .font(.system(.callout, design: .monospaced))
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityRepresentation {
-                            Text(verbatim: LibraryAuthorization.redirectURI)
-                                .accessibilityIdentifier("onboarding.redirectURI")
-                        }
-                    Button(SoloistResources.string("librarySetup.copy")) {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(LibraryAuthorization.redirectURI, forType: .string)
-                    }
-                    .buttonStyle(.plain).foregroundStyle(.tint)
-                    .accessibilityIdentifier("onboarding.copyRedirect")
-                    Text("librarySetup.guide.connectDetail", bundle: SoloistResources.bundle)
-                }
-                .padding(.top, 10)
-                .font(.callout).startupSupporting()
-                .fixedSize(horizontal: false, vertical: true)
-            } label: {
-                Text("librarySetup.getClientID", bundle: SoloistResources.bundle)
-                    .font(.callout).foregroundStyle(.tint)
-                    .accessibilityIdentifier("onboarding.registrationHelp")
+            Button(SoloistResources.string("librarySetup.getClientID")) {
+                withAnimation(.easeInOut(duration: 0.2)) { showsRegistrationHelp = true }
             }
+            .buttonStyle(.plain).font(.callout).foregroundStyle(.tint)
+            .accessibilityIdentifier("onboarding.registrationHelp")
             if !clientID.isEmpty && !validClient {
                 Text("librarySetup.invalid", bundle: SoloistResources.bundle).font(.callout).startupStatus()
             }
@@ -114,6 +90,39 @@ struct LibraryAuthorizationSetupView: View {
                 .buttonStyle(.plain).font(.callout).foregroundStyle(.tint)
             }
         }
+    }
+
+    private var registrationHelp: some View {
+        VStack(spacing: 12) {
+            StartupHeading(title: Text("librarySetup.getClientID", bundle: SoloistResources.bundle), isCompact: true)
+            Text("librarySetup.guide.createDetail", bundle: SoloistResources.bundle)
+            StartupButton(key: "librarySetup.openDashboard", identifier: "onboarding.openDashboard") {
+                NSWorkspace.shared.open(URL(string: "https://developer.spotify.com/dashboard")!)
+            }
+            Text("librarySetup.guide.redirectDetail", bundle: SoloistResources.bundle)
+            Text(verbatim: LibraryAuthorization.redirectURI)
+                .font(.system(.callout, design: .monospaced))
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityRepresentation {
+                    Text(verbatim: LibraryAuthorization.redirectURI)
+                        .accessibilityIdentifier("onboarding.redirectURI")
+                }
+            Button(SoloistResources.string("librarySetup.copy")) {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(LibraryAuthorization.redirectURI, forType: .string)
+            }
+            .buttonStyle(.plain).foregroundStyle(.tint)
+            .accessibilityIdentifier("onboarding.copyRedirect")
+            Text("librarySetup.guide.connectDetail", bundle: SoloistResources.bundle)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(SoloistResources.string("librarySetup.backToLibrary")) {
+                withAnimation(.easeInOut(duration: 0.2)) { showsRegistrationHelp = false }
+            }
+            .buttonStyle(.plain).foregroundStyle(.tint)
+            .accessibilityIdentifier("onboarding.registrationBack")
+        }
+        .font(.callout).startupSupporting()
     }
 
     @ViewBuilder private var failure: some View {

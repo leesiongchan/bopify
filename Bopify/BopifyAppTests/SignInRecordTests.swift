@@ -78,7 +78,7 @@ struct SignInRecordTests {
         environment.showOnboarding(section: .playback)
         #expect(environment.isShowingOnboarding)
         #expect(environment.playerMode == .expanded)
-        #expect(environment.onboardingStep == .playback(.entry))
+        #expect(environment.onboardingStep == .completion)
         environment.closeOnboarding()
         #expect(!environment.isShowingOnboarding)
     }

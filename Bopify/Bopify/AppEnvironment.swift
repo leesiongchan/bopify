@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 import os
@@ -77,8 +78,17 @@ final class AppEnvironment {
 
     func showOnboarding(section: OnboardingSection = .playback) {
         guard !isPreparingForQuit, !isRemovingCredentials else { return }
-        if onboarding.phase == .completing || onboarding.phase == .handoff { onboarding.cancel() }
-        requestedOnboardingSection = section
+        if section == .playback, soloist.hasUsablePlayback {
+            // A ready setup may open without changing readiness. Coalesce repeat requests through its handoff.
+            if onboarding.phase != .handoff {
+                requestedOnboardingSection = section
+                if !onboarding.isArmed { onboarding.begin() }
+                updateOnboardingReadiness(reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+            }
+        } else {
+            if onboarding.phase == .completing || onboarding.phase == .handoff { onboarding.cancel() }
+            requestedOnboardingSection = section
+        }
         searchPopover.close()
         hideLiveLyrics()
         presentation.isVisible = true
@@ -339,7 +349,7 @@ final class AppEnvironment {
         }
         let generation = libraryGeneration
         let session = sessionGeneration
-        if !hasConfiguredPlayback { onboarding.begin() }
+        onboarding.begin()
         let task = Task { [self] in
             defer {
                 if generation == libraryGeneration {
@@ -362,6 +372,7 @@ final class AppEnvironment {
                           libraryAuthorization?.isCancelled == false else { return }
                     connect()
                     onboarding.confirmLibraryConnection()
+                    updateOnboardingReadiness(reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
                 }.value
             } catch is CancellationError {
                 BopifyLog.library.info("library authorization cancelled")

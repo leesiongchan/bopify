@@ -111,6 +111,16 @@
         }
       }
     },
+    "librarySetup.backToLibrary": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back to library"
+          }
+        }
+      }
+    },
     "librarySetup.consentHint": {
       "localizations": {
         "en": {
@@ -457,16 +467,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Setup…"
-          }
-        }
-      }
-    },
-    "onboarding.done": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Done"
           }
         }
       }

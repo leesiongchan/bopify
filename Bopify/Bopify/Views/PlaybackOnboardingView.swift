@@ -36,8 +36,7 @@ struct PlaybackOnboardingView: View {
                 case .pairing: pairing
                 case .connecting: progress("onboarding.finishingConnection")
                 case .ready:
-                    Label(SoloistResources.string("soloist.ready"), systemImage: "checkmark.circle")
-                        .font(.callout).startupSupporting()
+                    EmptyView()
                 }
             }
             .id(scene)
@@ -83,8 +82,10 @@ struct PlaybackOnboardingView: View {
                           : controller.hasSavedKey ? "soloist.retry" : "onboarding.startListening",
                           identifier: "soloist.enable", action: enable)
                 .disabled(busy || (key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !controller.hasSavedKey))
-            text("soloist.keyPrivacy").font(.callout).startupSupporting()
-                .fixedSize(horizontal: false, vertical: true)
+            if !controller.hasSavedKey {
+                text("soloist.keyPrivacy").font(.callout).startupSupporting()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

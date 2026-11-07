@@ -8,6 +8,64 @@ import BopifyPlayback
 
 @MainActor @Suite("Onboarding native handoff", .serialized)
 struct OnboardingHandoffRenderingTests {
+    @Test func resizedStartupKeepsHeaderAndFormInsideTheNativeViewportWithoutScrolling() async throws {
+        let fixture = try NativeOnboardingFixture(needsKey: true)
+        defer { fixture.close() }
+        try await Task.sleep(for: .milliseconds(220))
+        let panel = fixture.panel
+        panel.maxSize = CGSize(width: 10_000, height: 10_000)
+        panel.setFrame(CGRect(x: 180, y: 80, width: 500, height: 700), display: true)
+        try await Task.sleep(for: .milliseconds(100))
+        panel.setFrame(CGRect(x: 180, y: 80, width: 430, height: 660), display: true)
+        try await Task.sleep(for: .milliseconds(100))
+        let content = try #require(panel.contentView)
+        content.layoutSubtreeIfNeeded()
+        try fixture.capture("resized")
+        #expect(content.bounds.size == CGSize(width: 430, height: 660))
+        let progress = try AppearanceTestAccessibility.element("onboarding.step", in: content)
+        let progressOnScreen = try #require(progress.object.accessibilityFrame?())
+        let progressInWindow = panel.convertFromScreen(progressOnScreen)
+        let progressInContent = content.convert(progressInWindow, from: nil)
+        #expect(!progressInContent.isEmpty)
+        #expect(content.bounds.contains(progressInContent), "The header must follow the native viewport after it shrinks")
+        let forms = descendants(in: content).compactMap { $0 as? NSHostingView<AnyView> }
+        #expect(!forms.isEmpty)
+        for form in forms {
+            #expect(content.bounds.contains(form.convert(form.bounds, to: content)),
+                    "The form host must not retain the previous wider startup bounds")
+        }
+        #expect(!descendants(in: content).contains { $0 is NSScrollView },
+                "Every onboarding step must fit without a scrolling form")
+        let field = try #require(findSecureField(in: content))
+        #expect(content.bounds.contains(field.convert(field.bounds, to: content)))
+    }
+
+    @Test func libraryAndHelpFitWithoutScrollingInTheSameWindow() async throws {
+        let fixture = try NativeOnboardingFixture(needsKey: false, section: .library)
+        defer { fixture.close() }
+        try await Task.sleep(for: .milliseconds(250))
+        let content = try #require(fixture.panel.contentView)
+        func expectInside(_ identifier: String) throws {
+            let element = try AppearanceTestAccessibility.element(identifier, in: content)
+            let screenFrame = try #require(element.object.accessibilityFrame?())
+            let frame = content.convert(fixture.panel.convertFromScreen(screenFrame), from: nil)
+            #expect(!frame.isEmpty && content.bounds.contains(frame))
+        }
+        try expectInside("onboarding.title")
+        try expectInside("onboarding.libraryClientID")
+        try expectInside("onboarding.saveLibrary")
+        try fixture.capture("library")
+        let help = try AppearanceTestAccessibility.element("onboarding.registrationHelp", in: content)
+        #expect(help.press())
+        try await Task.sleep(for: .milliseconds(250))
+        try expectInside("onboarding.title")
+        try expectInside("onboarding.openDashboard")
+        try expectInside("onboarding.redirectURI")
+        try expectInside("onboarding.registrationBack")
+        #expect(!descendants(in: content).contains { $0 is NSScrollView })
+        try fixture.capture("library-help")
+    }
+
     @Test func nativeStartupKeepsTheFormVisibleAndAccessible() async throws {
         let fixture = try NativeOnboardingFixture(needsKey: true)
         defer { fixture.close() }
@@ -57,6 +115,10 @@ struct OnboardingHandoffRenderingTests {
         if let field = view as? NSSecureTextField { return field }
         return view.subviews.lazy.compactMap { findSecureField(in: $0) }.first
     }
+
+    private func descendants(in view: NSView) -> [NSView] {
+        view.subviews.flatMap { [$0] + descendants(in: $0) }
+    }
 }
 
 @MainActor
@@ -68,7 +130,7 @@ private final class NativeOnboardingFixture {
     private let saved: [(String, Any?)]
     private let artifacts: URL
 
-    init(needsKey: Bool) throws {
+    init(needsKey: Bool, section: OnboardingSection = .playback) throws {
         _ = NSApplication.shared
         saved = ["player.frame", "player.keepOnTop", "player.recordCenter"].map { ($0, UserDefaults.standard.object(forKey: $0)) }
         if needsKey {
@@ -77,9 +139,10 @@ private final class NativeOnboardingFixture {
                 install: { _, _ in throw SoloistPlaybackError.unavailable }, clearSession: {})
             environment = makePreviewEnvironment(.nothingPlaying, soloistController: soloist)
         } else {
-            environment = makePreviewEnvironment(.nothingPlaying)
+            environment = makePreviewEnvironment(.nothingPlaying,
+                libraryClientID: section == .library ? nil : String(repeating: "0", count: 32))
         }
-        environment.showOnboarding()
+        environment.showOnboarding(section: section)
         let existing = Set(NSApp.windows.map(ObjectIdentifier.init))
         controller = StatusItemController(
             content: PlayerRootView(environment: environment).environment(\.accessibilityEnabled, true),
@@ -87,7 +150,7 @@ private final class NativeOnboardingFixture {
         panel = try #require(NSApp.windows.compactMap { $0 as? StatusPanel }
             .first { !existing.contains(ObjectIdentifier($0)) })
         panel.isReleasedWhenClosed = false
-        panel.setFrame(CGRect(x: 180, y: 80, width: 410, height: 600), display: false)
+        panel.setFrame(CGRect(x: 180, y: 80, width: 410, height: 680), display: false)
         background = NSWindow(contentRect: panel.frame.insetBy(dx: -30, dy: -30),
                               styleMask: [.borderless], backing: .buffered, defer: false)
         background.isReleasedWhenClosed = false
