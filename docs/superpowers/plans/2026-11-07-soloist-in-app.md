@@ -80,3 +80,13 @@ One independent integration review returned five Important findings; all receive
 Fresh Apple Development-signed arm64 build: `build/soloist-in-app-test-20261107/Build/Products/Debug/Bopify.app`. Deep strict signature verification passed. Effective entitlements retain the sandbox and network access and add user-selected executable/read-write and app-scoped bookmark access.
 
 Live acceptance remains open: a real native folder grant must permit the downloaded publisher-signed binary to execute, and the user's Spotify account must complete pairing, advancing-playback correlation, companion-session coexistence, controls, restart, sign-out and audio checks. No key or account credentials were accessed for automated verification. This is a test build, not a claim of verified live integration.
+
+
+## Follow-up: reported permission failure — 2026-11-07
+
+The delivered test build fails the native permission flow. Diagnosis is recorded in the spec: current guard conflates extra scope activation with access, and a correctly activated bookmark still fails actual installed-code execution in a signed sandbox diagnostic. The same unmodified Soloist exits0 in both an ordinary hardened diagnostic and the sandboxed diagnostic's signed bundle. Spotifast is not App Sandboxed. The prior Open-panel workaround is rejected; no replacement production build or live playback success is claimed.
+
+- [x] Reproduce file-access and executable-launch boundaries without keys or account access.
+- [x] Verify Spotifast's app and release signer at exact revisions.
+- [x] Record evidence, limitations and a proposed independently scoped XPC installer/process owner.
+- [ ] Choose the replacement execution boundary and prove its signed end-to-end smoke test before implementing it in the app.
