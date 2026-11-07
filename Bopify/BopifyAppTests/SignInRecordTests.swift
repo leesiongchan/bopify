@@ -7,6 +7,18 @@ import BopifyPlayback
 
 @MainActor @Suite("Startup record")
 struct SignInRecordTests {
+    @Test func completedSetupKeepsTheRegularPlayerWhileIdle() {
+        let environment = makePreviewEnvironment(.nothingPlaying)
+        defer { environment.player?.stop() }
+        #expect(!environment.isShowingOnboarding)
+        #expect(environment.player?.state.currentTrack == nil)
+        #expect(environment.playerMode == environment.presentation.mode)
+        environment.showOnboarding(section: .playback)
+        #expect(environment.isShowingOnboarding && environment.playerMode == .expanded)
+        environment.closeOnboarding()
+        #expect(environment.playerMode == environment.presentation.mode)
+    }
+
     @Test(arguments: [StartupStep.signIn(.idle), .library(.idle)])
     func idleStepsInviteWithTheRecordOutOfItsSleeve(step: StartupStep) {
         #expect(step.recordPose == .out)
@@ -56,7 +68,7 @@ struct SignInRecordTests {
         let environment = makePreviewEnvironment(.playing, soloistController: controller)
         let track = environment.player?.state.currentTrack
         defer { environment.player?.stop() }
-        #expect(environment.isListening)
+        #expect(environment.player?.state.currentTrack != nil)
         #expect(environment.onboardingStep == .playback(.entry))
         #expect(environment.playerMode == .expanded)
         await environment.enableSoloist(key: "fixture-key")
@@ -125,7 +137,7 @@ struct StartupConnectionTests {
 
 @MainActor @Suite("Startup shell", .serialized)
 struct StartupShellTests {
-    @Test func openingSetupExpandsTheExistingRecordPanel() async throws {
+    @Test func openingSetupExpandsTheExistingIdleRecordPanel() async throws {
         _ = NSApplication.shared
         let keys = ["player.frame", "player.keepOnTop", "player.recordCenter"]
         let saved = keys.map { UserDefaults.standard.object(forKey: $0) }
@@ -136,12 +148,14 @@ struct StartupShellTests {
             }
         }
         let existing = Set(NSApp.windows.map(ObjectIdentifier.init))
-        let environment = makePreviewEnvironment(.playing)
+        let environment = makePreviewEnvironment(.nothingPlaying)
         let controller = StatusItemController(content: PlayerRootView(environment: environment), environment: environment)
         let panel = try #require(NSApp.windows.compactMap { $0 as? StatusPanel }
             .first { !existing.contains(ObjectIdentifier($0)) })
         panel.isReleasedWhenClosed = false
         defer { withExtendedLifetime(controller) { panel.close() }; environment.player?.stop() }
+        #expect(environment.isShowingPlayer && environment.player?.state.currentTrack == nil)
+        #expect(panel.frame.width < 410)
         environment.showOnboarding()
         try await liveLyricEventually { panel.frame.width >= 410 && panel.frame.height >= 560 }
         #expect(environment.isShowingOnboarding)
@@ -163,7 +177,8 @@ struct StartupShellTests {
         let existingWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
         let environment = makePreviewEnvironment(.nothingPlaying)
         defer { environment.player?.stop() }
-        try #require(!environment.isListening, "The startup shell only shows while nothing is listening")
+        environment.showOnboarding(section: .playback)
+        try #require(environment.isShowingOnboarding, "The startup shell belongs to onboarding")
         let controller = StatusItemController(content: EmptyView(), environment: environment)
         let panel = try #require(NSApp.windows.compactMap { $0 as? StatusPanel }
             .first { !existingWindows.contains(ObjectIdentifier($0)) })

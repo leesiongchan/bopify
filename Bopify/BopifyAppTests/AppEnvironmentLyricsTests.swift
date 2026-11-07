@@ -24,7 +24,7 @@ struct AppEnvironmentLyricsTests {
         try await withLyricsApp { f in
             await f.environment.restoreOrPromptSignIn()
             try await liveLyricEventually { f.environment.player != nil && f.environment.authState == .signedIn }
-            #expect(!f.environment.isListening)
+            #expect(f.environment.player?.state.currentTrack == nil)
             let windows = Set(NSApp.windows.map(ObjectIdentifier.init))
             let controller = StatusItemController(content: PlayerRootView(environment: f.environment), environment: f.environment)
             let panel = try #require(NSApp.windows.compactMap { $0 as? StatusPanel }

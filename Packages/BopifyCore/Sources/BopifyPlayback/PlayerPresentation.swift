@@ -136,26 +136,6 @@ public func clampedPlayerFrame(origin: CGPoint, size: CGSize, visibleFrame: CGRe
                   width: width, height: height)
 }
 
-/// What the expanded player shows. It lives here, not in the view, so its
-/// precedence is tested: startup must never flash the paste view.
-public enum PlayerContent: Equatable, Sendable {
-    case player, loading, remote(deviceName: String), chooseContext
-
-    public init(_ state: PlaybackState) {
-        guard state.currentTrack == nil else { self = .player; return }
-        switch state.phase {
-        case .error: self = .player
-        case .loading: self = .loading
-        default:
-            switch state.startup {
-            case .pending, .resolved(.restored), .resolved(.likedSongs): self = .loading
-            case let .resolved(.remote(deviceName)): self = .remote(deviceName: deviceName)
-            case .resolved(.nothing): self = state.phase == .idle ? .chooseContext : .player
-            }
-        }
-    }
-}
-
 /// What the status line says while Bopify is not the active device.
 public enum InactiveStatus: Equatable, Sendable {
     case playingOn(deviceName: String), pausedOn(deviceName: String), notPlaying

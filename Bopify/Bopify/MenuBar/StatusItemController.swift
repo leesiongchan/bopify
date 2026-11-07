@@ -88,7 +88,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             BopifyLog.playback.debug("player window level changed floating=\(level == .floating, privacy: .public)")
         }
         UserDefaults.standard.set(keepOnTop, forKey: "player.keepOnTop")
-        if !environment.isShowingOnboarding, environment.isListening || environment.isLiveLyricsVisible {
+        if environment.isShowingPlayer {
             if !isWindowControllerAttached {
                 if !hasPosition, PlayerWindowController.restoredAnchor(defaults: .standard) == nil,
                    let button = statusItem.button,

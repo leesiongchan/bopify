@@ -34,12 +34,10 @@ final class AppEnvironment {
         mode: .compact,
         keepOnTop: UserDefaults.standard.bool(forKey: "player.keepOnTop"))
     let playerWindowController = PlayerWindowController(defaults: .standard)
-    var isListening: Bool {
-        authState == .signedIn && (player?.state.currentTrack != nil || player?.state.mirror != nil)
-    }
+    var isShowingPlayer: Bool { authState == .signedIn && !isShowingOnboarding && player != nil }
 
     var playerMode: PlayerMode {
-        !isShowingOnboarding && (isListening || isLiveLyricsVisible) ? presentation.mode : .expanded
+        isShowingPlayer ? presentation.mode : .expanded
     }
 
     private(set) var requestedOnboardingSection: OnboardingSection?

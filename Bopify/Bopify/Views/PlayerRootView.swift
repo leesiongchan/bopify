@@ -8,7 +8,7 @@ struct PlayerRootView: View {
 
     var body: some View {
         Group {
-            if !environment.isShowingOnboarding, environment.isListening || environment.isLiveLyricsVisible, let player = environment.player {
+            if environment.isShowingPlayer, let player = environment.player {
                 RecordPlayerView(player: player, artworkStore: environment.artworkStore,
                                    presentation: environment.presentation, windowController: environment.playerWindowController)
                     .id(ObjectIdentifier(player))
@@ -18,8 +18,6 @@ struct PlayerRootView: View {
                         header
                         if let step = startupStep {
                             StartupView(step: step, isVisible: environment.presentation.isVisible) { startupContent(step) }
-                        } else if let player = environment.player {
-                            StartupPlayerContent(player: player)
                         }
                     }
                     .padding(16)
@@ -131,83 +129,6 @@ struct PlayerRootView: View {
     }
 
     private func requestSignIn() { Task { await environment.signIn() } }
-}
-
-private struct StartupPlayerContent: View {
-    let player: PlayerModel
-    var body: some View {
-        let content = PlayerContent(player.state)
-        if content != .player {
-            StartupContent(content: content, onPlayRequest: player.load).frame(maxHeight: .infinity)
-        } else {
-            VStack(spacing: 12) {
-                if case let .error(error) = player.state.phase {
-                    Label("player.error", systemImage: "exclamationmark.circle")
-                    error.localizedText.foregroundStyle(.secondary)
-                } else {
-                    Text("player.inactiveDevice.title").foregroundStyle(.secondary)
-                }
-                if let notice = player.commandNotice { Text(notice).foregroundStyle(.secondary) }
-            }
-            .font(.callout).multilineTextAlignment(.center).frame(maxHeight: .infinity)
-        }
-    }
-}
-
-private struct ContextURILoadView: View {
-    let onPlayRequest: (PlayRequest) -> Void
-    @State private var contextURIText = ""
-
-    var body: some View {
-        VStack(spacing: 14) {
-            Text("player.idle.title")
-                .font(.system(size: 22, weight: .semibold, design: .rounded))
-            Text("player.idle.subtitle")
-                .font(.callout)
-                .foregroundStyle(.primary.opacity(0.7))
-                .multilineTextAlignment(.center)
-            HStack(spacing: 8) {
-                TextField("player.idle.contextURI.placeholder", text: $contextURIText)
-                    .textFieldStyle(.roundedBorder)
-                    .accessibilityLabel(Text("player.idle.contextURI.label"))
-                    .onSubmit(submit)
-                Button("player.idle.contextURI.load", action: submit)
-                    .disabled(SpotifyURI(contextURIText) == nil)
-            }
-            .controlSize(.large)
-        }
-    }
-
-    private func submit() {
-        guard let uri = SpotifyURI(contextURIText) else { return }
-        onPlayRequest(PlayRequest(contextURI: uri))
-    }
-}
-
-private struct StartupContent: View {
-    let content: PlayerContent
-    let onPlayRequest: (PlayRequest) -> Void
-
-    var body: some View {
-        switch content {
-        case .chooseContext:
-            ContextURILoadView(onPlayRequest: onPlayRequest)
-        case let .remote(deviceName):
-            placeholder { Text("player.remote.title \(deviceName)") }
-        // Errors without metadata are rendered by StartupPlayerContent.
-        case .loading, .player:
-            placeholder { ProgressView { Text("player.loading") }.controlSize(.small) }
-        }
-    }
-
-    private func placeholder(@ViewBuilder _ label: () -> some View) -> some View {
-        VStack(spacing: 18) {
-            ArtworkView(image: nil, diameter: 156)
-            label()
-                .font(.callout)
-                .foregroundStyle(.primary.opacity(0.7))
-        }
-    }
 }
 
 #Preview("Signed out") {

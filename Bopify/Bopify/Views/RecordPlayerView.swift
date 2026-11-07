@@ -694,15 +694,26 @@ struct PlayerTrackMetadata: View {
     let player: PlayerModel
     let artworkStore: ArtworkStore
     let presentation: PlayerPresentation
+    private var isIdle: Bool { track == nil && player.state.phase == .idle && player.state.mirror == nil }
+    private var title: String {
+        if let track { return track.title }
+        if isIdle { return SoloistResources.string("player.empty.title") }
+        if player.state.phase == .loading { return SoloistResources.string("player.loading") }
+        return SoloistResources.string("player.unknownTrack")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(track?.title ?? String(localized: "player.unknownTrack"))
+            Text(title)
                 .font(.system(size: 17, weight: .medium)).lineLimit(1).help(track?.title ?? "")
                 .frame(height: 21, alignment: .leading)
+                .accessibilityIdentifier("player.trackTitle")
             Group {
                 if let track {
                     ArtistSongsButton(track: track, player: player, artworkStore: artworkStore, presentation: presentation)
+                } else if isIdle {
+                    Text(SoloistResources.string("player.empty.subtitle"))
+                        .font(.callout).foregroundStyle(.secondary).lineLimit(1)
                 } else {
                     Color.clear.accessibilityHidden(true)
                 }
