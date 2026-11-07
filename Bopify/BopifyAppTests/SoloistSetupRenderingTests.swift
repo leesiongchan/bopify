@@ -6,6 +6,84 @@ import BopifyPlayback
 
 @MainActor @Suite("Soloist native presentation", .serialized)
 struct SoloistSetupRenderingTests {
+    @Test func headingsDescribeTheCurrentPlaybackStep() {
+        #expect(PlaybackOnboardingCopy(phase: .idle).title == "onboarding.playbackTitle")
+        #expect(PlaybackOnboardingCopy(phase: .pairing("Fixture device")).title == "onboarding.pairingTitle")
+        #expect(PlaybackOnboardingCopy(phase: .installing(nil)).title == "onboarding.preparingTitle")
+        #expect(PlaybackOnboardingCopy(phase: .failed(.startup)).title == "onboarding.attentionTitle")
+        #expect(PlaybackOnboardingCopy(phase: .ready).title == "onboarding.readyTitle")
+        #expect(PlaybackOnboardingCopy(phase: .limitedServices).title == "onboarding.readyTitle")
+    }
+
+    @Test func deniedLocalNetworkAccessOffersSettingsAndTheDesktopApp() async throws {
+        _ = NSApplication.shared
+        var openedSettings = false
+        var openedSpotify = false
+        var retried = false
+        let view = SoloistPairingGuidance(state: .denied,
+            openSettings: { openedSettings = true }, openSpotify: { openedSpotify = true }, onRetry: { retried = true })
+        let window = NSWindow(contentRect: CGRect(x: 300, y: 300, width: 410, height: 300),
+            styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let host = NSHostingView(rootView: view.frame(width: 410, height: 300)
+            .environment(\.accessibilityEnabled, true))
+        host.sizingOptions = []
+        window.contentView = host
+        window.makeKeyAndOrderFront(nil)
+        try await Task.sleep(for: .milliseconds(150))
+        let settings = try AppearanceTestAccessibility.element("soloist.localNetworkSettings", in: host)
+        #expect(settings.object.accessibilityRole?() == .button)
+        #expect(settings.press() && openedSettings)
+        let spotify = try AppearanceTestAccessibility.element("soloist.openSpotify", in: host)
+        #expect(spotify.object.accessibilityRole?() == .button)
+        #expect(spotify.press() && openedSpotify)
+        _ = try AppearanceTestAccessibility.element("soloist.discoveryDenied", in: host)
+        let retry = try AppearanceTestAccessibility.element("soloist.retryDiscovery", in: host)
+        #expect(retry.press() && retried)
+        let artifacts = try captureDirectory()
+        try capture(host, at: artifacts.appendingPathComponent("local-network-denied.png"))
+        print("Local network guidance capture: \(artifacts.path)")
+    }
+
+    @Test(arguments: [SoloistDiscovery.State.idle, .browsing])
+    func ordinaryDiscoveryKeepsPairingInstructions(state: SoloistDiscovery.State) async throws {
+        _ = NSApplication.shared
+        let window = NSWindow(contentRect: CGRect(x: 300, y: 300, width: 410, height: 300),
+            styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let host = NSHostingView(rootView: SoloistPairingGuidance(state: state,
+            openSettings: {}, openSpotify: {}, onRetry: {}).frame(width: 410, height: 300)
+            .environment(\.accessibilityEnabled, true))
+        host.sizingOptions = []
+        window.contentView = host
+        window.makeKeyAndOrderFront(nil)
+        try await Task.sleep(for: .milliseconds(150))
+        _ = try AppearanceTestAccessibility.element("soloist.pairingHelp", in: host)
+        _ = try AppearanceTestAccessibility.element("soloist.openSpotify", in: host)
+    }
+
+    @Test(arguments: [false, true])
+    func unavailableDiscoveryExplainsHowToRetry(isRetrying: Bool) async throws {
+        _ = NSApplication.shared
+        let window = NSWindow(contentRect: CGRect(x: 300, y: 300, width: 410, height: 300),
+            styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let host = NSHostingView(rootView: SoloistPairingGuidance(state: .unavailable, isRetrying: isRetrying,
+            openSettings: {}, openSpotify: {}, onRetry: {}).frame(width: 410, height: 300)
+            .environment(\.accessibilityEnabled, true))
+        host.sizingOptions = []
+        window.contentView = host
+        window.makeKeyAndOrderFront(nil)
+        try await Task.sleep(for: .milliseconds(150))
+        _ = try AppearanceTestAccessibility.element("soloist.discoveryUnavailable", in: host)
+        _ = try AppearanceTestAccessibility.element("soloist.openSpotify", in: host)
+        let retry = try AppearanceTestAccessibility.element("soloist.retryDiscovery", in: host)
+        #expect(retry.object.isAccessibilityEnabled?() == !isRetrying)
+    }
+
     @Test func keyEntryIsSecureAndKeyboardSetupFailurePreservesTheExistingPlayer() async throws {
         _ = NSApplication.shared
         let environment = makePreviewEnvironment(.playing)

@@ -8,6 +8,12 @@ if [[ $# != 1 || ! -d "$1/Contents/MacOS" ]]; then
 fi
 
 app=$1
+purpose=$(/usr/libexec/PlistBuddy -c 'Print :NSLocalNetworkUsageDescription' "$app/Contents/Info.plist" 2>/dev/null) || purpose=
+service=$(/usr/libexec/PlistBuddy -c 'Print :NSBonjourServices:0' "$app/Contents/Info.plist" 2>/dev/null) || service=
+if [[ -z "$purpose" || "$service" != _spotify-connect._tcp ]]; then
+  echo "App lacks Spotify Connect local-network discovery declarations." >&2
+  exit 1
+fi
 evidence=$(mktemp -d "${TMPDIR:-/tmp}/bopify-desktop-check.XXXXXX")
 trap 'rm -rf "$evidence"' EXIT
 codesign --verify --deep --strict "$app"

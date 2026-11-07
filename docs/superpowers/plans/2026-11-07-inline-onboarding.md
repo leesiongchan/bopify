@@ -54,3 +54,23 @@ Native bitmap captures omit GPU blur/transforms and use the test runner as Bundl
 - Artifact: `build/unified-onboarding-test-20261107/Build/Products/Release/Bopify.app`.
 - Read-only code review found no critical or important issues; final native scrolling correction was also inspected during integration. `git diff --check` passed. The Release compiler still reports an existing actor-isolation warning in unchanged `CoverFlowView.swift`.
 - Interactive personal-key pairing and audible playback remain the account acceptance step. Download/version checks alone are no longer reported as playback verification.
+
+## Pairing discovery follow-up
+
+A live first-pairing report showed the playback device missing from Spotify. Root integration owns local-network/Bonjour metadata, the discovery browser and retry lifecycle. The inline playback step now distinguishes entry, preparation, pairing and ready headings; pairing starts/stops discovery with the active pairing name, opens the installed Spotify desktop app (official download fallback), and offers Local Network Settings plus saved-key discovery retry after policy denial. Idle setup does not start browsing.
+
+UI regression coverage exercises phase headings and idle/browsing/denied/unavailable guidance without live network access; existing full-root secure Return submission and small-window library registration remain covered. Initial missing-UI-symbol red was observed before implementation. Combined focused verification passed **17 tests across 3 suites** (`SoloistDiscoveryTests`, `SoloistSetupTests`, and `SoloistSetupRenderingTests`), Xcode exit 0 (`/tmp/bopify-pairing-focused-green.log`). Final focused verification also passed **17 tests across 3 suites** after correcting pending-permission wording and the failure heading, Xcode exit 0 (`/tmp/bopify-pairing-final-focused.log`). Native denied-policy guidance was captured and inspected; all copy and actions fit the constrained fixture. As with earlier bitmap captures, native/GPU button rendering is not represented faithfully.
+
+The follow-up complete app suite executed **293 tests across 43 suites**, exit 65, with **24 issues across nine unchanged focus-sensitive tests** (`/tmp/bopify-pairing-final-all.log`):
+
+- `MusicBrowserTests.typingMultipleCharactersKeepsTheInsertionPointAndArrowKeysSelectResults`
+- `PlayerLyricsTests.vinylClickExpandsWithoutTogglingPlayback`
+- `PlayerLyricsTests.lyricClicksAndSelectionsPreservePresentationMode`
+- `PlayerLyricsTests.syncClickPreservesPresentationMode`
+- `PlayerLyricsTests.keyboardReadingAndSyncPreservePresentationMode`
+- `PlayerShortcutTests.searchRevealsTheHiddenPlayerAndFocusesTheRetainedQuery`
+- `PlayerShortcutTests.playerShortcutHidesSearchAndCanRevealThePlayerAgain`
+- `PlayerWindowControllerTests.fullscreenEligibilityFollowsActualFocusWithoutChangingDesktopLevel`
+- `PlayerWindowControllerTests.menuBarClickRaisesTheVisiblePlayerAfterAnotherWindowTakesFocus`
+
+These failures concern key-window/pointer behavior; their environmental cause is not established by this run. No tests were loosened and no unrelated focus code was changed. Pairing/discovery regressions passed in both focused runs and the full run. Root integration owns signed metadata and actual network/first-pairing verification.

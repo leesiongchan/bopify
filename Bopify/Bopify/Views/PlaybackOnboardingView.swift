@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import BopifyAuth
 import BopifyDomain
@@ -5,6 +6,7 @@ import BopifyDomain
 struct PlaybackOnboardingView: View {
     let environment: AppEnvironment
     @State private var key = ""
+    @State private var discovery = SoloistDiscovery()
     private var controller: SoloistPlaybackController { environment.soloist }
     private var busy: Bool {
         if controller.isPreparing { return true }
@@ -14,10 +16,15 @@ struct PlaybackOnboardingView: View {
         }
     }
 
+    private var pairingName: String? {
+        if case let .pairing(name) = controller.phase { name } else { nil }
+    }
+    private var copy: PlaybackOnboardingCopy { PlaybackOnboardingCopy(phase: controller.phase) }
+
     var body: some View {
         VStack(spacing: 14) {
-            StartupHeading(title: text("onboarding.playbackTitle"),
-                           message: text("onboarding.playbackDescription"), isCompact: true)
+            StartupHeading(title: text(LocalizedStringKey(copy.title)),
+                           message: text(LocalizedStringKey(copy.message)), isCompact: true)
             if !busy {
                 Link(SoloistResources.string("soloist.getKey"), destination: URL(string: "https://developer.spotify.com/dashboard/soloist")!)
                     .font(.callout)
@@ -46,7 +53,10 @@ struct PlaybackOnboardingView: View {
         }
         .frame(maxWidth: 340)
         .multilineTextAlignment(.center)
-        .onDisappear { key = "" }
+        .task(id: pairingName) {
+            if pairingName != nil { discovery.start() } else { discovery.stop() }
+        }
+        .onDisappear { key = ""; discovery.stop() }
         .onChange(of: controller.provider) { _, provider in
             if provider == .soloist { environment.closeOnboarding() }
         }
@@ -66,8 +76,9 @@ struct PlaybackOnboardingView: View {
             VStack(spacing: 8) {
                 text("soloist.pairing").font(.callout)
                 Text(verbatim: name).font(.headline).textSelection(.enabled)
-                text("soloist.pairingHelp").font(.caption).foregroundStyle(.secondary)
-                Link("onboarding.openSpotify", destination: URL(string: "https://open.spotify.com")!)
+                SoloistPairingGuidance(state: discovery.state, isRetrying: environment.isRestartingSoloistPairing,
+                    openSettings: Self.openLocalNetworkSettings, openSpotify: Self.openDesktopSpotify,
+                    onRetry: { Task { await environment.retrySoloistPairing() } })
             }
         case .verifying:
             progress("soloist.verifying")
@@ -86,6 +97,22 @@ struct PlaybackOnboardingView: View {
         }
     }
 
+    private static func openLocalNetworkSettings() {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork")!)
+    }
+
+    private static func openDesktopSpotify() {
+        let download = URL(string: "https://www.spotify.com/download/")!
+        guard let application = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.spotify.client") else {
+            NSWorkspace.shared.open(download)
+            return
+        }
+        Task {
+            do { _ = try await NSWorkspace.shared.openApplication(at: application, configuration: .init()) }
+            catch { NSWorkspace.shared.open(download) }
+        }
+    }
+
     private func text(_ key: LocalizedStringKey) -> Text { Text(key, bundle: SoloistResources.bundle) }
     private func progress(_ key: LocalizedStringKey) -> some View {
         HStack(spacing: 10) { ProgressView().controlSize(.small); text(key).font(.callout) }
@@ -99,6 +126,67 @@ struct PlaybackOnboardingView: View {
         Task {
             await environment.enableSoloist(key: value)
             if controller.provider == .soloist { environment.closeOnboarding() }
+        }
+    }
+}
+
+struct PlaybackOnboardingCopy {
+    let title: String
+    let message: String
+
+    init(phase: SoloistSetupPhase) {
+        switch phase {
+        case .idle:
+            title = "onboarding.playbackTitle"
+            message = "onboarding.playbackDescription"
+        case .failed:
+            title = "onboarding.attentionTitle"
+            message = "onboarding.attentionDescription"
+        case .pairing:
+            title = "onboarding.pairingTitle"
+            message = "onboarding.pairingDescription"
+        case .ready, .limitedServices:
+            title = "onboarding.readyTitle"
+            message = "onboarding.readyDescription"
+        default:
+            title = "onboarding.preparingTitle"
+            message = "onboarding.preparingDescription"
+        }
+    }
+}
+
+/// Discovery policy is independent of the key and the local playback connection.
+struct SoloistPairingGuidance: View {
+    let state: SoloistDiscovery.State
+    var isRetrying = false
+    let openSettings: () -> Void
+    let openSpotify: () -> Void
+    let onRetry: () -> Void
+
+    var body: some View {
+        VStack(spacing: 10) {
+            switch state {
+            case .denied:
+                Text("soloist.discoveryDenied", bundle: SoloistResources.bundle)
+                    .font(.caption).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("soloist.discoveryDenied")
+                Button(SoloistResources.string("soloist.localNetworkSettings"), action: openSettings)
+                    .accessibilityIdentifier("soloist.localNetworkSettings")
+            case .unavailable:
+                Text("soloist.discoveryUnavailable", bundle: SoloistResources.bundle)
+                    .font(.caption).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("soloist.discoveryUnavailable")
+            case .idle, .browsing:
+                Text("soloist.pairingHelp", bundle: SoloistResources.bundle)
+                    .font(.caption).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("soloist.pairingHelp")
+            }
+            Button(SoloistResources.string("onboarding.openSpotify"), action: openSpotify)
+                .accessibilityIdentifier("soloist.openSpotify")
+            Button(SoloistResources.string("soloist.retryDiscovery"), action: onRetry)
+                .buttonStyle(.plain).font(.caption)
+                .accessibilityIdentifier("soloist.retryDiscovery")
+                .disabled(isRetrying)
         }
     }
 }

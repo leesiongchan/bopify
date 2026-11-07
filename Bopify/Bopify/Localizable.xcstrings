@@ -1,6 +1,126 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "onboarding.attentionTitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback needs attention"
+          }
+        }
+      }
+    },
+    "onboarding.attentionDescription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry playback setup, or continue with librespot for now."
+          }
+        }
+      }
+    },
+    "onboarding.pairingTitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect Spotify to Bopify"
+          }
+        }
+      }
+    },
+    "onboarding.pairingDescription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the Spotify desktop app and choose Bopify in the device picker."
+          }
+        }
+      }
+    },
+    "onboarding.preparingTitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setting up playback"
+          }
+        }
+      }
+    },
+    "onboarding.preparingDescription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bopify is getting Soloist ready for playback."
+          }
+        }
+      }
+    },
+    "onboarding.readyTitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback is ready"
+          }
+        }
+      }
+    },
+    "onboarding.readyDescription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soloist is ready. Bopify keeps playback up to date automatically."
+          }
+        }
+      }
+    },
+    "soloist.discoveryDenied": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bopify needs local network access so Spotify can discover this device. Allow access in the macOS prompt or enable Bopify in System Settings → Privacy & Security → Local Network, then retry discovery."
+          }
+        }
+      }
+    },
+    "soloist.discoveryUnavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spotify discovery is unavailable. Check that this Mac is connected to your local network, open the Spotify desktop app, then retry discovery."
+          }
+        }
+      }
+    },
+    "soloist.localNetworkSettings": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Local Network Settings"
+          }
+        }
+      }
+    },
+    "soloist.retryDiscovery": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry discovery"
+          }
+        }
+      }
+    },
     "soloist.error.endpoint": {
       "localizations": {
         "en": {
@@ -126,7 +246,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Open Spotify"
+            "value": "Open Spotify desktop"
           }
         }
       }
@@ -366,7 +486,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Start a song in Spotify. Bopify keeps it muted briefly while checking that both connections belong together."
+            "value": "Allow Bopify access to your local network, then choose this device in the Spotify desktop app. Pairing is saved for next time."
           }
         }
       }

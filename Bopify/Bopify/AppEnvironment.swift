@@ -83,6 +83,8 @@ final class AppEnvironment {
     @ObservationIgnored private let libraryAuth: LibraryAuthorization
     private(set) var libraryClientID: String?
     let soloist: SoloistPlaybackController
+    private(set) var isRestartingSoloistPairing = false
+    @ObservationIgnored private var soloistPairingRetryGeneration = 0
     @ObservationIgnored private var soloistAction: Task<Void, Never>?
     private(set) var librarySetupError: PlayerError?
     @ObservationIgnored private var libraryConsentRequired = false
@@ -598,8 +600,26 @@ final class AppEnvironment {
         await task.value
     }
 
+    func retrySoloistPairing() async {
+        guard authState == .signedIn, !isRemovingCredentials, !isPreparingForQuit,
+              !isRestartingSoloistPairing, !soloist.hasUsablePlayback, soloist.hasSavedKey,
+              case .pairing = soloist.phase else { return }
+        isRestartingSoloistPairing = true
+        soloistPairingRetryGeneration += 1
+        let retry = soloistPairingRetryGeneration, session = sessionGeneration
+        defer { isRestartingSoloistPairing = false }
+        let action = soloistAction
+        action?.cancel()
+        await soloist.stop()
+        await action?.value
+        guard retry == soloistPairingRetryGeneration, session == sessionGeneration,
+              authState == .signedIn, !isRemovingCredentials, !isPreparingForQuit else { return }
+        await enableSoloist(key: "")
+    }
+
     func useLibrespotForSession() async {
         guard !isRemovingCredentials, !isPreparingForQuit else { return }
+        soloistPairingRetryGeneration += 1
         let preserveCurrent = soloist.provider == .librespot && recovery?.currentEngine != nil
         if !preserveCurrent { recovery?.invalidate() }
         soloistAction?.cancel()
