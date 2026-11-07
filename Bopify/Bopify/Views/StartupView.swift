@@ -5,25 +5,31 @@ import BopifyPlayback
 struct StartupView<Content: View>: View {
     let step: StartupStep
     var isVisible = true
+    var onRecordFrameChanged: ((CGRect) -> Void)?
     @ViewBuilder let content: () -> Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 18) {
-            SignInRecordView(step: step, isVisible: isVisible)
+            SignInRecordView(step: step, isVisible: isVisible,
+                             onRecordFrameChanged: onRecordFrameChanged)
+                .overlay(alignment: .bottomTrailing) {
+                    if step == .completion {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 24, weight: .medium))
+                            .foregroundStyle(.green)
+                            .symbolRenderingMode(.hierarchical)
+                            .accessibilityHidden(true)
+                            .transition(.opacity)
+                    }
+                }
             // Stacked, so outgoing and incoming copy cross-fade in place instead of pushing each other.
             ZStack {
                 content()
-                    .id(step.identity)
+                    .id(step.contentIdentity)
                     .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 6)))
             }
-            .frame(maxWidth: .infinity)
-            .background {
-                StartupReadabilityBackdrop()
-                    .padding(.horizontal, -24)
-                    .padding(.top, -28)
-                    .padding(.bottom, -40)
-            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .frame(maxHeight: .infinity)
         .animation(.easeInOut(duration: reduceMotion ? 0.16 : 0.3), value: step)
@@ -64,24 +70,6 @@ struct StartupStepIndicator: View {
     }
 }
 
-/// A soft tint follows the instructions as they scroll, leaving the Aurora and record visible.
-private struct StartupReadabilityBackdrop: View {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.colorSchemeContrast) private var contrast
-
-    var body: some View {
-        if !reduceTransparency && contrast != .increased {
-            LinearGradient(stops: [
-                .init(color: .clear, location: 0),
-                .init(color: .black.opacity(0.42), location: 0.14),
-                .init(color: .black.opacity(0.42), location: 1),
-            ], startPoint: .top, endPoint: .bottom)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-        }
-    }
-}
-
 struct StartupHeading: View {
     let title: Text
     var message: Text?
@@ -90,12 +78,12 @@ struct StartupHeading: View {
     var body: some View {
         VStack(spacing: 8) {
             title.font(.system(size: isCompact ? 21 : 24, weight: .semibold))
-                .foregroundStyle(.primary)
+                .startupPrimary()
                 .accessibilityAddTraits(.isHeader)
             if let message {
                 message
                     .font(.body)
-                    .foregroundStyle(.primary)
+                    .startupSupporting()
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -120,7 +108,7 @@ struct StartupButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(identifier)
-        .playerGlass()
+        .startupActionGlass()
     }
 }
 

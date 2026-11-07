@@ -34,6 +34,8 @@ final class AppEnvironment {
         mode: .compact,
         keepOnTop: UserDefaults.standard.bool(forKey: "player.keepOnTop"))
     let playerWindowController = PlayerWindowController(defaults: .standard)
+    let onboarding = OnboardingPresentation()
+    @ObservationIgnored var onboardingRecordFrame: CGRect?
     var isShowingPlayer: Bool { authState == .signedIn && !isShowingOnboarding && player != nil }
 
     var playerMode: PlayerMode {
@@ -50,6 +52,12 @@ final class AppEnvironment {
         case let .error(error): return .signIn(.error(error))
         case .needsLibraryAuthorization: return .library(librarySetupStatus)
         case .signedIn:
+            if onboarding.phase == .libraryConnected { return .library(.connected) }
+            if soloist.hasUsablePlayback {
+                if onboarding.phase == .completing { return .completion }
+                if onboarding.phase == .handoff { return nil }
+                if onboarding.isArmed { return .playback(.working) }
+            }
             if requestedOnboardingSection == .library { return .library(librarySetupStatus) }
             if case .failed = soloist.phase { return .playback(.failure) }
             if requestedOnboardingSection == .playback || !hasConfiguredPlayback {
@@ -69,6 +77,7 @@ final class AppEnvironment {
 
     func showOnboarding(section: OnboardingSection = .playback) {
         guard !isPreparingForQuit, !isRemovingCredentials else { return }
+        if onboarding.phase == .completing || onboarding.phase == .handoff { onboarding.cancel() }
         requestedOnboardingSection = section
         searchPopover.close()
         hideLiveLyrics()
@@ -76,7 +85,19 @@ final class AppEnvironment {
         playerWindowController.show()
     }
 
-    func closeOnboarding() { requestedOnboardingSection = nil }
+    func closeOnboarding() {
+        onboarding.cancel()
+        requestedOnboardingSection = nil
+    }
+
+    func updateOnboardingReadiness(reduceMotion: Bool) {
+        guard authState == .signedIn, !isRemovingCredentials, !isPreparingForQuit else { return }
+        onboarding.playbackReadinessChanged(soloist.hasUsablePlayback, reduceMotion: reduceMotion)
+    }
+
+    private func configureOnboardingPresentation() {
+        onboarding.onHandoff = { [weak self] in self?.requestedOnboardingSection = nil }
+    }
 
     @ObservationIgnored private let auth: SpotifyAuthService
     @ObservationIgnored private let libraryAuth: LibraryAuthorization
@@ -85,6 +106,9 @@ final class AppEnvironment {
     private(set) var isRestartingSoloistPairing = false
     @ObservationIgnored private var soloistPairingRetryGeneration = 0
     @ObservationIgnored private var soloistAction: Task<Void, Never>?
+    @ObservationIgnored private var discoveryRecoveryAttempts = 0
+    @ObservationIgnored private var discoveryRecoveryWindow: Date?
+    @ObservationIgnored private var nextDiscoveryRecovery = Date.distantPast
     private(set) var librarySetupError: PlayerError?
     @ObservationIgnored private var libraryConsentRequired = false
     /// Not a secret: it records only that library access was approved for this client, which outlives sign-out so
@@ -206,6 +230,7 @@ final class AppEnvironment {
             guard let self, !self.isPreparingForQuit, !self.isRemovingCredentials else { return }
             self.showOnboarding(section: .playback)
         }
+        configureOnboardingPresentation()
     }
 
     #if DEBUG
@@ -257,6 +282,7 @@ final class AppEnvironment {
         player = previewPlayer
         authState = previewPlayer == nil ? .signedOut : .signedIn
         if let recoveryEngineFactory { suppliedEngineFactory = recoveryEngineFactory; monitorEnabled = false }
+        configureOnboardingPresentation()
     }
     #endif
 
@@ -313,6 +339,7 @@ final class AppEnvironment {
         }
         let generation = libraryGeneration
         let session = sessionGeneration
+        if !hasConfiguredPlayback { onboarding.begin() }
         let task = Task { [self] in
             defer {
                 if generation == libraryGeneration {
@@ -334,6 +361,7 @@ final class AppEnvironment {
                     guard session == sessionGeneration, generation == libraryGeneration,
                           libraryAuthorization?.isCancelled == false else { return }
                     connect()
+                    onboarding.confirmLibraryConnection()
                 }.value
             } catch is CancellationError {
                 BopifyLog.library.info("library authorization cancelled")
@@ -413,6 +441,7 @@ final class AppEnvironment {
 
     func requireLibrarySetup() async {
         guard !isPreparingForQuit, authState == .signedIn else { return }
+        onboarding.cancel()
         authState = .needsLibraryAuthorization
         clearLibrary()
         libraryConsentRequired = true
@@ -583,8 +612,16 @@ final class AppEnvironment {
 
     func retryPlaybackConnection() { recovery?.retryNow() }
 
-    func enableSoloist(key: String) async {
+    func enableSoloist(key: String, automaticDiscoveryRecovery: Bool = false) async {
         guard authState == .signedIn, !isRemovingCredentials, !isPreparingForQuit, soloistAction == nil else { return }
+        if !automaticDiscoveryRecovery {
+            discoveryRecoveryAttempts = 0
+            discoveryRecoveryWindow = nil
+            nextDiscoveryRecovery = .distantPast
+        }
+        if !soloist.hasUsablePlayback || !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            onboarding.begin()
+        }
         let session = sessionGeneration, setup = soloistPairingRetryGeneration
         let task = Task { [self] in
             defer { soloistAction = nil }
@@ -604,10 +641,20 @@ final class AppEnvironment {
         await task.value
     }
 
-    func retrySoloistPairing() async {
+    func resumeSoloistDiscovery() async {
+        let now = Date()
+        if let window = discoveryRecoveryWindow, now.timeIntervalSince(window) >= 60 {
+            discoveryRecoveryAttempts = 0
+            nextDiscoveryRecovery = .distantPast
+            discoveryRecoveryWindow = nil
+        }
         guard authState == .signedIn, !isRemovingCredentials, !isPreparingForQuit,
               !isRestartingSoloistPairing, !soloist.hasUsablePlayback, soloist.hasSavedKey,
-              case .pairing = soloist.phase else { return }
+              soloist.phase == .failed(.discovery), discoveryRecoveryAttempts < 3,
+              now >= nextDiscoveryRecovery else { return }
+        if discoveryRecoveryWindow == nil { discoveryRecoveryWindow = now }
+        discoveryRecoveryAttempts += 1
+        nextDiscoveryRecovery = now.addingTimeInterval(pow(2, Double(discoveryRecoveryAttempts)))
         isRestartingSoloistPairing = true
         soloistPairingRetryGeneration += 1
         let retry = soloistPairingRetryGeneration, session = sessionGeneration
@@ -618,11 +665,12 @@ final class AppEnvironment {
         await action?.value
         guard retry == soloistPairingRetryGeneration, session == sessionGeneration,
               authState == .signedIn, !isRemovingCredentials, !isPreparingForQuit else { return }
-        await enableSoloist(key: "")
+        await enableSoloist(key: "", automaticDiscoveryRecovery: true)
     }
 
     func cancelSoloistSetup() async {
         guard !isRemovingCredentials, !isPreparingForQuit else { return }
+        onboarding.cancel()
         soloistPairingRetryGeneration += 1
         let action = soloistAction
         action?.cancel()
@@ -681,6 +729,7 @@ final class AppEnvironment {
 
     func signOut() async {
         guard !isRemovingCredentials else { return }
+        onboarding.cancel()
         requestedOnboardingSection = nil
         isRemovingCredentials = true
         recovery?.invalidate()
@@ -737,6 +786,7 @@ final class AppEnvironment {
     }
 
     func prepareForQuit() async {
+        onboarding.cancel()
         requestedOnboardingSection = nil
         isPreparingForQuit = true
         recovery?.invalidate()

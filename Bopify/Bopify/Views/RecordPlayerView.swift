@@ -363,7 +363,9 @@ struct RecordPlayerView: View {
                     ?? rotation.angle(at: ProcessInfo.processInfo.systemUptime)
                 ZStack(alignment: .topLeading) {
                     recordFace(diameter: layout.recordDiameter, loadProgress: progress,
-                               angle: coverLaunch == nil ? nil : angle).position(layout.recordCenter)
+                               angle: coverLaunch == nil ? nil : angle)
+                        .scaleEffect(windowController.recordPresentationScale)
+                        .position(layout.recordCenter)
                     if showsCoverFunnel, let launch = coverLaunch {
                         RecordLoadTransition(launch: launch,
                             destination: CGRect(x: layout.recordCenter.x - layout.recordDiameter / 2,

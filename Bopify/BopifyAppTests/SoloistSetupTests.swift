@@ -30,7 +30,7 @@ extension LiveLyricTestEngine: PreparedPlaybackEngine {
 
 @MainActor @Suite("Soloist native setup", .serialized)
 struct SoloistSetupTests {
-    @Test func retryingDiscoveryJoinsUnpairedSetupAndPreservesTheExistingTrack() async throws {
+    @Test func recoveringFailedDiscoveryJoinsOwnedSetupAndPreservesTheExistingTrack() async throws {
         let suite = "soloist-repair-\(UUID())"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -41,7 +41,7 @@ struct SoloistSetupTests {
                 starts += 1
                 if starts == 1 {
                     request.available(first)
-                    request.progress(.pairing("Bopify fixture"))
+                    request.progress(.failed(.discoveryUnavailable))
                     while true { try await Task.sleep(for: .milliseconds(10)) }
                 }
                 return second
@@ -50,8 +50,8 @@ struct SoloistSetupTests {
         let track = environment.player?.state.currentTrack
         defer { environment.player?.stop() }
         let preparation = Task { await environment.enableSoloist(key: "fixture-key") }
-        try await liveLyricEventually { if case .pairing = controller.phase { true } else { false } }
-        await environment.retrySoloistPairing()
+        try await liveLyricEventually { controller.phase == .failed(.discovery) }
+        await environment.resumeSoloistDiscovery()
         await preparation.value
         #expect(starts == 2 && first.shutdowns == 1)
         #expect(controller.hasSavedKey && controller.phase == .prepared)
@@ -60,7 +60,7 @@ struct SoloistSetupTests {
         await controller.stop()
     }
 
-    @Test func cancelSetupInvalidatesAPendingPairingRetry() async throws {
+    @Test func cancelSetupInvalidatesAPendingFailedDiscoveryRecovery() async throws {
         let suite = "soloist-cancel-retry-\(UUID())"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -73,14 +73,14 @@ struct SoloistSetupTests {
             install: { _, _ in URL(fileURLWithPath: "/fixture/soloist") }, start: { request in
                 starts += 1
                 request.available(candidate)
-                request.progress(.pairing("Fixture"))
+                request.progress(.failed(.discoveryUnavailable))
                 while true { try await Task.sleep(for: .milliseconds(10)) }
             }, clearSession: {})
         let environment = makePreviewEnvironment(.playing, soloistController: controller)
         defer { environment.player?.stop() }
         let preparing = Task { await environment.enableSoloist(key: "fixture-key") }
-        try await liveLyricEventually { if case .pairing = controller.phase { true } else { false } }
-        let retrying = Task { await environment.retrySoloistPairing() }
+        try await liveLyricEventually { controller.phase == .failed(.discovery) }
+        let retrying = Task { await environment.resumeSoloistDiscovery() }
         try await liveLyricEventually { candidate.shutdowns == 1 && environment.isRestartingSoloistPairing }
         await environment.cancelSoloistSetup()
         release.continuation.finish()
@@ -91,6 +91,53 @@ struct SoloistSetupTests {
         #expect(controller.hasSavedKey && controller.phase == .idle)
         #expect(environment.onboardingStep == .playback(.entry))
         #expect(try keys.load() == "fixture-key")
+    }
+
+    @Test func recoveryOpportunityDoesNotRestartHealthyPairing() async throws {
+        let suite = "soloist-healthy-pairing-\(UUID())"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let candidate = LiveLyricTestEngine()
+        var starts = 0
+        let controller = SoloistPlaybackController(defaults: defaults, keys: SetupKeys(), authorize: {},
+            install: { _, _ in URL(fileURLWithPath: "/fixture/soloist") }, start: { request in
+                starts += 1
+                request.available(candidate)
+                request.progress(.pairing(request.name))
+                while true { try await Task.sleep(for: .milliseconds(10)) }
+            }, clearSession: {})
+        let environment = makePreviewEnvironment(.playing, soloistController: controller)
+        let track = environment.player?.state.currentTrack
+        defer { environment.player?.stop() }
+        let preparing = Task { await environment.enableSoloist(key: "fixture-key") }
+        try await liveLyricEventually { if case .pairing = controller.phase { true } else { false } }
+        await environment.resumeSoloistDiscovery()
+        #expect(starts == 1 && candidate.shutdowns == 0 && controller.isPreparing)
+        #expect(environment.player?.state.currentTrack == track && environment.player?.state.phase == .playing)
+        await environment.cancelSoloistSetup()
+        await preparing.value
+    }
+
+    @Test func failedDiscoveryRetryKeepsTheControllerDeviceNameAndSavedKey() async throws {
+        let suite = "soloist-stable-name-\(UUID())"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let engine = LiveLyricTestEngine(), keys = SetupKeys()
+        var names: [String] = []
+        let controller = SoloistPlaybackController(defaults: defaults, keys: keys, authorize: {},
+            install: { _, _ in URL(fileURLWithPath: "/fixture/soloist") }, start: { request in
+                names.append(request.name)
+                #expect(request.key == "fixture-key")
+                if names.count == 1 { throw SoloistPlaybackError.discoveryUnavailable }
+                return engine
+            }, clearSession: {})
+        #expect(await !controller.enable(key: "fixture-key"))
+        #expect(controller.phase == .failed(.discovery))
+        await controller.stop()
+        #expect(await controller.enable(key: ""))
+        #expect(names.count == 2 && names[0] == names[1])
+        #expect(names.first?.hasPrefix("Bopify ") == true)
+        await controller.stop()
     }
 
     @Test func usablePlaybackRequiresAReadyCoreAndSurvivesOnlyCompanionFailure() async throws {

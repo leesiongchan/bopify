@@ -25,12 +25,19 @@ struct SignInView: View {
                 StartupButton(key: "signIn.button", action: onSignIn).padding(.top, 20)
                 Text("signIn.premium", bundle: SoloistResources.bundle)
                     .font(.callout)
-                    .foregroundStyle(.primary)
+                    .startupSupporting()
                     .padding(.top, 12)
             case .authenticating:
                 StartupHeading(title: Text("onboarding.signingIn", bundle: SoloistResources.bundle), message: Text("signIn.browser", bundle: SoloistResources.bundle))
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("onboarding.waitingForSpotify", bundle: SoloistResources.bundle).font(.callout)
+                }
+                .startupStatus()
+                .padding(.top, 16)
                 if let onCancel {
-                    StartupButton(key: "onboarding.cancel", isSecondary: true, action: onCancel).padding(.top, 16)
+                    Button(SoloistResources.string("signIn.cancel"), action: onCancel)
+                        .buttonStyle(.plain).font(.callout).foregroundStyle(.tint).padding(.top, 12)
                 }
             case .removingCredentials:
                 StartupHeading(title: Text("signIn.removingCredentials", bundle: SoloistResources.bundle))

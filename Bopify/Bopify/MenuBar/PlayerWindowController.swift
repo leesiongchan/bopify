@@ -9,6 +9,8 @@ import os
 final class PlayerWindowController {
     private(set) var layout = recordLayout(mode: .compact, availableSize: CGSize(width: 484, height: 360))
     private(set) var contentOffset: CGPoint = .zero
+    private(set) var recordPresentationScale: CGFloat = 1
+    private(set) var onboardingContentOffset: CGPoint = .zero
     private(set) var transitionID: UInt64 = 0
     private(set) var isTransitioning = false
     private(set) var isDragging = false
@@ -19,6 +21,7 @@ final class PlayerWindowController {
     @ObservationIgnored private var pendingMode: (mode: PlayerMode, reduceMotion: Bool, showsLyrics: Bool)?
     @ObservationIgnored private var lastRequest: (mode: PlayerMode, reduceMotion: Bool, showsLyrics: Bool) = (.compact, false, false)
     @ObservationIgnored private var targetFrame: CGRect = .zero
+    @ObservationIgnored private var onboardingFrame: CGRect?
 
     init(defaults: UserDefaults) { self.defaults = defaults }
 
@@ -30,12 +33,29 @@ final class PlayerWindowController {
     }
     #endif
 
-    func attach(to panel: StatusPanel) {
+    func attach(to panel: StatusPanel, onboardingRecordFrame: CGRect? = nil) {
         self.panel = panel
         // Native shadow traces the record's translucent halo as a second hard outline.
         panel.hasShadow = false
         panel.onCancelInteraction = { [weak self] in self?.onCancelInteraction?() ?? false }
-        anchor = Self.restoredAnchor(defaults: defaults)
+        if let record = onboardingRecordFrame, record.width > 0, record.height > 0,
+           record.midX.isFinite, record.midY.isFinite {
+            anchor = CGPoint(x: panel.frame.minX + record.midX, y: panel.frame.maxY - record.midY)
+            onboardingFrame = panel.frame
+            withoutAnimation {
+                contentOffset = CGPoint(x: record.midX - layout.recordCenter.x, y: record.midY - layout.recordCenter.y)
+                recordPresentationScale = record.width / layout.recordDiameter
+                onboardingContentOffset = .zero
+            }
+        } else {
+            anchor = Self.restoredAnchor(defaults: defaults)
+            onboardingFrame = nil
+            withoutAnimation {
+                contentOffset = .zero
+                recordPresentationScale = 1
+                onboardingContentOffset = .zero
+            }
+        }
         panel.minSize = CGSize(width: 1, height: 1)
         panel.maxSize = CGSize(width: 10000, height: 10000)
         panel.styleMask.remove(.resizable)
@@ -117,6 +137,8 @@ final class PlayerWindowController {
             withoutAnimation {
                 layout = next
                 contentOffset = .zero
+                recordPresentationScale = 1
+                updateOnboardingOffset(in: target)
                 panel.setFrame(target, display: true)
             }
             persistAnchor()
@@ -127,6 +149,7 @@ final class PlayerWindowController {
         withoutAnimation {
             contentOffset.x += oldFrame.minX - envelope.minX
             contentOffset.y += envelope.maxY - oldFrame.maxY
+            updateOnboardingOffset(in: envelope)
             panel.setFrame(envelope, display: true)
             isTransitioning = true
         }
@@ -136,6 +159,7 @@ final class PlayerWindowController {
                       completionCriteria: .removed) {
             layout = next
             contentOffset = CGPoint(x: target.minX - envelope.minX, y: envelope.maxY - target.maxY)
+            recordPresentationScale = 1
         } completion: { [weak self] in
             // Completion can run inside NSHostingView.layout during a Core Animation commit.
             DispatchQueue.main.async { [weak self] in self?.finishTransition(generation) }
@@ -147,6 +171,7 @@ final class PlayerWindowController {
         withoutAnimation {
             panel.setFrame(targetFrame, display: true)
             contentOffset = .zero
+            updateOnboardingOffset(in: targetFrame)
             isTransitioning = false
         }
         persistAnchor()
@@ -190,5 +215,10 @@ final class PlayerWindowController {
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction, body)
+    }
+
+    private func updateOnboardingOffset(in frame: CGRect) {
+        guard let source = onboardingFrame else { return }
+        onboardingContentOffset = CGPoint(x: source.minX - frame.minX, y: frame.maxY - source.maxY)
     }
 }

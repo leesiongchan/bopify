@@ -90,17 +90,20 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         UserDefaults.standard.set(keepOnTop, forKey: "player.keepOnTop")
         if environment.isShowingPlayer {
             if !isWindowControllerAttached {
-                if !hasPosition, PlayerWindowController.restoredAnchor(defaults: .standard) == nil,
+                let handingOff = environment.onboarding.phase == .handoff
+                if !handingOff, !hasPosition, PlayerWindowController.restoredAnchor(defaults: .standard) == nil,
                    let button = statusItem.button,
                    let frame = button.window?.convertToScreen(button.convert(button.bounds, to: nil)) {
                     panel.setFrame(CGRect(x: frame.midX - 71, y: frame.minY - 148, width: 142, height: 142), display: false)
                 }
-                environment.playerWindowController.attach(to: panel)
+                environment.playerWindowController.attach(to: panel,
+                    onboardingRecordFrame: handingOff ? environment.onboardingRecordFrame : nil)
                 environment.presentation.sendAttention(.visibility(panel.isVisible))
                 if panel.isKeyWindow { environment.presentation.sendAttention(.keyboardFocus(true)) }
                 isWindowControllerAttached = true
-                // The new composition has no rendered player geometry to animate from yet.
-                environment.playerWindowController.apply(mode: environment.presentation.mode, reduceMotion: true,
+                // Initial restoration has no prior player geometry; onboarding has a visible record to preserve.
+                environment.playerWindowController.apply(mode: environment.presentation.mode,
+                                                         reduceMotion: !handingOff || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
                                                          showsLyrics: environment.isLiveLyricsVisible)
                 BopifyLog.playback.debug("Player listening geometry initialized")
             }

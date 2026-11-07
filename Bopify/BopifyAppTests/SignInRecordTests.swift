@@ -7,6 +7,17 @@ import BopifyPlayback
 
 @MainActor @Suite("Startup record")
 struct SignInRecordTests {
+    @Test func armedReadySetupCannotShowPlayerBeforeCompletionStarts() {
+        let environment = makePreviewEnvironment(.nothingPlaying)
+        defer { environment.onboarding.cancel(); environment.player?.stop() }
+        environment.onboarding.begin()
+        #expect(environment.requestedOnboardingSection == nil)
+        #expect(!environment.isShowingPlayer)
+        #expect(environment.onboardingStep == .playback(.working))
+        environment.updateOnboardingReadiness(reduceMotion: true)
+        #expect(environment.onboardingStep == .completion)
+    }
+
     @Test func completedSetupKeepsTheRegularPlayerWhileIdle() {
         let environment = makePreviewEnvironment(.nothingPlaying)
         defer { environment.player?.stop() }

@@ -4,7 +4,7 @@ import os
 
 enum SignInRecordPose: Equatable { case out, spinning, tucked }
 enum RecordSide: Equatable { case a, b }
-enum LibrarySetupStatus: Hashable { case idle, authorizing, refused }
+enum LibrarySetupStatus: Hashable { case idle, authorizing, refused, connected }
 
 enum OnboardingSection { case library, playback }
 enum PlaybackSetupStatus: Hashable { case entry, working, failure }
@@ -15,6 +15,7 @@ enum StartupStep: Hashable {
     case library(LibrarySetupStatus)
     case playback(PlaybackSetupStatus)
     case connection(messageKey: String, isFailure: Bool)
+    case completion
 
     /// Form identity is independent of download progress and error changes.
     var identity: String {
@@ -23,6 +24,16 @@ enum StartupStep: Hashable {
         case .library: "library"
         case .playback: "playback"
         case .connection: "connection"
+        case .completion: "completion"
+        }
+    }
+
+    var contentIdentity: String {
+        switch self {
+        case .library(.authorizing): "library.authorizing"
+        case .library(.connected): "library.connected"
+        case .signIn(.authenticating): "signIn.authenticating"
+        default: identity
         }
     }
 
@@ -30,7 +41,7 @@ enum StartupStep: Hashable {
         switch self {
         case .signIn(.idle), .signIn(.authenticating), .signIn(.error): 1
         case .library: 2
-        case .playback: 3
+        case .playback, .completion: 3
         case .signIn(.restoring), .signIn(.removingCredentials), .connection: nil
         }
     }
@@ -39,20 +50,20 @@ enum StartupStep: Hashable {
         switch self {
         case .signIn: .a
         case .library: .b
-        case .playback, .connection: nil
+        case .playback, .connection, .completion: nil
         }
     }
 
     var isCompact: Bool {
         switch self {
-        case .library, .playback: true
+        case .library, .playback, .completion: true
         default: false
         }
     }
 
     var recordPose: SignInRecordPose {
         switch self {
-        case .signIn(.idle), .library(.idle), .playback(.entry): .out
+        case .signIn(.idle), .library(.idle), .library(.connected), .playback(.entry), .completion: .out
         case .signIn(.authenticating), .signIn(.restoring), .signIn(.removingCredentials), .library(.authorizing), .playback(.working): .spinning
         case .signIn(.error), .library(.refused), .playback(.failure): .tucked
         case let .connection(_, isFailure): isFailure ? .tucked : .spinning
@@ -65,6 +76,7 @@ enum StartupStep: Hashable {
 struct SignInRecordView: View {
     let step: StartupStep
     var isVisible = true
+    var onRecordFrameChanged: ((CGRect) -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var lift = Metrics.insideLift
@@ -92,6 +104,7 @@ struct SignInRecordView: View {
     private struct Trigger: Equatable {
         let pose: SignInRecordPose
         let isVisible: Bool
+        let isCompleting: Bool
     }
 
     var body: some View {
@@ -102,7 +115,7 @@ struct SignInRecordView: View {
                     .frame(width: 236, height: 26)
                     .blur(radius: 5)
                     .offset(y: 8)
-                placedRecord(angle)
+                placedRecord(angle, reportsFrame: true)
                     .mask {
                         ZStack(alignment: .bottom) {
                             Rectangle()
@@ -128,7 +141,7 @@ struct SignInRecordView: View {
         .frame(width: Metrics.stage.width * scale, height: Metrics.stage.height * scale)
         .animation(reduceMotion ? nil : .spring(duration: 0.8, bounce: 0.15), value: scale)
         .accessibilityHidden(true)
-        .task(id: Trigger(pose: pose, isVisible: isVisible)) { await settle() }
+        .task(id: Trigger(pose: pose, isVisible: isVisible, isCompleting: step == .completion)) { await settle() }
         .onAppear { if shownSide == nil { shownSide = step.side ?? .a } }
         .onChange(of: step.side) { _, side in
             // The shown side only changes once the record is edge-on.
@@ -136,8 +149,11 @@ struct SignInRecordView: View {
         }
     }
 
-    private func placedRecord(_ angle: Angle) -> some View {
+    private func placedRecord(_ angle: Angle, reportsFrame: Bool = false) -> some View {
         RecordDisc(angle: angle, side: shownSide ?? step.side ?? .a, isSad: pose == .tucked)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+                if reportsFrame { onRecordFrameChanged?(frame) }
+            }
             .scaleEffect(x: flip, y: 1)
             .saturation(pose == .tucked ? 0.2 : 1)
             .brightness(pose == .tucked ? -0.12 : 0)
@@ -175,6 +191,12 @@ struct SignInRecordView: View {
         BopifyLog.auth.debug("startup record pose=\(String(describing: pose), privacy: .public) progress=\(step.progress ?? 0)")
         let animation: (Animation) -> Animation? = { reduceMotion ? nil : $0 }
         switch pose {
+        case .out where step == .completion:
+            // A fast setup can finish during the entrance animation. Settle before the window handoff.
+            withAnimation(animation(.easeOut(duration: 0.2))) {
+                lift = Metrics.outLift
+                turn = upright(turn)
+            }
         case .out where !isPresented && !reduceMotion:
             var instant = Transaction()
             instant.disablesAnimations = true

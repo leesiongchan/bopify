@@ -5,27 +5,53 @@ import BopifyPlayback
 
 struct PlayerRootView: View {
     let environment: AppEnvironment
+    @State private var startupSize: CGSize?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Group {
+        ZStack(alignment: .topLeading) {
             if environment.isShowingPlayer, let player = environment.player {
                 RecordPlayerView(player: player, artworkStore: environment.artworkStore,
                                    presentation: environment.presentation, windowController: environment.playerWindowController)
                     .id(ObjectIdentifier(player))
-            } else {
+                    .transition(.opacity)
+            }
+            if !environment.isShowingPlayer || environment.onboarding.phase == .handoff {
                 StartupSurface(isAnimating: environment.presentation.isVisible, isDimmed: startupStep?.recordPose == .tucked) {
                     VStack(spacing: 8) {
                         header
                         if let step = startupStep {
-                            StartupView(step: step, isVisible: environment.presentation.isVisible) { startupContent(step) }
+                            StartupView(step: step, isVisible: environment.presentation.isVisible,
+                                        onRecordFrameChanged: { environment.onboardingRecordFrame = $0 }) {
+                                startupContent(step)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                                    .modifier(ScrollablePlayerContent())
+                            }
                         }
                     }
                     .padding(16)
-                    .modifier(ScrollablePlayerContent())
                 }
+                .frame(width: startupSize?.width, height: startupSize?.height)
+                .offset(x: handoffOffset.x, y: handoffOffset.y)
+                .animation(nil, value: handoffOffset)
+                .opacity(environment.isShowingPlayer ? 0 : 1)
+                .allowsHitTesting(!environment.isShowingPlayer)
+                .accessibilityHidden(environment.isShowingPlayer)
+                .zIndex(1)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+            if !environment.isShowingPlayer { startupSize = size }
+        }
         .environment(environment)
+        .animation(.easeInOut(duration: reduceMotion ? 0.15 : 0.5), value: environment.isShowingPlayer)
+        .onChange(of: environment.soloist.hasUsablePlayback, initial: true) { _, _ in
+            environment.updateOnboardingReadiness(reduceMotion: reduceMotion)
+        }
+        .onChange(of: environment.authState) { _, state in
+            if state == .signedIn { environment.updateOnboardingReadiness(reduceMotion: reduceMotion) }
+        }
         .onChange(of: environment.hasLibraryAuthorizationFailure, initial: true) { _, failed in
             if failed { Task { await environment.requireLibrarySetup() } }
         }
@@ -52,7 +78,7 @@ struct PlayerRootView: View {
                 // Search and Favorite need a ready player, and reconnecting still counts as signed in.
                 if let progress = step.progress { StartupStepIndicator(current: progress, total: 3) }
                 if environment.authState == .signedIn, environment.requestedOnboardingSection != nil,
-                   environment.soloist.hasUsablePlayback {
+                   environment.soloist.hasUsablePlayback, !environment.onboarding.isArmed {
                     Button(SoloistResources.string("onboarding.done"), action: environment.closeOnboarding)
                         .buttonStyle(.plain).font(.callout)
                 }
@@ -89,11 +115,16 @@ struct PlayerRootView: View {
     }
 
     private var startupStep: StartupStep? {
+        if environment.onboarding.phase == .handoff { return .completion }
         if let step = environment.onboardingStep { return step }
         guard let player = environment.player,
               environment.connectionStatus != .ready || player.restorationUnavailable else { return nil }
         let status = connection(for: player)
         return .connection(messageKey: status.messageKey, isFailure: status.isFailure)
+    }
+
+    private var handoffOffset: CGPoint {
+        environment.onboarding.phase == .handoff ? environment.playerWindowController.onboardingContentOffset : .zero
     }
 
     private func connection(for player: PlayerModel) -> PlaybackConnectionStatusView {
@@ -117,6 +148,9 @@ struct PlayerRootView: View {
             LibraryAuthorizationSetupView(status: status, environment: environment)
         case .playback:
             PlaybackOnboardingView(environment: environment)
+        case .completion:
+            StartupHeading(title: Text("onboarding.readyTitle", bundle: SoloistResources.bundle),
+                           message: Text("onboarding.readyDescription", bundle: SoloistResources.bundle), isCompact: true)
         case .connection:
             if let player = environment.player { StartupConnectionView(connection: connection(for: player)) }
         }
@@ -165,7 +199,9 @@ private struct StartupScrollView<Content: View>: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         guard let host = scroll.documentView as? NSHostingView<AnyView> else { return }
-        host.rootView = AnyView(content.environment(\.self, context.environment))
+        withTransaction(context.transaction) {
+            host.rootView = AnyView(content.environment(\.self, context.environment))
+        }
     }
 }
 

@@ -17,6 +17,7 @@ enum SoloistSetupFailure {
 struct SoloistLaunchRequest: Sendable {
     let executable: URL
     let key: String
+    let name: String
     let progress: @Sendable (SoloistEngineStatus) -> Void
     let available: @MainActor @Sendable (any PreparedPlaybackEngine) -> Void
 }
@@ -50,6 +51,7 @@ final class SoloistPlaybackController {
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var deliveredStatus = 0
     @ObservationIgnored private let statusSequence = SoloistStatusSequence()
+    @ObservationIgnored private let deviceName = "Bopify \(UUID().uuidString.prefix(8))"
 
     init(defaults: UserDefaults = .standard, readyEngine: (any PreparedPlaybackEngine)? = nil, keys: any SoloistKeyStoring = SoloistKeyStore(),
         authorize: @escaping @MainActor () async throws -> Void,
@@ -65,8 +67,7 @@ final class SoloistPlaybackController {
         hasSavedKey = defaults.bool(forKey: "soloist.hasKey")
         self.install = install
         self.start = start ?? { request in
-            let name = "Bopify \(UUID().uuidString.prefix(8))"
-            let engine = try await SoloistEngine.launch(executable: request.executable, key: request.key, name: name,
+            let engine = try await SoloistEngine.launch(executable: request.executable, key: request.key, name: request.name,
                 webToken: webToken, streamingToken: streamingToken, dataToken: dataToken, progress: request.progress)
             request.available(engine)
             do { try await engine.preparePairing(); return engine }
@@ -130,7 +131,7 @@ final class SoloistPlaybackController {
     }
 
     private func launchRequest(executable: URL, key: String, generation mine: Int) -> SoloistLaunchRequest {
-        SoloistLaunchRequest(executable: executable, key: key, progress: reporter(generation: mine),
+        SoloistLaunchRequest(executable: executable, key: key, name: deviceName, progress: reporter(generation: mine),
             available: { [weak self] engine in
                 guard let self, self.generation == mine else { return }; self.setupEngine = engine
             })

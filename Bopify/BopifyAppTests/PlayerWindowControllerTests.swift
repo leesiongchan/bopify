@@ -5,6 +5,30 @@ import BopifyPlayback
 
 @MainActor @Suite("Player window", .serialized)
 struct PlayerWindowControllerTests {
+    @Test func onboardingHandoffAnchorsThePlayerAtTheVisibleStartupRecord() throws {
+        _ = NSApplication.shared
+        let suite = "onboarding-anchor-\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set("{900, 700}", forKey: "player.recordCenter")
+        let panel = StatusPanel(content: EmptyView())
+        panel.isReleasedWhenClosed = false
+        defer { panel.close() }
+        panel.setFrame(CGRect(x: 80, y: 40, width: 410, height: 560), display: false)
+        let record = CGRect(x: 150, y: 70, width: 110, height: 110)
+        let expected = CGPoint(x: panel.frame.minX + record.midX, y: panel.frame.maxY - record.midY)
+        let controller = PlayerWindowController(defaults: defaults)
+        controller.attach(to: panel, onboardingRecordFrame: record)
+        #expect(controller.layout.recordCenter.x + controller.contentOffset.x == record.midX)
+        #expect(controller.layout.recordCenter.y + controller.contentOffset.y == record.midY)
+        #expect(controller.layout.recordDiameter * controller.recordPresentationScale == record.width)
+        controller.apply(mode: .compact, reduceMotion: true,
+                         visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 900))
+        let actual = CGPoint(x: panel.frame.minX + controller.layout.recordCenter.x,
+                             y: panel.frame.maxY - controller.layout.recordCenter.y)
+        #expect(actual == expected, "Setup must settle around its visible record instead of jumping to a saved window position")
+    }
+
     @Test func onboardingFloatsWithoutChangingTheSavedWindowPreference() async throws {
         _ = NSApplication.shared
         let defaults = UserDefaults.standard
