@@ -54,13 +54,6 @@ enum StartupStep: Hashable {
         }
     }
 
-    var isCompact: Bool {
-        switch self {
-        case .library, .playback, .completion: true
-        default: false
-        }
-    }
-
     var recordPose: SignInRecordPose {
         switch self {
         case .signIn(.idle), .library(.idle), .library(.connected), .playback(.entry), .completion: .out
@@ -87,7 +80,7 @@ struct SignInRecordView: View {
     @State private var flip: CGFloat = 1
 
     private var pose: SignInRecordPose { step.recordPose }
-    private var scale: CGFloat { step.isCompact ? 0.55 : 0.88 }
+    private let scale: CGFloat = 0.88
 
     private enum Metrics {
         static let stage = CGSize(width: 250, height: 324)
@@ -139,7 +132,6 @@ struct SignInRecordView: View {
         }
         .scaleEffect(scale)
         .frame(width: Metrics.stage.width * scale, height: Metrics.stage.height * scale)
-        .animation(reduceMotion ? nil : .spring(duration: 0.8, bounce: 0.15), value: scale)
         .accessibilityHidden(true)
         .task(id: Trigger(pose: pose, isVisible: isVisible, isCompleting: step == .completion)) { await settle() }
         .onAppear { if shownSide == nil { shownSide = step.side ?? .a } }

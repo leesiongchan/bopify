@@ -20,6 +20,7 @@ public actor SoloistEngine: PreparedPlaybackEngine {
     private let transportFactory: @Sendable (URL) -> any SoloistTransport
     private let progress: @Sendable (SoloistEngineStatus) -> Void
     private let publisherFactory: SoloistPairingPublisherFactory?
+    private let pairingNow: @Sendable () -> Date
     private var pairingPublication: (any SoloistPairingPublishing)?
     private var publicationTask: Task<any SoloistPairingPublishing, any Error>?
     private var transport: (any SoloistTransport)?
@@ -67,13 +68,15 @@ public actor SoloistEngine: PreparedPlaybackEngine {
         serviceFactory: @escaping @Sendable (String) async throws -> any SoloistDataServices = { try await LibrespotServices(accessToken: $0) },
         progress: @escaping @Sendable (SoloistEngineStatus) -> Void,
         verificationInterval: Duration = .seconds(5), publisherFactory: SoloistPairingPublisherFactory? = nil,
-        dataToken: (@Sendable () async throws -> String)? = nil) {
+        dataToken: (@Sendable () async throws -> String)? = nil,
+        pairingNow: @escaping @Sendable () -> Date = { .now }) {
         self.verificationInterval = verificationInterval
         self.child = child; self.api = api; self.baseline = baseline; self.name = name
         self.webToken = webToken; self.streamingToken = streamingToken
         self.dataToken = dataToken ?? webToken
         self.transportFactory = transportFactory; self.progress = progress; self.serviceFactory = serviceFactory
         self.publisherFactory = publisherFactory
+        self.pairingNow = pairingNow
         let pair = AsyncStream<PlaybackEvent>.makeStream(bufferingPolicy: .bufferingNewest(512))
         events = pair.stream; continuation = pair.continuation
     }
@@ -114,9 +117,8 @@ public actor SoloistEngine: PreparedPlaybackEngine {
     }
 
     public func preparePairing() async throws {
-        let deadline = Date().addingTimeInterval(300)
-        let publicationDeadline = Date().addingTimeInterval(10)
-        while Date() < deadline {
+        let publicationDeadline = pairingNow().addingTimeInterval(10)
+        while true {
             try Task.checkCancellation()
             guard !stopped, child.isRunning else { throw SoloistPlaybackError.startupFailed }
             if isLocallyReady {
@@ -130,13 +132,12 @@ public actor SoloistEngine: PreparedPlaybackEngine {
                     if let port = child.pairingPort {
                         do { try await ensurePairingPublication(port: port, factory: factory) }
                         catch { if !isLocallyReady { throw error } }
-                    } else if Date() >= publicationDeadline { throw SoloistPlaybackError.discoveryUnavailable }
+                    } else if pairingNow() >= publicationDeadline { throw SoloistPlaybackError.discoveryUnavailable }
                 }
             }
             setStatus(.pairing(name))
             try await Task.sleep(for: .milliseconds(250))
         }
-        throw SoloistPlaybackError.pairingRequired
     }
 
     private func ensurePairingPublication(port: UInt16, factory: @escaping SoloistPairingPublisherFactory) async throws {
@@ -323,6 +324,9 @@ public actor SoloistEngine: PreparedPlaybackEngine {
             } catch {}
             await self?.socketLost(id)
         }
+        // A fresh connection must bootstrap discovery even if the initial push is missed.
+        do { try await query("get_auth_state") }
+        catch { await socketLost(id) }
     }
 
     private func ingest(_ frame: SoloistFrame, socketID id: UUID) async throws {

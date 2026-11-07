@@ -7,6 +7,19 @@ import BopifyPlayback
 
 @MainActor @Suite("Startup record")
 struct SignInRecordTests {
+    @Test func libraryAndListeningKeepTheWelcomeRecordSize() throws {
+        func renderedSize(_ step: StartupStep) throws -> CGSize {
+            let renderer = ImageRenderer(content: SignInRecordView(step: step, isVisible: false))
+            return try #require(renderer.nsImage?.size)
+        }
+        let welcome = try renderedSize(.signIn(.idle))
+        #expect(welcome.width >= 200)
+        for step: StartupStep in [.library(.idle), .library(.authorizing), .library(.connected), .library(.refused),
+                                  .playback(.entry), .playback(.working), .playback(.failure), .completion] {
+            #expect(try renderedSize(step) == welcome, "The hero must keep its visual presence throughout setup")
+        }
+    }
+
     @Test func armedReadySetupCannotShowPlayerBeforeCompletionStarts() {
         let environment = makePreviewEnvironment(.nothingPlaying)
         defer { environment.onboarding.cancel(); environment.player?.stop() }

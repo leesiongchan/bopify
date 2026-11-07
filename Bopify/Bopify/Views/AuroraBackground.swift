@@ -32,6 +32,7 @@ struct AuroraBackground: View {
         if !reduceTransparency && contrast != .increased {
             TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isAnimating || reduceMotion)) { context in
                 let time = context.date.timeIntervalSinceReferenceDate
+                let breath = reduceMotion || !isAnimating ? 0 : (1 - cos(.pi * time / 4)) / 2
                 GeometryReader { geometry in
                     // The field overhangs the surface so the blur never reveals an edge.
                     let field = CGSize(width: geometry.size.width * 1.6, height: geometry.size.height * 1.6)
@@ -45,6 +46,8 @@ struct AuroraBackground: View {
                     .blur(radius: 50)
                     .offset(x: -geometry.size.width * 0.3, y: -geometry.size.height * 0.3)
                 }
+                .scaleEffect(1 + 0.035 * breath)
+                .opacity(0.90 + 0.10 * breath)
             }
             .saturation(isDimmed ? 0.3 : 1)
             .opacity(isDimmed ? 0.45 : 0.85)
