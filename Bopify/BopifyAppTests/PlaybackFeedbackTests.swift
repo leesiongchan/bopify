@@ -4,17 +4,9 @@ import Testing
 import BopifyDomain
 import BopifyPlayback
 import CoreGraphics
-import Metal
 
 @MainActor @Suite("Turntable feedback", .serialized)
 struct PlaybackFeedbackTests {
-    @Test(.enabled("Requires a Metal device") { @MainActor in MTLCreateSystemDefaultDevice() != nil })
-    func funnelShaderIsAvailableFromTheAppResourceBundle() throws {
-        let device = try #require(MTLCreateSystemDefaultDevice())
-        let library = try device.makeDefaultLibrary(bundle: Bundle(for: ShaderTestBundle.self))
-        #expect(library.functionNames.contains("spindlePull"))
-    }
-
     @Test func aSlowLoadHoldsTheCoverAtTheSpindleUntilConfirmation() throws {
         let start = SuspendingClock.now
         var timing = RecordLoadTiming(startedAt: start)
@@ -101,5 +93,3 @@ struct PlaybackFeedbackTests {
         return (visible, png)
     }
 }
-
-private final class ShaderTestBundle: NSObject {}

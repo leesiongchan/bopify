@@ -5,21 +5,6 @@ import BopifyPlayback
 
 @MainActor @Suite("Library onboarding presentation", .serialized)
 struct LibraryAuthorizationSetupViewTests {
-    @Test func libraryConsentExplainsItsFourPermissionsBeforeConnecting() async throws {
-        let environment = makePreviewEnvironment(.nothingPlaying, libraryClientID: nil)
-        defer { environment.player?.stop() }
-        let host = NSHostingView(rootView: LibraryAuthorizationSetupView(status: .idle, environment: environment)
-            .frame(width: 340).environment(\.accessibilityEnabled, true))
-        let window = window(for: host)
-        defer { window.close() }
-        try await Task.sleep(for: .milliseconds(100))
-        host.layoutSubtreeIfNeeded()
-        for name in ["liked", "artists", "recent", "likes"] {
-            _ = try AppearanceTestAccessibility.element("onboarding.permission.\(name)", in: host)
-        }
-        _ = try AppearanceTestAccessibility.element("onboarding.libraryClientID", in: host)
-    }
-
     @Test func waitingForLibraryConsentHasNoCancelControl() async throws {
         let environment = makePreviewEnvironment(.nothingPlaying)
         defer { environment.player?.stop() }

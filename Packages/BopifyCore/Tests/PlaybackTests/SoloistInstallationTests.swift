@@ -117,7 +117,7 @@ private actor InstallSource {
     func resumeDownloads() { hold = false; release?.resume(); release = nil }
     func publish(at date: Date) { version = "1.4.0"; built = date }
     func failDownloads() { fail = true }
-    func download(to destination: URL, progress: @Sendable (SoloistInstallProgress) -> Void) async throws {
+    func download(to destination: URL) async throws {
         requests += 1
         if hold {
             await withCheckedContinuation { release = $0; suspended = true }
@@ -208,7 +208,7 @@ private func installFixture() throws -> (URL, SoloistInstaller, InstallClock, In
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
     let clock = InstallClock(), source = InstallSource()
     let installer = SoloistInstaller(directory: directory.appendingPathComponent("managed"), now: { clock.now },
-        download: { path, progress in try await source.download(to: path, progress: progress) },
+        download: { path, _ in try await source.download(to: path) },
         validate: { path, at in
             let parts = try String(contentsOf: path, encoding: .utf8).split(separator: "|")
             guard parts.count == 2 else { throw SoloistInstallationError.invalidExecutable }

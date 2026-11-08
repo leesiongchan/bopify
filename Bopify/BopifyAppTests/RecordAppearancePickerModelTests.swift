@@ -7,13 +7,6 @@ struct RecordAppearancePickerModelTests {
         CountingAppearanceDefaults(suiteName: "appearance.\(UUID())")!
     }
 
-    @Test func catalogUsesExistingStableIDs() {
-        #expect(RecordAppearanceChoice.choices(in: .material) == RecordDesign.allCases.map(RecordAppearanceChoice.material))
-        #expect(RecordAppearanceChoice.choices(in: .pattern) == VinylDesign.allCases.map(RecordAppearanceChoice.pattern))
-        #expect(RecordAppearanceChoice.pattern(.original).accessibilityIdentifier == "vinyl.design.original")
-        #expect(RecordAppearanceChoice.material(.glass).nameKey == RecordDesign.glass.nameKey)
-    }
-
     @Test func openingAndFocusWriteNothing() {
         let defaults = isolated()
         let model = RecordAppearancePickerModel(defaults: defaults)

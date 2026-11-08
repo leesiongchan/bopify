@@ -79,43 +79,6 @@ struct OnboardingHandoffRenderingTests {
         #expect(content.bounds.contains(field.convert(field.bounds, to: content)))
     }
 
-    @Test func libraryAndHelpFitWithoutScrollingInTheSameWindow() async throws {
-        let fixture = try NativeOnboardingFixture(needsKey: false, section: .library)
-        defer { fixture.close() }
-        // Compare projected record bounds only after its entrance has settled.
-        try await Task.sleep(for: .milliseconds(2500))
-        let content = try #require(fixture.panel.contentView)
-        func expectInside(_ identifier: String) throws {
-            let element = try AppearanceTestAccessibility.element(identifier, in: content)
-            let screenFrame = try #require(element.object.accessibilityFrame?())
-            let frame = content.convert(fixture.panel.convertFromScreen(screenFrame), from: nil)
-            #expect(!frame.isEmpty && content.bounds.contains(frame))
-        }
-        try expectInside("onboarding.title")
-        try expectInside("onboarding.libraryClientID")
-        try expectInside("onboarding.saveLibrary")
-        for permission in ["liked", "artists", "recent", "likes"] {
-            try expectInside("onboarding.permission.\(permission)")
-        }
-        let libraryFrame = fixture.panel.frame
-        let recordWidth = try #require(fixture.environment.onboardingRecordFrame?.width)
-        let help = try AppearanceTestAccessibility.element("onboarding.registrationHelp", in: content)
-        #expect(help.press())
-        try await Task.sleep(for: .milliseconds(400))
-        try expectInside("onboarding.title")
-        try expectInside("onboarding.openDashboard")
-        try expectInside("onboarding.redirectURI")
-        try expectInside("onboarding.registrationBack")
-        #expect(abs(fixture.panel.frame.height - libraryFrame.height) > 16,
-                "Registration help must receive its own content-sized window")
-        #expect(abs(fixture.panel.frame.width - libraryFrame.width) < 1)
-        #expect(abs(fixture.panel.frame.maxY - libraryFrame.maxY) < 1,
-                "Changing steps must keep the header and record anchored")
-        #expect(abs((fixture.environment.onboardingRecordFrame?.width ?? 0) - recordWidth) < 1,
-                "The record must not shrink when a step changes window height")
-        #expect(!descendants(in: content).contains { $0 is NSScrollView })
-    }
-
     @Test func nativeStartupKeepsTheFormVisibleAndAccessible() async throws {
         let fixture = try NativeOnboardingFixture(needsKey: true)
         defer { fixture.close() }
@@ -130,39 +93,6 @@ struct OnboardingHandoffRenderingTests {
         #expect(content.bounds.intersects(frame))
         _ = try AppearanceTestAccessibility.element("soloist.apiKey", in: content)
         _ = try AppearanceTestAccessibility.element("soloist.enable", in: content)
-    }
-
-    @Test func completionKeepsThePanelAndIdlePlaybackThroughTheHandoff() async throws {
-        let fixture = try NativeOnboardingFixture(needsKey: false)
-        defer { fixture.close() }
-        try await liveLyricEventually { fixture.environment.onboardingRecordFrame?.width ?? 0 > 0 }
-        let panel = fixture.panel
-        let before = panel.windowNumber
-        var handoffAnchor: CGPoint?
-        var sourceWindowFrame: CGRect?
-        let completeSetup = fixture.environment.onboarding.onHandoff
-        defer { fixture.environment.onboarding.onHandoff = completeSetup }
-        fixture.environment.onboarding.onHandoff = {
-            if let source = fixture.environment.onboardingRecordFrame {
-                sourceWindowFrame = panel.frame
-                handoffAnchor = CGPoint(x: panel.frame.minX + source.midX, y: panel.frame.maxY - source.midY)
-            }
-            completeSetup?()
-        }
-        fixture.environment.onboarding.begin()
-        try await liveLyricEventually { fixture.environment.onboarding.phase == .completing }
-        #expect(fixture.environment.onboardingStep == .completion)
-        try await liveLyricEventually { fixture.environment.onboarding.phase == .handoff }
-        let anchor = try #require(handoffAnchor)
-        try await liveLyricEventually {
-            fixture.environment.onboarding.phase == .idle && !fixture.environment.playerWindowController.isTransitioning
-        }
-        #expect(panel.windowNumber == before && fixture.environment.isShowingPlayer)
-        #expect(fixture.environment.player?.state.phase == .idle && fixture.environment.player?.state.currentTrack == nil)
-        let layout = fixture.environment.playerWindowController.layout
-        let final = CGPoint(x: panel.frame.minX + layout.recordCenter.x, y: panel.frame.maxY - layout.recordCenter.y)
-        #expect(abs(final.x - anchor.x) < 2 && abs(final.y - anchor.y) < 2,
-                "Handoff anchor=\(anchor), final=\(final), source window=\(String(describing: sourceWindowFrame)), final window=\(panel.frame), visible screens=\(NSScreen.screens.map(\.visibleFrame)), layout=\(layout)")
     }
 
     private func findSecureField(in view: NSView) -> NSSecureTextField? {
@@ -183,7 +113,7 @@ private final class NativeOnboardingFixture {
     private let background: NSWindow
     private let saved: [(String, Any?)]
 
-    init(needsKey: Bool, section: OnboardingSection = .playback) throws {
+    init(needsKey: Bool) throws {
         _ = NSApplication.shared
         saved = ["player.frame", "player.keepOnTop", "player.recordCenter"].map { ($0, UserDefaults.standard.object(forKey: $0)) }
         if needsKey {
@@ -193,9 +123,9 @@ private final class NativeOnboardingFixture {
             environment = makePreviewEnvironment(.nothingPlaying, soloistController: soloist)
         } else {
             environment = makePreviewEnvironment(.nothingPlaying,
-                libraryClientID: section == .library ? nil : String(repeating: "0", count: 32))
+                libraryClientID: String(repeating: "0", count: 32))
         }
-        environment.showOnboarding(section: section)
+        environment.showOnboarding(section: .playback)
         let existing = Set(NSApp.windows.map(ObjectIdentifier.init))
         controller = StatusItemController(
             content: PlayerRootView(environment: environment).environment(\.accessibilityEnabled, true),

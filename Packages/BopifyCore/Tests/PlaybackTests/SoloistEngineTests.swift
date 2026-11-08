@@ -174,9 +174,7 @@ private final class SoloistHTTPFixture: URLProtocol, @unchecked Sendable {
 
 private actor SoloistEventFixture {
     var events: [PlaybackEvent] = []
-    var statuses: [SoloistEngineStatus] = []
     func append(_ event: PlaybackEvent) { events.append(event) }
-    func report(_ status: SoloistEngineStatus) { statuses.append(status) }
 }
 
 private actor SoloistPublicationFixture: SoloistPairingPublishing {

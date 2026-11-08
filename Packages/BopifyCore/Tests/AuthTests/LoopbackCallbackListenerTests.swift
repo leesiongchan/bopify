@@ -26,8 +26,6 @@ struct LoopbackCallbackListenerTests {
         let listener = LoopbackCallbackListener(expectedState: "expected", expectedPath: "/callback")
         let port = try await listener.start()
 
-        // `async let` bindings can't be captured by a closure, so the concurrent
-        // wait uses a `Task` instead -- `#expect(throws:)` can capture `.value`.
         let result = Task { try await listener.waitForCallback() }
         _ = try? await URLSession.shared.data(from: URL(string: "http://127.0.0.1:\(port)/callback?code=abc&state=attacker")!)
         try await get(URL(string: "http://127.0.0.1:\(port)/callback?code=VALID&state=expected")!)

@@ -266,6 +266,8 @@ struct AppEnvironmentAuthorizationTests {
         await fixture.environment.signIn()
         try await eventually { fixture.environment.authState == .signedIn }
         #expect(fixture.browser.count == 1 && fixture.libraryBrowser.count == 0)
+        #expect(fixture.libraryConsents.count == 1)
+        #expect(fixture.libraryStore.load()?.grantedScopes == LibraryAuthorization.initialConsentScopes)
 
         await fixture.environment.signOut()
         #expect(fixture.environment.authState == .signedOut)
@@ -275,17 +277,6 @@ struct AppEnvironmentAuthorizationTests {
         try await eventually { fixture.environment.authState == .signedIn }
         #expect(fixture.browser.count == 2)
         #expect(fixture.libraryBrowser.count == 0, "Both first and returning consent continue in the sign-in tab")
-        #expect(fixture.libraryStore.load()?.grantedScopes == LibraryAuthorization.initialConsentScopes)
-        await fixture.stop()
-    }
-
-    @Test func firstUserWithKnownClientApprovesBothInOneBrowserVisit() async throws {
-        let fixture = AuthorizationFixture(libraryScopes: nil, startSignedOut: true, completesSignIn: true)
-        await fixture.environment.signIn()
-        try await eventually { fixture.environment.authState == .signedIn }
-        #expect(fixture.browser.count == 1)
-        #expect(fixture.libraryBrowser.count == 0)
-        #expect(fixture.libraryConsents.count == 1)
         #expect(fixture.libraryStore.load()?.grantedScopes == LibraryAuthorization.initialConsentScopes)
         await fixture.stop()
     }

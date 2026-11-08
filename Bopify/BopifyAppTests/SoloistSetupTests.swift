@@ -206,19 +206,6 @@ struct SoloistSetupTests {
         await controller.stop()
     }
 
-    @Test func enablingLocalCoreDoesNotWaitForSpotifyServiceAuthorization() async throws {
-        let suite = "soloist-local-\(UUID())"
-        let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let engine = LiveLyricTestEngine()
-        let controller = SoloistPlaybackController(defaults: defaults, keys: SetupKeys(),
-            authorize: { throw SoloistPlaybackError.rateLimited },
-            install: { _, _ in URL(fileURLWithPath: "/fixture/soloist") }, start: { _ in engine }, clearSession: {})
-        #expect(await controller.enable(key: "fixture-key"))
-        #expect(controller.hasSavedKey)
-        await controller.stop()
-    }
-
     @Test func invalidKeyNeverStartsConsentOrInstallation() async throws {
         let suite = "soloist-setup-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!

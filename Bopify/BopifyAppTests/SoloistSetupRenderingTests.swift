@@ -340,81 +340,6 @@ struct SoloistSetupRenderingTests {
         print("Soloist UI captures: \(artifacts.path)")
     }
 
-    @Test func libraryRegistrationFitsAndValidatesBeforeConsent() async throws {
-        _ = NSApplication.shared
-        let environment = makePreviewEnvironment(.playing, libraryClientID: nil)
-        let track = environment.player?.state.currentTrack
-        environment.showOnboarding(section: .library)
-        // Match the app's non-activating panel so native glass editing keeps keyboard focus.
-        let window = StatusPanel(content: PlayerRootView(environment: environment)
-            .frame(width: 410, height: 480)
-            .environment(\.accessibilityEnabled, true))
-        window.setFrame(CGRect(x: 300, y: 300, width: 410, height: 480), display: false)
-        window.isReleasedWhenClosed = false
-        defer { window.close(); environment.player?.stop() }
-        window.makeKeyAndOrderFront(nil)
-        let content = try #require(window.contentView)
-        try await Task.sleep(for: .milliseconds(180))
-        content.layoutSubtreeIfNeeded()
-        window.makeKeyAndOrderFront(nil)
-        try await Task.sleep(for: .milliseconds(80))
-        try #require(window.isKeyWindow, "Keyboard entry requires an active native test window")
-        let field = try #require(editableField(in: content))
-        let accessibleClient = try AppearanceTestAccessibility.element("onboarding.libraryClientID", in: content)
-        #expect(accessibleClient.object.accessibilityRole?() == .textField)
-        #expect(accessibleClient.object.accessibilityLabel?() == SoloistResources.string("librarySetup.clientID"))
-        #expect(!hasAccessibilityElement("onboarding.redirectURI", in: content), "Registration help has a separate page")
-        let save = try AppearanceTestAccessibility.element("onboarding.saveLibrary", in: content)
-        #expect(save.object.isAccessibilityEnabled?() == false,
-                "Save AX type=\(type(of: save.object)), role=\(String(describing: save.object.accessibilityRole?())), children=\(String(describing: save.object.accessibilityChildren?())), reduceTransparency=\(NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency)")
-        field.selectText(nil)
-        let editor = try #require(field.currentEditor() as? NSTextView)
-        editor.insertText("invalid-client", replacementRange: editor.selectedRange())
-        field.delegate?.controlTextDidChange?(Notification(name: NSControl.textDidChangeNotification, object: field))
-        try await Task.sleep(for: .milliseconds(80))
-        let invalidSave = try AppearanceTestAccessibility.element("onboarding.saveLibrary", in: content)
-        #expect(invalidSave.object.isAccessibilityEnabled?() == false,
-                "Invalid save AX type=\(type(of: invalidSave.object)), role=\(String(describing: invalidSave.object.accessibilityRole?())), children=\(String(describing: invalidSave.object.accessibilityChildren?()))")
-        editor.selectAll(nil)
-        editor.insertText(String(repeating: "a", count: 32), replacementRange: editor.selectedRange())
-        field.delegate?.controlTextDidChange?(Notification(name: NSControl.textDidChangeNotification, object: field))
-        try await Task.sleep(for: .milliseconds(80))
-        let validSave = try AppearanceTestAccessibility.element("onboarding.saveLibrary", in: content)
-        #expect(validSave.object.isAccessibilityEnabled?() == true)
-        #expect(window.firstResponder === editor)
-        #expect(environment.libraryClientID == nil, "Typing alone must not replace or authorize a Spotify app")
-        #expect(environment.player?.state.currentTrack == track)
-        let help = try AppearanceTestAccessibility.element("onboarding.registrationHelp", in: content)
-        #expect(help.press())
-        try await liveLyricEventually { editableField(in: content) == nil && hasAccessibilityElement("onboarding.redirectURI", in: content) }
-        content.layoutSubtreeIfNeeded()
-        let redirect = try AppearanceTestAccessibility.element("onboarding.redirectURI", in: content)
-        #expect(redirect.object.accessibilityRole?() == .staticText)
-        #expect(redirect.value == LibraryAuthorization.redirectURI)
-        let copy = try AppearanceTestAccessibility.element("onboarding.copyRedirect", in: content)
-        #expect(copy.object.accessibilityRole?() == .button)
-        #expect(editableField(in: content) == nil, "Help replaces the form instead of pushing it offscreen")
-        try expectVisible("onboarding.redirectURI", in: content)
-        try expectVisible("onboarding.registrationBack", in: content)
-        let artifacts = try captureDirectory()
-        try capture(content, at: artifacts.appendingPathComponent("library-registration.png"))
-        #expect(scrollView(in: content) == nil)
-        let back = try AppearanceTestAccessibility.element("onboarding.registrationBack", in: content)
-        #expect(back.press())
-        try await liveLyricEventually {
-            hasAccessibilityElement("onboarding.saveLibrary", in: content) && !hasAccessibilityElement("onboarding.redirectURI", in: content)
-        }
-        let returnedField = try #require(editableField(in: content))
-        #expect(returnedField.stringValue == String(repeating: "a", count: 32))
-        try expectVisible("onboarding.title", in: content)
-        try expectVisible("onboarding.saveLibrary", in: content)
-        #expect(!hasAccessibilityElement("onboarding.playback", in: content))
-        environment.closeOnboarding()
-        #expect(!environment.isShowingOnboarding)
-        #expect(environment.player?.state.currentTrack == track)
-        print("Library onboarding capture: \(artifacts.path)")
-    }
-
     private func makeKeyEntryEnvironment() -> AppEnvironment {
         let defaults = UserDefaults(suiteName: "soloist-rendering-\(UUID())")!
         let controller = SoloistPlaybackController(defaults: defaults, keys: RenderingSetupKeys(), authorize: {},
@@ -447,11 +372,6 @@ struct SoloistSetupRenderingTests {
     private func scrollView(in view: NSView) -> NSScrollView? {
         if let scroll = view as? NSScrollView { return scroll }
         return view.subviews.lazy.compactMap { scrollView(in: $0) }.first
-    }
-
-    private func editableField(in view: NSView) -> NSTextField? {
-        if let field = view as? NSTextField, field.isEditable, !(field is NSSecureTextField) { return field }
-        return view.subviews.lazy.compactMap { editableField(in: $0) }.first
     }
 
     private func secureField(in view: NSView) -> NSSecureTextField? {

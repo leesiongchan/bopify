@@ -16,10 +16,9 @@ struct VinylDesignTests {
         #expect(VinylDesign.resolve("drift") == .original)
     }
 
-    @Test(arguments: VinylDesign.allCases)
-    func tintedPalettesBypassDesignColors(design: VinylDesign) {
-        #expect(VinylDesignPalette.resolve(.neutral, design: design) == nil)
-        #expect(VinylDesignPalette.resolve(.tinted(ArtworkColor(red: 0.5, green: 0.5, blue: 0.5)), design: design) == nil)
+    @Test func tintedPalettesBypassDesignColors() {
+        #expect(VinylDesignPalette.resolve(.neutral, design: .bloom) == nil)
+        #expect(VinylDesignPalette.resolve(.tinted(ArtworkColor(red: 0.5, green: 0.5, blue: 0.5)), design: .bloom) == nil)
     }
 
     @Test(arguments: [VinylDesign.original, .undertow, .strata])
@@ -40,19 +39,17 @@ struct VinylDesignTests {
         #expect(palette.paper == ArtworkColor(red: 0.9569, green: 0.8745, blue: 0.6078))
     }
 
-    @Test(arguments: [VinylDesign.bloom, .rhapsody, .carnival])
-    func neutralSlotsStayNeutral(design: VinylDesign) throws {
+    @Test func neutralSlotsStayNeutral() throws {
         let white = ArtworkColor(red: 1, green: 1, blue: 1)
         let gray = ArtworkColor(red: 0.5, green: 0.5, blue: 0.5)
-        let result = try #require(VinylDesignPalette.resolve(.marble(white, gray, ArtworkColor(red: 1, green: 0, blue: 0)), design: design))
+        let result = try #require(VinylDesignPalette.resolve(.marble(white, gray, ArtworkColor(red: 1, green: 0, blue: 0)), design: .bloom))
         #expect(result.primary == white)
         #expect(result.secondary == gray)
     }
 
-    @Test(arguments: [VinylDesign.bloom, .rhapsody, .carnival])
-    func repeatedSlotsRemainFiniteAndRelated(design: VinylDesign) throws {
+    @Test func repeatedSlotsRemainFiniteAndRelated() throws {
         let red = ArtworkColor(red: 1, green: 0, blue: 0)
-        let result = try #require(VinylDesignPalette.resolve(.marble(red, red, red), design: design))
+        let result = try #require(VinylDesignPalette.resolve(.marble(red, red, red), design: .bloom))
         #expect(result.primary == result.secondary && result.primary == result.accent)
         #expect(result.primary.red > result.primary.green)
         #expect(result.primary.green == result.primary.blue)

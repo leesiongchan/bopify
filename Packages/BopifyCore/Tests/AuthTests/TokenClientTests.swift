@@ -64,8 +64,6 @@ struct TokenClientTests {
             (200, Data(#"{"access_token":"AT2","token_type":"Bearer","expires_in":3600,"scope":"streaming"}"#.utf8))
         }
         let tokens = try await makeClient().refresh(refreshToken: "OLD_RT")
-        // Spotify: "When a refresh token is not returned, continue using
-        // the existing token."
         #expect(tokens.refreshToken == "OLD_RT")
         #expect(tokens.accessToken == "AT2")
     }

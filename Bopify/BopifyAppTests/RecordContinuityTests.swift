@@ -78,7 +78,7 @@ struct RecordContinuityTests {
             return true
         }
         for phase in [-Double.pi + 0.01, Double.pi - 0.01, 9 * Double.pi - 0.01] {
-            for diameter in [182.0, 150.0, 118.0, 182.0] {
+            for diameter in [182.0, 150.0, 118.0] {
                 let host = NSHostingView(rootView: VinylRecordView(image: Image(nsImage: image), occurrenceID: "arrival",
                     direction: .fade, diameter: diameter, isMoving: false, isVisible: true, rotation: RecordRotation(),
                     artworkRotationOffset: -phase, rotationOverride: phase + 0.25, labelRatio: 76.0 / 182)
