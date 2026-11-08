@@ -48,7 +48,7 @@ jobs:
     runs-on: xcode-27
     timeout-minutes: 90
     env:
-      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
       MACOSX_DEPLOYMENT_TARGET: '26.0'
       XCODE_XCCONFIG_FILE: ${{ github.workspace }}/.github/ci.xcconfig
     steps:
