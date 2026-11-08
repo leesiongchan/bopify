@@ -28,14 +28,10 @@ let package = Package(
             name: "CBopifyCore",
             dependencies: ["BopifyCoreFFI"],
             linkerSettings: [
-                .linkedFramework("AudioToolbox"),
-                .linkedFramework("CoreAudio"),
                 .linkedFramework("IOKit"),
                 .linkedFramework("CoreFoundation"),
-                .linkedFramework("Foundation"),
                 .linkedFramework("SystemConfiguration"),
                 .linkedFramework("Security"),
-                .linkedLibrary("objc"),
                 .linkedLibrary("iconv"),
             ]
         ),
@@ -45,6 +41,6 @@ let package = Package(
         .testTarget(name: "LibraryTests", dependencies: ["BopifyLibrary"], swiftSettings: [.swiftLanguageMode(.v6)]),
         .testTarget(name: "DomainTests", dependencies: ["BopifyDomain"], swiftSettings: [.swiftLanguageMode(.v6)]),
         .testTarget(name: "AuthTests", dependencies: ["BopifyAuth"], swiftSettings: [.swiftLanguageMode(.v6)]),
-        .testTarget(name: "PlaybackTests", dependencies: ["BopifyPlayback", "CBopifyCore"], swiftSettings: [.swiftLanguageMode(.v6)]),
+        .testTarget(name: "PlaybackTests", dependencies: ["BopifyPlayback"], swiftSettings: [.swiftLanguageMode(.v6)]),
     ]
 )

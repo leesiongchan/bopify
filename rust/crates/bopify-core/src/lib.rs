@@ -1,7 +1,6 @@
-//! C-ABI wrapper around librespot's Spirc for the Bopify macOS app.
+//! C ABI for authenticated Spotify metadata services used by the Bopify macOS app.
 
 mod artist;
-mod engine;
 mod error;
 mod event;
 mod ffi;
@@ -9,8 +8,6 @@ mod ffi;
 // Imports C symbols without exporting ABI types.
 mod logging;
 mod lyrics;
-mod queue;
+mod metadata;
 mod radio;
-mod recovery;
-mod remote;
-mod terminal;
+mod services;

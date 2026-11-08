@@ -1,19 +1,9 @@
 use librespot_metadata::audio::{AudioItem, UniqueFields};
-use librespot_playback::player::{PlayerEvent, RemoteState, StartupOutcome};
 use serde::Serialize;
 use std::time::Duration;
 
-/// How long radio, lyrics and artist lookups may take before failing their reply.
-/// Swift's `EventBridge.replyWatchdog` must stay longer, so it only catches lost replies.
+/// Request deadlines stay shorter than the Swift reply watchdog.
 pub(crate) const REPLY_DEADLINE: Duration = Duration::from_secs(30);
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WireQueueEntry {
-    pub id: String,
-    pub uri: Option<String>,
-    pub raw_next_index: Option<u32>,
-}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,18 +13,6 @@ pub struct WireTrack {
     pub artists: Vec<String>,
     pub album_title: Option<String>,
     pub artwork_url: Option<String>,
-    pub duration_ms: u32,
-}
-
-/// Another device's playback, mirrored while Bopify is inactive.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WireRemote {
-    pub device_name: String,
-    pub track_uri: String,
-    pub track: Option<WireTrack>,
-    pub is_playing: bool,
-    pub position_ms: u32,
     pub duration_ms: u32,
 }
 
@@ -48,88 +26,10 @@ pub enum RadioFailure {
     Network,
 }
 
-/// The JSON contract between Rust and Swift. Changing a case or a field
-/// name here is a breaking change: `BopifyDomain.PlaybackEvent` must
-/// change in the same commit.
+/// Metadata reply JSON consumed by the Swift event bridge.
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum WireEvent {
-    RecoveryIdentity {
-        identity: crate::recovery::RecoveryIdentity,
-    },
-    ConnectionReady {
-        outcome: &'static str,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        identity: Option<crate::recovery::RecoveryIdentity>,
-    },
-    SessionLost {
-        reason: crate::terminal::SessionLossReason,
-    },
-    QueueChanged {
-        generation: u64,
-        previous: Vec<WireQueueEntry>,
-        current: Option<WireQueueEntry>,
-        next: Vec<WireQueueEntry>,
-    },
-    QueueMetadata {
-        generation: u64,
-        #[serde(rename = "entryID")]
-        entry_id: String,
-        track: Option<WireTrack>,
-    },
-    ShuffleChanged {
-        enabled: bool,
-    },
-    RepeatChanged {
-        mode: &'static str,
-    },
-    CommandRejected {
-        reason: &'static str,
-    },
-    #[serde(rename_all = "camelCase")]
-    TrackChanged {
-        track_uri: String,
-        title: String,
-        artists: Vec<String>,
-        album_title: Option<String>,
-        artwork_url: Option<String>,
-        duration_ms: u32,
-    },
-    #[serde(rename_all = "camelCase")]
-    Playing {
-        position_ms: u32,
-    },
-    #[serde(rename_all = "camelCase")]
-    Paused {
-        position_ms: u32,
-    },
-    #[serde(rename_all = "camelCase")]
-    Seeked {
-        position_ms: u32,
-    },
-    #[serde(rename_all = "camelCase")]
-    PositionCorrection {
-        position_ms: u32,
-    },
-    #[serde(rename_all = "camelCase")]
-    VolumeChanged {
-        volume: u16,
-    },
-    Loading,
-    EndOfTrack,
-    #[serde(rename_all = "camelCase")]
-    ActiveDeviceChanged {
-        is_active: bool,
-    },
-    #[serde(rename_all = "camelCase")]
-    StartupResolved {
-        outcome: &'static str,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        device_name: Option<String>,
-    },
-    RemotePlayback {
-        remote: Option<WireRemote>,
-    },
     /// A radio mix for the request with the same ID; Swift resolves the waiting caller, not the event stream.
     Radio {
         #[serde(rename = "requestID")]
@@ -176,152 +76,6 @@ pub enum WireEvent {
     },
 }
 
-/// Translates player events, explicitly dropping signals not used by Swift.
-pub fn translate(event: PlayerEvent) -> Option<WireEvent> {
-    match event {
-        PlayerEvent::RecoveryIdentity { identity } => Some(WireEvent::RecoveryIdentity {
-            identity: identity.into(),
-        }),
-        PlayerEvent::ConnectionReady { outcome } => {
-            use librespot_playback::player::ConnectionOutcome;
-            let (outcome, identity) = match outcome {
-                ConnectionOutcome::Local(identity) => ("local", Some(identity.into())),
-                ConnectionOutcome::Remote => ("remote", None),
-                ConnectionOutcome::Unavailable => ("unavailable", None),
-            };
-            log::info!("event: connection ready outcome={outcome}");
-            Some(WireEvent::ConnectionReady { outcome, identity })
-        }
-        PlayerEvent::TrackChanged { audio_item } => Some(track_changed(*audio_item)),
-        PlayerEvent::Playing { position_ms, .. } => Some(WireEvent::Playing { position_ms }),
-        PlayerEvent::Paused { position_ms, .. } => Some(WireEvent::Paused { position_ms }),
-        PlayerEvent::Seeked { position_ms, .. } => Some(WireEvent::Seeked { position_ms }),
-        PlayerEvent::PositionCorrection { position_ms, .. } => {
-            Some(WireEvent::PositionCorrection { position_ms })
-        }
-        PlayerEvent::Loading { .. } => Some(WireEvent::Loading),
-        PlayerEvent::EndOfTrack { .. } => Some(WireEvent::EndOfTrack),
-        PlayerEvent::VolumeChanged { volume } => Some(WireEvent::VolumeChanged { volume }),
-        // Connection cleanup must not erase resume intent as if a foreign device took over.
-        // Connection and user identifiers stay inside the native boundary.
-        PlayerEvent::SessionDisconnected {
-            connection_lost, ..
-        } => {
-            log::info!("event: session disconnected connection_lost={connection_lost}");
-            if connection_lost {
-                Some(WireEvent::SessionLost {
-                    reason: crate::terminal::SessionLossReason::SessionDisconnected,
-                })
-            } else {
-                Some(WireEvent::ActiveDeviceChanged { is_active: false })
-            }
-        }
-
-        // SessionConnected exposes a user identifier; transport events already convey activity.
-        PlayerEvent::SessionConnected { .. }
-        | PlayerEvent::SessionClientChanged { .. }
-        | PlayerEvent::PlayRequestIdChanged { .. }
-        | PlayerEvent::Stopped { .. }
-        | PlayerEvent::Preloading { .. }
-        | PlayerEvent::TimeToPreloadNextTrack { .. }
-        | PlayerEvent::Unavailable { .. }
-        | PlayerEvent::PositionChanged { .. } => None,
-        PlayerEvent::SetQueue {
-            generation,
-            current_track,
-            next_tracks,
-            prev_tracks,
-            ..
-        } => Some(WireEvent::QueueChanged {
-            generation,
-            previous: prev_tracks.into_iter().filter_map(queue_entry).collect(),
-            current: current_track.and_then(queue_entry),
-            next: next_tracks.into_iter().filter_map(queue_entry).collect(),
-        }),
-        PlayerEvent::StartupResolved { outcome } => Some(startup_resolved(outcome)),
-        PlayerEvent::RemotePlayback { remote } => Some(remote_playback(remote)),
-        PlayerEvent::ShuffleChanged { shuffle } => {
-            Some(WireEvent::ShuffleChanged { enabled: shuffle })
-        }
-        PlayerEvent::RepeatChanged { context, track } => Some(WireEvent::RepeatChanged {
-            mode: if track {
-                "track"
-            } else if context {
-                "context"
-            } else {
-                "off"
-            },
-        }),
-        PlayerEvent::AutoPlayChanged { .. } | PlayerEvent::FilterExplicitContentChanged { .. } => {
-            None
-        }
-    }
-}
-
-fn startup_resolved(outcome: StartupOutcome) -> WireEvent {
-    let (outcome, device_name) = match outcome {
-        StartupOutcome::Restored => ("restored", None),
-        StartupOutcome::LikedSongs => ("likedSongs", None),
-        StartupOutcome::Remote { device_name } => ("remote", Some(device_name)),
-        StartupOutcome::Nothing => ("nothing", None),
-    };
-    // The outcome only: a device name is whatever the user called their phone.
-    log::info!("event: startup resolved outcome={outcome}");
-    WireEvent::StartupResolved {
-        outcome,
-        device_name,
-    }
-}
-
-fn remote_playback(remote: Option<RemoteState>) -> WireEvent {
-    WireEvent::RemotePlayback {
-        remote: remote.map(|remote| WireRemote {
-            device_name: remote.device_name,
-            track_uri: remote.track_uri,
-            track: None,
-            is_playing: remote.is_playing,
-            position_ms: remote.position_ms,
-            duration_ms: remote.duration_ms,
-        }),
-    }
-}
-
-fn queue_entry(track: librespot_playback::player::QueueTrack) -> Option<WireQueueEntry> {
-    use librespot_core::SpotifyUri;
-    if track.uid.starts_with("delimiter") {
-        return None;
-    }
-    let playable = track.provider != "unavailable"
-        && matches!(
-            SpotifyUri::from_uri(&track.uri),
-            Ok(uri @ (SpotifyUri::Track { .. } | SpotifyUri::Episode { .. })) if uri.to_uri() == track.uri
-        );
-    Some(WireQueueEntry {
-        id: track.id.to_string(),
-        uri: playable.then_some(track.uri),
-        raw_next_index: if playable { track.raw_next_index } else { None },
-    })
-}
-
-fn track_changed(item: AudioItem) -> WireEvent {
-    let WireTrack {
-        track_uri,
-        title,
-        artists,
-        album_title,
-        artwork_url,
-        duration_ms,
-    } = track_metadata(item);
-    WireEvent::TrackChanged {
-        track_uri,
-        title,
-        artists,
-        album_title,
-        artwork_url,
-        duration_ms,
-    }
-}
-
 pub(crate) fn track_metadata(item: AudioItem) -> WireTrack {
     let (artists, album_title) = match item.unique_fields {
         UniqueFields::Track { artists, album, .. } => {
@@ -349,13 +103,6 @@ pub(crate) fn track_metadata(item: AudioItem) -> WireTrack {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn playing_serialises_with_a_type_tag() {
-        let json = serde_json::to_string(&WireEvent::Playing { position_ms: 1000 }).unwrap();
-        assert_eq!(json, r#"{"type":"playing","positionMs":1000}"#);
-    }
-
     use std::borrow::Cow;
 
     use librespot_core::SpotifyUri;
@@ -413,7 +160,7 @@ mod tests {
     }
 
     #[test]
-    fn track_changed_translates_and_serialises_metadata() {
+    fn track_metadata_preserves_the_wire_shape() {
         let item = audio_item(
             vec![cover(
                 "https://i.scdn.co/image/large",
@@ -422,14 +169,11 @@ mod tests {
             )],
             one_track("Harry Styles"),
         );
-        let wire = translate(PlayerEvent::TrackChanged {
-            audio_item: Box::new(item),
-        })
-        .unwrap();
+        let wire = track_metadata(item);
         assert_eq!(
             serde_json::to_value(wire).unwrap(),
             serde_json::json!({
-                "type": "trackChanged", "trackUri": "spotify:track:5Ohxk2dO5COHF1krpoPigN",
+                "trackUri": "spotify:track:5Ohxk2dO5COHF1krpoPigN",
                 "title": "Sign of the Times", "artists": ["Harry Styles"],
                 "albumTitle": "Harry Styles", "artworkUrl": "https://i.scdn.co/image/large",
                 "durationMs": 340706
@@ -447,219 +191,11 @@ mod tests {
             ],
             one_track("Harry Styles"),
         );
-        let wire = translate(PlayerEvent::TrackChanged {
-            audio_item: Box::new(item),
-        })
-        .unwrap();
-        let WireEvent::TrackChanged { artwork_url, .. } = wire else {
-            panic!("expected TrackChanged")
-        };
+        let wire = track_metadata(item);
+        let artwork_url = wire.artwork_url;
         assert_eq!(
             artwork_url.as_deref(),
             Some("https://i.scdn.co/image/large")
-        );
-    }
-
-    #[test]
-    fn session_disconnected_becomes_an_inactive_device() {
-        let wire = translate(PlayerEvent::SessionDisconnected {
-            connection_id: "conn".into(),
-            user_name: "31abcdef".into(),
-            connection_lost: false,
-        });
-        assert_eq!(
-            serde_json::to_string(&wire.unwrap()).unwrap(),
-            r#"{"type":"activeDeviceChanged","isActive":false}"#
-        );
-    }
-
-    #[test]
-    fn lost_connection_is_terminal_before_late_cleanup_events() {
-        use crate::terminal::{EngineReporter, SessionLossReason};
-        use std::sync::{Arc, Mutex};
-
-        let events = Arc::new(Mutex::new(Vec::new()));
-        let output = events.clone();
-        let reporter =
-            EngineReporter::new(Arc::new(move |event| output.lock().unwrap().push(event)));
-        reporter.event(
-            translate(PlayerEvent::SessionDisconnected {
-                connection_id: "conn".into(),
-                user_name: "31abcdef".into(),
-                connection_lost: true,
-            })
-            .unwrap(),
-        );
-        reporter.event(WireEvent::ActiveDeviceChanged { is_active: false });
-        reporter.event(WireEvent::Paused { position_ms: 250 });
-        reporter.session_lost(SessionLossReason::PlayerChannelClosed);
-        let events = events.lock().unwrap();
-        assert_eq!(events.len(), 1);
-        assert_eq!(
-            serde_json::to_value(&events[0]).unwrap(),
-            serde_json::json!({"type": "sessionLost", "reason": "sessionDisconnected"})
-        );
-    }
-
-    #[test]
-    fn session_connected_is_dropped_so_the_user_id_never_crosses() {
-        let wire = translate(PlayerEvent::SessionConnected {
-            connection_id: "conn".into(),
-            user_name: "31abcdef".into(),
-        });
-        assert!(wire.is_none());
-    }
-
-    #[test]
-    fn queue_snapshot_preserves_occurrences_and_filters_unplayable_entries() {
-        use librespot_playback::player::QueueTrack;
-        let valid = "spotify:track:6rqhFgbbKwnb9MLmUQDhG6";
-        let queued = |id, uri: &str, provider: &str, uid: &str, index| QueueTrack {
-            id,
-            uri: uri.into(),
-            provider: provider.into(),
-            uid: uid.into(),
-            raw_next_index: Some(index),
-        };
-        let event = translate(PlayerEvent::SetQueue {
-            generation: 12,
-            context_uri: String::new(),
-            prev_tracks: vec![],
-            current_track: None,
-            next_tracks: vec![
-                queued(1, valid, "context", "a", 0),
-                queued(2, valid, "context", "b", 1),
-                queued(3, valid, "context", "delimiter-start", 2),
-                queued(4, valid, "unavailable", "d", 3),
-                queued(5, "spotify:album:6rqhFgbbKwnb9MLmUQDhG6", "context", "e", 4),
-                queued(
-                    6,
-                    "spotify:track:6rqhFgbbKwnb9MLmUQDhG6:extra",
-                    "context",
-                    "f",
-                    5,
-                ),
-            ],
-        })
-        .unwrap();
-        assert_eq!(
-            serde_json::to_value(event).unwrap(),
-            serde_json::json!({
-                "type": "queueChanged", "generation": 12, "previous": [], "current": null,
-                "next": [
-                    {"id": "1", "uri": valid, "rawNextIndex": 0},
-                    {"id": "2", "uri": valid, "rawNextIndex": 1},
-                    {"id": "4", "uri": null, "rawNextIndex": null},
-                    {"id": "5", "uri": null, "rawNextIndex": null},
-                    {"id": "6", "uri": null, "rawNextIndex": null}
-                ]
-            })
-        );
-    }
-
-    #[test]
-    fn recovery_and_readiness_events_preserve_identity_and_omit_absent_identity() {
-        use librespot_playback::player::{ConnectionOutcome, RecoveryIdentity};
-        let identity = RecoveryIdentity {
-            track_uri: "spotify:track:6rqhFgbbKwnb9MLmUQDhG6".into(),
-            track_uid: Some("occurrence".into()),
-            context_uri: None,
-        };
-        let expected = serde_json::json!({
-            "trackUri": "spotify:track:6rqhFgbbKwnb9MLmUQDhG6",
-            "trackUid": "occurrence", "contextUri": null
-        });
-        let event = translate(PlayerEvent::RecoveryIdentity {
-            identity: identity.clone(),
-        })
-        .unwrap();
-        assert_eq!(
-            serde_json::to_value(event).unwrap(),
-            serde_json::json!({
-                "type": "recoveryIdentity", "identity": expected
-            })
-        );
-        for (outcome, expected) in [
-            (
-                ConnectionOutcome::Local(identity),
-                serde_json::json!({
-                    "type": "connectionReady", "outcome": "local", "identity": expected
-                }),
-            ),
-            (
-                ConnectionOutcome::Remote,
-                serde_json::json!({"type": "connectionReady", "outcome": "remote"}),
-            ),
-            (
-                ConnectionOutcome::Unavailable,
-                serde_json::json!({"type": "connectionReady", "outcome": "unavailable"}),
-            ),
-        ] {
-            let event = translate(PlayerEvent::ConnectionReady { outcome }).unwrap();
-            assert_eq!(serde_json::to_value(event).unwrap(), expected);
-        }
-    }
-
-    #[test]
-    fn repeat_track_takes_priority_over_repeat_context() {
-        let json = serde_json::to_value(
-            translate(PlayerEvent::RepeatChanged {
-                context: true,
-                track: true,
-            })
-            .unwrap(),
-        )
-        .unwrap();
-        assert_eq!(
-            json,
-            serde_json::json!({"type":"repeatChanged", "mode":"track"})
-        );
-    }
-
-    #[test]
-    fn startup_outcomes_carry_a_device_name_only_when_remote() {
-        let remote = translate(PlayerEvent::StartupResolved {
-            outcome: StartupOutcome::Remote {
-                device_name: "iPhone".into(),
-            },
-        });
-        assert_eq!(
-            serde_json::to_string(&remote.unwrap()).unwrap(),
-            r#"{"type":"startupResolved","outcome":"remote","deviceName":"iPhone"}"#
-        );
-        for (outcome, wire) in [
-            (StartupOutcome::Restored, "restored"),
-            (StartupOutcome::LikedSongs, "likedSongs"),
-            (StartupOutcome::Nothing, "nothing"),
-        ] {
-            let event = translate(PlayerEvent::StartupResolved { outcome }).unwrap();
-            assert_eq!(
-                serde_json::to_string(&event).unwrap(),
-                format!(r#"{{"type":"startupResolved","outcome":"{wire}"}}"#)
-            );
-        }
-    }
-
-    #[test]
-    fn remote_playback_serialises_the_mirror_or_null() {
-        let none = translate(PlayerEvent::RemotePlayback { remote: None }).unwrap();
-        assert_eq!(
-            serde_json::to_string(&none).unwrap(),
-            r#"{"type":"remotePlayback","remote":null}"#
-        );
-        let some = translate(PlayerEvent::RemotePlayback {
-            remote: Some(RemoteState {
-                device_name: "iPhone".into(),
-                track_uri: "spotify:track:abc".into(),
-                is_playing: true,
-                position_ms: 7_500,
-                duration_ms: 200_000,
-            }),
-        })
-        .unwrap();
-        assert_eq!(
-            serde_json::to_string(&some).unwrap(),
-            r#"{"type":"remotePlayback","remote":{"deviceName":"iPhone","trackUri":"spotify:track:abc","track":null,"isPlaying":true,"positionMs":7500,"durationMs":200000}}"#
         );
     }
 

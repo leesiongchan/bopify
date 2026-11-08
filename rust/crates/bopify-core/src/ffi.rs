@@ -4,24 +4,20 @@ use std::ffi::{CStr, c_char, c_void};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, PoisonError, RwLock};
 
-use crate::{
-    engine::{Engine, RepeatMode},
-    error::BopifyError,
-    event::WireEvent,
-};
+use crate::{error::BopifyError, event::WireEvent, services::Services};
 
 /// Opaque handle retained after destroy to keep concurrent and late calls safe.
-pub struct BopifyEngine {
+pub struct BopifyServices {
     /// Read without the lock so a late command fails fast instead of queueing
     /// behind a write lock that is held across a multi-second runtime drop.
     alive: AtomicBool,
-    inner: RwLock<Option<Engine>>,
+    inner: RwLock<Option<Services>>,
 }
 
-// FFI callers share the engine across threads; enforce that invariant at compile time.
+// FFI callers share the services across threads; enforce that invariant at compile time.
 const _: fn() = || {
     fn assert_send_sync<T: Send + Sync>() {}
-    assert_send_sync::<Engine>();
+    assert_send_sync::<Services>();
 };
 
 /// The Swift-provided context pointer, carried onto the runtime threads.
@@ -64,81 +60,59 @@ unsafe fn write_err(out_err: *mut i32, code: i32) {
     }
 }
 
-/// Starts a Connect device and delivers UTF-8 JSON buffers valid only during each callback.
-// cbindgen needs the literal Option<fn> type to generate a nullable function pointer.
+/// Starts metadata services and delivers UTF-8 JSON valid only during each callback.
+// cbindgen needs the literal Option<fn> type to generate a nullable callback.
 ///
 /// # Safety
-/// `access_token`, `device_name` and `options_json` must each be a
-/// NUL-terminated UTF-8 string that stays valid for the call, `out_err` must
-/// be null or a writable `int32_t`, and `ctx` must satisfy the contract at the
-/// top of this header. The returned handle must be shut down with
-/// `bopify_engine_destroy`; it stays safe to pass to any entry point after
-/// that, so the caller may keep or discard the pointer as it likes.
+/// String arguments must be null or NUL-terminated UTF-8 valid for the call.
+/// `out_err` must be null or writable and `ctx` must satisfy the header contract.
+/// A successful handle must be shut down with `bopify_services_destroy`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn bopify_engine_create(
+pub unsafe extern "C" fn bopify_services_create(
     access_token: *const c_char,
-    device_name: *const c_char,
-    options_json: *const c_char,
+    expected_username: *const c_char,
     callback: Option<extern "C" fn(json: *const u8, len: usize, ctx: *mut c_void)>,
     ctx: *mut c_void,
     out_err: *mut i32,
-) -> *mut BopifyEngine {
+) -> *mut BopifyServices {
     crate::logging::install();
-    log::info!("ffi: bopify_engine_create");
-
-    // SAFETY: all three pointers satisfy `str_from`'s contract per the header,
-    // and the borrows are consumed inside this call.
-    let (Some(token), Some(name), Some(options)) = (
+    log::info!("ffi: bopify_services_create");
+    // SAFETY: the pointers satisfy this function's caller contract.
+    let (Some(token), Some(username), Some(callback)) = (
         unsafe { str_from(access_token) },
-        unsafe { str_from(device_name) },
-        unsafe { str_from(options_json) },
+        unsafe { str_from(expected_username) },
+        callback,
     ) else {
-        log::error!("ffi: bopify_engine_create rejected, missing token, device name or options");
-        // SAFETY: `out_err` satisfies `write_err`'s contract per the header.
+        // SAFETY: out_err satisfies the caller contract.
         unsafe { write_err(out_err, BopifyError::InvalidArgument.code()) };
         return std::ptr::null_mut();
     };
-
-    // Swift imports a C function pointer as an optional, so null has to be
-    // rejected here rather than called.
-    let Some(callback) = callback else {
-        log::error!("ffi: bopify_engine_create rejected, null callback");
+    if token.trim().is_empty() || crate::services::validate_identity(username).is_err() {
+        log::error!("ffi: services creation rejected invalid arguments");
         // SAFETY: as above.
         unsafe { write_err(out_err, BopifyError::InvalidArgument.code()) };
         return std::ptr::null_mut();
-    };
-
-    let options = match crate::recovery::EngineCreateOptions::parse(options) {
-        Ok(options) => options,
-        Err(error) => {
-            log::error!("ffi: bopify_engine_create rejected, malformed options");
-            // SAFETY: as above.
-            unsafe { write_err(out_err, error.code()) };
-            return std::ptr::null_mut();
-        }
-    };
-
+    }
     let ctx = SendCtx(ctx);
-    let sink: crate::engine::EventSink = Arc::new(move |event: WireEvent| {
+    let sink: crate::services::EventSink = Arc::new(move |event: WireEvent| {
         let Ok(json) = serde_json::to_vec(&event) else {
             log::error!("ffi: event serialisation failed, dropping event");
             return;
         };
         callback(json.as_ptr(), json.len(), ctx.as_ptr());
     });
-
-    match Engine::new(token, name, options, sink) {
+    match Services::new(token, username, sink) {
         Ok(inner) => {
             // SAFETY: as above.
             unsafe { write_err(out_err, 0) };
-            log::info!("ffi: bopify_engine_create succeeded");
-            Box::into_raw(Box::new(BopifyEngine {
+            log::info!("ffi: bopify_services_create succeeded");
+            Box::into_raw(Box::new(BopifyServices {
                 alive: AtomicBool::new(true),
                 inner: RwLock::new(Some(inner)),
             }))
         }
         Err(error) => {
-            log::error!("ffi: bopify_engine_create failed error={error:?}");
+            log::error!("ffi: bopify_services_create failed error={error:?}");
             // SAFETY: as above.
             unsafe { write_err(out_err, error.code()) };
             std::ptr::null_mut()
@@ -146,21 +120,21 @@ pub unsafe extern "C" fn bopify_engine_create(
     }
 }
 
-/// Stops the engine and joins its workers before returning, including concurrent destroys.
+/// Stops the services and joins its workers before returning, including concurrent destroys.
 ///
 /// # Safety
-/// `handle` must be null or a pointer returned by `bopify_engine_create`.
+/// `handle` must be null or a pointer returned by `bopify_services_create`.
 /// It stays valid to pass to any entry point afterwards; later calls simply
 /// report `SessionLost`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn bopify_engine_destroy(handle: *mut BopifyEngine) {
+pub unsafe extern "C" fn bopify_services_destroy(handle: *mut BopifyServices) {
     // SAFETY: per the contract the pointer is null or points at a box from
-    // `bopify_engine_create`, which is never freed, so this borrow is always
+    // `bopify_services_create`, which is never freed, so this borrow is always
     // valid; `as_ref` turns null into None.
     let Some(handle) = (unsafe { handle.as_ref() }) else {
         return;
     };
-    log::info!("ffi: bopify_engine_destroy");
+    log::info!("ffi: bopify_services_destroy");
     // Stop new commands from queueing behind the write lock below. This is a
     // hint, not the synchronisation: the lock is.
     handle.alive.store(false, Ordering::Release);
@@ -173,22 +147,22 @@ pub unsafe extern "C" fn bopify_engine_destroy(handle: *mut BopifyEngine) {
     drop(guard);
 
     if was_live {
-        log::info!("ffi: bopify_engine_destroy complete, runtime stopped");
+        log::info!("ffi: bopify_services_destroy complete, runtime stopped");
     } else {
-        log::debug!("ffi: bopify_engine_destroy on an already-destroyed handle");
+        log::debug!("ffi: bopify_services_destroy on an already-destroyed handle");
     }
 }
 
 /// Rejects null or destroyed handles and holds the read lock while submitting a command.
 ///
 /// # Safety
-/// `handle` must be null or a pointer returned by `bopify_engine_create`.
-unsafe fn with_engine<F>(handle: *mut BopifyEngine, command: F) -> i32
+/// `handle` must be null or a pointer returned by `bopify_services_create`.
+unsafe fn with_services<F>(handle: *mut BopifyServices, command: F) -> i32
 where
-    F: FnOnce(&Engine) -> Result<(), BopifyError>,
+    F: FnOnce(&Services) -> Result<(), BopifyError>,
 {
     // SAFETY: per this function's contract the pointer is null or points at a
-    // box from `bopify_engine_create`, which is never freed; `as_ref` turns
+    // box from `bopify_services_create`, which is never freed; `as_ref` turns
     // null into None.
     let Some(handle) = (unsafe { handle.as_ref() }) else {
         return BopifyError::InvalidArgument.code();
@@ -199,155 +173,9 @@ where
     // Commands only enqueue work; recover a poisoned lock so teardown remains possible.
     let guard = handle.inner.read().unwrap_or_else(PoisonError::into_inner);
     match guard.as_ref() {
-        Some(engine) => match command(engine) {
-            Ok(()) => 0,
-            Err(error) => {
-                if error == BopifyError::SessionLost {
-                    engine.report_command_loss();
-                }
-                error.code()
-            }
-        },
+        Some(services) => command(services).map_or_else(|error| error.code(), |()| 0),
         // Lost the race with destroy between the `alive` read and the lock.
         None => BopifyError::SessionLost.code(),
-    }
-}
-
-// cbindgen does not expand macro_rules!, so ABI entry points must be explicit.
-
-/// # Safety
-/// `handle` must be null or a live handle from `bopify_engine_create`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn bopify_play(handle: *mut BopifyEngine) -> i32 {
-    log::debug!("ffi: bopify_play");
-    // SAFETY: forwards this function's own contract to `with_engine`.
-    unsafe { with_engine(handle, Engine::play) }
-}
-
-/// # Safety
-/// `handle` must be null or a live handle from `bopify_engine_create`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn bopify_play_here(handle: *mut BopifyEngine) -> i32 {
-    log::debug!("ffi: bopify_play_here");
-    // SAFETY: forwards this function's own contract to `with_engine`.
-    unsafe { with_engine(handle, Engine::play_here) }
-}
-
-/// # Safety
-/// `handle` must be null or a live handle from `bopify_engine_create`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn bopify_pause(handle: *mut BopifyEngine) -> i32 {
-    log::debug!("ffi: bopify_pause");
-    // SAFETY: forwards this function's own contract to `with_engine`.
-    unsafe { with_engine(handle, Engine::pause) }
-}
-
-/// # Safety
-/// `handle` must be null or a live handle from `bopify_engine_create`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn bopify_next(handle: *mut BopifyEngine) -> i32 {
-    log::debug!("ffi: bopify_next");
-    // SAFETY: forwards this function's own contract to `with_engine`.
-    unsafe { with_engine(handle, Engine::next) }
-}
-
-/// # Safety
-/// `handle` must be null or a live handle from `bopify_engine_create`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn bopify_previous(handle: *mut BopifyEngine) -> i32 {
-    log::debug!("ffi: bopify_previous");
-    // SAFETY: forwards this function's own contract to `with_engine`.
-    unsafe { with_engine(handle, Engine::previous) }
-}
-
-/// # Safety
-/// `handle` must be null or a live handle from `bopify_engine_create`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn bopify_seek(handle: *mut BopifyEngine, position_ms: u32) -> i32 {
-    log::debug!("ffi: bopify_seek position_ms={position_ms}");
-    // SAFETY: forwards this function's own contract to `with_engine`.
-    unsafe { with_engine(handle, |engine| engine.seek(position_ms)) }
-}
-
-/// `volume` is on librespot's `u16::MAX` scale.
-///
-/// # Safety
-/// `handle` must be null or a live handle from `bopify_engine_create`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn bopify_set_volume(handle: *mut BopifyEngine, volume: u16) -> i32 {
-    log::debug!("ffi: bopify_set_volume volume={volume}");
-    // SAFETY: forwards this function's own contract to `with_engine`.
-    unsafe { with_engine(handle, |engine| engine.set_volume(volume)) }
-}
-
-/// Selects one occurrence in the observed queue. Success means enqueued.
-/// # Safety
-/// `handle` must be null or a live handle from `bopify_engine_create`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn bopify_select_queue(
-    handle: *mut BopifyEngine,
-    generation: u64,
-    raw_next_index: u32,
-) -> i32 {
-    log::debug!("ffi: bopify_select_queue generation={generation} index={raw_next_index}");
-    // SAFETY: forwards this function's own contract to `with_engine`.
-    unsafe {
-        with_engine(handle, |engine| {
-            engine.select_queue(generation, raw_next_index)
-        })
-    }
-}
-
-/// # Safety
-/// `handle` must be null or a live handle from `bopify_engine_create`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn bopify_set_shuffle(handle: *mut BopifyEngine, enabled: bool) -> i32 {
-    log::debug!("ffi: bopify_set_shuffle enabled={enabled}");
-    // SAFETY: forwards this function's own contract to `with_engine`.
-    unsafe { with_engine(handle, |engine| engine.set_shuffle(enabled)) }
-}
-
-/// `mode`: 0 off, 1 context, 2 track.
-/// # Safety
-/// `handle` must be null or a live handle from `bopify_engine_create`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn bopify_set_repeat(handle: *mut BopifyEngine, mode: u8) -> i32 {
-    log::debug!("ffi: bopify_set_repeat mode={mode}");
-    let Ok(mode) = RepeatMode::try_from(mode) else {
-        return BopifyError::InvalidArgument.code();
-    };
-    // SAFETY: forwards this function's own contract to `with_engine`.
-    unsafe { with_engine(handle, |engine| engine.set_repeat(mode)) }
-}
-
-/// Starts playback of a context URI, optionally at a given track.
-///
-/// # Safety
-/// `handle` must be null or a live handle from `bopify_engine_create`.
-/// `context_uri` must be a NUL-terminated UTF-8 string valid for the call;
-/// `start_track_uri` may be null, or the same kind of string.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn bopify_load(
-    handle: *mut BopifyEngine,
-    context_uri: *const c_char,
-    start_track_uri: *const c_char,
-    start_position_ms: u32,
-) -> i32 {
-    log::debug!("ffi: bopify_load start_position_ms={start_position_ms}");
-    // SAFETY: the URI pointers satisfy `str_from`'s contract per the header,
-    // and both borrows are consumed before this call returns.
-    let Some(context) = (unsafe { str_from(context_uri) }) else {
-        return BopifyError::InvalidArgument.code();
-    };
-    let start = unsafe { str_from(start_track_uri) };
-    if !start_track_uri.is_null() && start.is_none() {
-        return BopifyError::InvalidArgument.code();
-    }
-    // SAFETY: forwards this function's own contract to `with_engine`.
-    unsafe {
-        with_engine(handle, |engine| {
-            engine.load(context, start, start_position_ms)
-        })
     }
 }
 
@@ -356,11 +184,11 @@ pub unsafe extern "C" fn bopify_load(
 /// the same `request_id`.
 ///
 /// # Safety
-/// `handle` must be null or a live handle from `bopify_engine_create`, and
+/// `handle` must be null or a live handle from `bopify_services_create`, and
 /// `seed_uri` must satisfy `str_from`'s contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn bopify_request_radio(
-    handle: *mut BopifyEngine,
+    handle: *mut BopifyServices,
     seed_uri: *const c_char,
     request_id: u64,
 ) -> i32 {
@@ -370,19 +198,19 @@ pub unsafe extern "C" fn bopify_request_radio(
     let Some(seed) = (unsafe { str_from(seed_uri) }) else {
         return BopifyError::InvalidArgument.code();
     };
-    // SAFETY: forwards this function's own contract to `with_engine`.
-    unsafe { with_engine(handle, |engine| engine.request_radio(seed, request_id)) }
+    // SAFETY: forwards this function's own contract to `with_services`.
+    unsafe { with_services(handle, |services| services.request_radio(seed, request_id)) }
 }
 
 /// Queues a lyric lookup for a canonical track URI. The callback carries
 /// `lyrics` or `lyricsFailed` with the same `request_id`.
 ///
 /// # Safety
-/// `handle` must be null or a live handle from `bopify_engine_create`, and
+/// `handle` must be null or a live handle from `bopify_services_create`, and
 /// `track_uri` must satisfy `str_from`'s contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn bopify_request_lyrics(
-    handle: *mut BopifyEngine,
+    handle: *mut BopifyServices,
     track_uri: *const c_char,
     request_id: u64,
 ) -> i32 {
@@ -391,8 +219,12 @@ pub unsafe extern "C" fn bopify_request_lyrics(
     let Some(track) = (unsafe { str_from(track_uri) }) else {
         return BopifyError::InvalidArgument.code();
     };
-    // SAFETY: forwards this function's own handle contract to `with_engine`.
-    unsafe { with_engine(handle, |engine| engine.request_lyrics(track, request_id)) }
+    // SAFETY: forwards this function's own handle contract to `with_services`.
+    unsafe {
+        with_services(handle, |services| {
+            services.request_lyrics(track, request_id)
+        })
+    }
 }
 
 /// Queues a displayed artist's popular songs for a canonical track URI. The callback
@@ -402,7 +234,7 @@ pub unsafe extern "C" fn bopify_request_lyrics(
 /// `handle` must be null or live, and `track_uri` must satisfy `str_from`'s contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn bopify_request_artist_top_tracks(
-    handle: *mut BopifyEngine,
+    handle: *mut BopifyServices,
     track_uri: *const c_char,
     artist_index: u32,
     request_id: u64,
@@ -416,258 +248,256 @@ pub unsafe extern "C" fn bopify_request_artist_top_tracks(
     };
     // SAFETY: forwards this function's own handle contract.
     unsafe {
-        with_engine(handle, |engine| {
-            engine.request_artist_top_tracks(track, artist_index, request_id)
+        with_services(handle, |services| {
+            services.request_artist_top_tracks(track, artist_index, request_id)
         })
     }
 }
 
 #[cfg(test)]
-mod tests {
+mod services_boundary_tests {
     use super::*;
+    use std::ffi::CString;
 
-    // Exercises handle guards without a network login.
-    fn handle_without_an_engine(alive: bool) -> *mut BopifyEngine {
-        Box::into_raw(Box::new(BopifyEngine {
-            alive: AtomicBool::new(alive),
-            inner: RwLock::new(None),
-        }))
-    }
-
-    /// Production never frees the box; tests do, so they do not leak.
-    ///
-    /// # Safety
-    /// `ptr` must come from `handle_without_an_engine` and not be used after.
-    unsafe fn release(ptr: *mut BopifyEngine) {
-        // SAFETY: guaranteed by this function's contract.
-        drop(unsafe { Box::from_raw(ptr) });
+    extern "C" fn never_called(_json: *const u8, _len: usize, _ctx: *mut c_void) {
+        panic!("invalid creation must not invoke a callback");
     }
 
     #[test]
-    fn lyric_requests_validate_null_input_and_guard_lost_handles() {
-        let ptr = handle_without_an_engine(false);
-        // SAFETY: the test owns this handle and the URI is a valid C literal.
-        unsafe {
-            assert_eq!(
-                bopify_request_lyrics(ptr, std::ptr::null(), 1),
-                BopifyError::InvalidArgument.code()
-            );
-            assert_eq!(
-                bopify_request_lyrics(std::ptr::null_mut(), std::ptr::null(), 1),
-                BopifyError::InvalidArgument.code()
-            );
-            assert_eq!(
-                bopify_request_lyrics(ptr, c"spotify:track:11dFghVXANMlKmJXsNCbNl".as_ptr(), 1),
-                BopifyError::SessionLost.code()
-            );
-            assert_eq!(
-                bopify_request_lyrics(
-                    std::ptr::null_mut(),
-                    c"spotify:track:11dFghVXANMlKmJXsNCbNl".as_ptr(),
-                    1
-                ),
-                BopifyError::InvalidArgument.code()
-            );
-            release(ptr);
-        }
-    }
-
-    #[test]
-    fn every_command_on_a_destroyed_handle_reports_session_lost() {
-        let ptr = handle_without_an_engine(false);
-        let lost = BopifyError::SessionLost.code();
-        // SAFETY: `ptr` is a live handle from `handle_without_an_engine`, and
-        // the string pointers are valid literals.
-        unsafe {
-            assert_eq!(bopify_play(ptr), lost);
-            assert_eq!(bopify_play_here(ptr), lost);
-            assert_eq!(bopify_pause(ptr), lost);
-            assert_eq!(bopify_next(ptr), lost);
-            assert_eq!(bopify_select_queue(ptr, 1, 0), lost);
-            assert_eq!(
-                bopify_request_radio(ptr, c"spotify:track:6rqhFgbbKwnb9MLmUQDhG6".as_ptr(), 1),
-                lost
-            );
-            assert_eq!(
-                bopify_request_radio(ptr, std::ptr::null(), 1),
-                BopifyError::InvalidArgument.code()
-            );
-            assert_eq!(bopify_set_shuffle(ptr, true), lost);
-            assert_eq!(bopify_set_repeat(ptr, 2), lost);
-            assert_eq!(
-                bopify_set_repeat(ptr, 3),
-                BopifyError::InvalidArgument.code()
-            );
-            assert_eq!(bopify_previous(ptr), lost);
-            assert_eq!(bopify_seek(ptr, 1000), lost);
-            assert_eq!(bopify_set_volume(ptr, 32767), lost);
-            assert_eq!(
-                bopify_load(ptr, c"spotify:album:x".as_ptr(), std::ptr::null(), 0),
-                lost
-            );
-            release(ptr);
-        }
-    }
-
-    #[test]
-    fn load_rejects_invalid_utf8_in_an_optional_start_track() {
-        let ptr = handle_without_an_engine(false);
-        let invalid = c"\xff";
-        // SAFETY: the handle and NUL-terminated strings remain valid throughout the call.
-        unsafe {
-            assert_eq!(
-                bopify_load(ptr, c"spotify:album:x".as_ptr(), invalid.as_ptr(), 0),
-                BopifyError::InvalidArgument.code()
-            );
-            release(ptr);
-        }
-    }
-
-    #[test]
-    fn losing_the_race_with_destroy_also_reports_session_lost() {
-        // `alive` is still true but the engine is gone: the window between
-        // the relaxed `alive` read and taking the read lock.
-        let ptr = handle_without_an_engine(true);
-        // SAFETY: as above.
-        unsafe {
-            assert_eq!(bopify_play(ptr), BopifyError::SessionLost.code());
-            release(ptr);
-        }
-    }
-
-    #[test]
-    fn a_concurrent_second_destroy_waits_for_the_teardown() {
-        use std::sync::mpsc::{self, RecvTimeoutError};
-        use std::time::Duration;
-
-        // Stands in for the winner mid-teardown: `alive` already cleared,
-        // and the write lock held across what would be `Runtime::drop`.
-        let ptr = handle_without_an_engine(false);
-        // SAFETY: `ptr` is a live box from `handle_without_an_engine`, and
-        // this thread holds the only reference until the join below.
-        let guard = unsafe { (*ptr).inner.write().unwrap() };
-
-        // Raw pointers are not Send; the box outlives the thread because the
-        // test joins it before releasing.
-        let address = ptr as usize;
-        let (tx, rx) = mpsc::channel();
-        let loser = std::thread::spawn(move || {
-            // SAFETY: `address` is that same live box, freed only after join.
-            unsafe { bopify_engine_destroy(address as *mut BopifyEngine) };
-            let _ = tx.send(());
-        });
-
-        // A concurrent destroy must not return while ctx is still in use.
-        assert_eq!(
-            rx.recv_timeout(Duration::from_millis(200)),
-            Err(RecvTimeoutError::Timeout),
-            "destroy returned while the teardown it must wait for was still running"
-        );
-
-        drop(guard);
-        rx.recv_timeout(Duration::from_secs(5))
-            .expect("destroy should return once the teardown completes");
-        loser.join().unwrap();
-        // SAFETY: the thread is joined, so nothing else touches the box.
-        unsafe { release(ptr) };
-    }
-
-    #[test]
-    fn destroy_is_idempotent_and_leaves_the_handle_usable() {
-        let ptr = handle_without_an_engine(true);
-        // SAFETY: as above. Calling destroy twice, then a command, is exactly
-        // the sequence the header promises is safe.
-        unsafe {
-            bopify_engine_destroy(ptr);
-            bopify_engine_destroy(ptr);
-            assert_eq!(bopify_play(ptr), BopifyError::SessionLost.code());
-            assert!(!(*ptr).alive.load(Ordering::Relaxed));
-            release(ptr);
-        }
-    }
-
-    #[test]
-    fn a_null_handle_is_an_invalid_argument_not_a_crash() {
-        // SAFETY: null is explicitly allowed by every entry point's contract.
-        unsafe {
-            assert_eq!(
-                bopify_play(std::ptr::null_mut()),
-                BopifyError::InvalidArgument.code()
-            );
-            assert_eq!(
-                bopify_select_queue(std::ptr::null_mut(), 1, 0),
-                BopifyError::InvalidArgument.code()
-            );
-            assert_eq!(
-                bopify_set_shuffle(std::ptr::null_mut(), true),
-                BopifyError::InvalidArgument.code()
-            );
-            assert_eq!(
-                bopify_set_repeat(std::ptr::null_mut(), 0),
-                BopifyError::InvalidArgument.code()
-            );
-            assert_eq!(
-                bopify_seek(std::ptr::null_mut(), 0),
-                BopifyError::InvalidArgument.code()
-            );
-            assert_eq!(
-                bopify_set_volume(std::ptr::null_mut(), 0),
-                BopifyError::InvalidArgument.code()
-            );
-            assert_eq!(
-                bopify_load(
-                    std::ptr::null_mut(),
-                    c"spotify:album:x".as_ptr(),
-                    std::ptr::null(),
-                    0
-                ),
-                BopifyError::InvalidArgument.code()
-            );
-            bopify_engine_destroy(std::ptr::null_mut());
-        }
-    }
-
-    #[test]
-    fn create_rejects_missing_or_malformed_arguments_before_login() {
-        extern "C" fn never_called(_json: *const u8, _len: usize, _ctx: *mut c_void) {
-            unreachable!("no events can be emitted before the engine exists");
-        }
-        let valid = c"{\"deviceId\":\"test-device\",\"startup\":\"coldLaunch\"}";
-        let cases: [(Option<&CStr>, Option<&CStr>); 3] = [
-            // Valid options isolate the null-token check.
-            (None, Some(valid)),
-            (Some(c"token"), None),
-            (Some(c"token"), Some(c"{\"startup\":\"coldLaunch\"}")),
-        ];
-        for (token, options) in cases {
-            let mut code = 0i32;
-            // SAFETY: null string pointers are explicitly allowed, `code` is a
-            // live writable i32, and the callback pointer is valid.
+    fn services_creation_rejects_invalid_tokens_and_missing_callback_before_login() {
+        for token in [
+            std::ptr::null(),
+            c"".as_ptr(),
+            c" ".as_ptr(),
+            c"\xff".as_ptr(),
+        ] {
+            let mut code = 0;
+            // SAFETY: nonnull pointers are NUL-terminated strings valid for the call.
             let handle = unsafe {
-                bopify_engine_create(
-                    token.map_or(std::ptr::null(), CStr::as_ptr),
-                    c"Bopify".as_ptr(),
-                    options.map_or(std::ptr::null(), CStr::as_ptr),
+                bopify_services_create(
+                    token,
+                    c"listener".as_ptr(),
                     Some(never_called),
                     std::ptr::null_mut(),
                     &mut code,
                 )
             };
             assert!(handle.is_null());
-            assert_eq!(code, BopifyError::InvalidArgument.code());
+            assert_eq!(code, -1);
         }
-
-        // SAFETY: as above, with a null callback and out-parameter, which are allowed.
+        // SAFETY: null callback and out_err are accepted and checked by the boundary.
         let handle = unsafe {
-            bopify_engine_create(
+            bopify_services_create(
                 c"token".as_ptr(),
-                c"Bopify".as_ptr(),
-                valid.as_ptr(),
+                c"listener".as_ptr(),
                 None,
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
             )
         };
         assert!(handle.is_null());
+    }
+
+    #[test]
+    fn services_creation_rejects_invalid_identity_before_login() {
+        let invalid_utf8 = c"\xff";
+        let values = [
+            None,
+            Some(CString::new("").unwrap()),
+            Some(CString::new(" \t").unwrap()),
+            Some(CString::new("listener\n").unwrap()),
+            Some(CString::new("a".repeat(257)).unwrap()),
+            Some(CString::new("é".repeat(129)).unwrap()),
+        ];
+        for username in values
+            .iter()
+            .map(|v| v.as_deref())
+            .chain([Some(invalid_utf8)])
+        {
+            let mut code = 0;
+            // SAFETY: pointers remain valid during the call; null identity is supported.
+            let handle = unsafe {
+                bopify_services_create(
+                    c"token".as_ptr(),
+                    username.map_or(std::ptr::null(), CStr::as_ptr),
+                    Some(never_called),
+                    std::ptr::null_mut(),
+                    &mut code,
+                )
+            };
+            assert!(handle.is_null());
+            assert_eq!(code, -1);
+        }
+    }
+}
+
+#[cfg(test)]
+mod lifecycle_tests {
+    use super::*;
+    use std::sync::mpsc::{self, RecvTimeoutError};
+    use std::time::Duration;
+
+    fn empty_handle(alive: bool) -> *mut BopifyServices {
+        Box::into_raw(Box::new(BopifyServices {
+            alive: AtomicBool::new(alive),
+            inner: RwLock::new(None),
+        }))
+    }
+
+    // Tests reclaim tombstones only after every participating thread joins.
+    unsafe fn release(handle: *mut BopifyServices) {
+        // SAFETY: the caller owns the box and guarantees no outstanding access.
+        drop(unsafe { Box::from_raw(handle) });
+    }
+
+    #[test]
+    fn metadata_requests_guard_null_destroyed_and_lost_race_handles() {
+        for alive in [false, true] {
+            let ptr = empty_handle(alive);
+            // SAFETY: the test owns ptr and all strings stay valid during the calls.
+            unsafe {
+                assert_eq!(
+                    bopify_request_radio(ptr, c"spotify:track:6rqhFgbbKwnb9MLmUQDhG6".as_ptr(), 1),
+                    -2
+                );
+                assert_eq!(
+                    bopify_request_lyrics(ptr, c"spotify:track:6rqhFgbbKwnb9MLmUQDhG6".as_ptr(), 1),
+                    -2
+                );
+                assert_eq!(
+                    bopify_request_artist_top_tracks(
+                        ptr,
+                        c"spotify:track:6rqhFgbbKwnb9MLmUQDhG6".as_ptr(),
+                        0,
+                        1
+                    ),
+                    -2
+                );
+                assert_eq!(bopify_request_radio(ptr, std::ptr::null(), 1), -1);
+                assert_eq!(bopify_request_lyrics(ptr, c"\xff".as_ptr(), 1), -1);
+                assert_eq!(
+                    bopify_request_artist_top_tracks(ptr, c"\xff".as_ptr(), 0, 1),
+                    -1
+                );
+                bopify_services_destroy(ptr);
+                bopify_services_destroy(ptr);
+                assert!(!(*ptr).alive.load(Ordering::Relaxed));
+                release(ptr);
+            }
+        }
+        // SAFETY: null handles and pointers are supported by the contract.
+        unsafe {
+            assert_eq!(
+                bopify_request_radio(
+                    std::ptr::null_mut(),
+                    c"spotify:track:6rqhFgbbKwnb9MLmUQDhG6".as_ptr(),
+                    1
+                ),
+                -1
+            );
+            assert_eq!(
+                bopify_request_lyrics(
+                    std::ptr::null_mut(),
+                    c"spotify:track:6rqhFgbbKwnb9MLmUQDhG6".as_ptr(),
+                    1
+                ),
+                -1
+            );
+            assert_eq!(
+                bopify_request_artist_top_tracks(
+                    std::ptr::null_mut(),
+                    c"spotify:track:6rqhFgbbKwnb9MLmUQDhG6".as_ptr(),
+                    0,
+                    1
+                ),
+                -1
+            );
+            bopify_services_destroy(std::ptr::null_mut());
+        }
+    }
+
+    #[test]
+    fn concurrent_destroys_join_callbacks_and_cancel_pending_work_before_returning() {
+        use std::sync::{Mutex, atomic::AtomicUsize};
+        struct Dropped(mpsc::Sender<()>);
+        impl Drop for Dropped {
+            fn drop(&mut self) {
+                let _ = self.0.send(());
+            }
+        }
+
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let release_rx = Mutex::new(release_rx);
+        let callbacks = Arc::new(AtomicUsize::new(0));
+        let recorded = callbacks.clone();
+        let sink: crate::services::EventSink = Arc::new(move |_| {
+            recorded.fetch_add(1, Ordering::SeqCst);
+            entered_tx.send(()).unwrap();
+            release_rx.lock().unwrap().recv().unwrap();
+        });
+        let (services, runtime) = crate::services::tests::disconnected(sink.clone());
+        let (pending_tx, pending_rx) = mpsc::channel();
+        let (dropped_tx, dropped_rx) = mpsc::channel();
+        let dropped = Dropped(dropped_tx);
+        let delayed_sink = sink.clone();
+        runtime.spawn(async move {
+            let _dropped = dropped;
+            pending_tx.send(()).unwrap();
+            std::future::pending::<()>().await;
+            delayed_sink(WireEvent::RadioFailed {
+                request_id: 2,
+                seed_uri: String::new(),
+                reason: crate::event::RadioFailure::Network,
+            });
+        });
+        pending_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        runtime.spawn(async move {
+            sink(WireEvent::RadioFailed {
+                request_id: 1,
+                seed_uri: String::new(),
+                reason: crate::event::RadioFailure::Network,
+            });
+        });
+        entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let ptr = Box::into_raw(Box::new(BopifyServices {
+            alive: AtomicBool::new(true),
+            inner: RwLock::new(Some(services)),
+        }));
+        let address = ptr as usize;
+        let (finished_tx, finished_rx) = mpsc::channel();
+        let mut destroys = Vec::new();
+        for _ in 0..2 {
+            let finished_tx = finished_tx.clone();
+            destroys.push(std::thread::spawn(move || {
+                // SAFETY: the handle outlives all joined threads.
+                unsafe { bopify_services_destroy(address as *mut BopifyServices) };
+                finished_tx.send(()).unwrap();
+            }));
+        }
+        assert_eq!(
+            finished_rx.recv_timeout(Duration::from_millis(200)),
+            Err(RecvTimeoutError::Timeout)
+        );
+        // SAFETY: a destroyed handle remains usable while runtime teardown holds its write lock.
+        unsafe {
+            assert_eq!(
+                bopify_request_lyrics(ptr, c"spotify:track:6rqhFgbbKwnb9MLmUQDhG6".as_ptr(), 1),
+                -2
+            );
+        }
+        release_tx.send(()).unwrap();
+        for _ in 0..2 {
+            finished_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        }
+        for thread in destroys {
+            thread.join().unwrap();
+        }
+        dropped_rx
+            .try_recv()
+            .expect("pending work must be dropped before destroy returns");
+        assert_eq!(callbacks.load(Ordering::SeqCst), 1);
+        // SAFETY: both destroys are joined, and runtime work can no longer access the box.
+        unsafe { release(ptr) };
     }
 }

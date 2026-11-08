@@ -86,7 +86,7 @@ jobs:
           key: xcode-cas-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.build-env.outputs.xcode }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             xcode-cas-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.build-env.outputs.xcode }}-
-      - name: Test native playback
+      - name: Test native metadata services
         run: ./scripts/test-native.sh
       - name: Build native framework
         if: steps.native-cache.outputs.cache-hit != 'true'

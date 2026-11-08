@@ -7,9 +7,6 @@ edition = "2024"
 rust-version = "1.99"
 license = "MIT"
 
-# Keep all librespot crates on the same reviewed commit of the Bopify fork.
 [workspace.dependencies]
-librespot-core = { git = "https://github.com/leesiongchan/librespot.git", rev = "80f49d50bf46ac454255f02c2fe0ed46ddf01fa6" }
-librespot-playback = { git = "https://github.com/leesiongchan/librespot.git", rev = "80f49d50bf46ac454255f02c2fe0ed46ddf01fa6" }
-librespot-connect = { git = "https://github.com/leesiongchan/librespot.git", rev = "80f49d50bf46ac454255f02c2fe0ed46ddf01fa6" }
-librespot-metadata = { git = "https://github.com/leesiongchan/librespot.git", rev = "80f49d50bf46ac454255f02c2fe0ed46ddf01fa6" }
+librespot-core = { git = "https://github.com/crmne/librespot", rev = "3ba977f1f918582edce566cfc16617f8eccdfb1e" }
+librespot-metadata = { git = "https://github.com/crmne/librespot", rev = "3ba977f1f918582edce566cfc16617f8eccdfb1e" }

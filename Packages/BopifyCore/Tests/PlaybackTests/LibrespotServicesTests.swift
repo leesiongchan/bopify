@@ -7,17 +7,6 @@ import BopifyDomain
 struct LibrespotServicesTests {
     private let track = SpotifyURI("spotify:track:11dFghVXANMlKmJXsNCbNl")!
 
-    @Test func creationAlwaysRequestsADataOnlySession() async throws {
-        let native = ServiceFFIFixture()
-        let services = try await LibrespotServices(accessToken: "fixture-token", expectedUsername: "fixture-listener", native: native.functions)
-        let options = try #require(native.options)
-        let object = try #require(JSONSerialization.jsonObject(with: Data(options.utf8)) as? [String: Any])
-        #expect(object["servicesOnly"] as? Bool == true)
-        #expect(object["expectedUsername"] as? String == "fixture-listener")
-        #expect(native.token == "fixture-token")
-        await services.shutdown()
-    }
-
     @Test func failedAuthenticationReleasesTheCallbackContext() async {
         let native = ServiceFFIFixture(createError: -3)
         await #expect(throws: PlayerError.authExpired) {
@@ -33,19 +22,7 @@ struct LibrespotServicesTests {
         await #expect(throws: SoloistPlaybackError.missingAccountID) {
             _ = try await LibrespotServices(accessToken: "fixture-token", expectedUsername: username, native: native.functions)
         }
-        #expect(native.options == nil && native.bridge == nil)
-    }
-
-    @Test func expectedIdentityIsEncodedAsDataWithoutChangingTheNativeOptions() async throws {
-        let native = ServiceFFIFixture()
-        let username = #"listener\"quoted\\identity"#
-        let services = try await LibrespotServices(accessToken: "fixture-token", expectedUsername: username, native: native.functions)
-        let options = try #require(native.options)
-        let object = try #require(JSONSerialization.jsonObject(with: Data(options.utf8)) as? [String: Any])
-        #expect(object["expectedUsername"] as? String == username)
-        #expect(object["servicesOnly"] as? Bool == true)
-        #expect(object.count == 4)
-        await services.shutdown()
+        #expect(native.createCount == 0 && native.bridge == nil)
     }
 
     @Test func metadataRepliesReturnToTheirRequestingService() async throws {
@@ -119,8 +96,7 @@ private final class ServiceFFIFixture: @unchecked Sendable {
     private let requestError: Int32
     private let replies: Bool
     private var context: UnsafeMutableRawPointer?
-    private var storedOptions: String?
-    private var storedToken: String?
+    private var creates = 0
     private var storedRequests: [String] = []
     private var destroys = 0
     private var aliveDuringDestroy = true
@@ -135,8 +111,7 @@ private final class ServiceFFIFixture: @unchecked Sendable {
         (dispatched, sent) = AsyncStream.makeStream()
     }
 
-    var options: String? { lock.withLock { storedOptions } }
-    var token: String? { lock.withLock { storedToken } }
+    var createCount: Int { lock.withLock { creates } }
     var requests: [String] { lock.withLock { storedRequests } }
     var destroyCount: Int { lock.withLock { destroys } }
     var contextAliveDuringDestroy: Bool { lock.withLock { aliveDuringDestroy } }
@@ -144,11 +119,10 @@ private final class ServiceFFIFixture: @unchecked Sendable {
 
     var functions: LibrespotServiceFFI {
         LibrespotServiceFFI(
-            create: { token, _, options, context, error in
+            create: { _, _, context, error in
                 self.lock.withLock {
                     self.context = context
-                    self.storedToken = token
-                    self.storedOptions = options
+                    self.creates += 1
                     self.storedBridge = Unmanaged<EventBridge>.fromOpaque(context).takeUnretainedValue()
                 }
                 error = self.createError

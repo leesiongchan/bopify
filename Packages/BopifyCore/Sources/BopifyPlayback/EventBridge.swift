@@ -2,8 +2,8 @@ import Foundation
 import BopifyDomain
 import os
 
-/// Usable from construction and never reaches for the engine handle, because the callback can fire on a Rust thread
-/// before `bopify_engine_create` returns. It only buffers, since the header forbids issuing commands from the callback.
+/// Buffers Rust replies without reaching for the services handle. Callbacks run on runtime threads,
+/// and the native contract forbids issuing requests or destroying services from inside a callback.
 public final class EventBridge: Sendable {
     public let events: AsyncStream<PlaybackEvent>
     private let continuation: AsyncStream<PlaybackEvent>.Continuation
@@ -87,7 +87,7 @@ public final class EventBridge: Sendable {
         self.continuation = escaped
     }
 
-    /// Hands Rust an owning (+1) reference as `ctx`, which must outlive `bopify_engine_destroy`. Retaining makes an
+    /// Hands Rust an owning (+1) reference as `ctx`, which must outlive `bopify_services_destroy`. Retaining makes an
     /// owner that lets go too early leak instead of causing a use-after-free on a runtime thread.
     public func retainedContext() -> UnsafeMutableRawPointer {
         Unmanaged.passRetained(self).toOpaque()
@@ -249,7 +249,7 @@ public final class EventBridge: Sendable {
     }
 
     /// Balances exactly one `retainedContext()`, taking the same pointer so the pairing is visible at the call site.
-    /// Call it only after `bopify_engine_destroy` returns or `bopify_engine_create` returns null, as no callback can follow either.
+    /// Call it only after `bopify_services_destroy` returns or `bopify_services_create` returns null, as no callback can follow either.
     public static func releaseContext(_ ctx: UnsafeMutableRawPointer) {
         Unmanaged<EventBridge>.fromOpaque(ctx).release()
     }

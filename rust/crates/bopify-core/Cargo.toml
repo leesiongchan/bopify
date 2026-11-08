@@ -10,13 +10,11 @@ crate-type = ["staticlib", "rlib"]
 
 [dependencies]
 librespot-core.workspace = true
-librespot-connect.workspace = true
 librespot-metadata.workspace = true
-librespot-playback = { workspace = true, features = ["rodio-backend"] }
 # The facade librespot already logs through; a second framework would split
 # the output.
 log = "0.4"
-# "time" and "net" are what the engine's own runtime needs from enable_all().
+# "time" and "net" are what the services' own runtime needs from enable_all().
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros", "time", "net"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

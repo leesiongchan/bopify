@@ -6,36 +6,40 @@
 
 <p align="center">A Spotify player for your Mac, tucked into the menu bar.</p>
 
-<p align="center"><a href="https://leesiongchan.github.io/bopify/">Website</a></p>
+<p align="center">
+  <a href="https://leesiongchan.github.io/bopify/">Website</a> ·
+  <a href="https://github.com/leesiongchan/bopify/releases">Download</a>
+</p>
 
-Play music with a spinning record, browse your library and queue, search Spotify, and follow along with lyrics. Bopify also supports Spotify Connect and keyboard shortcuts.
+Play music with a spinning record, browse your library and queue, search Spotify, and read lyrics. Supports Spotify Connect and keyboard shortcuts.
 
 <p align="center">
-  <img src="docs/screenshots/player.png" alt="Bopify player with a spinning record and music browser" width="800">
+  <img src="docs/screenshots/player.png" alt="Bopify player and music browser" width="800">
 </p>
 
 ## Get started
 
-Bopify requires **macOS 26 or later**, an **Apple silicon Mac**, and **Spotify Premium**.
+Requires **macOS 26+**, **Apple silicon**, and **Spotify Premium**.
 
-1. Download Bopify from [Releases](https://github.com/leesiongchan/bopify/releases), open the DMG, and drag Bopify to Applications.
-2. Open Bopify from the menu bar and sign in to Spotify.
-3. Create an app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard). Add `http://127.0.0.1:8898/callback` as a redirect URI and select **Web API**.
-4. In the app's **User Management**, add your Spotify account's name and email. Copy the **Client ID** into Bopify and authorize library access.
+1. [Download Bopify](https://github.com/leesiongchan/bopify/releases), open the DMG, and drag the app to Applications.
+2. Open Bopify and sign in to Spotify.
+3. Follow setup to create a [Spotify Developer app](https://developer.spotify.com/dashboard) with **Web API** access and redirect URI `http://127.0.0.1:8898/callback`. Add your Spotify account under **Users and Access** if requested.
+4. Paste the **Client ID** into Bopify and authorize access.
+5. Follow the setup link to get your **Soloist key**, paste it into Bopify, and continue. When prompted, open Spotify on the same network, select Bopify's device, and play a track to pair.
 
-The release build is ad-hoc signed and not notarized; macOS may require you to approve opening it in Privacy & Security.
+Bopify installs and updates Soloist automatically and remembers your pairing.
 
-## Soloist playback
+Releases are ad-hoc signed and not notarized. If macOS blocks the app, approve it in **System Settings → Privacy & Security**.
 
-Open **Playback Engine…** from Bopify's menu. Follow the link to obtain your personal Soloist key, paste it into the secure field, and choose **Enable Soloist**. Bopify downloads and validates Spotify's latest macOS build automatically. Choose **Connect Spotify features** to approve additional Spotify access for companion features; this does not stop Soloist playback.
+## How it works
 
-When prompted, open Spotify on the same network, select the device name shown by Bopify, and play a track. Bopify verifies the session before taking over playback. A saved key makes Soloist the default on subsequent launches, reusing its pairing. Local controls and supported song loads keep working if Spotify’s Web API is throttled; verified companion services reconnect separately. Updates download in the background and take effect after the current Soloist process stops.
+Bopify uses SwiftUI and AppKit for its native macOS interface.
 
-Soloist handles audio; a data-only librespot session supplies lyrics, radio, and artist tracks. Exact queue-entry selection requires **Use librespot for this session** in Playback Engine. Switching engines pauses playback and does not copy queue edits. No Terminal setup or installation-folder permission is required. Bopify uses the ordinary hardened desktop model, with publisher validation before running downloaded Soloist code.
+- **Playback:** Spotify Soloist runs as a managed local process, controlled over a local WebSocket.
+- **Library and search:** Spotify's Web API uses the app registration you create during setup.
+- **Metadata:** A Rust bridge uses a separate librespot session for lyrics, radio, and artist tracks. Lyrics fall back to LRCLIB when Spotify is unavailable.
 
-When updating from a sandboxed build, Bopify preserves saved settings, sign-out cleanup state, and inactive pairing data. macOS may request access to the previous app data during that one-time transfer. Old downloaded executables are not reused.
-
-## Build from source
+## Build
 
 Install Xcode, Rust, and [mise](https://mise.jdx.dev/), then run:
 
@@ -45,16 +49,11 @@ mise install
 open Bopify/Bopify.xcodeproj
 ```
 
-Select the Bopify scheme in Xcode and run it. The build script creates the Rust library required by the Swift package.
+Run the **Bopify** scheme. Keep the same Apple Development signing identity across builds to reduce Keychain prompts.
 
-Use the same Apple Development signing identity for local builds. Ad-hoc signing (`CODE_SIGN_IDENTITY=-`) ties Keychain trust to each build's code hash, so rebuilding can trigger another password prompt even after choosing Always Allow. Certificate-based signing gives successive local builds a stable identity; the first switch may still require approval for the saved sign-in items.
+Run checks after building the Rust framework:
 
-## Releases
-
-Pushes to `main` release automatically when they bring user-facing app changes: a `feat:`, `fix:`, `perf:`, `revert:`, or breaking Conventional Commit touching the shipped app inputs listed in `cliff.toml`. Website, documentation, agent instructions, and test-only changes never release the app, and other commit types such as `chore:`, `refactor:`, and `build:` wait for the next release.
-
-`feat:` bumps the minor version, `fix:`, `perf:`, and `revert:` (including git's default `Revert "…"` message of a user-facing commit) bump the patch, and `!` or a `BREAKING CHANGE:` footer bumps the major. To ship a dependency update on its own, commit it as `fix(deps):`. Release notes list user-facing commit subjects since the last release and keep breaking upgrade instructions.
-
-## License
-
-[MIT](LICENSE)
+```sh
+./scripts/test-native.sh
+swift test --package-path Packages/BopifyCore
+```

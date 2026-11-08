@@ -2,7 +2,6 @@ import Testing
 import Foundation
 @testable import BopifyPlayback
 import BopifyDomain
-import CBopifyCore
 
 @Suite("EventBridge")
 struct EventBridgeTests {
@@ -65,7 +64,7 @@ struct EventBridgeTests {
     }
 
     /// The one obligation the Rust side cannot own: `ctx` must outlive
-    /// `bopify_engine_destroy`. The retain is what makes losing the owning
+    /// `bopify_services_destroy`. The retain is what makes losing the owning
     /// reference early a leak rather than a use-after-free on a Rust thread.
     @Test func theRetainedContextOutlivesItsOwningReference() async throws {
         var owner: EventBridge? = EventBridge()
@@ -90,27 +89,6 @@ struct EventBridgeTests {
 
         var iterator = events.makeAsyncIterator()
         #expect(await iterator.next() == nil)
-    }
-}
-
-@Suite("FFI smoke test")
-struct FFISmokeTests {
-    @Test func lyricSymbolLinksAndRejectsNullInputs() {
-        #expect(bopify_request_lyrics(nil, nil, 42) == -1)
-        #expect(bopify_request_lyrics(nil, "spotify:track:11dFghVXANMlKmJXsNCbNl", 42) == -1)
-    }
-
-    /// Proves the xcframework links, the generated header imports, and the
-    /// Swift and Rust views of the ABI agree — including that the trampoline
-    /// really converts to the C callback type. A null token is rejected
-    /// before any network work, so this does not block.
-    @Test func rejectsANullTokenWithInvalidArgument() {
-        var err: Int32 = 0
-        // Valid options isolate the null-token check from options parsing.
-        let handle = bopify_engine_create(nil, "Bopify Test", #"{"deviceId":"test-device","startup":"coldLaunch"}"#,
-                                          bopifyEventTrampoline, nil, &err)
-        #expect(handle == nil)
-        #expect(err == -1)
     }
 }
 

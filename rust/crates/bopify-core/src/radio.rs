@@ -99,7 +99,7 @@ impl RadioSource for SessionRadio {
     }
 
     async fn track(&self, uri: String) -> Option<WireTrack> {
-        crate::queue::lookup(self.0.clone(), uri).await
+        crate::metadata::lookup(self.0.clone(), uri).await
     }
 }
 
@@ -197,7 +197,7 @@ async fn resolve_tracks<S: RadioSource>(source: &S, uris: Vec<String>) -> Vec<Wi
     let mut jobs = JoinSet::new();
     let mut found = Vec::new();
     loop {
-        while jobs.len() < crate::queue::CONCURRENT_LOOKUPS {
+        while jobs.len() < crate::metadata::CONCURRENT_LOOKUPS {
             let Some((index, uri)) = pending.next() else {
                 break;
             };

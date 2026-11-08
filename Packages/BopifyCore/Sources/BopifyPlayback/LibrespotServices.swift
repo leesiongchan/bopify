@@ -33,17 +33,11 @@ public final class LibrespotServices: SoloistDataServices, @unchecked Sendable {
               !expectedUsername.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
             throw SoloistPlaybackError.missingAccountID
         }
-        // The native login compares this identity before exposing any metadata requests.
-        let encoded = try JSONSerialization.data(withJSONObject: [
-            "deviceId": "bopify-services", "startup": "coldLaunch", "servicesOnly": true,
-            "expectedUsername": expectedUsername,
-        ])
-        let options = String(decoding: encoded, as: UTF8.self)
         let bridge = EventBridge()
         let context = bridge.retainedContext()
         var code: Int32 = 0
         BopifyLog.playback.info("data services create starting")
-        guard let handle = native.create(accessToken, "Bopify services", options, context, &code) else {
+        guard let handle = native.create(accessToken, expectedUsername, context, &code) else {
             bridge.finish()
             EventBridge.releaseContext(context)
             BopifyLog.playback.error("data services create failed code=\(code, privacy: .public)")
@@ -111,17 +105,17 @@ public final class LibrespotServices: SoloistDataServices, @unchecked Sendable {
 
 /// The native boundary deliberately contains only session lifecycle and metadata requests.
 struct LibrespotServiceFFI: Sendable {
-    var create: @Sendable (String, String, String, UnsafeMutableRawPointer, inout Int32) -> OpaquePointer?
+    var create: @Sendable (String, String, UnsafeMutableRawPointer, inout Int32) -> OpaquePointer?
     var destroy: @Sendable (OpaquePointer) -> Void
     var radio: @Sendable (OpaquePointer, String, UInt64) -> Int32
     var lyrics: @Sendable (OpaquePointer, String, UInt64) -> Int32
     var artistTopTracks: @Sendable (OpaquePointer, String, UInt32, UInt64) -> Int32
 
     static let live = LibrespotServiceFFI(
-        create: { token, name, options, context, code in
-            options.withCString { bopify_engine_create(token, name, $0, bopifyEventTrampoline, context, &code) }
+        create: { token, expectedUsername, context, code in
+            bopify_services_create(token, expectedUsername, bopifyEventTrampoline, context, &code)
         },
-        destroy: { bopify_engine_destroy($0) },
+        destroy: { bopify_services_destroy($0) },
         radio: { handle, uri, id in uri.withCString { bopify_request_radio(handle, $0, id) } },
         lyrics: { handle, uri, id in uri.withCString { bopify_request_lyrics(handle, $0, id) } },
         artistTopTracks: { handle, uri, index, id in uri.withCString { bopify_request_artist_top_tracks(handle, $0, index, id) } }

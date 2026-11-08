@@ -1,4 +1,4 @@
-//! Retrieves and bounds lyric data using the engine-owned Spotify session.
+//! Retrieves and bounds lyric data using the services-owned Spotify session.
 
 use std::{future::Future, time::Duration};
 

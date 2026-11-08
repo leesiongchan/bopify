@@ -158,7 +158,7 @@ mod tests {
     fn librespot_is_a_separate_category_held_at_warn() {
         for target in [
             "librespot_core::session",
-            "librespot_playback::player",
+            "librespot_metadata::audio",
             "tokio::runtime",
         ] {
             assert!(!is_ours(target), "{target}");
@@ -180,10 +180,10 @@ mod tests {
         let backend = OsLogBackend::new();
         assert!(!backend.category_for("bopify_core_extra::session").public);
         assert!(backend.category_for("bopify_core").public);
-        assert!(backend.category_for("bopify_core::engine").public);
+        assert!(backend.category_for("bopify_core::services").public);
         assert!(backend.category_for("bopify_core::ffi").public);
         assert!(!backend.category_for("librespot_core::session").public);
-        assert!(!backend.category_for("librespot_playback::player").public);
+        assert!(!backend.category_for("librespot_metadata::audio").public);
     }
 
     #[test]

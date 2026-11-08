@@ -5,38 +5,31 @@ header = """
 /*
  * Contract for every entry point in this header:
  *
- *  - bopify_engine_create and bopify_engine_destroy BLOCK. Create performs
- *    the whole network login; destroy waits for the Rust runtime threads and
- *    then for librespot's audio thread. Neither may be called on the main
- *    thread.
- *  - The event callback runs on a Rust runtime thread, never the caller's,
- *    and may fire before bopify_engine_create returns: librespot emits a
- *    volume event while still inside the login. `ctx` must therefore be
- *    fully usable at the moment of the create call, and the handler must not
- *    assume the handle has been stored yet.
- *  - `ctx` must stay alive until bopify_engine_destroy has returned. Once it
- *    has, no further callback can occur.
- *  - bopify_engine_destroy is idempotent and may be called concurrently with
- *    any other entry point, and every concurrent destroy waits for the
- *    teardown before returning. The handle is never freed; after destroy
- *    every command returns SessionLost (-2). THE CALLER DOES NOT NEED TO
- *    SERIALISE -- this is guaranteed by the Rust side, not merely tolerated.
- *  - The one exception: do NOT issue a command on the same handle from
- *    inside the event callback. The callback runs on a Rust runtime worker,
- *    so a command that reaches the lock just as destroy takes it would block
- *    that worker while the runtime is trying to join it, and both hang. Hand
- *    the event to your own queue and issue commands from somewhere else.
- *  - Every command returns 0 on success or a negative BopifyError code.
- *    Success means "enqueued", not "took effect": observe the events.
- *  - bopify_engine_create's options_json contains deviceId, startup
- *    (coldLaunch/recovery), and optional snapshot and initialVolume;
- *    malformed options fail with InvalidArgument before login.
- *  - String arguments are borrowed for the duration of the call only.
+ *  - bopify_services_create and bopify_services_destroy BLOCK. Create performs
+ *    network login; destroy joins every Rust runtime worker. Call both away
+ *    from the main thread.
+ *  - These services only retrieve radio, lyrics and artist metadata.
+ *  - The event callback runs on a Rust runtime thread. JSON buffers are
+ *    borrowed and valid only during the callback.
+ *  - `ctx` must be usable when create is called and stay alive until destroy
+ *    returns. Once destroy returns, no further callback can occur.
+ *  - Destroy is idempotent and may run concurrently with every entry point.
+ *    Every concurrent destroy waits for teardown. The handle remains allocated
+ *    as a tombstone; later requests return SessionLost (-2).
+ *  - Do NOT issue a request or destroy the same handle from inside a callback.
+ *    Dispatch to your own queue first: a runtime worker cannot wait on its own
+ *    teardown or a lock held by the thread joining it.
+ *  - Requests return 0 when enqueued or a negative BopifyError code. Observe
+ *    the reply event carrying the request ID for the eventual result.
+ *  - `expected_username` is required: nonblank UTF-8, at most 256 bytes, with
+ *    no control characters. Login verifies an exact authenticated username
+ *    match; mismatches shut down the session and return AuthInvalid (-3).
+ *  - String arguments are borrowed only for the duration of the call.
  */
 """
 
 [export]
-include = ["BopifyEngine"]
+include = ["BopifyServices"]
 # BopifyError never crosses the ABI as a type -- only its i32 code does -- but
 # cbindgen would otherwise emit it as an unusable opaque struct. Excluding it
 # costs a "Can't find BopifyError" warning per reference, which is expected.
