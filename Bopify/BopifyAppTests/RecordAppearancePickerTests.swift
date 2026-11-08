@@ -21,6 +21,15 @@ struct RecordAppearancePickerTests {
         c.close(); c.show()
         #expect(try window() === first)
     }
+    @Test func titleIsHiddenAndWindowCannotBeResized() throws {
+        let c = RecordAppearanceWindowController(defaults: defaults())
+        c.show(); defer { c.close() }
+        let w = try window()
+        #expect(w.titleVisibility == .hidden)
+        #expect(!w.styleMask.contains(.resizable))
+        #expect(w.standardWindowButton(.closeButton)?.isHidden == false)
+        #expect(w.isMovableByWindowBackground)
+    }
     @Test func savedChoicesAppearOnOpenWithoutWrites() async throws {
         let d = defaults()
         d.set("unknown", forKey: RecordDesign.preferenceKey)
@@ -115,6 +124,9 @@ struct RecordAppearancePickerTests {
             #expect(w.frame.insetBy(dx: -0.5, dy: -0.5).contains(rect), "\(id) must stay in the window at \(size)")
             #expect(rect.height >= 30, "\(id) must retain a comfortable target height")
         }
+        let heading = try AppearanceTestAccessibility.element("appearance.help", in: w)
+        let headingFrame = try #require(heading.object.accessibilityFrame?())
+        #expect(w.frame.contains(headingFrame), "The instruction must stay inside the window")
     }
 
     @Test func occlusionStopsPreviewWork() async throws {

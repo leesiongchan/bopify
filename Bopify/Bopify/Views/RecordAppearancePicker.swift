@@ -17,13 +17,16 @@ struct RecordAppearancePicker: View {
         GeometryReader { size in
             let geometry = RecordAppearanceGeometry(sceneWidth: size.size.width)
             VStack(spacing: 0) {
-                Text("appearance.title", bundle: strings).font(.system(size: 13, weight: .medium))
-                    .frame(maxWidth: .infinity).frame(height: 38)
-                    .background(Color(red: 0.18, green: 0.22, blue: 0.18))
-                Text("appearance.help", bundle: strings).font(.system(size: 12))
-                    .foregroundStyle(Color.white.opacity(0.78))
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20)
-                    .frame(height: 42)
+                Text("appearance.help", bundle: strings)
+                    .font(.custom("ManropeV5-Medium", fixedSize: 20))
+                    .foregroundStyle(Color(red: 0.96, green: 0.95, blue: 0.88))
+                    .multilineTextAlignment(.center).lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .shadow(color: .black.opacity(0.7), radius: 3, y: 2)
+                    .frame(maxWidth: 760).frame(maxWidth: .infinity)
+                    .padding(.horizontal, 32).padding(.top, 34).padding(.bottom, 14)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier("appearance.help")
                 RecordAppearanceScene(model: model).frame(maxHeight: geometry.sceneHeight)
                 Spacer(minLength: 4)
                 HStack(alignment: .top, spacing: 20) {
@@ -34,7 +37,7 @@ struct RecordAppearancePicker: View {
                 footer
             }
             .frame(width: size.size.width, height: size.size.height, alignment: .top)
-            .background(alignment: .topLeading) { cloth(width: size.size.width, height: size.size.height) }
+            .background { RecordAppearanceCloth() }
             .clipped()
         }
         .foregroundStyle(Color(red: 0.89, green: 0.91, blue: 0.85))
@@ -45,16 +48,10 @@ struct RecordAppearancePicker: View {
         .onChange(of: model.focused, initial: true) { _, value in focused = value }
         .onChange(of: focused) { _, value in if let value { model.focused = value } }
     }
-    private func cloth(width: CGFloat, height: CGFloat) -> some View {
-        ZStack(alignment: .topLeading) {
-            Color(red: 0.16, green: 0.19, blue: 0.09)
-            RecordAppearanceCloth().frame(width: width, height: max(0, height - 38)).offset(y: 38)
-        }.frame(width: width, height: height, alignment: .topLeading).clipped().accessibilityHidden(true)
-    }
     private func options(_ family: RecordAppearanceFamily) -> some View {
         VStack(alignment: .leading, spacing: 9) {
             Text(LocalizedStringKey(family == .material ? "appearance.material" : "appearance.pattern"), bundle: strings)
-                .font(.system(size: 22, weight: .semibold)).tracking(-0.4)
+                .font(.custom("ManropeV5-SemiBold", fixedSize: 16))
                 .accessibilityAddTraits(.isHeader)
             RecordAppearanceOptionLayout {
                 ForEach(RecordAppearanceChoice.choices(in: family), id: \.self) { choice in
@@ -83,7 +80,7 @@ struct RecordAppearancePicker: View {
     private var footer: some View {
         HStack(spacing: 8) {
             Circle().fill(Color(red: 0.79, green: 0.87, blue: 0.57)).frame(width: 4, height: 4).accessibilityHidden(true)
-            Text(summary).font(.system(size: 11))
+            Text(summary).font(.custom("ManropeV5-Regular", fixedSize: 12))
             Spacer()
             Button { model.isMotionPaused.toggle() } label: {
                 Text(LocalizedStringKey(model.isMotionPaused ? "appearance.resume" : "appearance.pause"), bundle: strings)
@@ -108,7 +105,7 @@ private struct RecordAppearanceButtonStyle: ButtonStyle {
     let focused: Bool
     let increasedContrast: Bool
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(.system(size: 12))
+        configuration.label.font(.custom("ManropeV5-Medium", fixedSize: 13))
             .padding(.horizontal, 10).frame(minHeight: 32)
             .foregroundStyle(selected ? Color(red: 0.10, green: 0.15, blue: 0.10) : Color(red: 0.90, green: 0.93, blue: 0.85))
             .background {
@@ -123,24 +120,15 @@ private struct RecordAppearanceButtonStyle: ButtonStyle {
 }
 
 struct RecordAppearanceCloth: View {
-    var image: CGImage? = RecordAppearanceResources.corduroyTile
+    var image: CGImage? = RecordAppearanceResources.corduroyPixels
 
     var body: some View {
-        Canvas { context, size in
-            guard let pixels = image else { return }
-            // One source pixel per Retina pixel; mirrored edges meet without a colour jump.
-            let tile = CGSize(width: CGFloat(pixels.width) / 2, height: CGFloat(pixels.height) / 2)
-            let texture = context.resolve(Image(decorative: pixels, scale: 2).interpolation(.none))
-            for row in 0..<Int(ceil(size.height / tile.height)) {
-                for column in 0..<Int(ceil(size.width / tile.width)) {
-                    let mirrorX = !column.isMultiple(of: 2)
-                    let mirrorY = !row.isMultiple(of: 2)
-                    var placement = context
-                    placement.translateBy(x: CGFloat(column + (mirrorX ? 1 : 0)) * tile.width,
-                                          y: CGFloat(row + (mirrorY ? 1 : 0)) * tile.height)
-                    placement.scaleBy(x: mirrorX ? -1 : 1, y: mirrorY ? -1 : 1)
-                    placement.draw(texture, in: CGRect(origin: .zero, size: tile))
-                }
+        GeometryReader { size in
+            if let image {
+                Image(decorative: image, scale: 1).resizable().interpolation(.high)
+                    .scaledToFill()
+                    .frame(width: size.size.width, height: size.size.height)
+                    .clipped()
             }
         }
         .background(Color(red: 0.16, green: 0.19, blue: 0.09))

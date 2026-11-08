@@ -13,7 +13,7 @@ import SwiftUI
         if window == nil {
             RecordAppearanceResources.prepare()
             let window = RecordAppearanceWindow(contentRect: CGRect(x: 0, y: 0, width: 900, height: 655),
-                                                styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+                                                styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
             window.contentView = NSHostingView(rootView: RecordAppearancePicker(model: model, onClose: { [weak self] in self?.close() })
                 .environment(\.accessibilityEnabled, true))
             window.onMove = { [weak model] in model?.move($0) }

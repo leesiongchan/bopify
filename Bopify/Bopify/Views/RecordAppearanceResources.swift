@@ -13,8 +13,9 @@ import os
     static func prepare() {
         guard !prepared else { return }
         prepared = true
-        for name in ["Allura-Regular", "IBMPlexSansCondensed-Medium"] {
-            guard let url = bundle.url(forResource: name, withExtension: "ttf") else { report(name); continue }
+        for (name, ext) in [("ManropeV5-Regular", "otf"), ("ManropeV5-Medium", "otf"),
+                            ("ManropeV5-SemiBold", "otf"), ("IBMPlexSansCondensed-Medium", "ttf")] {
+            guard let url = bundle.url(forResource: name, withExtension: ext) else { report(name); continue }
             var error: Unmanaged<CFError>?
             if !CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error) {
                 let code = error.map { CFErrorGetCode($0.takeRetainedValue()) }
@@ -32,18 +33,14 @@ import os
     }
     static var deck: NSImage? { image(named: "sunburst-deck") }
     static var corduroy: NSImage? { image(named: "corduroy-crisp") }
-    static let corduroyTile: CGImage? = {
-        guard let source = corduroy?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
-        // End at the dark furrow centres so reflection does not create a doubled raised rib.
-        return source.cropping(to: CGRect(x: 33, y: 0, width: 1185, height: source.height))
-    }()
+    static let corduroyPixels = corduroy?.cgImage(forProposedRect: nil, context: nil, hints: nil)
     static func plateFont(compact: Bool) -> Font {
         prepare()
         return .custom("IBMPlexSansCond-Medium", fixedSize: compact ? 6.2 : 7)
     }
     static func recordFont(compact: Bool) -> Font {
         prepare()
-        return .custom("Allura-Regular", fixedSize: compact ? 22 : 24)
+        return .custom("ManropeV5-Medium", fixedSize: compact ? 14 : 16)
     }
     private static func report(_ name: String) {
         guard missing.insert(name).inserted else { return }

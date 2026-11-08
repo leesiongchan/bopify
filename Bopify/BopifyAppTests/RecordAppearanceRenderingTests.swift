@@ -13,16 +13,20 @@ struct RecordAppearanceRenderingTests {
         let c = try #require(cloth.cgImage(forProposedRect: nil, context: nil, hints: nil))
         #expect(d.width == 1509 && d.height == 1042)
         #expect(c.width == 1254 && c.height == 1254)
-        let tile = try #require(RecordAppearanceResources.corduroyTile)
-        #expect(tile.width > 1100 && tile.width < c.width && tile.height == c.height)
+        let clothPixels = try #require(RecordAppearanceResources.corduroyPixels)
+        #expect(clothPixels.width == c.width && clothPixels.height == c.height)
         #expect(d.alphaInfo != .none)
-        for name in ["Allura-Regular", "IBMPlexSansCond-Medium"] {
+        for name in ["ManropeV5-Regular", "ManropeV5-Medium", "ManropeV5-SemiBold", "IBMPlexSansCond-Medium"] {
             #expect(CTFontCopyPostScriptName(CTFontCreateWithName(name as CFString, 12, nil)) as String == name)
         }
         for name in ["Allura-OFL", "IBMPlexSansCondensed-OFL"] {
             let url = try #require(RecordAppearanceResources.bundle.url(forResource: name, withExtension: "txt"))
             #expect(try String(contentsOf: url, encoding: .utf8).contains("SIL OPEN FONT LICENSE"))
         }
+        let licenseURL = try #require(RecordAppearanceResources.bundle.url(forResource: "ManropeV5-License", withExtension: "txt"))
+        let license = try String(contentsOf: licenseURL, encoding: .utf8)
+        #expect(license.contains("Manrope V5 by Mikhail Sharanda"))
+        #expect(license.contains("You may embed this font in websites, apps, or software."))
         #expect(RecordAppearanceResources.image(named: "missing-appearance-image") == nil)
     }
     @Test func longNamesWrapWithoutLeavingBounds() {
@@ -33,39 +37,39 @@ struct RecordAppearanceRenderingTests {
         #expect(frames[1].minY > frames[0].minY)
         #expect(frames[2].minY == frames[1].minY)
     }
-    @Test func corduroyPreservesPixelsAndMatchesReflectedEdges() throws {
-        let bitmap = try #require(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 4, pixelsHigh: 4,
+    @Test(arguments: [CGSize(width: 180, height: 80), CGSize(width: 80, height: 180)], [CGFloat(1), CGFloat(2)])
+    func corduroyFillsWindowWithOneProportionallyScaledImage(_ size: CGSize, _ scale: CGFloat) throws {
+        let bitmap = try #require(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 120, pixelsHigh: 80,
             bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-            colorSpaceName: .deviceRGB, bytesPerRow: 16, bitsPerPixel: 32))
-        let levels: [CGFloat] = [0.05, 0.85, 0.15, 0.95]
+            colorSpaceName: .deviceRGB, bytesPerRow: 480, bitsPerPixel: 32))
         let bytes = try #require(bitmap.bitmapData)
-        for y in 0..<4 {
-            for x in 0..<4 {
+        for y in 0..<80 {
+            for x in 0..<120 {
                 let offset = y * bitmap.bytesPerRow + x * 4
-                let level = UInt8((levels[x] * 255).rounded())
-                bytes[offset] = level
-                bytes[offset + 1] = level
-                bytes[offset + 2] = level
+                bytes[offset] = UInt8(x * 255 / 119)
+                bytes[offset + 1] = UInt8(y * 255 / 79)
+                bytes[offset + 2] = 255
                 bytes[offset + 3] = 255
             }
         }
-        let sample = NSImage(size: CGSize(width: 4, height: 4))
-        sample.addRepresentation(bitmap)
-        #expect(try #require(bitmap.colorAt(x: 1, y: 0)?.usingColorSpace(.deviceRGB)).redComponent > 0.8)
-        let pixels = try #require(sample.cgImage(forProposedRect: nil, context: nil, hints: nil))
-        #expect(pixels.width == 4)
+        let pixels = try #require(bitmap.cgImage?.copy(colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!))
         let renderer = ImageRenderer(content: RecordAppearanceCloth(image: pixels)
-            .frame(width: 128, height: 64))
-        renderer.scale = 2
+            .frame(width: size.width, height: size.height))
+        renderer.scale = scale
         let capture = NSBitmapImageRep(cgImage: try #require(renderer.cgImage))
-        func value(_ x: Int) throws -> CGFloat {
-            try #require(capture.colorAt(x: x, y: 8)?.usingColorSpace(.deviceRGB)).redComponent
+        #expect(capture.bitsPerSample == 8 && capture.samplesPerPixel == 4)
+        let fit = max(size.width / 120, size.height / 80)
+        let crop = CGPoint(x: (120 * fit - size.width) / 2, y: (80 * fit - size.height) / 2)
+        for fraction in [CGFloat(0.05), 0.25, 0.5, 0.75, 0.95] {
+            let x = Int(size.width * scale * fraction), y = Int(size.height * scale * fraction)
+            var pixel = [UInt](repeating: 0, count: capture.samplesPerPixel)
+            capture.getPixel(&pixel, atX: x, y: y)
+            let sourceX = ((CGFloat(x) + 0.5) / scale + crop.x) / fit
+            let sourceY = ((CGFloat(y) + 0.5) / scale + crop.y) / fit
+            #expect(abs(CGFloat(pixel[0]) / 255 - sourceX / 120 * 0.86) < 0.04)
+            #expect(abs(CGFloat(pixel[1]) / 255 - sourceY / 80 * 0.86) < 0.04)
+            #expect(abs(CGFloat(pixel[2]) / 255 - 0.86) < 0.02, "The image must cover the entire window")
         }
-        let values = try (0..<8).map(value)
-        #expect((values.max()! - values.min()!) > 0.65, "Fine fibres must keep their source contrast, without fractional rescaling")
-        #expect(try value(0) < 0.1, "Anchor the texture at the viewport's leading edge")
-        #expect(try abs(value(3) - value(4)) < 0.01, "Horizontal mirror boundary must match")
-        #expect(try abs(value(7) - value(8)) < 0.01, "Alternate mirror boundary must match")
     }
     @Test(arguments: [CGFloat(760), CGFloat(900)])
     func allNineChoicesExposeIndependentSelections(_ width: CGFloat) async throws {
