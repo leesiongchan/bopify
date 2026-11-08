@@ -10,22 +10,33 @@ struct PlayerUnsupportedCommandTests {
         let model = PlayerModel(engine: UnsupportedCommandEngine())
         model.start()
         defer { model.stop() }
-        for _ in 0..<10_000 { if model.state.isActiveDevice { break }; await Task.yield() }
+        await waitUntil { model.state.isActiveDevice && model.state.canShuffle }
         try #require(model.state.isActiveDevice)
+        try #require(model.state.canShuffle)
         if action == "volume" {
             model.setVolume(0.25)
             model.endVolumeEditing()
         } else {
             model.setShuffle(true)
         }
-        for _ in 0..<10_000 { if model.commandNotice != nil { break }; await Task.yield() }
+        await waitUntil { model.commandNotice != nil }
         #expect(model.commandNotice == "This action is unavailable with Soloist.")
         #expect(model.isEngineReady)
     }
 }
 
+@MainActor private func waitUntil(_ predicate: () -> Bool) async {
+    let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+    while !predicate() && ContinuousClock.now < deadline {
+        await Task.yield()
+    }
+}
+
 private struct UnsupportedCommandEngine: PlaybackEngine {
-    let events = AsyncStream<PlaybackEvent> { $0.yield(.playing(positionMs: 0)) }
+    let events = AsyncStream<PlaybackEvent> {
+        $0.yield(.availablePlaybackOptions(canShuffle: true, canRepeat: false))
+        $0.yield(.playing(positionMs: 0))
+    }
     func load(_ request: PlayRequest) async throws { throw SoloistPlaybackError.unsupported }
     func resume() async throws { throw SoloistPlaybackError.unsupported }
     func playHere() async throws { throw SoloistPlaybackError.unsupported }
