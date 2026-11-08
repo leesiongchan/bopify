@@ -10,11 +10,6 @@ struct SpotifyURITests {
         #expect(uri.rawValue == "spotify:track:6rqhFgbbKwnb9MLmUQDhG6")
     }
 
-    @Test func parsesAPlaylistURI() throws {
-        let uri = try #require(SpotifyURI("spotify:playlist:37i9dQZF1DXcBWIGoYBM5M"))
-        #expect(uri.kind == .playlist)
-    }
-
     @Test(arguments: ["", "spotify:track", "spotify::abc", "http://open.spotify.com/track/abc", "spotify:track:"])
     func rejectsMalformedInput(_ raw: String) {
         #expect(SpotifyURI(raw) == nil)

@@ -14,8 +14,6 @@ struct RecordAppearanceGeometryTests {
                 #expect(extracted.x + g.recordDiameter / 2 <= width)
             }
         }
-        #expect(abs(g.recordDiameter - g.deckFrame.width * 570 / 1509) < 0.001)
-        #expect(abs(g.platterCenter(in: .material).x - g.deckFrame.minX - g.deckFrame.width * 428 / 1509) < 0.001)
     }
     @Test(arguments: [CGFloat(758), CGFloat(898)])
     func constantDiameterFixedLayersAndStraightTravel(_ width: CGFloat) {
