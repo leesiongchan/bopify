@@ -61,12 +61,11 @@ struct RecordLoadTransition: View {
     let launch: CoverFlowLaunch
     let destination: CGRect
     let progress: Double
-    var reduceMotion = false
     var rotationAngle = 0.0
 
     var body: some View {
         let stage = RecordLoadStage(progress: progress)
-        if !reduceMotion, stage.coverOpacity > 0, let artwork = launch.artwork {
+        if stage.coverOpacity > 0, let artwork = launch.artwork {
             Group {
                 if stage.travel < 1 {
                     funnel(artwork: artwork, stage: stage)

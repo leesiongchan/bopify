@@ -9,10 +9,11 @@ struct LibrespotServicesTests {
 
     @Test func creationAlwaysRequestsADataOnlySession() async throws {
         let native = ServiceFFIFixture()
-        let services = try await LibrespotServices(accessToken: "fixture-token", native: native.functions)
+        let services = try await LibrespotServices(accessToken: "fixture-token", expectedUsername: "fixture-listener", native: native.functions)
         let options = try #require(native.options)
         let object = try #require(JSONSerialization.jsonObject(with: Data(options.utf8)) as? [String: Any])
         #expect(object["servicesOnly"] as? Bool == true)
+        #expect(object["expectedUsername"] as? String == "fixture-listener")
         #expect(native.token == "fixture-token")
         await services.shutdown()
     }
@@ -20,15 +21,36 @@ struct LibrespotServicesTests {
     @Test func failedAuthenticationReleasesTheCallbackContext() async {
         let native = ServiceFFIFixture(createError: -3)
         await #expect(throws: PlayerError.authExpired) {
-            _ = try await LibrespotServices(accessToken: "fixture-token", native: native.functions)
+            _ = try await LibrespotServices(accessToken: "fixture-token", expectedUsername: "fixture-listener", native: native.functions)
         }
         #expect(native.bridge == nil)
         #expect(native.destroyCount == 0)
     }
 
+    @Test(arguments: ["", " ", "listener\n", "listener\0", String(repeating: "é", count: 129)])
+    func invalidExpectedIdentityNeverStartsNativeLogin(username: String) async {
+        let native = ServiceFFIFixture()
+        await #expect(throws: SoloistPlaybackError.missingAccountID) {
+            _ = try await LibrespotServices(accessToken: "fixture-token", expectedUsername: username, native: native.functions)
+        }
+        #expect(native.options == nil && native.bridge == nil)
+    }
+
+    @Test func expectedIdentityIsEncodedAsDataWithoutChangingTheNativeOptions() async throws {
+        let native = ServiceFFIFixture()
+        let username = #"listener\"quoted\\identity"#
+        let services = try await LibrespotServices(accessToken: "fixture-token", expectedUsername: username, native: native.functions)
+        let options = try #require(native.options)
+        let object = try #require(JSONSerialization.jsonObject(with: Data(options.utf8)) as? [String: Any])
+        #expect(object["expectedUsername"] as? String == username)
+        #expect(object["servicesOnly"] as? Bool == true)
+        #expect(object.count == 4)
+        await services.shutdown()
+    }
+
     @Test func metadataRepliesReturnToTheirRequestingService() async throws {
         let native = ServiceFFIFixture()
-        let services = try await LibrespotServices(accessToken: "fixture-token", native: native.functions)
+        let services = try await LibrespotServices(accessToken: "fixture-token", expectedUsername: "fixture-listener", native: native.functions)
         let lyrics = try await services.requestLyrics(for: track)
         let radio = try await services.requestRadio(seed: track)
         let artist = try await services.requestArtistTopTracks(for: track, artistIndex: 2)
@@ -43,7 +65,7 @@ struct LibrespotServicesTests {
 
     @Test func nativeRequestRejectionUsesTheSharedErrorTaxonomy() async throws {
         let native = ServiceFFIFixture(requestError: -5)
-        let services = try await LibrespotServices(accessToken: "fixture-token", native: native.functions)
+        let services = try await LibrespotServices(accessToken: "fixture-token", expectedUsername: "fixture-listener", native: native.functions)
         await #expect(throws: PlayerError.networkUnavailable) { _ = try await services.requestLyrics(for: track) }
         await #expect(throws: PlayerError.networkUnavailable) { _ = try await services.requestRadio(seed: track) }
         await #expect(throws: PlayerError.networkUnavailable) {
@@ -55,7 +77,7 @@ struct LibrespotServicesTests {
     @Test(arguments: [-1, Int.max])
     func invalidArtistIndexNeverReachesNativeServices(index: Int) async throws {
         let native = ServiceFFIFixture()
-        let services = try await LibrespotServices(accessToken: "fixture-token", native: native.functions)
+        let services = try await LibrespotServices(accessToken: "fixture-token", expectedUsername: "fixture-listener", native: native.functions)
         await #expect(throws: ArtistTopTracksFailure.unavailable) {
             _ = try await services.requestArtistTopTracks(for: track, artistIndex: index)
         }
@@ -65,7 +87,7 @@ struct LibrespotServicesTests {
 
     @Test func shutdownFailsPendingRequestsAndPreventsFurtherDispatch() async throws {
         let native = ServiceFFIFixture(replies: false)
-        let services = try await LibrespotServices(accessToken: "fixture-token", native: native.functions)
+        let services = try await LibrespotServices(accessToken: "fixture-token", expectedUsername: "fixture-listener", native: native.functions)
         let request = Task { try await services.requestLyrics(for: track) }
         for await _ in native.dispatched { break }
         await services.shutdown()
@@ -76,7 +98,7 @@ struct LibrespotServicesTests {
 
     @Test func concurrentShutdownReleasesTheContextExactlyOnceAfterDestroy() async throws {
         let native = ServiceFFIFixture()
-        var services: LibrespotServices? = try await LibrespotServices(accessToken: "fixture-token", native: native.functions)
+        var services: LibrespotServices? = try await LibrespotServices(accessToken: "fixture-token", expectedUsername: "fixture-listener", native: native.functions)
         try #require(native.bridge != nil)
         if let current = services {
             async let first: Void = current.shutdown()

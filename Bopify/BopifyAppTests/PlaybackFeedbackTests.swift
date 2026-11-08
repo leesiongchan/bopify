@@ -47,24 +47,24 @@ struct PlaybackFeedbackTests {
 
     @Test func anAlreadySpinningRecordKeepsDrivingDuringSelectionLoading() {
         #expect(RecordMotorRequest.resolve(phase: .loading, ready: true, active: true,
-            visible: true, reduced: false, pressed: false, loadingFromPlaying: true) == .drive)
+            visible: true, pressed: false, loadingFromPlaying: true) == .drive)
         #expect(RecordMotorRequest.resolve(phase: .loading, ready: true, active: true,
-            visible: true, reduced: false, pressed: false) == .snap)
+            visible: true, pressed: false) == .snap)
     }
 
     @Test(arguments: [false, true])
-    func reducedMotionKeepsTheConfirmedGlyphAtEveryAnimationPhase(isPlaying: Bool) async throws {
+    func playbackGlyphShowsIntermediateAnimationFrames(isPlaying: Bool) async throws {
         let settled = try await snapshot(PlaybackButtonFace(isPlaying: isPlaying, previousPlaying: !isPlaying,
             progress: 1))
         #expect(settled.visiblePixels > 50)
         for progress in [0.0, 0.25, 0.6] {
             let pixels = try await snapshot(PlaybackButtonFace(isPlaying: isPlaying, previousPlaying: !isPlaying,
-                progress: progress, reduceMotion: true))
-            #expect(pixels.png == settled.png, "Reduced motion must show the confirmed glyph without intermediate frames")
+                progress: progress))
+            #expect(pixels.png != settled.png, "Playback feedback should animate toward the confirmed glyph")
         }
     }
 
-    @Test func coverFlightHasVisibleFramesAndDisappearsWithReducedMotionOrAtRest() async throws {
+    @Test func coverFlightHasVisibleFramesAndDisappearsAtRest() async throws {
         let artwork = makePreviewArtworkStore().image(for: previewArtworkURL(0))
         let launch = CoverFlowLaunch(itemURI: SpotifyURI("spotify:track:preview0")!,
                                     sourceFrame: CGRect(x: 125, y: 125, width: 76, height: 76), artwork: artwork)
@@ -74,9 +74,7 @@ struct PlaybackFeedbackTests {
             #expect(pixels.visiblePixels > 50)
         }
         let finished = try await snapshot(RecordLoadTransition(launch: launch, destination: target, progress: 1))
-        let reduced = try await snapshot(RecordLoadTransition(launch: launch, destination: target, progress: 0.45, reduceMotion: true))
         #expect(finished.visiblePixels == 0)
-        #expect(reduced.visiblePixels == 0)
     }
 
     private func snapshot<Content: View>(_ content: Content) async throws -> (visiblePixels: Int, png: Data) {

@@ -26,11 +26,22 @@ private func snapshot(active: Bool = true, status: String = "playing") -> [Strin
     var state = SoloistState()
     let events = try state.ingest(frame(snapshot()), at: stateDate)
     #expect(events.contains(.availableActions(canSeek: true, canNext: false, canPrevious: false)))
+    #expect(events.contains(.availablePlaybackOptions(canShuffle: false, canRepeat: false)))
     #expect(state.track?.title == "Fixture")
     #expect(state.positionMs == 1000)
     let idle = try state.ingest(frame(snapshot(status: "idle")), at: stateDate)
     #expect(idle.contains(.playbackIdle))
     #expect(!idle.contains(.endOfTrack))
+}
+
+@Test func soloistOnlyAdvertisesShuffleAndRepeatWhenTheCurrentContextAllowsThem() throws {
+    var state = SoloistState()
+    var value = snapshot()
+    value["available_actions"] = ["shuffle": [:], "set_repeat": [:]]
+    let supported = try state.ingest(frame(value), at: stateDate)
+    #expect(supported.contains(.availablePlaybackOptions(canShuffle: true, canRepeat: true)))
+    let inactive = try state.ingest(frame(snapshot(active: false)), at: stateDate)
+    #expect(inactive.contains(.availablePlaybackOptions(canShuffle: false, canRepeat: false)))
 }
 
 @Test func soloistQueueKeepsDuplicateOccurrencesWithoutInventedSelection() throws {
@@ -51,6 +62,28 @@ private func snapshot(active: Bool = true, status: String = "playing") -> [Strin
     _ = try state.ingest(frame(snapshot()), at: stateDate)
     let events = try state.ingest(frame(snapshot()), at: stateDate)
     #expect(!events.contains { if case .trackChanged = $0 { return true }; return false })
+}
+
+@Test func soloistQueueRefreshPreservesTheCurrentOccurrenceForLyrics() throws {
+    var state = SoloistState()
+    _ = try state.ingest(frame(snapshot()), at: stateDate)
+    let item: [String: Any] = ["uid": sampleURI, "item": ["uri": sampleURI]]
+    func currentID(_ events: [PlaybackEvent]) -> String? {
+        events.compactMap { event -> String? in
+            if case let .queueChanged(queue) = event { return queue.current?.id }
+            return nil
+        }.first
+    }
+    let first = try #require(currentID(state.ingest(frame(["type": "queue_changed", "previous": [], "upcoming": [item]]), at: stateDate)))
+    let refresh = try #require(currentID(state.ingest(frame(["type": "queue_changed", "previous": [], "upcoming": [item]]), at: stateDate)))
+    let edit = try #require(currentID(state.ingest(frame(["type": "queue_changed", "previous": [], "upcoming": [item, item]]), at: stateDate)))
+    #expect(refresh == first)
+    #expect(edit == first)
+
+    let sameTrack = try #require(snapshot()["item"] as? [String: Any])
+    _ = try state.ingest(frame(["type": "track_changed", "item": sameTrack]), at: stateDate)
+    let nextOccurrence = try #require(currentID(state.ingest(frame(["type": "queue_changed", "previous": [item], "upcoming": [item]]), at: stateDate)))
+    #expect(nextOccurrence != first, "A consecutive occurrence of the same song must still restart its lyrics")
 }
 
 @Test func soloistBufferingDoesNotPretendPlaybackWasPaused() throws {
@@ -123,6 +156,15 @@ func soloistReactivationPublishesMetadataThatWasNotVisibleDuringAnInterruption(i
     }
 }
 
+@Test func soloistRejectsUnknownGranularPlaybackStatus() throws {
+    var state = SoloistState()
+    _ = try state.ingest(frame(snapshot()), at: stateDate)
+    #expect(throws: SoloistPlaybackError.invalidState) {
+        try state.ingest(frame(["type": "playback_changed", "status": "unexpected"]), at: stateDate)
+    }
+    #expect(state.playbackStatus == "playing")
+}
+
 @MainActor @Test func playerHonorsProviderActionsAndIdleWithoutPhantomTrack() {
     let model = PlayerModel()
     let track = Track(uri: SpotifyURI(sampleURI)!, title: "Fixture", artists: [], albumTitle: nil, artwork: nil, durationMs: 100000)
@@ -153,6 +195,15 @@ func soloistReactivationPublishesMetadataThatWasNotVisibleDuringAnInterruption(i
     #expect(body["position_ms"] as? Int64 == 5000)
     let artist = SpotifyURI("spotify:artist:06HL4z0CvFAxyc27GXpf02")!
     #expect(throws: SoloistPlaybackError.self) { try SoloistWebAPI.playBody(PlayRequest(contextURI: artist, startTrackURI: track)) }
+}
+
+@Test func explicitPlaybackContextsReplaceTheAutomaticOrderWithoutInventedURIs() throws {
+    let selected = SpotifyURI(sampleURI)!, next = SpotifyURI("spotify:track:11dFghVXANMlKmJXsNCbNl")!
+    let body = try SoloistWebAPI.playBody(PlayRequest(contextURI: selected, startPositionMs: 5500,
+        followingTrackURIs: [selected, next, next]))
+    #expect(body["uris"] as? [String] == [selected.rawValue, next.rawValue])
+    #expect(body["position_ms"] as? Int64 == 5500)
+    #expect(body["context_uri"] == nil && body["offset"] == nil)
 }
 
 @Test func soloistCorrelationRequiresFreshMatchingAdvancingOwnedPlayback() throws {

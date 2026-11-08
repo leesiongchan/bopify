@@ -635,7 +635,9 @@ struct SpotifyLibraryClientTests {
         let tracks = try JSONSerialization.data(withJSONObject: ["items": [savedTrack("t")["track"]!, ["uri": 1]]])
         LibraryProtocol.fixture.reset(.init(data: tracks))
         let client = scopedClient(["user-top-read"])
-        #expect(try await client.topItems(.tracks) == [StationSeed(uri: SpotifyURI("spotify:track:t")!, name: "Song t")])
+        let expected = Track(uri: SpotifyURI("spotify:track:t")!, title: "Song t", artists: [ArtistSummary(name: "Artist")],
+                             albumTitle: "Album", artwork: Artwork(url: URL(string: "https://i.scdn.co/image/cover")!), durationMs: 180_000)
+        #expect(try await client.topItems(.tracks) == [StationSeed(track: expected)])
         #expect(LibraryProtocol.fixture.requests.first?.url?.path == "/v1/me/top/tracks")
         #expect(query(LibraryProtocol.fixture.requests.first) == [
             URLQueryItem(name: "time_range", value: "medium_term"), URLQueryItem(name: "limit", value: "5")])
@@ -645,8 +647,18 @@ struct SpotifyLibraryClientTests {
         let seeds = try await client.topItems(.artists)
         #expect(seeds == [StationSeed(uri: SpotifyURI("spotify:artist:ar")!, name: "Artist")])
         #expect(seeds.first?.isArtist == true)
+        #expect(seeds.first?.track == nil)
         #expect(LibraryProtocol.fixture.requests.first?.url?.path == "/v1/me/top/artists")
     }
+    @Test(arguments: [TopItemTimeRange.shortTerm, .mediumTerm, .longTerm])
+    func topItemsHonorExplicitTimeRange(timeRange: TopItemTimeRange) async throws {
+        LibraryProtocol.fixture.reset(.init(data: Data(#"{"items":[]}"#.utf8)))
+        let history: any ListeningHistoryService = scopedClient(["user-top-read"])
+        _ = try await history.topItems(.tracks, timeRange: timeRange)
+        #expect(query(LibraryProtocol.fixture.requests.first) == [
+            URLQueryItem(name: "time_range", value: timeRange.rawValue), URLQueryItem(name: "limit", value: "5")])
+    }
+
     @Test func historyRequestsShareTheLibraryCooldown() async {
         LibraryProtocol.fixture.reset(.init(status: 429, headers: ["Retry-After": "30"]))
         let client = client()

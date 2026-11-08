@@ -37,6 +37,13 @@ enum StartupStep: Hashable {
         }
     }
 
+    var isCompact: Bool {
+        switch self {
+        case .library, .playback, .completion: true
+        case .signIn, .connection: false
+        }
+    }
+
     var progress: Int? {
         switch self {
         case .signIn(.idle), .signIn(.authenticating), .signIn(.error): 1
@@ -71,14 +78,22 @@ struct SignInRecordView: View {
     var isVisible = true
     var onRecordFrameChanged: ((CGRect) -> Void)?
     var scale: CGFloat = 0.88
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var completionID: UUID?
+    var onCompletionSettled: ((UUID) -> Void)?
+    var onRecordSideChanged: ((RecordSide) -> Void)?
+    var pocketOpacity: Double = 1
+    var recordOpacity: Double = 1
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var lift = Metrics.insideLift
-    @State private var turn = 0.0
-    @State private var spinStart: Date?
+    @State private var motion = StartupRecordMotion(angle: -100)
+    @State private var pointerTilt = CGSize.zero
     @State private var isPresented = false
     @State private var shownSide: RecordSide?
+    @State private var targetSide: RecordSide?
     @State private var flip: CGFloat = 1
+    @State private var animations = StartupRecordAnimationState()
+    @State private var activeCompletionID: UUID?
+    @State private var reportedCompletionID: UUID?
 
     private var pose: SignInRecordPose { step.recordPose }
 
@@ -90,137 +105,204 @@ struct SignInRecordView: View {
         static let insideLift: CGFloat = 2
         static let tuckedLift: CGFloat = 28
         static let outLift: CGFloat = 112
-        /// 33⅓ rpm.
-        static let spinDegreesPerSecond = 200.0
     }
 
     private struct Trigger: Equatable {
         let pose: SignInRecordPose
         let isVisible: Bool
         let isCompleting: Bool
+        let completionID: UUID?
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: spinStart == nil || !isVisible || reduceMotion)) { context in
-            let angle = Angle.degrees(turn + spunDegrees(at: context.date))
+        TimelineView(.animation(minimumInterval: pose == .spinning ? 1.0 / 60 : 1.0 / 30,
+                                paused: !isVisible)) { context in
+            let time = context.date.timeIntervalSinceReferenceDate
+            let angle = Angle.degrees(motion.sample(at: time).angle + (pose == .tucked ? -8 : 0))
+            let sweep = decorates ? reflection(at: time) : nil
+            let poise = decorates ? 0.25 * sin(time * .pi / 4) : 0
             ZStack(alignment: .bottom) {
                 Ellipse().fill(.black.opacity(0.6))
                     .frame(width: 236, height: 26)
                     .blur(radius: 5)
                     .offset(y: 8)
-                placedRecord(angle, reportsFrame: true)
+                    .opacity(pocketOpacity)
+                placedRecord(angle, reflection: sweep, reportsFrame: true)
                     .mask {
                         ZStack(alignment: .bottom) {
                             Rectangle()
                             SleeveShape().frame(width: Metrics.sleeve.width, height: Metrics.sleeve.height)
+                                .opacity(pocketOpacity)
                                 .blendMode(.destinationOut)
                         }
                         .compositingGroup()
                     }
+                    .opacity(recordOpacity)
                 // What shows through the plastic: the same record, frosted, clipped exactly to the sleeve.
-                placedRecord(angle)
+                placedRecord(angle, reflection: sweep)
                     .blur(radius: 6)
                     .brightness(-0.12)
                     .mask(alignment: .bottom) {
                         SleeveShape().frame(width: Metrics.sleeve.width, height: Metrics.sleeve.height)
                     }
+                    .opacity(pocketOpacity)
                 Sleeve(isOpaque: reduceTransparency)
                     .frame(width: Metrics.sleeve.width, height: Metrics.sleeve.height)
+                    .opacity(pocketOpacity)
             }
             .frame(width: Metrics.stage.width, height: Metrics.stage.height)
-            .rotation3DEffect(.degrees(10), axis: (x: 1, y: 0, z: 0), anchor: UnitPoint(x: 0.5, y: 0.9), perspective: 0.35)
+            .rotationEffect(.degrees(poise), anchor: UnitPoint(x: 0.5, y: 0.85))
+            .rotation3DEffect(.degrees(10 + Double(pointerTilt.height)),
+                              axis: (x: 1, y: 0, z: 0), anchor: UnitPoint(x: 0.5, y: 0.9), perspective: 0.35)
+            .rotation3DEffect(.degrees(Double(pointerTilt.width)),
+                              axis: (x: 0, y: 1, z: 0), anchor: UnitPoint(x: 0.5, y: 0.85), perspective: 0.2)
         }
         .scaleEffect(scale)
         .frame(width: Metrics.stage.width * scale, height: Metrics.stage.height * scale)
         .accessibilityHidden(true)
-        .task(id: Trigger(pose: pose, isVisible: isVisible, isCompleting: step == .completion)) { await settle() }
-        .onAppear { if shownSide == nil { shownSide = step.side ?? .a } }
+        .task(id: Trigger(pose: pose, isVisible: isVisible, isCompleting: step == .completion,
+                          completionID: completionID)) { await settle() }
+        .onContinuousHover { phase in
+            guard decorates else { return }
+            switch phase {
+            case let .active(location):
+                animateTilt(to: CGSize(width: (location.x / (Metrics.stage.width * scale) - 0.5) * 4,
+                                       height: -(location.y / (Metrics.stage.height * scale) - 0.5) * 2))
+            case .ended: animateTilt(to: .zero)
+            }
+        }
+        .onDisappear { resetHiddenPose() }
+        .onAppear {
+            if shownSide == nil { shownSide = step.side ?? .a }
+            if targetSide == nil { targetSide = shownSide }
+        }
+        .onChange(of: shownSide, initial: true) { _, side in
+            if let side { onRecordSideChanged?(side) }
+        }
         .onChange(of: step.side) { _, side in
             // The shown side only changes once the record is edge-on.
-            if let side, side != shownSide { turnOver(to: side) }
+            if let side, side != targetSide { turnOver(to: side) }
         }
     }
 
-    private func placedRecord(_ angle: Angle, reportsFrame: Bool = false) -> some View {
-        RecordDisc(angle: angle, side: shownSide ?? step.side ?? .a, isSad: pose == .tucked)
+    private var decorates: Bool { isVisible && pose != .tucked && step != .completion }
+
+    private func placedRecord(_ angle: Angle, reflection: Double?, reportsFrame: Bool = false) -> some View {
+        RecordDisc(angle: angle, side: shownSide ?? step.side ?? .a, isSad: pose == .tucked, reflection: reflection)
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
                 if reportsFrame { onRecordFrameChanged?(frame) }
             }
             .scaleEffect(x: flip, y: 1)
             .saturation(pose == .tucked ? 0.2 : 1)
             .brightness(pose == .tucked ? -0.12 : 0)
-            .animation(.easeInOut(duration: reduceMotion ? 0.16 : 0.8), value: pose)
+            .animation(.easeInOut(duration: 0.8), value: pose)
             .offset(y: -lift)
             .padding(.bottom, Metrics.well)
             .frame(width: Metrics.stage.width, height: Metrics.stage.height, alignment: .bottom)
     }
 
-    private func spunDegrees(at date: Date) -> Double {
-        spinStart.map { date.timeIntervalSince($0) * Metrics.spinDegreesPerSecond } ?? 0
+    private func reflection(at time: TimeInterval) -> Double? {
+        let phase = time.truncatingRemainder(dividingBy: 10) / 10
+        guard phase >= 0.15, phase <= 0.5 else { return nil }
+        return (phase - 0.15) / 0.35
     }
 
-    private func upright(_ degrees: Double) -> Double { (degrees / 360).rounded(.up) * 360 }
-
     private func turnOver(to side: RecordSide) {
-        guard !reduceMotion else {
-            shownSide = side
+        targetSide = side
+        let token = animations.begin(.flip)
+        if side == shownSide {
+            withAnimation(.easeOut(duration: 0.35), completionCriteria: .removed) { flip = 1 } completion: {
+                animations.finish(.flip, token: token)
+            }
             return
         }
-        withAnimation(.easeIn(duration: 0.3)) { flip = 0 } completion: {
+        withAnimation(.easeIn(duration: 0.3), completionCriteria: .removed) { flip = 0 } completion: {
+            guard animations.isCurrent(.flip, token: token) else { return }
             shownSide = side
-            withAnimation(.easeOut(duration: 0.35)) { flip = 1 }
+            withAnimation(.easeOut(duration: 0.35), completionCriteria: .removed) { flip = 1 } completion: {
+                animations.finish(.flip, token: token)
+            }
         }
+    }
+
+    private func animateLift(to value: CGFloat, animation: Animation) {
+        guard lift != value else { return }
+        let token = animations.begin(.lift)
+        withAnimation(animation, completionCriteria: .removed) { lift = value } completion: {
+            animations.finish(.lift, token: token)
+        }
+    }
+
+    private func animateTilt(to value: CGSize) {
+        guard pointerTilt != value else { return }
+        let token = animations.begin(.tilt)
+        withAnimation(.easeOut(duration: 0.18), completionCriteria: .removed) { pointerTilt = value } completion: {
+            animations.finish(.tilt, token: token)
+        }
+    }
+
+    private func resetHiddenPose() {
+        motion.update(.paused, at: Date.now.timeIntervalSinceReferenceDate)
+        animations.cancelAll()
+        activeCompletionID = nil
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant) {
+            // Resolve an interrupted flip before invalidated callbacks can leave it edge-on.
+            shownSide = step.side ?? targetSide ?? shownSide ?? .a
+            targetSide = shownSide
+            flip = 1
+            pointerTilt = .zero
+        }
+        isPresented = false
     }
 
     private func settle() async {
-        // Fold any spin into the resting angle so the label carries on from where it is.
-        turn += spunDegrees(at: .now)
-        spinStart = nil
+        let now = Date.now.timeIntervalSinceReferenceDate
+        activeCompletionID = step == .completion ? completionID : nil
         guard isVisible else {
-            isPresented = false
+            resetHiddenPose()
             return
         }
         BopifyLog.auth.debug("startup record pose=\(String(describing: pose), privacy: .public) progress=\(step.progress ?? 0)")
-        let animation: (Animation) -> Animation? = { reduceMotion ? nil : $0 }
+        if !decorates { animateTilt(to: .zero) }
         switch pose {
-        case .out where step == .completion:
-            // A fast setup can finish during the entrance animation. Settle before the window handoff.
-            withAnimation(animation(.easeOut(duration: 0.2))) {
-                lift = Metrics.outLift
-                turn = upright(turn)
-            }
-        case .out where !isPresented && !reduceMotion:
+        case .out where !isPresented:
             var instant = Transaction()
             instant.disablesAnimations = true
-            withTransaction(instant) {
-                lift = Metrics.insideLift
-                turn = upright(turn) - 660
-            }
-            do { try await Task.sleep(for: .milliseconds(350)) } catch { return }
-            withAnimation(.spring(duration: 1.9, bounce: 0.12)) { lift = Metrics.outLift }
-            withAnimation(.timingCurve(0.15, 0.7, 0.25, 1, duration: 1.9)) { turn += 660 }
+            withTransaction(instant) { lift = Metrics.insideLift }
+            do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
+            motion.update(.idle, at: Date.now.timeIntervalSinceReferenceDate, settleDuration: 0.9)
+            animateLift(to: Metrics.outLift, animation: .spring(duration: 1, bounce: 0.08))
         case .out:
-            withAnimation(animation(.spring(duration: 0.9, bounce: 0.1))) {
-                lift = Metrics.outLift
-                turn = upright(turn)
-            }
+            motion.update(.idle, at: now)
+            animateLift(to: Metrics.outLift, animation: .spring(duration: 0.8, bounce: 0.08))
         case .spinning:
-            withAnimation(animation(.spring(duration: 0.9, bounce: 0.1))) { lift = Metrics.outLift }
-            if !reduceMotion { spinStart = .now }
+            motion.update(.working, at: now)
+            animateLift(to: Metrics.outLift, animation: .spring(duration: 0.8, bounce: 0.08))
         case .tucked:
-            withAnimation(animation(.easeInOut(duration: 1))) {
-                lift = Metrics.tuckedLift
-                turn = upright(turn) - 8
-            }
+            motion.update(.idle, at: now)
+            animateLift(to: Metrics.tuckedLift, animation: .easeInOut(duration: 0.8))
         }
         isPresented = true
+        guard step == .completion, let id = completionID, reportedCompletionID != id else { return }
+        while !Task.isCancelled, isVisible, activeCompletionID == id {
+            if animations.isSettled(motion: motion, at: Date.now.timeIntervalSinceReferenceDate) {
+                reportedCompletionID = id
+                onCompletionSettled?(id)
+                return
+            }
+            do { try await Task.sleep(for: .milliseconds(16)) } catch { return }
+        }
     }
+
 }
 
-private struct RecordDisc: View {
+struct RecordDisc: View {
     let angle: Angle
     let side: RecordSide
     let isSad: Bool
+    let reflection: Double?
     private let size: CGFloat = 200
     private let label: CGFloat = 66
 
@@ -232,6 +314,16 @@ private struct RecordDisc: View {
                 .shadow(color: .black.opacity(0.55), radius: 8, y: 8)
             // Lighting is fixed, so the grooves don't turn; only the label and dust reveal the spin.
             VinylPressingView(diameter: size)
+            if let reflection {
+                LinearGradient(colors: [.clear, .white.opacity(0.06), .white.opacity(0.24), .clear],
+                               startPoint: .leading, endPoint: .trailing)
+                    .rotationEffect(.degrees(-18))
+                    .offset(x: (reflection * 2 - 1) * size * 1.4)
+                    .mask { Circle().strokeBorder(.white, lineWidth: (size - label - 12) / 2) }
+                    .opacity(sin(reflection * .pi) * 0.55)
+                    .blendMode(.screen)
+                    .allowsHitTesting(false)
+            }
             ZStack {
                 RecordDust()
                 RecordLabel(side: side, isSad: isSad).frame(width: label, height: label)

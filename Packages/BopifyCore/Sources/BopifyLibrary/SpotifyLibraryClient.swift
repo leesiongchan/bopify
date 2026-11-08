@@ -51,13 +51,17 @@ public struct SpotifyLibraryClient: LibraryService, SavedTracksService, Listenin
     }
 
     public func topItems(_ kind: TopItemKind) async throws -> [StationSeed] {
+        try await topItems(kind, timeRange: .mediumTerm)
+    }
+
+    public func topItems(_ kind: TopItemKind, timeRange: TopItemTimeRange) async throws -> [StationSeed] {
         let data = try await request(method: "GET", path: "/v1/me/top/\(kind.rawValue)", query: [
-            URLQueryItem(name: "time_range", value: "medium_term"), URLQueryItem(name: "limit", value: "5")
+            URLQueryItem(name: "time_range", value: timeRange.rawValue), URLQueryItem(name: "limit", value: "5")
         ], scopes: ["user-top-read"])
         switch kind {
         case .tracks:
             guard let page = try? JSONDecoder().decode(TopPage<SavedTrack>.self, from: data) else { throw LibraryError.invalidResponse }
-            return page.items.compactMap { $0.value?.domain }.map { StationSeed(uri: $0.uri, name: $0.title) }
+            return page.items.compactMap { $0.value?.domain }.map { StationSeed(track: $0) }
         case .artists:
             guard let page = try? JSONDecoder().decode(TopPage<TopArtist>.self, from: data) else { throw LibraryError.invalidResponse }
             return page.items.compactMap { $0.value?.seed }

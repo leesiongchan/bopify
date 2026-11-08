@@ -6,62 +6,126 @@ import BopifyPlayback
 struct PlayerRootView: View {
     let environment: AppEnvironment
     @State private var startupSize: CGSize?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var startupRecordSide: RecordSide = .a
+    @State private var lastMeasuredContent: String?
+    @State private var waitsForContentSpace = false
+    @State private var currentViewportHeight: CGFloat = 0
 
     var body: some View {
         GeometryReader { viewport in
-            ZStack(alignment: .topLeading) {
-                if environment.isShowingPlayer, let player = environment.player {
-                    RecordPlayerView(player: player, artworkStore: environment.artworkStore,
-                                       presentation: environment.presentation, windowController: environment.playerWindowController)
-                        .id(ObjectIdentifier(player))
-                        .transition(.opacity)
-                }
-                if !environment.isShowingPlayer || environment.onboarding.phase == .handoff {
-                    StartupSurface(isAnimating: environment.presentation.isVisible, isDimmed: startupStep?.recordPose == .tucked) {
-                        VStack(spacing: 8) {
-                            header
-                            if let step = startupStep {
-                                StartupView(step: step, isVisible: environment.presentation.isVisible,
-                                            onRecordFrameChanged: { environment.onboardingRecordFrame = $0 }) {
-                                    startupContent(step)
-                                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                                        .modifier(NativeStartupContent())
+            let transfer = environment.playerWindowController.onboardingHandoff
+            let handingOff = environment.onboarding.phase == .handoff
+            OnboardingHandoffScene(progress: handingOff ? environment.playerWindowController.onboardingProgress : 0) { visual in
+                ZStack(alignment: .topLeading) {
+                    if environment.isShowingPlayer, let player = environment.player {
+                        RecordPlayerView(player: player, artworkStore: environment.artworkStore,
+                                           presentation: environment.presentation, windowController: environment.playerWindowController,
+                                           recordOpacity: handingOff ? visual.playerRecordOpacity : 1)
+                            .opacity(handingOff ? visual.playerOpacity : 1)
+                            .allowsHitTesting(!handingOff)
+                            .accessibilityHidden(handingOff)
+                            .id(ObjectIdentifier(player))
+                            .transition(.opacity)
+                    }
+                    if !environment.isShowingPlayer || environment.onboarding.phase == .handoff {
+                        StartupSurface(isAnimating: environment.presentation.isVisible, isDimmed: startupStep?.recordPose == .tucked,
+                                       surfaceOpacity: handingOff ? visual.backgroundOpacity : 1) {
+                            VStack(spacing: 8) {
+                                header.opacity(handingOff ? visual.backgroundOpacity : 1)
+                                if let step = startupStep {
+                                    let identity = contentIdentity(for: step)
+                                    StartupView(step: step, isVisible: environment.presentation.isVisible,
+                                                onRecordFrameChanged: { if !handingOff { environment.onboardingRecordFrame = $0 } },
+                                                recordScale: environment.startupWindow.isManaged ? environment.startupWindow.recordScale : nil,
+                                                completionID: environment.onboarding.completionID,
+                                                onCompletionSettled: { environment.onboarding.animationSettled(for: $0) },
+                                                onRecordSideChanged: { startupRecordSide = $0 },
+                                                pocketOpacity: handingOff ? visual.pocketOpacity : 1,
+                                                recordOpacity: handingOff ? visual.sourceRecordOpacity : 1) {
+                                        startupContent(step)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                            .onGeometryChange(for: StartupContentMeasurement.self) { geometry in
+                                                StartupContentMeasurement(identity: identity, windowWidth: viewport.size.width, size: geometry.size)
+                                            } action: { measurement in
+                                                rememberContent(measurement)
+                                                Task { @MainActor in
+                                                    measureContent(measurement)
+                                                }
+                                            }
+                                            .opacity(revealsContent ? (handingOff ? visual.backgroundOpacity : 1) : 0)
+                                            .animation(revealsContent ? .easeIn(duration: 0.16) : nil, value: revealsContent)
+                                            .allowsHitTesting(revealsContent)
+                                            .accessibilityHidden(!revealsContent)
+                                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                                            .modifier(NativeStartupContent())
+                                    }
                                 }
                             }
+                            .padding(16)
                         }
-                        .padding(16)
+                        .frame(width: environment.onboarding.phase == .handoff ? startupSize?.width : viewport.size.width,
+                               height: environment.onboarding.phase == .handoff ? startupSize?.height : viewport.size.height)
+                        .offset(x: handoffOffset.x, y: handoffOffset.y)
+                        .animation(nil, value: handoffOffset)
+                        .opacity(handingOff ? visual.setupOpacity : 1)
+                        .allowsHitTesting(!environment.isShowingPlayer)
+                        .accessibilityHidden(environment.isShowingPlayer)
+                        .zIndex(1)
                     }
-                    .frame(width: environment.onboarding.phase == .handoff ? startupSize?.width : viewport.size.width,
-                           height: environment.onboarding.phase == .handoff ? startupSize?.height : viewport.size.height)
-                    .offset(x: handoffOffset.x, y: handoffOffset.y)
-                    .animation(nil, value: handoffOffset)
-                    .opacity(environment.isShowingPlayer ? 0 : 1)
-                    .allowsHitTesting(!environment.isShowingPlayer)
-                    .accessibilityHidden(environment.isShowingPlayer)
-                    .zIndex(1)
+                    if handingOff, let transfer {
+                        OnboardingTransferRecord(geometry: transfer, progress: visual.progress, side: startupRecordSide,
+                                                 onRecordFrameChanged: { environment.onboardingRecordFrame = $0 })
+                            .opacity(visual.transferOpacity)
+                            .zIndex(2)
+                    }
                 }
             }
             .frame(width: viewport.size.width, height: viewport.size.height, alignment: .topLeading)
             .onChange(of: viewport.size, initial: true) { _, size in
+                currentViewportHeight = size.height
                 if !environment.isShowingPlayer { startupSize = size }
+                if size.height >= environment.startupWindow.height - 1 { waitsForContentSpace = false }
             }
             .onChange(of: environment.isShowingPlayer) { wasShowing, isShowing in
-                if wasShowing && !isShowing { startupSize = viewport.size }
+                if wasShowing && !isShowing {
+                    startupSize = viewport.size
+                    lastMeasuredContent = nil
+                }
+                if isShowing {
+                    environment.startupWindow.cancelPendingResize()
+                    waitsForContentSpace = false
+                }
+            }
+            .onChange(of: environment.startupWindow.height) { _, height in
+                if currentViewportHeight >= height - 1 { waitsForContentSpace = false }
             }
         }
         .environment(environment)
-        .animation(.easeInOut(duration: reduceMotion ? 0.15 : 0.5), value: environment.isShowingPlayer)
-        .onChange(of: environment.soloist.hasUsablePlayback, initial: true) { _, _ in
-            environment.updateOnboardingReadiness(reduceMotion: reduceMotion)
+        .animation(environment.onboarding.phase == .handoff ? nil : .easeInOut(duration: 0.5),
+                   value: environment.isShowingPlayer)
+        .onChange(of: startupStep, initial: true) { _, step in
+            if let step {
+                if environment.startupWindow.isManaged, let width = startupSize?.width, (390...430).contains(width),
+                   prepareStartupSizing(for: step, width: width, immediately: false) {
+                    waitsForContentSpace = environment.startupWindow.height > currentViewportHeight + 1
+                }
+                environment.startupWindow.useStep(step)
+            } else { environment.startupWindow.activateContent(nil) }
+            if step == .completion || step == .library(.connected) {
+                // Brief acknowledgements should not contract the window just before the next handoff.
+                environment.startupWindow.cancelPendingResize()
+                waitsForContentSpace = false
+            }
         }
-        .onChange(of: environment.authState) { _, state in
-            if state == .signedIn { environment.updateOnboardingReadiness(reduceMotion: reduceMotion) }
+        .onAppear {
+            environment.onboarding.setAnimationPresentationVisible(environment.presentation.isVisible)
         }
+        .onDisappear { environment.onboarding.setAnimationPresentationVisible(false) }
         .onChange(of: environment.hasLibraryAuthorizationFailure, initial: true) { _, failed in
             if failed { Task { await environment.requireLibrarySetup() } }
         }
         .onChange(of: environment.presentation.isVisible) { _, visible in
+            environment.onboarding.setAnimationPresentationVisible(visible)
             if visible { environment.artworkStore.retryFailedLoads() }
             else { environment.player?.cancelVolumeEditing() }
         }
@@ -128,6 +192,75 @@ struct PlayerRootView: View {
         environment.onboarding.phase == .handoff ? environment.playerWindowController.onboardingContentOffset : .zero
     }
 
+    private var revealsContent: Bool {
+        !environment.startupWindow.isManaged || !waitsForContentSpace
+            || currentViewportHeight >= environment.startupWindow.height - 1
+    }
+
+    private func contentIdentity(for step: StartupStep) -> String {
+        let scene: PlaybackOnboardingScene? = if case .playback = step {
+            PlaybackOnboardingScene(phase: environment.soloist.phase)
+        } else { nil }
+        let library = if case .library = step {
+            "\(environment.libraryClientID != nil):\(String(describing: environment.librarySetupError)):\(environment.libraryAuthorizationNotice ?? "")"
+        } else { "" }
+        return "\(step):\(String(describing: scene)):\(library)"
+    }
+
+    func startupMeasurementKey(for step: StartupStep, width: CGFloat) -> StartupWindowLayout.MeasurementKey {
+        .init(identity: contentIdentity(for: step), width: width)
+    }
+
+    @discardableResult
+    func prepareStartupSizing(for step: StartupStep, width: CGFloat, immediately: Bool) -> Bool {
+        let layout = environment.startupWindow
+        let key = startupMeasurementKey(for: step, width: width)
+        layout.activateContent(key.identity)
+        let content: AnyView
+        switch step {
+        case .signIn, .library(.idle), .library(.authorizing), .library(.refused):
+            content = AnyView(startupContent(step).environment(environment))
+        case .library(.connected), .playback, .connection, .completion:
+            // Playback contains live discovery work; temporary acknowledgements retain their current allocation.
+            return false
+        }
+        guard width.isFinite, width >= 100 else { return false }
+        let height: CGFloat
+        if let cached = layout.measuredHeight(for: key) { height = cached }
+        else {
+            // Existing editors/help keep their mounted state when width changes; their geometry remains authoritative.
+            guard !layout.hasPreparedMeasurement(for: key.identity) else { return false }
+            let formWidth = width - 32
+            let measurer = NSHostingController(rootView: content.fixedSize(horizontal: false, vertical: true).frame(width: formWidth))
+            height = measurer.sizeThatFits(in: CGSize(width: formWidth, height: .greatestFiniteMagnitude)).height
+        }
+        guard height.isFinite, height > 0 else { return false }
+        layout.remember(contentHeight: height, for: key, prepared: true)
+        layout.prepare(contentHeight: height, step: step, immediately: immediately)
+        return true
+    }
+
+    private func rememberContent(_ measurement: StartupContentMeasurement) {
+        guard let step = startupStep, contentIdentity(for: step) == measurement.identity else { return }
+        environment.startupWindow.remember(contentHeight: measurement.size.height,
+            for: .init(identity: measurement.identity, width: measurement.windowWidth))
+    }
+
+    private func measureContent(_ measurement: StartupContentMeasurement) {
+        guard !environment.isPreparingForQuit, !environment.isShowingPlayer, let step = startupStep,
+              step != .completion, step != .library(.connected),
+              contentIdentity(for: step) == measurement.identity,
+              abs(measurement.windowWidth - (startupSize?.width ?? measurement.windowWidth)) < 0.5,
+              measurement.size.width >= 100, measurement.size.height.isFinite, measurement.size.height > 0 else { return }
+        let changedScene = lastMeasuredContent != measurement.identity
+        environment.startupWindow.measure(contentHeight: measurement.size.height)
+        lastMeasuredContent = measurement.identity
+        if changedScene {
+            waitsForContentSpace = environment.startupWindow.isManaged
+                && environment.startupWindow.height > currentViewportHeight + 1
+        }
+    }
+
     private func connection(for player: PlayerModel) -> PlaybackConnectionStatusView {
         PlaybackConnectionStatusView(status: environment.connectionStatus, restorationUnavailable: player.restorationUnavailable, hasConnected: environment.hasPlaybackConnected, onRetry: environment.retryPlaybackConnection, onReconnect: { Task { await environment.reconnectSpotify() } }, offersRetry: environment.offersPlaybackRetry, isAuthorizing: environment.isAuthorizingPlayback, onCancel: environment.cancelPlaybackAuthorization)
     }
@@ -158,6 +291,12 @@ struct PlayerRootView: View {
     }
 
     private func requestSignIn() { Task { await environment.signIn() } }
+}
+
+private nonisolated struct StartupContentMeasurement: Equatable, Sendable {
+    let identity: String
+    let windowWidth: CGFloat
+    let size: CGSize
 }
 
 #Preview("Signed out") {

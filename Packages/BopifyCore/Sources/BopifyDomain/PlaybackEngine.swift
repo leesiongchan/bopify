@@ -2,11 +2,15 @@ public struct PlayRequest: Hashable, Sendable {
     public let contextURI: SpotifyURI
     public let startTrackURI: SpotifyURI?
     public let startPositionMs: Int64
+    /// Recommended continuation for a track selection.
+    public let followingTrackURIs: [SpotifyURI]
 
-    public init(contextURI: SpotifyURI, startTrackURI: SpotifyURI? = nil, startPositionMs: Int64 = 0) {
+    public init(contextURI: SpotifyURI, startTrackURI: SpotifyURI? = nil, startPositionMs: Int64 = 0,
+                followingTrackURIs: [SpotifyURI] = []) {
         self.contextURI = contextURI
         self.startTrackURI = startTrackURI
         self.startPositionMs = startPositionMs
+        self.followingTrackURIs = followingTrackURIs
     }
 }
 

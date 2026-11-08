@@ -39,6 +39,159 @@ struct LibraryAuthorizationTests {
         }
     }
 
+    private func consentAuthorization(_ suite: String, store: any TokenStoring,
+                                      openURL: @escaping @Sendable (URL) -> Void) -> LibraryAuthorization {
+        LibraryAuthorization(suiteName: suite) { clientID in
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [LibraryConsentStubProtocol.self]
+            return SpotifyAuthService(clientID: clientID,
+                client: TokenClient(clientID: clientID, session: URLSession(configuration: configuration)),
+                store: store, callbackPath: "/callback", openURL: openURL)
+        }
+    }
+
+    @Test func playbackAuthorizationKeepsAnExistingCompleteGrantQuiet() async throws {
+        try await withSuite { suite, defaults in
+            defaults.set(id, forKey: LibraryAuthorization.defaultsKey)
+            let store = InMemoryTokenStore()
+            let saved = TokenSet(accessToken: "FULL", refreshToken: "RT", expiresAt: .distantFuture,
+                                 grantedScopes: LibraryAuthorization.requiredScopes.union(LibraryAuthorization.playbackScopes))
+            try store.save(saved)
+            let library = consentAuthorization(suite, store: store) { _ in Issue.record("Valid credentials must not open consent") }
+            #expect(try await !library.authorizePlaybackIfNeeded())
+            #expect(store.load() == saved)
+        }
+    }
+
+    @Test(arguments: ["missing", "libraryOnly", "playbackOnly", "expired", "corrupt"])
+    func explicitPlaybackAuthorizationRepairsOnlyMissingOrInvalidGrants(state: String) async throws {
+        try await withSuite { suite, defaults in
+            defaults.set(id, forKey: LibraryAuthorization.defaultsKey)
+            let scopes = state == "libraryOnly" ? LibraryAuthorization.requiredScopes :
+                state == "playbackOnly" ? LibraryAuthorization.playbackScopes :
+                LibraryAuthorization.requiredScopes.union(LibraryAuthorization.playbackScopes)
+            let saved = TokenSet(accessToken: "OLD", refreshToken: nil,
+                                 expiresAt: state == "expired" ? .distantPast : .distantFuture, grantedScopes: scopes)
+            let normal = InMemoryTokenStore()
+            if state != "missing" { try normal.save(saved) }
+            let store: any TokenStoring = state == "corrupt" ? LibraryReadFaultStore(tokens: saved, failure: .corrupt) : normal
+            let opened = AuthOpenCounter()
+            let library = consentAuthorization(suite, store: store) { url in
+                opened.increment()
+                let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value!) })
+                let callback = URL(string: query["redirect_uri"]! + "?code=NEW&state=" + query["state"]!)!
+                Task { _ = try? await URLSession.shared.data(from: callback) }
+            }
+            #expect(try await library.authorizePlaybackIfNeeded())
+            #expect(opened.count == 1)
+            #expect(try await library.validAccessToken(requiredScopes: scopes.union(LibraryAuthorization.playbackScopes)) == "NEW_LIBRARY")
+        }
+    }
+
+    @Test(arguments: [KeychainError.unavailable(-25308), .accessDenied(-25293), .unexpected(-1)])
+    func playbackAuthorizationPropagatesStorageFailuresWithoutConsent(failure: KeychainError) async throws {
+        try await withSuite { suite, defaults in
+            defaults.set(id, forKey: LibraryAuthorization.defaultsKey)
+            let store = LibraryReadFaultStore(tokens: grant(), failure: failure)
+            let library = consentAuthorization(suite, store: store) { _ in Issue.record("Storage failure must not open consent") }
+            let expected: PlayerError = failure == .accessDenied(-25293) ? .credentialAccessDenied : .credentialUnavailable
+            await #expect(throws: expected) { _ = try await library.authorizePlaybackIfNeeded() }
+            #expect(store.clears == 0)
+        }
+    }
+
+    @Test func playbackAuthorizationPropagatesRefreshNetworkFailureWithoutConsent() async throws {
+        try await withSuite { suite, defaults in
+            defaults.set(id, forKey: LibraryAuthorization.defaultsKey)
+            let store = InMemoryTokenStore()
+            let saved = TokenSet(accessToken: "OLD", refreshToken: "RT", expiresAt: .distantPast,
+                                 grantedScopes: LibraryAuthorization.requiredScopes.union(LibraryAuthorization.playbackScopes))
+            try store.save(saved)
+            let library = LibraryAuthorization(suiteName: suite) { clientID in
+                let configuration = URLSessionConfiguration.ephemeral
+                configuration.protocolClasses = [LibraryRefreshUnavailableProtocol.self]
+                return SpotifyAuthService(clientID: clientID,
+                    client: TokenClient(clientID: clientID, session: URLSession(configuration: configuration)),
+                    store: store, openURL: { _ in Issue.record("Network failure must not open consent") })
+            }
+            await #expect(throws: PlayerError.networkUnavailable) { _ = try await library.authorizePlaybackIfNeeded() }
+            #expect(store.load() == saved)
+        }
+    }
+
+    @Test func cancelledPlaybackAuthorizationDoesNotOpenConsent() async throws {
+        try await withSuite { suite, defaults in
+            defaults.set(id, forKey: LibraryAuthorization.defaultsKey)
+            let library = consentAuthorization(suite, store: InMemoryTokenStore()) { _ in Issue.record("Canceled work must not open consent") }
+            let task = await MainActor.run {
+                let task = Task { try await library.authorizePlaybackIfNeeded() }
+                task.cancel()
+                return task
+            }
+            await #expect(throws: CancellationError.self) { _ = try await task.value }
+        }
+    }
+
+    @Test func playbackAuthorizationRejectsAnInProgressClientChange() async throws {
+        try await withSuite { suite, defaults in
+            defaults.set(id, forKey: LibraryAuthorization.defaultsKey)
+            let store = BlockingClientChangeStore()
+            let library = consentAuthorization(suite, store: store) { _ in Issue.record("An old selection must not authorize another client") }
+            let replacement = Task { try await library.setClientID(other) }
+            var clearing = store.started.stream.makeAsyncIterator()
+            _ = await clearing.next()
+            await #expect(throws: CancellationError.self) { _ = try await library.authorizePlaybackIfNeeded() }
+            store.release.signal()
+            let changedID = try await replacement.value
+            #expect(changedID == other)
+        }
+    }
+
+    @Test func replacingTheClientCancelsItsPendingPlaybackConsent() async throws {
+        try await withSuite { suite, defaults in
+            defaults.set(id, forKey: LibraryAuthorization.defaultsKey)
+            let store = InMemoryTokenStore(), opened = AsyncStream<URL>.makeStream()
+            let count = AuthOpenCounter()
+            let library = consentAuthorization(suite, store: store) { url in
+                count.increment()
+                opened.continuation.yield(url)
+            }
+            let pending = Task { try await library.authorizePlaybackIfNeeded() }
+            var urls = opened.stream.makeAsyncIterator()
+            _ = await urls.next()
+            let changedID = try await library.setClientID(other)
+            #expect(changedID == other)
+            do { _ = try await pending.value; Issue.record("The old client's playback request completed") }
+            catch {}
+            #expect(count.count == 1 && store.load() == nil)
+            #expect(defaults.string(forKey: LibraryAuthorization.defaultsKey) == other)
+        }
+    }
+
+    @Test func cancellingPendingPlaybackConsentReleasesOnlyItsCallbackAndPreservesGrant() async throws {
+        try await withSuite { suite, defaults in
+            defaults.set(id, forKey: LibraryAuthorization.defaultsKey)
+            let store = InMemoryTokenStore()
+            let saved = grant()
+            try store.save(saved)
+            let opened = AsyncStream<URL>.makeStream()
+            let library = consentAuthorization(suite, store: store) { opened.continuation.yield($0) }
+            let task = Task { try await library.authorizePlaybackIfNeeded() }
+            var urls = opened.stream.makeAsyncIterator()
+            let url = try #require(await urls.next())
+            let query = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+            let redirect = try #require(query.first { $0.name == "redirect_uri" }?.value.flatMap(URL.init(string:)))
+            let start = ContinuousClock.now
+            task.cancel()
+            await #expect(throws: CancellationError.self) { _ = try await task.value }
+            #expect(start.duration(to: .now) < .seconds(1))
+            #expect(store.load() == saved)
+            let replacement = LoopbackCallbackListener(expectedState: "replacement", expectedPath: "/callback")
+            _ = try await replacement.start(port: UInt16(try #require(redirect.port)))
+            await replacement.stop()
+        }
+    }
+
     @Test func normalizesPastedInput() {
         #expect(LibraryAuthorization.normalized("  25BBD3BACCA4412B80F17B892072AF71\n") == id)
     }
@@ -405,7 +558,18 @@ private final class LibraryConsentStubProtocol: URLProtocol, @unchecked Sendable
     override func startLoading() {
         let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Data(#"{"access_token":"NEW_LIBRARY","refresh_token":"NEW_RT","expires_in":3600,"scope":"user-library-read user-library-modify user-read-recently-played user-top-read playlist-read-private playlist-read-collaborative user-follow-read"}"#.utf8))
+        client?.urlProtocol(self, didLoad: Data(#"{"access_token":"NEW_LIBRARY","refresh_token":"NEW_RT","expires_in":3600,"scope":"user-library-read user-library-modify user-read-recently-played user-top-read playlist-read-private playlist-read-collaborative user-follow-read user-read-playback-state user-modify-playback-state"}"#.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+}
+
+private final class LibraryRefreshUnavailableProtocol: URLProtocol, @unchecked Sendable {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func stopLoading() {}
+    override func startLoading() {
+        let response = HTTPURLResponse(url: request.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocolDidFinishLoading(self)
     }
 }

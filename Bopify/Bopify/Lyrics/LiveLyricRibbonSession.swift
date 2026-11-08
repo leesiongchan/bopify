@@ -153,29 +153,45 @@ final class LiveLyricRibbonSession {
         }
     }
 
-    private func load(_ input: Input, token: LyricLoadToken) {
+    private func load(_ input: Input, token initialToken: LyricLoadToken) {
         let generation = requestGeneration
         let fetch = requestLyrics
+        let sleep = sleep
         BopifyLog.playback.debug("live lyrics request started generation=\(generation, privacy: .public)")
         request = Task { [weak self] in
-            let result: Result<TrackLyrics, any Error>
-            do { result = .success(try await fetch(input.trackURI, input.epoch)) }
-            catch { result = .failure(error) }
-            guard let self else { return }
-            defer { if self.requestGeneration == generation { self.request = nil } }
-            guard !Task.isCancelled, !self.stopped, self.isVisible, self.requestGeneration == generation,
-                  case let .local(current, snapshot) = self.readState(), current == input else { return }
-            self.model.update(snapshot)
-            do {
-                let lyrics = try result.get()
-                guard lyrics.trackURI == input.trackURI else { throw LyricFailure.unavailable }
-                let presentation = try LyricPresentation(lyrics: lyrics)
-                self.model.completeLoad(presentation.content, token: token, source: presentation.source)
-                BopifyLog.playback.debug("live lyrics request completed")
-            } catch is CancellationError { return }
-            catch {
-                self.model.completeLoad(error as? LyricFailure == .noLyrics ? .noMatch : .failure, token: token)
-                BopifyLog.playback.debug("live lyrics request unavailable")
+            defer { if let self, self.requestGeneration == generation { self.request = nil } }
+            var token = initialToken
+            let retryDelays: [Duration] = [.seconds(2), .seconds(5), .seconds(15)]
+            for attempt in 0...retryDelays.count {
+                let result: Result<TrackLyrics, any Error>
+                do { result = .success(try await fetch(input.trackURI, input.epoch)) }
+                catch { result = .failure(error) }
+                guard let self else { return }
+                guard !Task.isCancelled, !self.stopped, self.isVisible, self.requestGeneration == generation,
+                      case let .local(current, snapshot) = self.readState(), current == input else { return }
+                self.model.update(snapshot)
+                do {
+                    let lyrics = try result.get()
+                    guard lyrics.trackURI == input.trackURI else { throw LyricFailure.unavailable }
+                    let presentation = try LyricPresentation(lyrics: lyrics)
+                    self.model.completeLoad(presentation.content, token: token, source: presentation.source)
+                    BopifyLog.playback.debug("live lyrics request completed")
+                    return
+                } catch is CancellationError { return }
+                catch {
+                    self.model.completeLoad(error as? LyricFailure == .noLyrics ? .noMatch : .failure, token: token)
+                    BopifyLog.playback.debug("live lyrics request unavailable")
+                }
+                // A companion session may still be warming up. Retry transport failures only;
+                // absent lyrics and malformed content are terminal for this occurrence.
+                guard case let .failure(error) = result,
+                      error as? LyricFailure == .network || error as? LyricFailure == .unavailable,
+                      attempt < retryDelays.count else { return }
+                do { try await sleep(retryDelays[attempt]) } catch { return }
+                guard !Task.isCancelled, !self.stopped, self.isVisible, self.requestGeneration == generation,
+                      case let .local(current, _) = self.readState(), current == input else { return }
+                token = self.model.beginLoad()
+                BopifyLog.playback.debug("live lyrics retry attempt=\(attempt + 1, privacy: .public)")
             }
         }
     }

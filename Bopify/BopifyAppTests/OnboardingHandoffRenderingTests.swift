@@ -8,6 +8,48 @@ import BopifyPlayback
 
 @MainActor @Suite("Onboarding native handoff", .serialized)
 struct OnboardingHandoffRenderingTests {
+    @Test func theActualPlayerHandoffRendersIntermediateRecordSizes() async throws {
+        let fixture = try NativeOnboardingFixture(needsKey: false)
+        defer { fixture.close() }
+        let recording = try await fixture.startVideoRecordingIfRequested()
+        fixture.environment.onboarding.begin()
+        try await liveLyricEventually { fixture.environment.playerWindowController.onboardingHandoff != nil }
+        let transfer = try #require(fixture.environment.playerWindowController.onboardingHandoff)
+        var widths: [CGFloat] = []
+        let began = Date()
+        var trace: [(Int, Int)] = []
+        let deadline = Date().addingTimeInterval(2)
+        while fixture.environment.playerWindowController.onboardingHandoff != nil, Date() < deadline {
+            if let width = fixture.environment.onboardingRecordFrame?.width {
+                widths.append(width)
+                if trace.last?.1 != Int(width) { trace.append((Int(Date().timeIntervalSince(began) * 1000), Int(width))) }
+            }
+            try await Task.sleep(for: .milliseconds(8))
+        }
+        let intermediate = widths.filter { $0 > transfer.source.width + 4 && $0 < transfer.destination.width - 4 }
+        print("Rendered handoff milliseconds/record width: \(trace)")
+        let movingFrames = trace.filter { CGFloat($0.1) > transfer.source.width + 4 && CGFloat($0.1) < transfer.destination.width - 4 }
+        let movingDuration = (movingFrames.last?.0 ?? 0) - (movingFrames.first?.0 ?? 0)
+        #expect(movingDuration >= 250,
+                "Visible motion must occupy the handoff, rather than be compressed into a brief snap followed by a stationary wait")
+        #expect(Set(intermediate.map { Int($0) }).count >= 3,
+                "The native player must present multiple intermediate record sizes, rather than jump to its final size")
+        try await recording?.waitForCompletion()
+    }
+
+    @Test func dismissingTheActualPanelSettlesTheNativeHandoffBounds() async throws {
+        let fixture = try NativeOnboardingFixture(needsKey: false)
+        defer { fixture.close() }
+        fixture.environment.onboarding.begin()
+        try await liveLyricEventually { fixture.environment.playerWindowController.onboardingHandoff != nil }
+        try #require(fixture.environment.onboarding.phase == .handoff)
+        fixture.dismiss()
+        #expect(!fixture.panel.isVisible)
+        #expect(fixture.environment.playerWindowController.contentOffset == .zero)
+        #expect(fixture.panel.frame.size == fixture.environment.playerWindowController.layout.contentSize)
+        #expect(fixture.environment.playerWindowController.onboardingHandoff == nil)
+    }
+
     @Test func resizedStartupKeepsHeaderAndFormInsideTheNativeViewportWithoutScrolling() async throws {
         let fixture = try NativeOnboardingFixture(needsKey: true)
         defer { fixture.close() }
@@ -43,7 +85,8 @@ struct OnboardingHandoffRenderingTests {
     @Test func libraryAndHelpFitWithoutScrollingInTheSameWindow() async throws {
         let fixture = try NativeOnboardingFixture(needsKey: false, section: .library)
         defer { fixture.close() }
-        try await Task.sleep(for: .milliseconds(250))
+        // Compare projected record bounds only after its entrance has settled.
+        try await Task.sleep(for: .milliseconds(2500))
         let content = try #require(fixture.panel.contentView)
         func expectInside(_ identifier: String) throws {
             let element = try AppearanceTestAccessibility.element(identifier, in: content)
@@ -54,14 +97,26 @@ struct OnboardingHandoffRenderingTests {
         try expectInside("onboarding.title")
         try expectInside("onboarding.libraryClientID")
         try expectInside("onboarding.saveLibrary")
+        for permission in ["liked", "artists", "recent", "likes"] {
+            try expectInside("onboarding.permission.\(permission)")
+        }
         try fixture.capture("library")
+        let libraryFrame = fixture.panel.frame
+        let recordWidth = try #require(fixture.environment.onboardingRecordFrame?.width)
         let help = try AppearanceTestAccessibility.element("onboarding.registrationHelp", in: content)
         #expect(help.press())
-        try await Task.sleep(for: .milliseconds(250))
+        try await Task.sleep(for: .milliseconds(400))
         try expectInside("onboarding.title")
         try expectInside("onboarding.openDashboard")
         try expectInside("onboarding.redirectURI")
         try expectInside("onboarding.registrationBack")
+        #expect(abs(fixture.panel.frame.height - libraryFrame.height) > 16,
+                "Registration help must receive its own content-sized window")
+        #expect(abs(fixture.panel.frame.width - libraryFrame.width) < 1)
+        #expect(abs(fixture.panel.frame.maxY - libraryFrame.maxY) < 1,
+                "Changing steps must keep the header and record anchored")
+        #expect(abs((fixture.environment.onboardingRecordFrame?.width ?? 0) - recordWidth) < 1,
+                "The record must not shrink when a step changes window height")
         #expect(!descendants(in: content).contains { $0 is NSScrollView })
         try fixture.capture("library-help")
     }
@@ -89,15 +144,23 @@ struct OnboardingHandoffRenderingTests {
         try await liveLyricEventually { fixture.environment.onboardingRecordFrame?.width ?? 0 > 0 }
         let panel = fixture.panel
         let before = panel.windowNumber
+        var handoffAnchor: CGPoint?
+        let completeSetup = fixture.environment.onboarding.onHandoff
+        defer { fixture.environment.onboarding.onHandoff = completeSetup }
+        fixture.environment.onboarding.onHandoff = {
+            if let source = fixture.environment.onboardingRecordFrame {
+                handoffAnchor = CGPoint(x: panel.frame.minX + source.midX, y: panel.frame.maxY - source.midY)
+            }
+            completeSetup?()
+        }
         fixture.environment.onboarding.begin()
-        fixture.environment.updateOnboardingReadiness(reduceMotion: false)
+        try await liveLyricEventually { fixture.environment.onboarding.phase == .completing }
         #expect(fixture.environment.onboardingStep == .completion)
-        // Allow the completion pose to settle, including setup that beats the initial record entrance.
+        // Capture the confirmation while its entrance is still running; handoff must wait for it.
         try await Task.sleep(for: .milliseconds(250))
         try fixture.capture("completion")
-        let source = try #require(fixture.environment.onboardingRecordFrame)
-        let anchor = CGPoint(x: panel.frame.minX + source.midX, y: panel.frame.maxY - source.midY)
         try await liveLyricEventually { fixture.environment.onboarding.phase == .handoff }
+        let anchor = try #require(handoffAnchor)
         try await Task.sleep(for: .milliseconds(300))
         try fixture.capture("handoff")
         try await liveLyricEventually {
@@ -185,6 +248,22 @@ private final class NativeOnboardingFixture {
         print("Native onboarding composited capture: \(destination.path)")
     }
 
+    func startVideoRecordingIfRequested() async throws -> NativeOnboardingRecording? {
+        guard let token = ProcessInfo.processInfo.environment["BOPIFY_NATIVE_VIDEO_TOKEN"],
+              UUID(uuidString: token) != nil else { return nil }
+        environment.onboarding.cancel()
+        let root = artifacts.deletingLastPathComponent()
+        let bridge = root.appendingPathComponent("capture-bridge/\(token)")
+        let destination = root.appendingPathComponent("\(token)/handoff.mp4")
+        try FileManager.default.createDirectory(at: bridge, withIntermediateDirectories: true)
+        let request: [String: Any] = ["token": token, "processID": ProcessInfo.processInfo.processIdentifier,
+                                      "windowNumber": panel.windowNumber, "destination": destination.path]
+        try JSONSerialization.data(withJSONObject: request).write(to: bridge.appendingPathComponent("video.request.json"), options: .atomic)
+        let recording = NativeOnboardingRecording(token: token, bridge: bridge, destination: destination)
+        try await recording.waitForReady()
+        return recording
+    }
+
     private func captureExternally(_ name: String, token: String) throws {
         let directory = artifacts.deletingLastPathComponent()
             .appendingPathComponent("capture-bridge/\(token)")
@@ -217,6 +296,8 @@ private final class NativeOnboardingFixture {
         print("Native onboarding composited capture: \(destination.path)")
     }
 
+    func dismiss() { controller.togglePlayer() }
+
     func close() {
         environment.onboarding.cancel()
         environment.player?.stop()
@@ -226,6 +307,36 @@ private final class NativeOnboardingFixture {
             if let value { UserDefaults.standard.set(value, forKey: key) }
             else { UserDefaults.standard.removeObject(forKey: key) }
         }
+    }
+}
+
+private struct NativeOnboardingRecording {
+    let token: String
+    let bridge: URL
+    let destination: URL
+
+    func waitForReady() async throws { try await waitForResponse("video.ready.json") }
+
+    func waitForCompletion() async throws {
+        try await waitForResponse("video.response.json")
+        try #require(FileManager.default.fileExists(atPath: destination.path))
+        print("Native onboarding video: \(destination.path)")
+    }
+
+    private func waitForResponse(_ name: String) async throws {
+        let response = bridge.appendingPathComponent(name)
+        let failure = bridge.appendingPathComponent("video.response.json")
+        let deadline = Date().addingTimeInterval(20)
+        while !FileManager.default.fileExists(atPath: response.path), Date() < deadline {
+            if FileManager.default.fileExists(atPath: failure.path) {
+                let result = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: failure)) as? [String: Any])
+                try #require(result["success"] as? Bool == true, "Native recording failed: \(result["error"] ?? "unknown error")")
+            }
+            try await Task.sleep(for: .milliseconds(25))
+        }
+        try #require(FileManager.default.fileExists(atPath: response.path), "Native recording timed out")
+        let result = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: response)) as? [String: Any])
+        try #require(result["token"] as? String == token && result["success"] as? Bool == true)
     }
 }
 

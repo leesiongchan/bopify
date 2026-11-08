@@ -11,6 +11,8 @@ final class PlayerWindowController {
     private(set) var contentOffset: CGPoint = .zero
     private(set) var recordPresentationScale: CGFloat = 1
     private(set) var onboardingContentOffset: CGPoint = .zero
+    private(set) var onboardingHandoff: OnboardingHandoffGeometry?
+    private(set) var onboardingProgress: CGFloat = 0
     private(set) var transitionID: UInt64 = 0
     private(set) var isTransitioning = false
     private(set) var isDragging = false
@@ -18,10 +20,13 @@ final class PlayerWindowController {
     @ObservationIgnored private weak var panel: StatusPanel?
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var anchor: CGPoint?
-    @ObservationIgnored private var pendingMode: (mode: PlayerMode, reduceMotion: Bool, showsLyrics: Bool)?
-    @ObservationIgnored private var lastRequest: (mode: PlayerMode, reduceMotion: Bool, showsLyrics: Bool) = (.compact, false, false)
+    @ObservationIgnored private var pendingMode: (mode: PlayerMode, animated: Bool, showsLyrics: Bool)?
+    @ObservationIgnored private var lastRequest: (mode: PlayerMode, animated: Bool, showsLyrics: Bool) = (.compact, true, false)
     @ObservationIgnored private var targetFrame: CGRect = .zero
     @ObservationIgnored private var onboardingFrame: CGRect?
+    @ObservationIgnored private var onboardingRecord: CGRect?
+    @ObservationIgnored private var onboardingID: UUID?
+    @ObservationIgnored private var onOnboardingSettled: ((UUID) -> Void)?
 
     init(defaults: UserDefaults) { self.defaults = defaults }
 
@@ -33,8 +38,14 @@ final class PlayerWindowController {
     }
     #endif
 
-    func attach(to panel: StatusPanel, onboardingRecordFrame: CGRect? = nil) {
+    func attach(to panel: StatusPanel, onboardingRecordFrame: CGRect? = nil,
+                onboardingID: UUID? = nil, onOnboardingSettled: ((UUID) -> Void)? = nil) {
         self.panel = panel
+        self.onboardingID = onboardingID
+        self.onOnboardingSettled = onOnboardingSettled
+        onboardingRecord = nil
+        onboardingHandoff = nil
+        onboardingProgress = 0
         // Native shadow traces the record's translucent halo as a second hard outline.
         panel.hasShadow = false
         panel.onCancelInteraction = { [weak self] in self?.onCancelInteraction?() ?? false }
@@ -42,6 +53,7 @@ final class PlayerWindowController {
            record.midX.isFinite, record.midY.isFinite {
             anchor = CGPoint(x: panel.frame.minX + record.midX, y: panel.frame.maxY - record.midY)
             onboardingFrame = panel.frame
+            onboardingRecord = record
             withoutAnimation {
                 contentOffset = CGPoint(x: record.midX - layout.recordCenter.x, y: record.midY - layout.recordCenter.y)
                 recordPresentationScale = record.width / layout.recordDiameter
@@ -73,9 +85,16 @@ final class PlayerWindowController {
     func show() { panel?.orderFrontRegardless() }
 
     func hide() {
+        settleOnboardingHandoff()
         persistAnchor()
         invalidateTransition()
         panel?.orderOut(nil)
+    }
+
+    func settleOnboardingHandoff() {
+        guard onboardingHandoff != nil else { return }
+        pendingMode = nil
+        finishTransition(transitionID)
     }
 
     func configureLyricsKeyboard(model: LyricRibbonModel) {
@@ -112,9 +131,16 @@ final class PlayerWindowController {
         return nil
     }
 
-    func apply(mode: PlayerMode, reduceMotion: Bool, visibleFrame: CGRect? = nil, showsLyrics: Bool = false) {
+    func apply(mode: PlayerMode, animated: Bool = true, visibleFrame: CGRect? = nil, showsLyrics: Bool = false) {
         guard let panel else { return }
-        if isDragging { pendingMode = (mode, reduceMotion, showsLyrics); return }
+        if onboardingHandoff != nil {
+            if !animated || !panel.isVisible { settleOnboardingHandoff() }
+            else {
+                pendingMode = lastRequest != (mode, animated, showsLyrics) ? (mode, animated, showsLyrics) : nil
+                return
+            }
+        }
+        if isDragging { pendingMode = (mode, animated, showsLyrics); return }
         var desiredAnchor = anchor ?? CGPoint(x: panel.frame.midX, y: panel.frame.midY)
         let screen = NSScreen.screens.first { $0.visibleFrame.contains(desiredAnchor) } ?? panel.screen ?? NSScreen.main
         guard let visible = visibleFrame ?? screen?.visibleFrame else { return }
@@ -125,14 +151,19 @@ final class PlayerWindowController {
         }
         let target = playerWindowFrame(recordCenter: desiredAnchor, layout: next, visibleFrame: visible)
         guard next != layout || target != targetFrame || (!isTransitioning && panel.frame != target) else { return }
-        lastRequest = (mode, reduceMotion, showsLyrics)
+        lastRequest = (mode, animated, showsLyrics)
         let adjusted = CGPoint(x: target.minX + next.recordCenter.x, y: target.maxY - next.recordCenter.y)
         if adjusted != desiredAnchor { BopifyLog.playback.debug("Player anchor clamped to visible screen") }
         anchor = adjusted
         transitionID &+= 1
         let generation = transitionID
         targetFrame = target
-        if reduceMotion || !panel.isVisible {
+        if let record = onboardingRecord, let sourceWindow = onboardingFrame {
+            beginOnboardingHandoff(record: record, sourceWindow: sourceWindow, target: target,
+                                   layout: next, animated: animated, generation: generation)
+            return
+        }
+        if !animated || !panel.isVisible {
             isTransitioning = false
             withoutAnimation {
                 layout = next
@@ -166,19 +197,69 @@ final class PlayerWindowController {
         }
     }
 
+    private func beginOnboardingHandoff(record: CGRect, sourceWindow: CGRect, target: CGRect,
+                                        layout next: RecordLayout, animated: Bool, generation: UInt64) {
+        guard let panel else { return }
+        let envelope = sourceWindow.union(target)
+        let offset = CGPoint(x: target.minX - envelope.minX, y: envelope.maxY - target.maxY)
+        let source = record.offsetBy(dx: sourceWindow.minX - envelope.minX, dy: envelope.maxY - sourceWindow.maxY)
+        let destination = CGRect(x: offset.x + next.recordCenter.x - next.recordDiameter / 2,
+                                 y: offset.y + next.recordCenter.y - next.recordDiameter / 2,
+                                 width: next.recordDiameter, height: next.recordDiameter)
+        withoutAnimation {
+            layout = next
+            contentOffset = offset
+            recordPresentationScale = 1
+            updateOnboardingOffset(in: envelope)
+            onboardingHandoff = OnboardingHandoffGeometry(id: onboardingID ?? UUID(), source: source,
+                                                         destination: destination)
+            onboardingProgress = 0
+            panel.setFrame(envelope, display: true)
+            isTransitioning = true
+        }
+        guard animated, panel.isVisible else { finishTransition(generation); return }
+        // Stage the measured source before starting the single coordinated timeline.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.transitionID == generation, self.onboardingHandoff != nil else { return }
+            // Each visual track supplies its own easing; ease the shared clock only once.
+            withAnimation(.linear(duration: 0.65),
+                          completionCriteria: .removed) {
+                self.onboardingProgress = 1
+            } completion: { [weak self] in
+                DispatchQueue.main.async { [weak self] in self?.finishTransition(generation) }
+            }
+        }
+    }
+
     func finishTransition(_ generation: UInt64) {
         guard generation == transitionID, isTransitioning, let panel else { return }
+        let finished = onboardingHandoff?.id
+        let completion = onOnboardingSettled
+        let pending = pendingMode
         withoutAnimation {
             panel.setFrame(targetFrame, display: true)
             contentOffset = .zero
             updateOnboardingOffset(in: targetFrame)
             isTransitioning = false
+            onboardingHandoff = nil
+            onboardingRecord = nil
+            onboardingID = nil
+            onOnboardingSettled = nil
+            pendingMode = nil
         }
         persistAnchor()
+        if let finished { completion?(finished) }
+        if finished != nil, let pending {
+            apply(mode: pending.mode, animated: pending.animated, showsLyrics: pending.showsLyrics)
+        }
     }
 
     func invalidateTransition() {
         transitionID &+= 1
+        onboardingHandoff = nil
+        onboardingRecord = nil
+        onboardingID = nil
+        onOnboardingSettled = nil
         isTransitioning = false
         pendingMode = nil
         isDragging = false
@@ -189,9 +270,9 @@ final class PlayerWindowController {
         if active { transitionID &+= 1; isTransitioning = false }
         else {
             persistAnchor()
-            let (mode, reduceMotion, showsLyrics) = pendingMode ?? lastRequest
+            let (mode, animated, showsLyrics) = pendingMode ?? lastRequest
             pendingMode = nil
-            apply(mode: mode, reduceMotion: reduceMotion, showsLyrics: showsLyrics)
+            apply(mode: mode, animated: animated, showsLyrics: showsLyrics)
         }
     }
 

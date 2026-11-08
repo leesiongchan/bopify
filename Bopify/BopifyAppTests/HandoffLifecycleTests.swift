@@ -132,7 +132,7 @@ struct HandoffLifecycleTests {
             .environment(environment).defaultAppStorage(defaults))
         panel.isReleasedWhenClosed = false
         controller.attach(to: panel)
-        controller.apply(mode: .expanded, reduceMotion: true, visibleFrame: screen)
+        controller.apply(mode: .expanded, animated: false, visibleFrame: screen)
         panel.makeKeyAndOrderFront(nil)
     }
 
@@ -182,7 +182,7 @@ struct HandoffLifecycleTests {
         environment.presentation.sendAttention(.keyboardFocus(false))
         environment.presentation.sendAttention(.pointer(false))
         try await wait { environment.presentation.mode == .compact }
-        controller.apply(mode: .compact, reduceMotion: true, visibleFrame: screen)
+        controller.apply(mode: .compact, animated: false, visibleFrame: screen)
         panel.contentView?.layoutSubtreeIfNeeded()
     }
 

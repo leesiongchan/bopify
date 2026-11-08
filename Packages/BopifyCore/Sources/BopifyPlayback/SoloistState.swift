@@ -12,6 +12,7 @@ struct SoloistState {
     private(set) var authRevision: UInt64 = 0
     private(set) var active = false
     private(set) var playing = false
+    private(set) var playbackStatus = "idle"
     private(set) var track: Track?
     private(set) var itemURI: String?
     private(set) var context: SpotifyURI?
@@ -20,11 +21,19 @@ struct SoloistState {
     private(set) var actions: Set<String> = []
     private(set) var volume: Double?
     private var queueGeneration: UInt64 = 0
+    private(set) var trackOccurrence: UInt64 = 0
+    private(set) var trackEventRevision: UInt64 = 0
+    private(set) var lastTrackEventURI: String?
     private var speed: Double = 1
     private var publishedTrack: Track?
     private var publishedActive = false
 
     mutating func resetPublication() { publishedTrack = nil; publishedActive = false }
+
+    func position(at date: Date) -> Int64 {
+        let elapsed = max(0, date.timeIntervalSince(observedAt)) * 1000 * speed
+        return Int64(min(31_536_000_000, Double(positionMs) + elapsed))
+    }
 
     mutating func ingest(_ data: Data, at date: Date) throws -> [PlaybackEvent] {
         guard data.count <= 1_048_576,
@@ -43,6 +52,7 @@ struct SoloistState {
                   let position = object["position"] as? [String: Any] else { throw SoloistPlaybackError.invalidState }
             self.active = active
             playing = status == "playing"
+            playbackStatus = status
             positionMs = try positionValue(position, at: date)
             observedAt = date
             let entity = object["item"] as? [String: Any]
@@ -51,11 +61,15 @@ struct SoloistState {
             context = (object["context"] as? [String: Any])?["uri"].flatMap { $0 as? String }.flatMap(SpotifyURI.init)
             actions = Set((object["available_actions"] as? [String: Any] ?? [:]).keys)
             if let raw = object["volume"] as? Double, raw.isFinite, (0...100).contains(raw) { volume = raw / 100 }
-            var events: [PlaybackEvent] = [.activeDeviceChanged(isActive: active), .queueSelectionSupported(false)]
+            var events: [PlaybackEvent] = [.activeDeviceChanged(isActive: active), .queueSelectionSupported(false),
+                .availablePlaybackOptions(canShuffle: active && actions.contains("shuffle"), canRepeat: active && actions.contains("set_repeat"))]
             guard active else { publishedActive = false; return events }
             if status == "idle" || track == nil { events.append(.playbackIdle); resetPublication() }
             else {
-                if let track, track != publishedTrack || !publishedActive { events.append(.trackChanged(track)); publishedTrack = track }
+                if let track, track != publishedTrack || !publishedActive {
+                    if track.uri != publishedTrack?.uri || !publishedActive { trackOccurrence &+= 1 }
+                    events.append(.trackChanged(track)); publishedTrack = track
+                }
                 publishedActive = true
                 if status == "buffering" { events.append(.loading) }
                 else { events.append(playing ? .playing(positionMs: positionMs) : .paused(positionMs: positionMs)) }
@@ -72,17 +86,23 @@ struct SoloistState {
             guard let active = object["is_active"] as? Bool else { throw SoloistPlaybackError.invalidState }
             self.active = active
             if !active { publishedActive = false }
-            return [.activeDeviceChanged(isActive: active)]
+            return [.activeDeviceChanged(isActive: active),
+                .availablePlaybackOptions(canShuffle: active && actions.contains("shuffle"), canRepeat: active && actions.contains("set_repeat"))]
         case "track_changed":
             let entity = object["item"] as? [String: Any]
             track = Self.track(entity)
             itemURI = entity?["uri"] as? String
+            trackEventRevision &+= 1
+            lastTrackEventURI = itemURI
+            if track != nil { trackOccurrence &+= 1 }
             guard active else { return [] }
             publishedTrack = track; publishedActive = track != nil
             return track.map { [.trackChanged($0)] } ?? [.playbackIdle]
         case "playback_changed":
-            guard let status = object["status"] as? String else { throw SoloistPlaybackError.invalidState }
+            guard let status = object["status"] as? String,
+                  ["idle", "playing", "paused", "buffering"].contains(status) else { throw SoloistPlaybackError.invalidState }
             playing = status == "playing"
+            playbackStatus = status
             guard active else { return [] }
             if status == "idle" { resetPublication(); return [.playbackIdle] }
             // Ask for a snapshot before presenting a position anchored to a changed phase.
@@ -112,7 +132,8 @@ struct SoloistState {
                 }
             }
             let previous = try entries("previous"), next = try entries("upcoming")
-            let current = track.map { QueueEntry(id: "\(queueGeneration)-current", uri: $0.uri, target: nil, track: $0, metadataFailed: false) }
+            // Polling or editing the upcoming queue must not restart the current song's lyrics.
+            let current = track.map { QueueEntry(id: "current-\(trackOccurrence)", uri: $0.uri, target: nil, track: $0, metadataFailed: false) }
             return [.queueChanged(PlaybackQueue(generation: queueGeneration, previous: previous, current: current, next: next))]
         case "error": return [.commandRejected("unavailable")]
         default: return []

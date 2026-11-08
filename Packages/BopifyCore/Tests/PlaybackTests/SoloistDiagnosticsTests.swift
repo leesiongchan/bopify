@@ -81,4 +81,17 @@ struct SoloistDiagnosticsTests {
         #expect(diagnostics.events.count == 2)
         #expect(diagnostics.pairingPort == 1000)
     }
+
+    @Test func repeatedDiscoveryRequestsRemainCountedWithoutRetainingPayloads() {
+        let diagnostics = SoloistDiagnostics()
+        for _ in 0..<100 {
+            diagnostics.ingest(Data("zeroconf: received getInfo synthetic-private-payload\n".utf8))
+        }
+        #expect(diagnostics.getInfoRequestCount == 100)
+        #expect(diagnostics.events == [.getInfoRequested])
+        diagnostics.ingest(Data("zeroconf: received get".utf8))
+        #expect(diagnostics.getInfoRequestCount == 100)
+        diagnostics.ingest(Data("Info\n".utf8))
+        #expect(diagnostics.getInfoRequestCount == 101)
+    }
 }

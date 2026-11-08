@@ -24,6 +24,10 @@ private final class SoloistSocketFixture: SoloistTransport, @unchecked Sendable 
     var messages: AsyncThrowingStream<SoloistFrame, any Error> { pair.stream }
     private let lock = NSLock()
     private var sent: [String] = []
+    private var frames: [Data] = []
+    private var actions = ["pause", "play", "seek"]
+    private var shuffle = false
+    private var repeatMode = "off"
     let anchor = Date()
     private var uri = "spotify:track:6rqhFgbbKwnb9MLmUQDhG6"
     private var volume: Double = 0
@@ -36,13 +40,16 @@ private final class SoloistSocketFixture: SoloistTransport, @unchecked Sendable 
     func setAuthenticationReply(_ value: Bool?) { lock.withLock { authenticationReply = value } }
     func failAuthenticationRequests() { lock.withLock { failsAuthenticationRequest = true } }
     var currentURI: String { lock.withLock { uri } }
+    func setTrack(_ value: String) { lock.withLock { uri = value } }
     func changeTrack() { lock.withLock { uri = "spotify:track:11dFghVXANMlKmJXsNCbNl" } }
     var position: Double { 1000 + Date().timeIntervalSince(anchor) * 1000 }
     var commands: [String] { lock.withLock { sent } }
+    var sentFrames: [Data] { lock.withLock { frames } }
+    func setActions(_ values: [String]) { lock.withLock { actions = values } }
     func send(_ data: Data) async throws {
         let value = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         if let command = value?["command"] as? String {
-            lock.withLock { sent.append(command) }
+            lock.withLock { sent.append(command); frames.append(data) }
             if command == "get_auth_state", lock.withLock({ failsAuthenticationRequest }) {
                 throw SoloistPlaybackError.unavailable
             }
@@ -50,11 +57,15 @@ private final class SoloistSocketFixture: SoloistTransport, @unchecked Sendable 
                 try emit(["type": "auth_state", "logged_in": loggedIn, "is_active": false])
             }
             if command == "set_volume", let value = value?["volume"] as? Double { lock.withLock { volume = value } }
+            if command == "set_shuffle", let enabled = value?["enabled"] as? Bool { lock.withLock { shuffle = enabled } }
+            if command == "set_repeat_context", let enabled = value?["enabled"] as? Bool { lock.withLock { repeatMode = enabled ? "context" : "off" } }
+            if command == "set_repeat_track", let enabled = value?["enabled"] as? Bool { lock.withLock { repeatMode = enabled ? "track" : "off" } }
             if command == "get_state" {
                 try emit(["type": "playback_state", "is_active": lock.withLock { active }, "status": lock.withLock { playbackStatus }, "volume": lock.withLock { volume },
                     "item": ["uri": currentURI, "decorations": ["identity": ["name": "Fixture"], "playback": ["duration_ms": 100000]]],
                     "position": ["position_ms": position, "timestamp_ms": Date().timeIntervalSince1970 * 1000, "speed": 1],
-                    "available_actions": ["pause": [:], "play": [:], "seek": [:]]])
+                    "options": lock.withLock { ["shuffle": shuffle, "repeat": repeatMode] as [String: Any] },
+                    "available_actions": lock.withLock { Dictionary(uniqueKeysWithValues: actions.map { ($0, [:] as [String: String]) }) }])
             }
         }
     }
@@ -64,22 +75,97 @@ private final class SoloistSocketFixture: SoloistTransport, @unchecked Sendable 
     func close() async { pair.continuation.finish() }
 }
 
+private final class SoloistBatchSocketFixture: SoloistTransport, @unchecked Sendable {
+    let pair = AsyncThrowingStream<SoloistFrame, any Error>.makeStream()
+    var messages: AsyncThrowingStream<SoloistFrame, any Error> { pair.stream }
+    private let lock = NSLock()
+    private var sent: [(String, String?)] = []
+    private var closed = false
+    var observeSelection = true
+    var observeSnapshotBeforeTrackEvent = false
+    var acknowledge = true
+    var sendBootstrapAndUnrelatedAcknowledgement = false
+    weak var main: SoloistSocketFixture?
+    var commands: [(String, String?)] { lock.withLock { sent } }
+    var isClosed: Bool { lock.withLock { closed } }
+    func send(_ data: Data) async throws {
+        let value = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let command = try #require(value["command"] as? String)
+        let uri = value["uri"] as? String
+        lock.withLock { sent.append((command, uri)) }
+        if command == "play", observeSelection, let uri, let main {
+            main.setTrack(uri)
+            if observeSnapshotBeforeTrackEvent {
+                try await main.send(JSONSerialization.data(withJSONObject: ["command": "get_state"]))
+            } else {
+                try main.emit(["type": "track_changed", "item": ["uri": uri, "decorations": ["identity": ["name": "Selected"]]]])
+            }
+        }
+        guard acknowledge else { return }
+        if sendBootstrapAndUnrelatedAcknowledgement {
+            for noise: [String: Any] in [["type": "auth_state", "logged_in": true, "is_active": true],
+                                        ["type": "command_result", "command": "pause"]] {
+                pair.continuation.yield(SoloistFrame(data: try JSONSerialization.data(withJSONObject: noise), receivedAt: .now))
+            }
+        }
+        let reply: [String: Any] = ["type": "command_result", "command": command]
+        pair.continuation.yield(SoloistFrame(data: try JSONSerialization.data(withJSONObject: reply), receivedAt: .now))
+    }
+    func close() async { lock.withLock { closed = true }; pair.continuation.finish() }
+}
+
+private final class SoloistTransportFactoryFixture: @unchecked Sendable {
+    private let lock = NSLock()
+    private var calls = 0
+    let main: SoloistSocketFixture
+    private var secondary: [any SoloistTransport]
+    init(main: SoloistSocketFixture, secondary: (any SoloistTransport)?, additional: [any SoloistTransport]) {
+        self.main = main; self.secondary = (secondary.map { [$0] } ?? []) + additional
+    }
+    func make() -> any SoloistTransport {
+        lock.withLock {
+            calls += 1
+            if calls == 1 { return main }
+            return secondary.count > 1 ? secondary.removeFirst() : secondary.first ?? main
+        }
+    }
+}
+
 private final class SoloistHTTPFixture: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var status = 200
     nonisolated(unsafe) static var playerStatus: Int?
+    nonisolated(unsafe) static var playStatus: Int?
     nonisolated(unsafe) static var handler: (@Sendable (URLRequest) -> Data)?
     private static let lock = NSLock()
     nonisolated(unsafe) private static var requests: [String] = []
+    nonisolated(unsafe) private static var writes: [URLRequest] = []
     static var paths: [String] { lock.withLock { requests } }
-    static func reset() { lock.withLock { requests = [] } }
+    static var playRequests: [URLRequest] { lock.withLock { writes } }
+    static func reset() { lock.withLock { requests = []; writes = []; playStatus = nil } }
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func stopLoading() {}
     override func startLoading() {
         let path = request.url?.path ?? ""
-        Self.lock.withLock { Self.requests.append(path) }
+        var recorded = request
+        if recorded.httpBody == nil, let stream = recorded.httpBodyStream {
+            stream.open()
+            var data = Data(), buffer = [UInt8](repeating: 0, count: 4096)
+            while data.count < 65_536 {
+                let count = stream.read(&buffer, maxLength: buffer.count)
+                if count <= 0 { break }
+                data.append(contentsOf: buffer.prefix(count))
+            }
+            stream.close()
+            recorded.httpBody = data
+        }
+        Self.lock.withLock {
+            Self.requests.append(path)
+            if request.httpMethod == "PUT", path == "/v1/me/player/play" { Self.writes.append(recorded) }
+        }
         let data = Self.handler?(request) ?? Data()
-        let status = path.hasPrefix("/v1/me/player") ? Self.playerStatus ?? Self.status : Self.status
+        let status = path == "/v1/me/player/play" ? Self.playStatus ?? Self.playerStatus ?? Self.status
+            : path.hasPrefix("/v1/me/player") ? Self.playerStatus ?? Self.status : Self.status
         client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: ["Retry-After": "3600"])!, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: data)
         client?.urlProtocolDidFinishLoading(self)
@@ -113,6 +199,20 @@ private final class SoloistPairingTimeFixture: @unchecked Sendable {
     func finish() { lock.withLock { finished = true } }
 }
 
+private actor ContinuationIntentFixture {
+    private(set) var consents = 0
+    private(set) var services = 0
+    let changed: Bool
+    let holdConsent: Bool
+    init(changed: Bool = false, holdConsent: Bool = false) { self.changed = changed; self.holdConsent = holdConsent }
+    func authorize() async throws -> Bool {
+        consents += 1
+        if holdConsent { try await Task.sleep(for: .seconds(100)) }
+        return changed
+    }
+    func makeService() -> any SoloistDataServices { services += 1; return ReadableCompanionFixture() }
+}
+
 private func engineFixture(webStatus: Int = 200, diagnosticFailure: SoloistPlaybackError? = nil,
     pairingPort: UInt16? = nil, publisherFactory: SoloistPairingPublisherFactory? = nil,
     webToken: @escaping @Sendable () async throws -> String = { "fixture" },
@@ -121,7 +221,10 @@ private func engineFixture(webStatus: Int = 200, diagnosticFailure: SoloistPlayb
     playerStatus: Int? = nil, profile: [String: String]? = nil,
     serviceFactory: @escaping @Sendable (String) async throws -> any SoloistDataServices = { _ in throw PlayerError.networkUnavailable },
     pairingNow: @escaping @Sendable () -> Date = { .now }, authenticationReply: Bool? = nil,
-    failsAuthenticationRequest: Bool = false) -> (SoloistEngine, SoloistChildFixture, SoloistSocketFixture) {
+    failsAuthenticationRequest: Bool = false, secondaryTransport: (any SoloistTransport)? = nil,
+    followsSocketTrack: Bool = false,
+    authorizeContinuation: @escaping @Sendable () async throws -> Bool = { false },
+    additionalTransports: [any SoloistTransport] = []) -> (SoloistEngine, SoloistChildFixture, SoloistSocketFixture) {
     let child = SoloistChildFixture(diagnosticFailure: diagnosticFailure, pairingPort: pairingPort), socket = SoloistSocketFixture()
     socket.setAuthenticationReply(authenticationReply)
     if failsAuthenticationRequest { socket.failAuthenticationRequests() }
@@ -133,23 +236,248 @@ private func engineFixture(webStatus: Int = 200, diagnosticFailure: SoloistPlayb
     SoloistHTTPFixture.handler = { request in
         let object: [String: Any]
         if request.url?.path == "/v1/me" {
-            object = profile ?? ["account_id": request.value(forHTTPHeaderField: "Authorization") == "Bearer replacement" ? "other-account" : "fixture-account"]
+            let identity = request.value(forHTTPHeaderField: "Authorization") == "Bearer replacement" ? "other-account" : "fixture-account"
+            object = profile ?? ["account_id": identity, "id": identity]
         } else if request.url?.path.hasSuffix("devices") == true {
             object = ["devices": [["id": "owned", "name": "Fixture", "is_restricted": false]]]
         } else {
             object = ["device": ["id": "owned", "name": "Fixture"],
-                "item": ["uri": "spotify:track:6rqhFgbbKwnb9MLmUQDhG6"], "is_playing": true, "progress_ms": socket.position]
+                "item": ["uri": followsSocketTrack ? socket.currentURI : "spotify:track:6rqhFgbbKwnb9MLmUQDhG6"], "is_playing": true, "progress_ms": socket.position]
         }
         return try! JSONSerialization.data(withJSONObject: object)
     }
+    let transports = SoloistTransportFactoryFixture(main: socket, secondary: secondaryTransport, additional: additionalTransports)
     let engine = SoloistEngine(child: child, api: SoloistWebAPI(session: URLSession(configuration: configuration)), baseline: [], name: "Fixture",
         webToken: webToken, streamingToken: streamingToken,
-        transportFactory: { _ in socket }, serviceFactory: serviceFactory, progress: { _ in }, verificationInterval: .milliseconds(600),
-        publisherFactory: publisherFactory, dataToken: dataToken, pairingNow: pairingNow)
+        transportFactory: { _ in transports.make() }, serviceFactory: { token, expectedUsername in
+            let actual = token == "replacement" ? "other-account" : "fixture-account"
+            guard actual == expectedUsername else { throw SoloistPlaybackError.accountMismatch }
+            return try await serviceFactory(token)
+        }, progress: { _ in }, verificationInterval: .milliseconds(600),
+        publisherFactory: publisherFactory, dataToken: dataToken, pairingNow: pairingNow, authorizeContinuation: authorizeContinuation)
     return (engine, child, socket)
 }
 
+
 @Suite("Soloist managed engine", .serialized) struct SoloistEngineTests {
+private func continuationFixture(_ batch: SoloistBatchSocketFixture, gate: CompanionCreationGate? = nil,
+    webToken: @escaping @Sendable () async throws -> String = { "fixture" }) async throws -> (SoloistEngine, SoloistSocketFixture) {
+    let (engine, _, socket) = engineFixture(webToken: webToken, serviceFactory: { _ in
+        await gate?.wait()
+        return ReadableCompanionFixture()
+    }, secondaryTransport: batch, followsSocketTrack: true)
+    batch.main = socket
+    socket.setActions(["play", "pause", "skip_next", "skip_prev", "add_to_queue"])
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    try await engine.preparePairing()
+    try await engine.adopt(initialVolume: 0.25)
+    return (engine, socket)
+}
+
+private func waitForPlaybackWrite() async {
+    for _ in 0..<400 { if !SoloistHTTPFixture.playRequests.isEmpty { return }; try? await Task.sleep(for: .milliseconds(10)) }
+    #expect(!SoloistHTTPFixture.playRequests.isEmpty)
+}
+
+@Test(arguments: [false, true])
+func exploreContinuationInstallsAReplaceableContextAtTheObservedPosition(restartingSameTrack: Bool) async throws {
+    let batch = SoloistBatchSocketFixture(); batch.sendBootstrapAndUnrelatedAcknowledgement = true
+    let (engine, _) = try await continuationFixture(batch)
+    let selected = SpotifyURI(restartingSameTrack ? "spotify:track:6rqhFgbbKwnb9MLmUQDhG6" : "spotify:track:11dFghVXANMlKmJXsNCbNl")!
+    let follower = SpotifyURI(restartingSameTrack ? "spotify:track:11dFghVXANMlKmJXsNCbNl" : "spotify:track:6rqhFgbbKwnb9MLmUQDhG6")!
+    try await engine.load(PlayRequest(contextURI: selected, followingTrackURIs: [selected, follower, follower]))
+    await waitForPlaybackWrite()
+    let write = try #require(SoloistHTTPFixture.playRequests.first)
+    let bytes = try #require(write.httpBody), url = try #require(write.url)
+    let body = try #require(try JSONSerialization.jsonObject(with: bytes) as? [String: Any])
+    #expect(body["uris"] as? [String] == [selected.rawValue, follower.rawValue])
+    #expect((body["position_ms"] as? Double ?? 0) > 0)
+    #expect(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems == [URLQueryItem(name: "device_id", value: "owned")])
+    #expect(batch.commands.map(\.0) == ["play"], "Recommendations belong to a replaceable context, never the manual queue")
+    #expect(batch.isClosed)
+    await engine.shutdown()
+}
+
+@Test func exploreContinuationWaitsForTheGranularSelectionEventAfterItsSnapshot() async throws {
+    let batch = SoloistBatchSocketFixture(); batch.observeSnapshotBeforeTrackEvent = true
+    let (engine, socket) = try await continuationFixture(batch)
+    let selected = SpotifyURI("spotify:track:11dFghVXANMlKmJXsNCbNl")!
+    let finished = SoloistPairingTimeFixture()
+    let loading = Task {
+        try await engine.load(PlayRequest(contextURI: selected, followingTrackURIs: [SpotifyURI("spotify:track:4uLU6hMCjMI75M1A2tKUQC")!]))
+        finished.finish()
+    }
+    for _ in 0..<100 { if !batch.commands.isEmpty { break }; try await Task.sleep(for: .milliseconds(5)) }
+    try await Task.sleep(for: .milliseconds(50))
+    #expect(!finished.didFinish)
+    #expect(SoloistHTTPFixture.playRequests.isEmpty)
+    try socket.emit(["type": "track_changed", "item": ["uri": selected.rawValue,
+        "decorations": ["identity": ["name": "Fixture"], "playback": ["duration_ms": 100000]]]])
+    try await loading.value
+    await waitForPlaybackWrite()
+    #expect(batch.isClosed)
+    await engine.shutdown()
+}
+
+@Test func exploreReselectionReplacesItsPreviousAutomaticContext() async throws {
+    let first = SoloistBatchSocketFixture(), second = SoloistBatchSocketFixture()
+    let (engine, _, socket) = engineFixture(serviceFactory: { _ in ReadableCompanionFixture() },
+        secondaryTransport: first, followsSocketTrack: true, additionalTransports: [second])
+    first.main = socket; second.main = socket
+    socket.setActions(["play", "pause", "add_to_queue"])
+    await engine.begin(); try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    try await engine.preparePairing(); try await engine.adopt(initialVolume: 0.25)
+    let a = SpotifyURI("spotify:track:11dFghVXANMlKmJXsNCbNl")!, b = SpotifyURI("spotify:track:6rqhFgbbKwnb9MLmUQDhG6")!
+    let c = SpotifyURI("spotify:track:4uLU6hMCjMI75M1A2tKUQC")!, d = SpotifyURI("spotify:track:next")!
+    try await engine.load(PlayRequest(contextURI: a, followingTrackURIs: [b, c]))
+    await waitForPlaybackWrite()
+    try await engine.load(PlayRequest(contextURI: c, followingTrackURIs: [d]))
+    for _ in 0..<400 { if SoloistHTTPFixture.playRequests.count == 2 { break }; try await Task.sleep(for: .milliseconds(10)) }
+    let writes = SoloistHTTPFixture.playRequests
+    try #require(writes.count == 2)
+    let firstBytes = try #require(writes[0].httpBody), secondBytes = try #require(writes[1].httpBody)
+    let oldContext = try #require(try JSONSerialization.jsonObject(with: firstBytes) as? [String: Any])
+    let newContext = try #require(try JSONSerialization.jsonObject(with: secondBytes) as? [String: Any])
+    #expect(oldContext["uris"] as? [String] == [a.rawValue, b.rawValue, c.rawValue])
+    #expect(newContext["uris"] as? [String] == [c.rawValue, d.rawValue])
+    #expect((first.commands + second.commands).allSatisfy { $0.0 == "play" })
+    await engine.shutdown()
+}
+
+@Test(arguments: ["noConfirmation", "sameSongWithoutOccurrence", "missingAcknowledgement"])
+func exploreContinuationNeverInstallsWithoutPlaybackAndCommandConfirmation(mode: String) async throws {
+    let batch = SoloistBatchSocketFixture(); batch.observeSelection = false
+    if mode == "missingAcknowledgement" { batch.acknowledge = false }
+    let (engine, _) = try await continuationFixture(batch)
+    let selected = SpotifyURI(mode == "sameSongWithoutOccurrence" ? "spotify:track:6rqhFgbbKwnb9MLmUQDhG6" : "spotify:track:11dFghVXANMlKmJXsNCbNl")!
+    await #expect(throws: SoloistPlaybackError.self) {
+        try await engine.load(PlayRequest(contextURI: selected, followingTrackURIs: [SpotifyURI("spotify:track:4uLU6hMCjMI75M1A2tKUQC")!]))
+    }
+    #expect(SoloistHTTPFixture.playRequests.isEmpty)
+    #expect(batch.isClosed)
+    await engine.shutdown()
+}
+
+@Test(arguments: ["pause", "next", "newLoad", "ownership", "authentication", "otherTrack", "sameTrack", "socketLost", "shutdown"])
+func explorePendingContextDoesNotBlockControlsAndStopsWithItsOccurrence(interruption: String) async throws {
+    let batch = SoloistBatchSocketFixture(), gate = CompanionCreationGate()
+    let (engine, socket) = try await continuationFixture(batch, gate: gate)
+    let selected = SpotifyURI("spotify:track:11dFghVXANMlKmJXsNCbNl")!
+    let follower = SpotifyURI("spotify:track:4uLU6hMCjMI75M1A2tKUQC")!
+    try await engine.load(PlayRequest(contextURI: selected, followingTrackURIs: [follower]))
+    switch interruption {
+    case "pause": try await engine.pause()
+    case "next": try await engine.next()
+    case "newLoad": try await engine.load(PlayRequest(contextURI: follower))
+    case "ownership": try socket.emit(["type": "device_changed", "is_active": false])
+    case "authentication": try socket.emit(["type": "auth_state", "logged_in": false, "is_active": false])
+    case "otherTrack", "sameTrack":
+        try socket.emit(["type": "track_changed", "item": ["uri": interruption == "sameTrack" ? selected.rawValue : follower.rawValue,
+            "decorations": ["identity": ["name": "Another occurrence"]]]])
+    case "socketLost": await socket.close()
+    default: break
+    }
+    await gate.release()
+    if interruption == "shutdown" { await engine.shutdown() }
+    else { try await Task.sleep(for: .milliseconds(800)); await engine.shutdown() }
+    #expect(SoloistHTTPFixture.playRequests.isEmpty)
+    #expect(batch.isClosed)
+}
+
+@Test(arguments: ["rejected", "rateLimited", "expired"])
+func exploreContextFailureIsVisibleAndNeverFallsBackToManualQueue(failure: String) async throws {
+    let batch = SoloistBatchSocketFixture(), gate = CompanionCreationGate(), expired = SoloistPairingTimeFixture()
+    let (engine, _) = try await continuationFixture(batch, gate: gate, webToken: {
+        if expired.didFinish { throw PlayerError.authExpired }; return "fixture"
+    })
+    if failure == "rejected" { SoloistHTTPFixture.playStatus = 403 }
+    if failure == "rateLimited" { SoloistHTTPFixture.playStatus = 429 }
+    let observations = SoloistEventFixture()
+    let reader = Task { for await event in engine.events { await observations.append(event) } }
+    try await engine.load(PlayRequest(contextURI: SpotifyURI("spotify:track:11dFghVXANMlKmJXsNCbNl")!,
+        followingTrackURIs: [SpotifyURI("spotify:track:4uLU6hMCjMI75M1A2tKUQC")!]))
+    if failure == "expired" { expired.finish() }
+    await gate.release()
+    for _ in 0..<1200 {
+        if await observations.events.contains(.commandRejected("unavailable")) { break }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(await observations.events.contains(.commandRejected("unavailable")))
+    #expect(!batch.commands.contains { $0.0 == "add_to_queue" })
+    if failure == "expired" { #expect(SoloistHTTPFixture.playRequests.isEmpty) }
+    await engine.shutdown(); await reader.value
+}
+
+@Test(arguments: ["tooMany", "nonTrack", "context", "offset"])
+func exploreContinuationValidatesEverythingBeforePlayback(invalid: String) async throws {
+    let batch = SoloistBatchSocketFixture()
+    let (engine, _) = try await continuationFixture(batch)
+    let selected = SpotifyURI("spotify:track:11dFghVXANMlKmJXsNCbNl")!
+    let follower = SpotifyURI("spotify:track:4uLU6hMCjMI75M1A2tKUQC")!
+    let request = PlayRequest(contextURI: invalid == "context" ? SpotifyURI("spotify:album:4aawyAB9vmqN3uQ7FjRGTy")! : selected,
+        startPositionMs: invalid == "offset" ? 1000 : 0,
+        followingTrackURIs: invalid == "tooMany" ? Array(repeating: follower, count: 51)
+            : [invalid == "nonTrack" ? SpotifyURI("spotify:episode:fixture")! : follower])
+    await #expect(throws: SoloistPlaybackError.self) { try await engine.load(request) }
+    #expect(batch.commands.isEmpty)
+    #expect(SoloistHTTPFixture.playRequests.isEmpty)
+    await engine.shutdown()
+}
+
+@Test func exploreConsentIsIntentOnlyAndChangedGrantsEstablishFreshProof() async throws {
+    let intent = ContinuationIntentFixture(changed: true), batch = SoloistBatchSocketFixture()
+    let (engine, _, socket) = engineFixture(serviceFactory: { _ in await intent.makeService() },
+        secondaryTransport: batch, followsSocketTrack: true, authorizeContinuation: { try await intent.authorize() })
+    batch.main = socket; socket.setActions(["play", "pause", "add_to_queue"])
+    await engine.begin(); try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    try await engine.preparePairing(); try await engine.adopt(initialVolume: 0.25)
+    await engine.retryDataServices()
+    try await engine.load(PlayRequest(contextURI: SpotifyURI("spotify:track:6rqhFgbbKwnb9MLmUQDhG6")!))
+    #expect(await intent.consents == 0)
+    try await engine.load(PlayRequest(contextURI: SpotifyURI("spotify:track:11dFghVXANMlKmJXsNCbNl")!,
+        followingTrackURIs: [SpotifyURI("spotify:track:4uLU6hMCjMI75M1A2tKUQC")!]))
+    await waitForPlaybackWrite()
+    #expect(await intent.consents == 1)
+    #expect(await intent.services >= 2)
+    await engine.shutdown()
+}
+
+@Test func exploreConsentCancellationCannotBlockPauseOrInstallAContext() async throws {
+    let intent = ContinuationIntentFixture(holdConsent: true), batch = SoloistBatchSocketFixture()
+    let (engine, _, socket) = engineFixture(serviceFactory: { _ in await intent.makeService() },
+        secondaryTransport: batch, followsSocketTrack: true, authorizeContinuation: { try await intent.authorize() })
+    batch.main = socket; socket.setActions(["play", "pause", "add_to_queue"])
+    await engine.begin(); try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    try await engine.preparePairing(); try await engine.adopt(initialVolume: 0.25)
+    try await engine.load(PlayRequest(contextURI: SpotifyURI("spotify:track:11dFghVXANMlKmJXsNCbNl")!,
+        followingTrackURIs: [SpotifyURI("spotify:track:4uLU6hMCjMI75M1A2tKUQC")!]))
+    for _ in 0..<100 { if await intent.consents > 0 { break }; try await Task.sleep(for: .milliseconds(5)) }
+    #expect(await intent.consents == 1)
+    try await engine.pause()
+    #expect(socket.commands.contains("pause"))
+    #expect(SoloistHTTPFixture.playRequests.isEmpty)
+    await engine.shutdown()
+}
+
+@Test func exploreConcurrentShutdownJoinsContextCleanupOnlyOnce() async throws {
+    let intent = ContinuationIntentFixture(holdConsent: true), batch = SoloistBatchSocketFixture()
+    let (engine, child, socket) = engineFixture(serviceFactory: { _ in await intent.makeService() },
+        secondaryTransport: batch, followsSocketTrack: true, authorizeContinuation: { try await intent.authorize() })
+    batch.main = socket; socket.setActions(["play", "pause", "add_to_queue"])
+    await engine.begin(); try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    try await engine.preparePairing(); try await engine.adopt(initialVolume: 0.25)
+    try await engine.load(PlayRequest(contextURI: SpotifyURI("spotify:track:11dFghVXANMlKmJXsNCbNl")!,
+        followingTrackURIs: [SpotifyURI("spotify:track:4uLU6hMCjMI75M1A2tKUQC")!]))
+    for _ in 0..<100 { if await intent.consents > 0 { break }; try await Task.sleep(for: .milliseconds(5)) }
+    async let first: Void = engine.shutdown()
+    async let second: Void = engine.shutdown()
+    _ = await (first, second)
+    #expect(child.stopCount == 1)
+    #expect(batch.isClosed)
+    #expect(SoloistHTTPFixture.playRequests.isEmpty)
+}
+
 @Test(arguments: [false, true])
 func publishedPairingWaitsPastFiveMinutesUntilCancellationOrChildFailure(childFails: Bool) async throws {
     let time = SoloistPairingTimeFixture()
@@ -341,6 +669,27 @@ func unpairedSetupSurfacesSDKDiagnosticFailure(failure: SoloistPlaybackError) as
 
 // A metadata-only companion has no audio or Connect control. Its account proof
 // must work before playback; device correlation remains a Web playback gate.
+@Test func metadataNeverUsesTheStreamingTokenForWebAPIProfiles() async throws {
+    let service = ReadableCompanionFixture()
+    let (engine, _, socket) = engineFixture(streamingToken: { "streaming-only" }, dataToken: { "fixture" },
+        serviceFactory: { _ in service })
+    SoloistHTTPFixture.handler = { request in
+        guard request.value(forHTTPHeaderField: "Authorization") != "Bearer streaming-only" else {
+            return Data(#"{"error":{"reason":"QUOTA_EXCEEDED"}}"#.utf8)
+        }
+        return Data(#"{"account_id":"fixture-account","id":"fixture-account"}"#.utf8)
+    }
+    socket.setPlaybackStatus("idle")
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    try await engine.preparePairing(); try await engine.adopt(initialVolume: 0.25)
+    defer { Task { await engine.shutdown() } }
+    let track = SpotifyURI("spotify:track:6rqhFgbbKwnb9MLmUQDhG6")!
+    let lyrics = try await engine.requestLyrics(for: track)
+    #expect(lyrics.lines.map(\.text) == ["Fixture lyric"])
+    #expect(await service.requests == 1)
+}
+
 @Test func metadataRequestsWaitForAccountProofAndRemainGatedAfterLogout() async throws {
     let service = CompanionServiceFixture()
     let (engine, _, socket) = engineFixture(serviceFactory: { _ in service })
@@ -594,6 +943,59 @@ func metadataReplyCannotOutliveAuthorizationSuspension(operation: String) async 
     await engine.shutdown()
     await engine.shutdown()
     #expect(child.stopCount == 1)
+}
+
+@Test(arguments: [RepeatMode.off, .context, .track])
+func repeatCommandsFollowTheDocumentedTwoCommandTransition(mode: RepeatMode) async throws {
+    let (engine, _, socket) = engineFixture()
+    socket.setActions(["pause", "play", "seek", "shuffle", "set_repeat", "skip_next", "skip_prev"])
+    let observations = SoloistEventFixture()
+    let reader = Task { for await event in engine.events { await observations.append(event) } }
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    try await engine.preparePairing()
+    try await engine.adopt(initialVolume: 0.25)
+    try await engine.setRepeat(mode)
+    for _ in 0..<100 {
+        if await observations.events.contains(.repeatChanged(mode)) { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    let controls = try socket.sentFrames.compactMap { try JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        .filter { ($0["command"] as? String)?.hasPrefix("set_repeat_") == true }
+    let names = controls.compactMap { $0["command"] as? String }
+    #expect(names == (mode == .track ? ["set_repeat_context", "set_repeat_track"] : ["set_repeat_track", "set_repeat_context"]))
+    #expect(controls.compactMap { $0["enabled"] as? Bool } == [false, mode != .off])
+    #expect(await observations.events.contains(.repeatChanged(mode)))
+    await engine.shutdown(); await reader.value
+}
+
+@Test func shuffleAndOtherLocalControlsPublishObservedStateWithoutWebPlaybackPermission() async throws {
+    let (engine, child, socket) = engineFixture(webStatus: 403)
+    socket.setActions(["pause", "play", "seek", "shuffle", "set_repeat", "skip_next", "skip_prev"])
+    let observations = SoloistEventFixture()
+    let reader = Task { for await event in engine.events { await observations.append(event) } }
+    await engine.begin()
+    try socket.emit(["type": "auth_state", "logged_in": true, "is_active": true])
+    try await engine.preparePairing()
+    try await engine.adopt(initialVolume: 0.25)
+    try await engine.setShuffle(true)
+    try await engine.next()
+    try await engine.previous()
+    try await engine.seek(to: 1234)
+    try await engine.setVolume(0.4)
+    try await engine.pause()
+    try await engine.resume()
+    for _ in 0..<100 {
+        if await observations.events.contains(.shuffleChanged(true)) { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(await observations.events.contains(.shuffleChanged(true)))
+    for name in ["set_shuffle", "skip_next", "skip_prev", "seek", "set_volume", "pause", "play"] {
+        #expect(socket.commands.contains(name))
+    }
+    #expect(!SoloistHTTPFixture.paths.contains("/v1/me/player/play"))
+    #expect(child.isRunning)
+    await engine.shutdown(); await reader.value
 }
 
 @Test func repairingRevokesCompanionAccessAndClearsPublishedState() async throws {

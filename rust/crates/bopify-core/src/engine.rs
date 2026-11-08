@@ -89,6 +89,11 @@ impl Engine {
                     session.connect(Credentials::with_access_token(access_token), false),
                 )
                 .await?;
+                if let Err(error) = options.verify_services_identity(&session.username()) {
+                    session.shutdown();
+                    log::error!("engine: data services rejected mismatched authenticated identity");
+                    return Err(error);
+                }
                 Ok::<_, BopifyError>(session)
             })?;
             log::info!("engine: data services connected without audio or Connect registration");

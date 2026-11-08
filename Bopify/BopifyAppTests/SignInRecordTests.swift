@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Observation
 import Testing
 import BopifyDomain
 import BopifyAuth
@@ -7,6 +8,28 @@ import BopifyPlayback
 
 @MainActor @Suite("Startup record")
 struct SignInRecordTests {
+    @Test func hidingDuringTheFirstFlipHalfDoesNotLeaveTheReopenedRecordEdgeOn() async throws {
+        _ = NSApplication.shared
+        let fixture = InterruptedRecordFixture()
+        let window = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 300, height: 360),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: InterruptedRecordView(fixture: fixture))
+        window.orderFront(nil)
+        defer { window.close() }
+        try await Task.sleep(for: .milliseconds(1300))
+        try #require(fixture.recordFrame.width > 100)
+
+        fixture.step = .library(.idle)
+        try await Task.sleep(for: .milliseconds(150))
+        fixture.isVisible = false
+        try await Task.sleep(for: .milliseconds(100))
+        fixture.isVisible = true
+        try await Task.sleep(for: .milliseconds(1300))
+
+        #expect(fixture.recordFrame.width > 100, "Reopening the same library step must restore the full record face")
+    }
+
     @Test func libraryAndListeningKeepTheWelcomeRecordSize() throws {
         func renderedSize(_ step: StartupStep) throws -> CGSize {
             let renderer = ImageRenderer(content: SignInRecordView(step: step, isVisible: false))
@@ -27,7 +50,7 @@ struct SignInRecordTests {
         #expect(environment.requestedOnboardingSection == nil)
         #expect(!environment.isShowingPlayer)
         #expect(environment.onboardingStep == .playback(.working))
-        environment.updateOnboardingReadiness(reduceMotion: true)
+        environment.updateOnboardingReadiness()
         #expect(environment.onboardingStep == .completion)
     }
 
@@ -181,7 +204,9 @@ struct StartupShellTests {
         #expect(environment.isShowingPlayer && environment.player?.state.currentTrack == nil)
         #expect(panel.frame.width < 410)
         environment.showOnboarding()
-        try await liveLyricEventually { panel.frame.width >= 410 && panel.frame.height >= 560 }
+        try await liveLyricEventually {
+            panel.frame.width >= 410 && abs(panel.frame.height - environment.startupWindow.height) < 1
+        }
         #expect(environment.isShowingOnboarding)
         #expect(!panel.hasShadow)
         environment.closeOnboarding()
@@ -218,4 +243,19 @@ private nonisolated final class OnboardingKeys: SoloistKeyStoring, @unchecked Se
     func load() throws -> String? { lock.withLock { value } }
     func save(_ key: String) throws { lock.withLock { value = key } }
     func clear() throws { lock.withLock { value = nil } }
+}
+
+@MainActor @Observable private final class InterruptedRecordFixture {
+    var step = StartupStep.signIn(.idle)
+    var isVisible = true
+    var recordFrame = CGRect.zero
+}
+
+private struct InterruptedRecordView: View {
+    let fixture: InterruptedRecordFixture
+    var body: some View {
+        SignInRecordView(step: fixture.step, isVisible: fixture.isVisible,
+                         onRecordFrameChanged: { fixture.recordFrame = $0 })
+            .frame(width: 300, height: 360)
+    }
 }

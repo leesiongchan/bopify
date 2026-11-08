@@ -1,6 +1,6 @@
 # Adaptive windows and a shared onboarding journey
 
-Status: proposed. The user requested dynamic sizing, richer vinyl motion, and a consistent first-time/returning experience. The isolated preview is ready; the entry point for returning users is still an open behavior choice. Application source is unchanged from 5d224e5.
+Status: approved by the user ("follow recommendation") on 2026-11-08. Apply the recommended physical vinyl treatment and content-sized windows. Returning users enter the shared journey when setup needs attention or is reopened; valid normal launches remain direct to the player. Saved credentials and permissions are reused.
 
 Preview: `build/onboarding-adaptive-demo/index.html`. It includes first-time/returning simulation, full-flow playback, per-step inspection, two motion options, a short-screen mode and Reduce Motion. This is browser approximation, not native Liquid Glass or live Spotify behavior.
 
@@ -23,7 +23,7 @@ The preview retains a single record DOM instance through every step and into the
 
 Use the same visual components, motion, step hierarchy and automatic completion. Saved grants, Client ID, Soloist key and SDK session are reused; valid steps advance without repeat entry. Shared presentation must not cause browser consent on launch, relax account/device proof, interrupt playback or reinstall a usable SDK.
 
-Open choice: show the brief shared automatic check on every returning launch, or invoke the shared journey only when setup needs attention/is reopened. The preview can demonstrate returning presentation under either entry policy; it does not decide startup behavior.
+Selected recommendation: invoke the shared journey when setup needs attention or is reopened. Do not add a setup ceremony or browser consent to valid normal launches. The user delegated the choice by asking to follow the recommendation.
 
 Existing interactive returning sign-in combines previously approved consent in one browser visit. That authentication optimization can remain while presentation is shared; making the visuals consistent does not require repeating consent.
 
@@ -37,4 +37,4 @@ Existing interactive returning sign-in combines previously approved consent in o
 
 The initial measurement pass covered nine stages. Heights ranged from 412 to 643 px; vinyl width stayed 224 px and the window top stayed 124 px in the browser viewport. Every form fit without scrolling. Both simulated full flows retain the same record instance and complete automatically. Reduce Motion was verified to remove poise/sheen animations, stop queued disc frames, hold the disc upright, and disable window transitions. At a 380 px browser viewport, all nine short-screen scenes and their controls fit; artwork width stayed 126 px and window heights ranged 292–523 px. No browser errors were reported.
 
-No application source, credentials, network pairing or real playback is touched; no application/package/Rust tests or new signed build are part of this proposal-only pass. Native sizing, event-driven restoration and motion need focused verification after the behavior choice is resolved.
+The preview pass touched no application source, credentials, network pairing or real playback and ran no application/package/Rust tests. The approved implementation now proceeds with focused native sizing, restoration, accessibility and motion verification.

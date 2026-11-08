@@ -47,6 +47,8 @@ public struct PlaybackState: Hashable, Sendable {
     public var canSeek = false
     public var canPrevious = false
     public var canNext = false
+    public var canShuffle = false
+    public var canRepeat = false
     public var supportsQueueSelection = true
     /// False when another Spotify device has taken over. Without this the
     /// UI would show a phantom paused track indefinitely.

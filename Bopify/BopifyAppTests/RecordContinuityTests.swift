@@ -36,7 +36,7 @@ struct RecordContinuityTests {
         defer { panel.close() }
         controller.attach(to: panel)
         let screen = CGRect(x: 0, y: 0, width: 1000, height: 800)
-        controller.apply(mode: .expanded, reduceMotion: true, visibleFrame: screen)
+        controller.apply(mode: .expanded, animated: false, visibleFrame: screen)
         panel.makeKeyAndOrderFront(nil)
         try await waitUntil { findInput(panel.contentView)?.input != nil && !environment.likedSongs.tracks.isEmpty }
         try await Task.sleep(for: .milliseconds(200))
@@ -56,7 +56,7 @@ struct RecordContinuityTests {
         presentation.sendAttention(.keyboardFocus(false))
         presentation.sendAttention(.pointer(false))
         try await waitUntil { presentation.mode == .compact }
-        controller.apply(mode: .compact, reduceMotion: true, visibleFrame: screen)
+        controller.apply(mode: .compact, animated: false, visibleFrame: screen)
         try await Task.sleep(for: .milliseconds(100))
         let underneath = try samplePhoto(panel, layout: controller.layout)
         #expect(underneath.redComponent > 0.8 && underneath.blueComponent < 0.2,
@@ -65,7 +65,7 @@ struct RecordContinuityTests {
         let arrived = try samplePhoto(panel, layout: controller.layout)
         #expect(arrived.blueComponent > 0.8 && arrived.redComponent < 0.2)
         presentation.sendAttention(.keyboardFocus(true))
-        controller.apply(mode: .expanded, reduceMotion: false, visibleFrame: screen)
+        controller.apply(mode: .expanded, visibleFrame: screen)
         try await Task.sleep(for: .milliseconds(700))
         let expanded = try samplePhoto(panel, layout: controller.layout)
         #expect(expanded.blueComponent > 0.8 && expanded.redComponent < 0.2)

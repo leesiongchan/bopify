@@ -18,6 +18,8 @@ public actor LibraryAuthorization {
         "playlist-read-private", "playlist-read-collaborative", "user-follow-read"
     ]
     public static let playbackScopes: Set<String> = ["user-read-playback-state", "user-modify-playback-state"]
+    /// Explicit consent covers browsing and playback in one browser visit; restore stays read-only.
+    public static let initialConsentScopes = requiredScopes.union(playbackScopes)
 
     private let defaults: UserDefaults
     private let makeAuth: @Sendable (String) -> SpotifyAuthService
@@ -91,6 +93,29 @@ public actor LibraryAuthorization {
     public func authorize(additionalScopes: Set<String> = []) async throws {
         guard let auth else { throw LibraryError.authorizationRequired }
         _ = try await auth.authorizeLibrary(additionalScopes: additionalScopes)
+    }
+
+    /// Called only for an explicit playback action, never by restore or metadata warmup.
+    @discardableResult
+    public func authorizePlaybackIfNeeded() async throws -> Bool {
+        try Task.checkCancellation()
+        guard clientChange == nil else { throw CancellationError() }
+        guard let authorization = auth else { throw LibraryError.authorizationRequired }
+        let expectedClientID = clientID
+        do {
+            _ = try await authorization.validAccessToken(requiredScopes: Self.initialConsentScopes)
+            try Task.checkCancellation()
+            guard auth === authorization, clientID == expectedClientID, clientChange == nil else { throw CancellationError() }
+            return false
+        } catch LibraryError.authorizationRequired {
+        } catch let error as PlayerError where error == .authExpired || error == .credentialCorrupt {
+        }
+        try Task.checkCancellation()
+        guard auth === authorization, clientID == expectedClientID, clientChange == nil else { throw CancellationError() }
+        _ = try await authorization.authorizeLibrary(additionalScopes: Self.playbackScopes)
+        try Task.checkCancellation()
+        guard auth === authorization, clientID == expectedClientID, clientChange == nil else { throw CancellationError() }
+        return true
     }
 
     public func prepareConsent() async throws -> URL {

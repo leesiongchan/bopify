@@ -21,17 +21,26 @@ public final class LibrespotServices: SoloistDataServices, @unchecked Sendable {
     private let lock = NSLock()
     private var contextReleased = false
 
-    public convenience init(accessToken: String) async throws {
-        try await self.init(accessToken: accessToken, native: .live)
+    public convenience init(accessToken: String, expectedUsername: String) async throws {
+        try await self.init(accessToken: accessToken, expectedUsername: expectedUsername, native: .live)
     }
 
     /// Native login and teardown must stay off the caller's actor.
     @concurrent
-    init(accessToken: String, native: LibrespotServiceFFI) async throws {
+    init(accessToken: String, expectedUsername: String, native: LibrespotServiceFFI) async throws {
+        guard !expectedUsername.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              expectedUsername.utf8.count <= 256,
+              !expectedUsername.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
+            throw SoloistPlaybackError.missingAccountID
+        }
+        // The native login compares this identity before exposing any metadata requests.
+        let encoded = try JSONSerialization.data(withJSONObject: [
+            "deviceId": "bopify-services", "startup": "coldLaunch", "servicesOnly": true,
+            "expectedUsername": expectedUsername,
+        ])
+        let options = String(decoding: encoded, as: UTF8.self)
         let bridge = EventBridge()
         let context = bridge.retainedContext()
-        // Unconditional: this adapter must never register a Connect device or open audio.
-        let options = #"{"deviceId":"bopify-services","startup":"coldLaunch","servicesOnly":true}"#
         var code: Int32 = 0
         BopifyLog.playback.info("data services create starting")
         guard let handle = native.create(accessToken, "Bopify services", options, context, &code) else {

@@ -4,10 +4,9 @@ struct PlaybackButtonFace: View {
     let isPlaying: Bool
     let previousPlaying: Bool
     let progress: Double
-    var reduceMotion = false
 
     var body: some View {
-        let p = reduceMotion ? 1 : min(1, max(0, progress))
+        let p = min(1, max(0, progress))
         let outgoing = min(1, p / 0.5)
         let incoming = min(1, max(0, (p - 0.35) / 0.65))
         let depth = sin(p * .pi)

@@ -13,7 +13,7 @@ struct PlayerLyricsTests {
         try await f.show()
         #expect(!f.panel.isKeyWindow)
         f.environment.presentation.sendAttention(.pointer(true))
-        f.controller.apply(mode: .expanded, reduceMotion: true, showsLyrics: true)
+        f.controller.apply(mode: .expanded, animated: false, showsLyrics: true)
         let lyrics = f.controller.layout.lyricsFrame
         f.panel.updatePlayerPointer(at: CGPoint(x: lyrics.midX, y: lyrics.midY))
         try await Task.sleep(for: .milliseconds(380))
@@ -31,7 +31,7 @@ struct PlayerLyricsTests {
         let reader = try #require(f.descendant(LyricReadingTextView.self))
         let scroll = try #require(reader.enclosingScrollView)
         for mode in [PlayerMode.compact, .expanded] {
-            f.controller.apply(mode: mode, reduceMotion: true, showsLyrics: true)
+            f.controller.apply(mode: mode, animated: false, showsLyrics: true)
             try await Task.sleep(for: .milliseconds(80))
             #expect(scroll.contentView.bounds.height >= 84)
         }
@@ -91,11 +91,11 @@ struct PlayerLyricsTests {
             try #require(!f.controller.isTransitioning)
         }
         f.environment.presentation.sendAttention(.keyboardFocus(true))
-        f.controller.apply(mode: .expanded, reduceMotion: false, showsLyrics: true)
+        f.controller.apply(mode: .expanded, showsLyrics: true)
         if interrupted { try await Task.sleep(for: .milliseconds(80)) }
         else { try await waitForTransition() }
         f.environment.presentation.resetEngagement()
-        f.controller.apply(mode: .compact, reduceMotion: false, showsLyrics: true)
+        f.controller.apply(mode: .compact, showsLyrics: true)
         try await waitForTransition()
         #expect(f.panel.frame.size == CGSize(width: 380, height: 178))
         #expect(f.controller.contentOffset == .zero)
@@ -160,7 +160,7 @@ struct PlayerLyricsTests {
         reader.setSelectedRange(selection)
         let origin = scroll.contentView.bounds.origin
         for mode in [PlayerMode.expanded, .compact] {
-            f.controller.apply(mode: mode, reduceMotion: true, showsLyrics: true)
+            f.controller.apply(mode: mode, animated: false, showsLyrics: true)
             try await Task.sleep(for: .milliseconds(50))
             #expect(f.descendant(LyricReadingTextView.self) === reader)
             #expect(reader.selectedRange() == selection)
@@ -252,7 +252,7 @@ struct PlayerLyricsTests {
         var toggles = 0
         f.panel.onTogglePlayback = { toggles += 1 }
         f.model.hide()
-        f.controller.apply(mode: .compact, reduceMotion: true)
+        f.controller.apply(mode: .compact, animated: false)
         try await Task.sleep(for: .milliseconds(50))
         let space = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
             windowNumber: f.panel.windowNumber, context: nil, characters: " ", charactersIgnoringModifiers: " ", isARepeat: false, keyCode: 49))
@@ -298,7 +298,7 @@ struct PlayerLyricsTests {
             trackURI: previewTracks[0].uri, synchronization: .lineSynced, lines: [],
             provider: "fixture", providerDisplayName: "Fixture provider", isRightToLeft: false)))
         environment.presentation.isVisible = true
-        controller.apply(mode: expanded ? .expanded : .compact, reduceMotion: true, showsLyrics: true)
+        controller.apply(mode: expanded ? .expanded : .compact, animated: false, showsLyrics: true)
         panel.orderFrontRegardless()
         if expanded { controller.focus() }
         panel.contentView?.layoutSubtreeIfNeeded()

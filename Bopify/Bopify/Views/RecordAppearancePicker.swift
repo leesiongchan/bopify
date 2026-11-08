@@ -5,7 +5,6 @@ struct RecordAppearancePicker: View {
     let model: RecordAppearancePickerModel
     var onClose: () -> Void = {}
     @FocusState private var focused: RecordAppearanceFocus?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
     private let strings = RecordAppearanceResources.bundle
 
@@ -91,8 +90,7 @@ struct RecordAppearancePicker: View {
             }
             .buttonStyle(RecordAppearanceButtonStyle(selected: false, focused: model.focused == .motion, increasedContrast: contrast == .increased))
             .focusable(interactions: .edit).focusEffectDisabled().focused($focused, equals: .motion)
-            .disabled(reduceMotion)
-            .accessibilityValue(Text(LocalizedStringKey(reduceMotion || model.isMotionPaused ? "appearance.motionStopped" : "appearance.motionPlaying"), bundle: strings))
+            .accessibilityValue(Text(LocalizedStringKey(model.isMotionPaused ? "appearance.motionStopped" : "appearance.motionPlaying"), bundle: strings))
             .accessibilityIdentifier("appearance.motion")
         }.padding(.horizontal, 20).frame(height: 44)
             .background(Color(red: 0.07, green: 0.12, blue: 0.08).opacity(0.72))

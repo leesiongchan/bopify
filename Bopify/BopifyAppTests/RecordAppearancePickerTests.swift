@@ -70,31 +70,6 @@ struct RecordAppearancePickerTests {
         #expect(d.string(forKey: RecordDesign.preferenceKey) == nil)
         #expect(d.string(forKey: VinylDesign.preferenceKey) == nil)
     }
-    @Test func reducedMotionKeysSkipAndCannotActivateMotion() async throws {
-        let d = defaults()
-        var reduceMotion = true
-        let c = RecordAppearanceWindowController(defaults: d, reduceMotion: { reduceMotion })
-        c.show(); defer { c.close() }
-        let w = try window()
-        try await Task.sleep(for: .milliseconds(150))
-        c.model.focused = .motion
-        try key(49, " ", in: w)
-        #expect(!c.model.isMotionPaused)
-        try key(36, "\r", in: w)
-        #expect(!c.model.isMotionPaused)
-        c.model.focused = .choice(.pattern(.carnival))
-        try key(48, "\t", in: w)
-        #expect(c.model.focused == .choice(.material(.classic)))
-        try key(48, "\t", modifiers: .shift, in: w)
-        #expect(c.model.focused == .choice(.pattern(.carnival)))
-        #expect(d.string(forKey: RecordDesign.preferenceKey) == nil)
-        #expect(d.string(forKey: VinylDesign.preferenceKey) == nil)
-        reduceMotion = false
-        try key(48, "\t", in: w)
-        #expect(c.model.focused == .motion)
-        try key(49, " ", in: w)
-        #expect(c.model.isMotionPaused)
-    }
     @Test func escapeClosesAndRetainsChoices() throws {
         let d = defaults(), c = RecordAppearanceWindowController(defaults: d)
         c.show(); defer { c.close() }

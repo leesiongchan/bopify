@@ -166,7 +166,7 @@ private final class ConsentRefreshProtocol: URLProtocol, @unchecked Sendable {
         if Self.gate.holdExchange || String(decoding: body, as: UTF8.self).contains("grant_type=refresh_token") {
             Self.gate.hold(self)
         } else {
-            respond(#"{"access_token":"NEW_CONSENT","expires_in":3600,"refresh_token":"NEW_RT","scope":"user-library-read user-library-modify user-read-recently-played user-top-read playlist-read-private playlist-read-collaborative user-follow-read"}"#)
+            respond(#"{"access_token":"NEW_CONSENT","expires_in":3600,"refresh_token":"NEW_RT","scope":"user-library-read user-library-modify user-read-recently-played user-top-read playlist-read-private playlist-read-collaborative user-follow-read user-read-playback-state user-modify-playback-state"}"#)
         }
     }
 

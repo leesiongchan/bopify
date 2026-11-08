@@ -14,7 +14,6 @@ struct LyricPanelView: View {
     var onDragChanged: (Bool) -> Void = { _ in }
     @FocusState private var syncFocused: Bool
     @State private var syncFrame: CGRect = .zero
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var message: NSAttributedString {
         let value: String = switch model.content {
@@ -73,7 +72,7 @@ struct LyricPanelView: View {
                     isReading: model.isReading, textScale: layout.textScale, isRightToLeft: model.source?.isRightToLeft ?? false,
                     width: max(1, layout.panelSize.width - 2 * LyricRibbonLayout.horizontalInset),
                     height: layout.textViewportHeight, resetRevision: model.scrollResetRevision,
-                    animate: !reduceMotion, onBeginReading: model.beginReading,
+                    animate: true, onBeginReading: model.beginReading,
                     shouldFocusReader: { model.isKeyboardInteracting && model.keyboardSelection == .reader },
                     occurrenceID: model.snapshot.occurrenceID, direction: model.snapshot.direction,
                     onSeek: { [snapshot = model.snapshot] time in onSeek(time, snapshot) },
@@ -81,7 +80,7 @@ struct LyricPanelView: View {
                     .frame(height: layout.textViewportHeight)
             }
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.24), value: model.snapshot.occurrenceID)
+        .animation(.easeOut(duration: 0.24), value: model.snapshot.occurrenceID)
         .padding(.horizontal, LyricRibbonLayout.horizontalInset)
         .padding(.vertical, LyricRibbonLayout.verticalInset)
         .frame(width: layout.panelSize.width,

@@ -5,18 +5,16 @@ struct MorphingArtworkView: View {
     let diameter: CGFloat
     let occurrenceID: String
     var isVisible = true
-    var reduceMotionOverride = false
+    var transitionDuration: TimeInterval = 0.65
     @State private var morph: ArtworkMorphState
     @State private var isAnimating = false
-    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    private var reduceMotion: Bool { systemReduceMotion || reduceMotionOverride }
 
-    init(image: Image?, diameter: CGFloat, occurrenceID: String = "", isVisible: Bool = true, reduceMotionOverride: Bool = false) {
+    init(image: Image?, diameter: CGFloat, occurrenceID: String = "", isVisible: Bool = true, transitionDuration: TimeInterval = 0.65) {
         self.image = image
         self.diameter = diameter
         self.occurrenceID = occurrenceID
         self.isVisible = isVisible
-        self.reduceMotionOverride = reduceMotionOverride
+        self.transitionDuration = transitionDuration
         _morph = State(initialValue: ArtworkMorphState(image: image, occurrenceID: occurrenceID))
     }
 
@@ -45,7 +43,7 @@ struct MorphingArtworkView: View {
     }
 
     private func retarget() {
-        morph.duration = reduceMotion ? 0.16 : 0.65
+        morph.duration = transitionDuration
         morph.transition(to: image, occurrenceID: occurrenceID, at: SuspendingClock.now, diameter: diameter)
         isAnimating = isVisible
         if !isVisible { morph.finish() }

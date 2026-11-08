@@ -6,16 +6,24 @@ struct StartupView<Content: View>: View {
     let step: StartupStep
     var isVisible = true
     var onRecordFrameChanged: ((CGRect) -> Void)?
+    var recordScale: CGFloat?
+    var completionID: UUID? = nil
+    var onCompletionSettled: ((UUID) -> Void)?
+    var onRecordSideChanged: ((RecordSide) -> Void)?
+    var pocketOpacity: Double = 1
+    var recordOpacity: Double = 1
     @ViewBuilder let content: () -> Content
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { geometry in
-            // Reserve the same readable form area at every step; adapt artwork only to the viewport.
-            let scale = min(0.88, max(0.25, (geometry.size.height - 312 - 18) / 324))
+            let preferredScale: CGFloat = step.isCompact ? 0.55 : 0.88
+            let scale = min(preferredScale, recordScale ?? max(0.25, (geometry.size.height - 312 - 18) / 324))
             VStack(spacing: 18) {
                 SignInRecordView(step: step, isVisible: isVisible,
-                                 onRecordFrameChanged: onRecordFrameChanged, scale: scale)
+                                 onRecordFrameChanged: onRecordFrameChanged, scale: scale,
+                                 completionID: completionID, onCompletionSettled: onCompletionSettled,
+                                 onRecordSideChanged: onRecordSideChanged, pocketOpacity: pocketOpacity,
+                                 recordOpacity: recordOpacity)
                     .overlay(alignment: .bottomTrailing) {
                         if step == .completion {
                             Image(systemName: "checkmark.circle.fill")
@@ -23,6 +31,7 @@ struct StartupView<Content: View>: View {
                                 .foregroundStyle(.green)
                                 .symbolRenderingMode(.hierarchical)
                                 .accessibilityHidden(true)
+                                .opacity(pocketOpacity)
                                 .transition(.opacity)
                         }
                     }
@@ -30,12 +39,12 @@ struct StartupView<Content: View>: View {
                 ZStack {
                     content()
                         .id(step.contentIdentity)
-                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 6)))
+                        .transition(.opacity.combined(with: .offset(y: 6)))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
             .frame(maxHeight: .infinity)
-            .animation(.easeInOut(duration: reduceMotion ? 0.16 : 0.3), value: step)
+            .animation(.easeInOut(duration: 0.3), value: step)
         }
     }
 }

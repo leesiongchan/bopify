@@ -69,7 +69,7 @@ public actor SpotifyAuthService {
     }
 
     public func authorizeLibrary(additionalScopes: Set<String> = []) async throws -> TokenSet {
-        let scopes = LibraryAuthorization.requiredScopes.union(additionalScopes)
+        let scopes = LibraryAuthorization.initialConsentScopes.union(additionalScopes)
         if let consent = preparedConsent {
             preparedConsent = nil
             if consent.generation == generation, activeListener === consent.listener, scopes.isSubset(of: consent.scopes) {
@@ -86,7 +86,7 @@ public actor SpotifyAuthService {
     /// the next `authorizeLibrary()` then waits for that tab instead of opening another.
     public func prepareLibraryConsent() async throws -> URL {
         try await prepareLibraryForConsent()
-        let consent = try await beginConsent(scopes: LibraryAuthorization.requiredScopes)
+        let consent = try await beginConsent(scopes: LibraryAuthorization.initialConsentScopes)
         preparedConsent = consent
         BopifyLog.auth.info("library consent prepared for the sign-in browser tab")
         return consent.url

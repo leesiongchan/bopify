@@ -17,6 +17,11 @@ struct SoloistWebPlayback: Sendable {
     let track: Track?
 }
 
+struct SoloistAccountProfile: Sendable {
+    let accountID: String
+    let username: String
+}
+
 private final class SoloistHTTPPolicy: NSObject, URLSessionTaskDelegate, Sendable {
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
         newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) { completionHandler(nil) }
@@ -58,9 +63,19 @@ actor SoloistWebAPI {
         do { (bytes, response) = try await session.bytes(for: request) }
         catch { if Task.isCancelled { throw CancellationError() }; throw SoloistPlaybackError.unavailable }
         guard let http = response as? HTTPURLResponse else { throw SoloistPlaybackError.invalidState }
+        let operation: String
+        switch path {
+        case "/me": operation = "profile"
+        case "/me/player/devices": operation = "devices"
+        case "/me/player": operation = "playback"
+        case "/me/player/play": operation = "play"
+        default: operation = "other"
+        }
+        if !(200..<300).contains(http.statusCode) {
+            BopifyLog.playback.notice("Soloist Web API failed operation=\(operation, privacy: .public) status=\(http.statusCode, privacy: .public)")
+        }
         if http.statusCode == 429 {
-            let seconds = Double(http.value(forHTTPHeaderField: "Retry-After") ?? "") ?? 60
-            await rateLimit.postpone(seconds: seconds)
+            try await recordRateLimit(response: http, bytes: bytes, operation: operation)
             throw SoloistPlaybackError.rateLimited
         }
         if http.statusCode == 401 || http.statusCode == 403 { throw SoloistPlaybackError.authorizationRequired }
@@ -74,11 +89,62 @@ actor SoloistWebAPI {
         return data
     }
 
+    func recordRateLimit<Bytes: AsyncSequence & Sendable>(response: HTTPURLResponse, bytes: Bytes, operation: String) async throws
+        where Bytes.Element == UInt8 {
+        let rawSeconds = Double(response.value(forHTTPHeaderField: "Retry-After") ?? "") ?? 60
+        let seconds = rawSeconds.isFinite ? max(1, rawSeconds) : 60
+        // Gate subsequent requests before awaiting an optional diagnostic body.
+        await rateLimit.postpone(seconds: seconds)
+        let deadline = await rateLimit.retryAt.timeIntervalSince1970
+        BopifyLog.playback.notice("Soloist Web API cooldown operation=\(operation, privacy: .public) retryAfterSeconds=\(seconds, privacy: .public) retryAtEpoch=\(deadline, privacy: .public)")
+        let classification: String
+        do { classification = try await Self.readRateLimitClassification(from: bytes) }
+        catch {
+            if Task.isCancelled { throw CancellationError() }
+            classification = "unspecified"
+        }
+        try Task.checkCancellation()
+        BopifyLog.playback.notice("Soloist Web API throttle operation=\(operation, privacy: .public) classification=\(classification, privacy: .public)")
+    }
+
+    static func rateLimitClassification(from data: Data) -> String {
+        guard data.count < 8192,
+              let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let error = value["error"] as? [String: Any], error["reason"] as? String == "QUOTA_EXCEEDED" else {
+            return "unspecified"
+        }
+        return "quotaExceeded"
+    }
+
+    private static func readRateLimitClassification<Bytes: AsyncSequence & Sendable>(from bytes: Bytes) async throws -> String
+        where Bytes.Element == UInt8 {
+        var data = Data()
+        for try await byte in bytes {
+            try Task.checkCancellation()
+            data.append(byte)
+            // At the limit the JSON may be truncated, so do not classify its prefix.
+            if data.count == 8192 { return "unspecified" }
+        }
+        try Task.checkCancellation()
+        return rateLimitClassification(from: data)
+    }
+
     func account(token: String) async throws -> String {
+        try await accountProfile(token: token).accountID
+    }
+
+    func accountProfile(token: String) async throws -> SoloistAccountProfile {
         guard let data = try await request("/me", token: token),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let id = object["account_id"] as? String, !id.isEmpty else { throw SoloistPlaybackError.missingAccountID }
-        return id
+              let id = object["account_id"] as? String, !id.isEmpty,
+              let username = object["id"] as? String,
+              !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              username.utf8.count <= 256,
+              !username.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
+            BopifyLog.playback.notice("Soloist account verification failed reason=missingAccountID")
+            throw SoloistPlaybackError.missingAccountID
+        }
+        return SoloistAccountProfile(accountID: id, username: username)
     }
 
     func devices(token: String) async throws -> Set<SoloistDevice> {
@@ -110,6 +176,15 @@ actor SoloistWebAPI {
 
     static func playBody(_ request: PlayRequest) throws -> [String: Any] {
         var body: [String: Any] = ["position_ms": max(0, request.startPositionMs)]
+        if !request.followingTrackURIs.isEmpty {
+            guard request.contextURI.kind == .track, request.startTrackURI == nil,
+                  request.followingTrackURIs.count <= 50, request.followingTrackURIs.allSatisfy({ $0.kind == .track }) else {
+                throw SoloistPlaybackError.unsupported
+            }
+            var seen: Set<SpotifyURI> = [request.contextURI]
+            body["uris"] = [request.contextURI.rawValue] + request.followingTrackURIs.filter { seen.insert($0).inserted }.map(\.rawValue)
+            return body
+        }
         switch request.contextURI.kind {
         case .track, .episode: body["uris"] = [request.contextURI.rawValue]
         default:

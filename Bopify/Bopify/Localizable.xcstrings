@@ -346,7 +346,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Select this device, then play a song."
+            "value": "Play a song in Spotify, then choose this device."
           }
         }
       }
@@ -457,16 +457,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Another playback session is still running. Close the other copy of Bopify, then retry."
-          }
-        }
-      }
-    },
-    "menu.setup": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Setup…"
           }
         }
       }
@@ -1456,6 +1446,16 @@
         }
       }
     },
+    "explore.fromLibrary" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From your library"
+          }
+        }
+      }
+    },
     "explore.loading" : {
       "localizations" : {
         "en" : {
@@ -1632,16 +1632,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Not saved to Spotify"
-          }
-        }
-      }
-    },
-    "library.cancelAuthorization" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cancel library sign-in"
           }
         }
       }

@@ -150,6 +150,7 @@ public final class PlayerModel {
         isEngineReady = false
         stagedEvents = []
         state.isActiveDevice = false
+        state.canShuffle = false; state.canRepeat = false
         if let remote = state.remote { state.staleRemote = stalled(remote); state.remote = nil }
         if state.phase == .playing || state.phase == .loading { state.phase = .idle }
     }
@@ -337,13 +338,13 @@ public final class PlayerModel {
 
     public func setShuffle(_ enabled: Bool) {
         guard isEngineReady, let engine else { return; }
-        guard state.isActiveDevice else { return }
+        guard state.isActiveDevice, state.canShuffle else { return }
         enqueue("setShuffle", requiresActive: true) { [engine] in try await engine.setShuffle(enabled) }
     }
 
     public func setRepeat(_ mode: RepeatMode) {
         guard isEngineReady, let engine else { return; }
-        guard state.isActiveDevice else { return }
+        guard state.isActiveDevice, state.canRepeat else { return }
         enqueue("setRepeat", requiresActive: true) { [engine] in try await engine.setRepeat(mode) }
     }
 
@@ -533,6 +534,8 @@ public final class PlayerModel {
             BopifyLog.playback.debug("player command rejected")
         case let .availableActions(seek, next, previous):
             state.canSeek = seek; state.canNext = next; state.canPrevious = previous
+        case let .availablePlaybackOptions(shuffle, repeatMode):
+            state.canShuffle = shuffle; state.canRepeat = repeatMode
         case let .queueSelectionSupported(supported): state.supportsQueueSelection = supported
         case let .playbackRate(rate):
             guard rate.isFinite, (0...4).contains(rate) else { return }
@@ -544,6 +547,7 @@ public final class PlayerModel {
             state.queue = nil
             state.positionMs = 0; state.durationMs = 0
             state.canSeek = false; state.canNext = false; state.canPrevious = false
+            state.canShuffle = false; state.canRepeat = false
             frozenDisplayPositionMs = nil
         case let .trackChanged(track):
             cancelPlaybackIntent()
@@ -612,6 +616,7 @@ public final class PlayerModel {
             BopifyLog.playback.info("player ownership active=\(isActive, privacy: .public) epoch=\(self.engineEpoch, privacy: .public)")
             state.isActiveDevice = isActive
             if !isActive {
+                state.canShuffle = false; state.canRepeat = false
                 lastConfirmedPlaying = false
                 cancelVolumeEditing()
                 if case .pending = queueSelection { queueSelection = .failed }

@@ -5,6 +5,12 @@ import BopifyDomain
 
 /// Registration and consent stay on the same surface as sign-in and playback setup.
 struct LibraryAuthorizationSetupView: View {
+    private static let needs: [(symbol: String, key: String, identifier: String)] = [
+        ("heart.fill", "librarySetup.need.liked", "liked"),
+        ("star.fill", "librarySetup.need.artists", "artists"),
+        ("clock.arrow.circlepath", "librarySetup.need.recent", "recent"),
+        ("plus", "librarySetup.need.likes", "likes"),
+    ]
     let status: LibrarySetupStatus
     let environment: AppEnvironment
     @State private var clientID = ""
@@ -33,11 +39,10 @@ struct LibraryAuthorizationSetupView: View {
                     Text("onboarding.waitingForSpotify", bundle: SoloistResources.bundle).font(.callout)
                 }
                 .startupStatus()
-                Button(SoloistResources.string("onboarding.cancel"), action: environment.cancelLibraryAuthorization)
-                    .buttonStyle(.plain).font(.callout).foregroundStyle(.tint)
             } else {
                 StartupHeading(title: Text("librarySetup.requiredTitle", bundle: SoloistResources.bundle),
                                message: Text("librarySetup.registrationIntro", bundle: SoloistResources.bundle), isCompact: true)
+                permissions
                 if needsRegistration {
                     registration
                 } else {
@@ -82,14 +87,31 @@ struct LibraryAuthorizationSetupView: View {
             StartupButton(key: "librarySetup.saveAndContinue", identifier: "onboarding.saveLibrary", action: save)
                 .disabled(!validClient || isSaving)
             Text("librarySetup.consentHint", bundle: SoloistResources.bundle).font(.callout).startupSupporting()
-            if environment.libraryClientID != nil {
-                Button(SoloistResources.string("onboarding.cancel")) {
-                    isEditingClient = false
-                    clientID = environment.libraryClientID ?? ""
-                }
-                .buttonStyle(.plain).font(.callout).foregroundStyle(.tint)
-            }
         }
+    }
+
+    private var permissions: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            ForEach(Self.needs, id: \.identifier) { need in
+                HStack(spacing: 9) {
+                    Image(systemName: need.symbol)
+                        .font(.system(size: 10, weight: .semibold))
+                        .frame(width: 22, height: 22)
+                        .background(.primary.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.primary.opacity(0.25), lineWidth: 0.5))
+                        .accessibilityHidden(true)
+                    Text(SoloistResources.string(need.key))
+                        .font(.system(size: 12.5))
+                        .accessibilityIdentifier("onboarding.permission.\(need.identifier)")
+                }
+            }
+            Text("librarySetup.allRequired", bundle: SoloistResources.bundle)
+                .font(.caption)
+                .padding(.top, 3)
+        }
+        .startupSupporting()
+        .frame(maxWidth: .infinity, alignment: .center)
+        .multilineTextAlignment(.leading)
     }
 
     private var registrationHelp: some View {

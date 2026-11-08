@@ -122,6 +122,7 @@ struct StartupInputBackground: View {
 struct StartupSurface<Content: View>: View {
     var isAnimating = true
     var isDimmed = false
+    var surfaceOpacity: Double = 1
     @ViewBuilder let content: () -> Content
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
@@ -129,7 +130,7 @@ struct StartupSurface<Content: View>: View {
     private var usesSolidSurface: Bool { reduceTransparency || contrast == .increased }
 
     var body: some View {
-        PlayerSurface {
+        PlayerSurface(surfaceOpacity: surfaceOpacity) {
             content()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background {
@@ -142,6 +143,7 @@ struct StartupSurface<Content: View>: View {
                                                startPoint: .top, endPoint: .bottom)
                             }
                         }
+                        .opacity(surfaceOpacity)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }

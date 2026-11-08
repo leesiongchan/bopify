@@ -27,6 +27,7 @@ final class SoloistDiagnostics: @unchecked Sendable {
     private var state = State()
     var events: [SoloistDiagnosticEvent] { lock.withLock { state.events } }
     var pairingPort: UInt16? { lock.withLock { state.pairingPort } }
+    var getInfoRequestCount: UInt64 { lock.withLock { state.getInfoRequestCount } }
     var failure: SoloistPlaybackError? {
         lock.withLock {
             if state.events.contains(.keyRejected) { return .invalidKey }
@@ -45,7 +46,12 @@ final class SoloistDiagnostics: @unchecked Sendable {
         events.forEach(Self.log)
     }
 
-    private static func log(_ event: SoloistDiagnosticEvent) {
+    private static func log(_ record: Record) {
+        let event = record.event
+        if let count = record.requestCount {
+            BopifyLog.playback.info("Soloist diagnostic code=getInfoRequested count=\(count, privacy: .public)")
+            return
+        }
         if case let .pairingServerReady(port) = event {
             BopifyLog.playback.info("Soloist diagnostic code=pairingServerReady port=\(port, privacy: .public)")
         } else {
@@ -53,14 +59,20 @@ final class SoloistDiagnostics: @unchecked Sendable {
         }
     }
 
+    private struct Record {
+        let event: SoloistDiagnosticEvent
+        var requestCount: UInt64? = nil
+    }
+
     private struct State {
         private var bytes: [UInt8] = []
         private var droppingLine = false
         var events: [SoloistDiagnosticEvent] = []
         var pairingPort: UInt16?
+        var getInfoRequestCount: UInt64 = 0
 
-        mutating func ingest(_ data: Data) -> [SoloistDiagnosticEvent] {
-            var added: [SoloistDiagnosticEvent] = []
+        mutating func ingest(_ data: Data) -> [Record] {
+            var added: [Record] = []
             for byte in data {
                 if byte == 10 {
                     if let event = consumeLine() { added.append(event) }
@@ -72,21 +84,27 @@ final class SoloistDiagnostics: @unchecked Sendable {
             return added
         }
 
-        mutating func finish() -> [SoloistDiagnosticEvent] {
+        mutating func finish() -> [Record] {
             consumeLine().map { [$0] } ?? []
         }
 
-        private mutating func consumeLine() -> SoloistDiagnosticEvent? {
+        private mutating func consumeLine() -> Record? {
             defer { bytes.removeAll(keepingCapacity: true); droppingLine = false }
             guard !droppingLine, let line = String(bytes: bytes, encoding: .utf8), let event = Self.parse(line) else { return nil }
             if case let .pairingServerReady(port) = event { pairingPort = port }
-            // One entry per fixed category bounds history and log volume to eight events.
+            if event == .getInfoRequested, getInfoRequestCount < .max { getInfoRequestCount += 1 }
+            // History stays bounded; sample repeated requests so our own probe cannot
+            // hide subsequent controller traffic. No request payload is retained.
+            let requestRecord: Record? = if event == .getInfoRequested,
+                getInfoRequestCount <= 16 || (getInfoRequestCount <= 1024 && getInfoRequestCount.nonzeroBitCount == 1) {
+                Record(event: event, requestCount: getInfoRequestCount)
+            } else { nil }
             if let index = events.firstIndex(where: { $0.code == event.code }) {
                 events[index] = event
-                return nil
+                return requestRecord
             }
             events.append(event)
-            return event
+            return requestRecord ?? Record(event: event)
         }
 
         private static func parse(_ line: String) -> SoloistDiagnosticEvent? {

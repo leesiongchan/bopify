@@ -8,7 +8,6 @@ struct PlaybackOnboardingView: View {
     @State private var key = ""
     @FocusState private var keyFocused: Bool
     @State private var discovery: SoloistDiscovery
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var controller: SoloistPlaybackController { environment.soloist }
     private var scene: PlaybackOnboardingScene { PlaybackOnboardingScene(phase: controller.phase) }
     private var busy: Bool { controller.isPreparing || scene != .entry }
@@ -40,11 +39,11 @@ struct PlaybackOnboardingView: View {
                 }
             }
             .id(scene)
-            .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 5)))
+            .transition(.opacity.combined(with: .offset(y: 5)))
         }
         .frame(maxWidth: 340)
         .multilineTextAlignment(.center)
-        .animation(.easeInOut(duration: reduceMotion ? 0.16 : 0.26), value: scene)
+        .animation(.easeInOut(duration: 0.26), value: scene)
         .task(id: monitorsDiscovery) {
             if monitorsDiscovery {
                 discovery.start(onRecovery: requestDiscoveryRecovery)

@@ -5,7 +5,6 @@ import BopifyPlayback
 
 struct FavoriteButton: View {
     @Environment(AppEnvironment.self) private var environment: AppEnvironment?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var confirmedSaves = 0
 
     var body: some View {
@@ -16,7 +15,7 @@ struct FavoriteButton: View {
                 else {
                     Task {
                         await model.toggle()
-                        if model.saved == true, !reduceMotion { confirmedSaves += 1 }
+                        if model.saved == true { confirmedSaves += 1 }
                     }
                 }
             } label: {

@@ -53,7 +53,7 @@ final class InMemoryTokenStore: TokenStoring, @unchecked Sendable {
 
 @Suite("SpotifyAuthService", .serialized)
 struct SpotifyAuthServiceTests {
-    private let librarySuccess = #"{"access_token":"LIBRARY","token_type":"Bearer","expires_in":3600,"refresh_token":"LIBRARY_RT","scope":"user-library-read user-library-modify user-read-recently-played user-top-read playlist-read-private playlist-read-collaborative user-follow-read"}"#
+    private let librarySuccess = #"{"access_token":"LIBRARY","token_type":"Bearer","expires_in":3600,"refresh_token":"LIBRARY_RT","scope":"user-library-read user-library-modify user-read-recently-played user-top-read playlist-read-private playlist-read-collaborative user-follow-read user-read-playback-state user-modify-playback-state"}"#
     private let success = #"""
     {"access_token":"AT","token_type":"Bearer","expires_in":3600,
      "refresh_token":"RT","scope":"streaming"}
@@ -90,6 +90,8 @@ struct SpotifyAuthServiceTests {
                                          callbackPort: UInt16(port), callbackPath: "/callback", openURL: { url in
             let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
             #expect(query["redirect_uri"] == callback)
+            #expect(Set((query["scope"] ?? "").split(separator: " ").map(String.init)) ==
+                    LibraryAuthorization.requiredScopes.union(LibraryAuthorization.playbackScopes))
             let response = URL(string: "\(callback)?code=TESTCODE&state=\(query["state"]!)")!
             Task { _ = try? await URLSession.shared.data(from: response) }
         })
@@ -139,8 +141,12 @@ struct SpotifyAuthServiceTests {
         #expect(nextToken?.accessToken == "LIBRARY")
     }
 
-    @Test func libraryConsentRejectsMissingScopes() async throws {
-        AuthFlowStubProtocol.handler = { _ in (200, Data(#"{"access_token":"PARTIAL","token_type":"Bearer","expires_in":3600,"scope":"user-library-read"}"#.utf8)) }
+    @Test(arguments: [false, true])
+    func libraryConsentRejectsMissingScopes(metadataOnly: Bool) async throws {
+        let scope = metadataOnly ? LibraryAuthorization.requiredScopes.sorted().joined(separator: " ") : "user-library-read"
+        let response = try JSONSerialization.data(withJSONObject: ["access_token": "PARTIAL", "token_type": "Bearer",
+                                                                 "expires_in": 3600, "scope": scope])
+        AuthFlowStubProtocol.handler = { _ in (200, response) }
         let store = InMemoryTokenStore()
         let old = TokenSet(accessToken: "OLD", refreshToken: "RT", expiresAt: Date().addingTimeInterval(3600), grantedScopes: ["user-library-read"])
         try store.save(old)
@@ -183,15 +189,22 @@ struct SpotifyAuthServiceTests {
     @Test func preparedLibraryConsentCompletesWithoutOpeningAnotherTab() async throws {
         AuthFlowStubProtocol.handler = { _ in (200, Data(self.librarySuccess.utf8)) }
         let store = InMemoryTokenStore()
+        let opened = AuthOpenCounter()
         let service = SpotifyAuthService(clientID: "dashboard", client: makeClient(), store: store, callbackPath: "/callback",
-                                         openURL: { _ in Issue.record("A prepared consent continues in the sign-in tab") })
+                                         openURL: { url in
+            opened.increment()
+            let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
+            Task { _ = try? await URLSession.shared.data(from: URL(string: "\(query["redirect_uri"]!)?code=TESTCODE&state=\(query["state"]!)")!) }
+        })
         let url = try await service.prepareLibraryConsent()
         let query = Dictionary(uniqueKeysWithValues: URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!.map { ($0.name, $0.value ?? "") })
         #expect(query["client_id"] == "dashboard")
-        #expect(Set(query["scope"]!.split(separator: " ").map(String.init)) == LibraryAuthorization.requiredScopes)
+        #expect(Set(query["scope"]!.split(separator: " ").map(String.init)) ==
+                LibraryAuthorization.requiredScopes.union(LibraryAuthorization.playbackScopes))
         // Spotify passes an already-approved app straight back, possibly before Bopify starts waiting.
         _ = try await URLSession.shared.data(from: URL(string: "\(query["redirect_uri"]!)?code=TESTCODE&state=\(query["state"]!)")!)
-        #expect(try await service.authorizeLibrary().accessToken == "LIBRARY")
+        #expect(try await service.authorizeLibrary(additionalScopes: LibraryAuthorization.playbackScopes).accessToken == "LIBRARY")
+        #expect(opened.count == 0)
         #expect(store.load()?.accessToken == "LIBRARY")
     }
 

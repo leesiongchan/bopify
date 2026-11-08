@@ -59,6 +59,7 @@ final class SoloistBonjourPublisher: NSObject, @MainActor NetServiceDelegate, @M
             data.append(byte)
         }
         _ = try SoloistPairingIdentity.validate(data, name: name)
+        BopifyLog.playback.info("Soloist pairing self-check code=getInfoProbeCompleted")
         try Task.checkCancellation()
         let publisher = SoloistBonjourPublisher(port: port, name: name)
         do {

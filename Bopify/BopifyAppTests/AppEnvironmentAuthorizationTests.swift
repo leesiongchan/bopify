@@ -264,11 +264,8 @@ struct AppEnvironmentAuthorizationTests {
     @Test func returningUserApprovesBothInOneBrowserVisit() async throws {
         let fixture = AuthorizationFixture(libraryScopes: nil, startSignedOut: true, completesSignIn: true)
         await fixture.environment.signIn()
-        #expect(fixture.environment.authState == .needsLibraryAuthorization, "A first sign-in stops to explain library access")
-        #expect(!fixture.environment.isAuthorizingLibrary)
-        await fixture.environment.completeLibrarySetup()
-        #expect(fixture.environment.authState == .signedIn)
-        #expect(fixture.browser.count == 1 && fixture.libraryBrowser.count == 1)
+        try await eventually { fixture.environment.authState == .signedIn }
+        #expect(fixture.browser.count == 1 && fixture.libraryBrowser.count == 0)
 
         await fixture.environment.signOut()
         #expect(fixture.environment.authState == .signedOut)
@@ -277,8 +274,75 @@ struct AppEnvironmentAuthorizationTests {
         await fixture.environment.signIn()
         try await eventually { fixture.environment.authState == .signedIn }
         #expect(fixture.browser.count == 2)
-        #expect(fixture.libraryBrowser.count == 1, "Library consent continues in the sign-in tab instead of opening another")
-        #expect(fixture.libraryStore.load()?.grantedScopes == LibraryAuthorization.requiredScopes)
+        #expect(fixture.libraryBrowser.count == 0, "Both first and returning consent continue in the sign-in tab")
+        #expect(fixture.libraryStore.load()?.grantedScopes == LibraryAuthorization.initialConsentScopes)
+        await fixture.stop()
+    }
+
+    @Test func firstUserWithKnownClientApprovesBothInOneBrowserVisit() async throws {
+        let fixture = AuthorizationFixture(libraryScopes: nil, startSignedOut: true, completesSignIn: true)
+        await fixture.environment.signIn()
+        try await eventually { fixture.environment.authState == .signedIn }
+        #expect(fixture.browser.count == 1)
+        #expect(fixture.libraryBrowser.count == 0)
+        #expect(fixture.libraryConsents.count == 1)
+        #expect(fixture.libraryStore.load()?.grantedScopes == LibraryAuthorization.initialConsentScopes)
+        await fixture.stop()
+    }
+
+    @Test func firstSignInWithoutClientIDPreservesLibrarySetup() async throws {
+        let fixture = AuthorizationFixture(libraryScopes: nil, startSignedOut: true, libraryClientID: nil, completesSignIn: true)
+        await fixture.environment.signIn()
+        #expect(fixture.environment.authState == .needsLibraryAuthorization)
+        #expect(fixture.browser.count == 1 && fixture.libraryBrowser.count == 0)
+        #expect(fixture.libraryConsents.count == 0)
+        #expect(!fixture.environment.isAuthorizingLibrary)
+        #expect(fixture.environment.player == nil)
+        await fixture.stop()
+    }
+
+    @Test func cancelledFirstSignInFreesThePreparedLibraryCallback() async throws {
+        let reservation = LoopbackCallbackListener(expectedState: "unused")
+        let port = UInt16(try await reservation.start())
+        await reservation.stop()
+        let fixture = AuthorizationFixture(libraryScopes: nil, startSignedOut: true, completesSignIn: true, libraryCallbackPort: port)
+        fixture.pausedBrowser.increment()
+        let signIn = Task { await fixture.environment.signIn() }
+        try await eventually { fixture.browser.count == 1 }
+        let during = LoopbackCallbackListener(expectedState: "during")
+        await #expect(throws: CallbackError.listenerFailed) { _ = try await during.start(port: port) }
+        await during.stop()
+        fixture.environment.cancelPlaybackAuthorization()
+        await signIn.value
+        let after = LoopbackCallbackListener(expectedState: "after")
+        #expect(try await after.start(port: port) == Int(port))
+        await after.stop()
+        #expect(fixture.environment.authState == .signedOut)
+        #expect(fixture.store.load() == nil && fixture.libraryStore.load() == nil)
+        await fixture.stop()
+    }
+
+    @Test(arguments: ["client", "session"])
+    func changingSetupDuringConsentPreflightCannotOpenAStaleBrowser(interruption: String) async throws {
+        let fixture = AuthorizationFixture(libraryScopes: nil, startSignedOut: true, completesSignIn: true)
+        fixture.pausedBrowser.increment()
+        fixture.libraryStore.armLoad()
+        let signIn = Task { await fixture.environment.signIn() }
+        try await eventually { fixture.libraryStore.blockedLoads.count == 1 || fixture.browser.count == 1 }
+        #expect(fixture.libraryStore.blockedLoads.count == 1)
+        let started = AuthorizationCounter()
+        let change = Task {
+            started.increment()
+            if interruption == "client" { await fixture.environment.setLibraryClientID(String(repeating: "1", count: 32)) }
+            else { await fixture.environment.signOut() }
+        }
+        try await eventually { started.count == 1 }
+        fixture.libraryStore.loadRelease.signal()
+        await change.value
+        fixture.environment.cancelPlaybackAuthorization()
+        await signIn.value
+        #expect(fixture.browser.count == 0 && fixture.libraryBrowser.count == 0)
+        #expect(fixture.environment.authState == .signedOut)
         await fixture.stop()
     }
 
@@ -288,7 +352,7 @@ struct AppEnvironmentAuthorizationTests {
         await reserved.stop()
         let fixture = AuthorizationFixture(libraryScopes: nil, startSignedOut: true, completesSignIn: true, libraryCallbackPort: port)
         await fixture.environment.signIn()
-        await fixture.environment.completeLibrarySetup()
+        try await eventually { fixture.environment.authState == .signedIn && !fixture.environment.isAuthorizingLibrary }
         await fixture.environment.signOut()
 
         fixture.pausedBrowser.increment()
@@ -308,7 +372,7 @@ struct AppEnvironmentAuthorizationTests {
         let fixture = AuthorizationFixture(libraryScopes: nil, approvedScopes: allLibraryScopes,
                                            startSignedOut: true, completesSignIn: true)
         await fixture.environment.signIn()
-        await fixture.environment.completeLibrarySetup()
+        try await eventually { fixture.environment.authState == .signedIn && !fixture.environment.isAuthorizingLibrary }
         // A later launch finds the playback grant but not the library one.
         fixture.libraryStore.clear()
 
@@ -434,7 +498,7 @@ private nonisolated class PlaybackGrantProtocol: URLProtocol, @unchecked Sendabl
 
 /// Answers the token exchange with a complete library grant.
 private nonisolated final class LibraryGrantProtocol: PlaybackGrantProtocol, @unchecked Sendable {
-    override class var scope: String { LibraryAuthorization.requiredScopes.sorted().joined(separator: " ") }
+    override class var scope: String { LibraryAuthorization.initialConsentScopes.sorted().joined(separator: " ") }
 }
 
 /// Spotify's consent page for an app the user already approved: it redirects straight back with a code.

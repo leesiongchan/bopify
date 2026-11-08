@@ -55,6 +55,7 @@ final class SoloistPlaybackController {
 
     init(defaults: UserDefaults = .standard, readyEngine: (any PreparedPlaybackEngine)? = nil, keys: any SoloistKeyStoring = SoloistKeyStore(),
         authorize: @escaping @MainActor () async throws -> Void,
+        authorizeContinuation: @escaping @Sendable () async throws -> Bool = { false },
         webToken: @escaping @Sendable () async throws -> String = { throw PlayerError.authDenied },
         streamingToken: @escaping @Sendable () async throws -> String = { throw PlayerError.authDenied },
         dataToken: (@Sendable () async throws -> String)? = nil,
@@ -68,7 +69,8 @@ final class SoloistPlaybackController {
         self.install = install
         self.start = start ?? { request in
             let engine = try await SoloistEngine.launch(executable: request.executable, key: request.key, name: request.name,
-                webToken: webToken, streamingToken: streamingToken, dataToken: dataToken, progress: request.progress)
+                webToken: webToken, streamingToken: streamingToken, dataToken: dataToken,
+                authorizeContinuation: authorizeContinuation, progress: request.progress)
             request.available(engine)
             do { try await engine.preparePairing(); return engine }
             catch { await engine.shutdown(); throw error }

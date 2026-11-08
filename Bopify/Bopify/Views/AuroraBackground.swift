@@ -4,7 +4,6 @@ import SwiftUI
 struct AuroraBackground: View {
     var isAnimating = true
     var isDimmed = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
 
@@ -30,15 +29,15 @@ struct AuroraBackground: View {
     var body: some View {
         // Solid surfaces stay solid: the aurora would undercut the contrast those settings ask for.
         if !reduceTransparency && contrast != .increased {
-            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isAnimating || reduceMotion)) { context in
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isAnimating)) { context in
                 let time = context.date.timeIntervalSinceReferenceDate
-                let breath = reduceMotion || !isAnimating ? 0 : (1 - cos(.pi * time / 4)) / 2
+                let breath = !isAnimating ? 0 : (1 - cos(.pi * time / 4)) / 2
                 GeometryReader { geometry in
                     // The field overhangs the surface so the blur never reveals an edge.
                     let field = CGSize(width: geometry.size.width * 1.6, height: geometry.size.height * 1.6)
                     ZStack(alignment: .topLeading) {
                         ForEach(Self.blobs.indices, id: \.self) { index in
-                            blob(Self.blobs[index], in: field, progress: reduceMotion ? 0 : (1 - cos(.pi * time / Self.blobs[index].period)) / 2)
+                            blob(Self.blobs[index], in: field, progress: (1 - cos(.pi * time / Self.blobs[index].period)) / 2)
                         }
                     }
                     .frame(width: field.width, height: field.height, alignment: .topLeading)
@@ -51,7 +50,7 @@ struct AuroraBackground: View {
             }
             .saturation(isDimmed ? 0.3 : 1)
             .opacity(isDimmed ? 0.45 : 0.85)
-            .animation(.easeInOut(duration: reduceMotion ? 0.16 : 0.8), value: isDimmed)
+            .animation(.easeInOut(duration: 0.8), value: isDimmed)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }

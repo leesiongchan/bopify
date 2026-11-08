@@ -192,7 +192,6 @@ private nonisolated struct PreviewLibraryServices: LibraryService, SavedTracksSe
     var isPlaying = true
     var isVisible = true
     var isArtworkMissing = false
-    var reduceMotion = false
     var diameter: CGFloat = 182
     var image: Image? {
         isArtworkMissing ? nil : artworkStore.image(for: previewArtworkURL(index)).map { Image(nsImage: $0) }
@@ -205,15 +204,14 @@ struct RecordPreviewScene: View {
     @State private var isCoasting = false
     @State private var pressing = PressingAppearance.neutral
     private var motorRequest: RecordMotorRequest {
-        !fixture.isVisible || fixture.reduceMotion ? .snap : fixture.isPlaying ? .drive : .brake
+        !fixture.isVisible ? .snap : fixture.isPlaying ? .drive : .brake
     }
     var body: some View {
         VinylRecordView(image: fixture.image, occurrenceID: fixture.occurrenceID, direction: fixture.direction,
                         diameter: fixture.diameter,
                         isMoving: motorRequest != .snap && (fixture.isPlaying || isCoasting) && rotation.isMoving(at: ProcessInfo.processInfo.systemUptime),
                         isVisible: fixture.isVisible, rotation: rotation,
-                        pressingSeed: pressing.seed, palette: pressing.palette, design: pressing.design,
-                        reduceMotionOverride: fixture.reduceMotion)
+                        pressingSeed: pressing.seed, palette: pressing.palette, design: pressing.design)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .onChange(of: motorRequest, initial: true) { _, request in
                 let now = ProcessInfo.processInfo.systemUptime
