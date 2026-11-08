@@ -139,10 +139,12 @@ struct OnboardingHandoffRenderingTests {
         let panel = fixture.panel
         let before = panel.windowNumber
         var handoffAnchor: CGPoint?
+        var sourceWindowFrame: CGRect?
         let completeSetup = fixture.environment.onboarding.onHandoff
         defer { fixture.environment.onboarding.onHandoff = completeSetup }
         fixture.environment.onboarding.onHandoff = {
             if let source = fixture.environment.onboardingRecordFrame {
+                sourceWindowFrame = panel.frame
                 handoffAnchor = CGPoint(x: panel.frame.minX + source.midX, y: panel.frame.maxY - source.midY)
             }
             completeSetup?()
@@ -159,7 +161,8 @@ struct OnboardingHandoffRenderingTests {
         #expect(fixture.environment.player?.state.phase == .idle && fixture.environment.player?.state.currentTrack == nil)
         let layout = fixture.environment.playerWindowController.layout
         let final = CGPoint(x: panel.frame.minX + layout.recordCenter.x, y: panel.frame.maxY - layout.recordCenter.y)
-        #expect(abs(final.x - anchor.x) < 2 && abs(final.y - anchor.y) < 2)
+        #expect(abs(final.x - anchor.x) < 2 && abs(final.y - anchor.y) < 2,
+                "Handoff anchor=\(anchor), final=\(final), source window=\(String(describing: sourceWindowFrame)), final window=\(panel.frame), visible screens=\(NSScreen.screens.map(\.visibleFrame)), layout=\(layout)")
     }
 
     private func findSecureField(in view: NSView) -> NSSecureTextField? {

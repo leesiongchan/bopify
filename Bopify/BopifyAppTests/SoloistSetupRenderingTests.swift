@@ -365,14 +365,16 @@ struct SoloistSetupRenderingTests {
         #expect(accessibleClient.object.accessibilityLabel?() == SoloistResources.string("librarySetup.clientID"))
         #expect(!hasAccessibilityElement("onboarding.redirectURI", in: content), "Registration help has a separate page")
         let save = try AppearanceTestAccessibility.element("onboarding.saveLibrary", in: content)
-        #expect(save.object.isAccessibilityEnabled?() == false)
+        #expect(save.object.isAccessibilityEnabled?() == false,
+                "Save AX type=\(type(of: save.object)), role=\(String(describing: save.object.accessibilityRole?())), children=\(String(describing: save.object.accessibilityChildren?())), reduceTransparency=\(NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency)")
         field.selectText(nil)
         let editor = try #require(field.currentEditor() as? NSTextView)
         editor.insertText("invalid-client", replacementRange: editor.selectedRange())
         field.delegate?.controlTextDidChange?(Notification(name: NSControl.textDidChangeNotification, object: field))
         try await Task.sleep(for: .milliseconds(80))
         let invalidSave = try AppearanceTestAccessibility.element("onboarding.saveLibrary", in: content)
-        #expect(invalidSave.object.isAccessibilityEnabled?() == false)
+        #expect(invalidSave.object.isAccessibilityEnabled?() == false,
+                "Invalid save AX type=\(type(of: invalidSave.object)), role=\(String(describing: invalidSave.object.accessibilityRole?())), children=\(String(describing: invalidSave.object.accessibilityChildren?()))")
         editor.selectAll(nil)
         editor.insertText(String(repeating: "a", count: 32), replacementRange: editor.selectedRange())
         field.delegate?.controlTextDidChange?(Notification(name: NSControl.textDidChangeNotification, object: field))
