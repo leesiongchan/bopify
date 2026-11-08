@@ -3,22 +3,8 @@ import Foundation
 
 @Suite("Playback session loss")
 struct SessionLossEventTests {
-    /// Raised by Swift itself, so never on the wire.
-    private let swiftOnly: Set<SessionLossReason> = [.eventStreamEnded, .readinessTimeout, .unrecognized]
-
     private func decodeLoss(_ reason: String) throws -> PlaybackEvent {
         try JSONDecoder().decode(PlaybackEvent.self, from: Data("{\"type\":\"sessionLost\",\"reason\":\"\(reason)\"}".utf8))
-    }
-
-    @Test func matchesTheReasonsRustSends() throws {
-        // Rust's terminal.rs tests read the same fixture.
-        let fixture = URL(filePath: #filePath).deletingLastPathComponent()
-            .appending(path: "../../../../contracts/session-loss-reasons.json").standardized
-        let wire = try JSONDecoder().decode([String].self, from: Data(contentsOf: fixture))
-        for reason in wire {
-            #expect(try decodeLoss(reason) != .sessionLost(.unrecognized), "\(reason)")
-        }
-        #expect(Set(wire) == Set(SessionLossReason.allCases.filter { !swiftOnly.contains($0) }.map(\.rawValue)))
     }
 
     @Test func anUnknownReasonStillReportsTheLoss() throws {

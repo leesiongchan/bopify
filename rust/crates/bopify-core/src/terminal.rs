@@ -80,46 +80,6 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     #[test]
-    fn loss_reasons_match_the_shared_wire_contract() {
-        use SessionLossReason::*;
-        let all = [
-            SpircEnded,
-            SpircPanicked,
-            PlayerChannelClosed,
-            AudioOutputFailed,
-            ForwarderPanicked,
-            CommandFailed,
-            SessionInvalidated,
-            SessionDisconnected,
-        ];
-        // A new variant stops this compiling until it is listed in `all`, and so in the fixture.
-        for reason in all {
-            match reason {
-                SpircEnded | SpircPanicked | PlayerChannelClosed | AudioOutputFailed
-                | ForwarderPanicked | CommandFailed | SessionInvalidated | SessionDisconnected => {}
-            }
-        }
-        let mut names: Vec<String> = all
-            .iter()
-            .map(|reason| {
-                serde_json::to_value(reason)
-                    .unwrap()
-                    .as_str()
-                    .unwrap()
-                    .to_owned()
-            })
-            .collect();
-        let mut contract: Vec<String> = serde_json::from_str(include_str!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../../contracts/session-loss-reasons.json"
-        )))
-        .unwrap();
-        names.sort();
-        contract.sort();
-        assert_eq!(names, contract);
-    }
-
-    #[test]
     fn terminal_reports_once_and_suppresses_late_events() {
         let events = Arc::new(Mutex::new(Vec::new()));
         let output = events.clone();

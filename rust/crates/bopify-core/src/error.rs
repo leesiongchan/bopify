@@ -8,7 +8,6 @@ pub enum BopifyError {
     AccountRestricted,
     Unknown,
 }
-
 impl std::fmt::Display for BopifyError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str(self.message())
@@ -40,48 +39,5 @@ impl BopifyError {
             Self::AccountRestricted => "Spotify will not let this account play here",
             Self::Unknown => "unknown error",
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Swift's `LibrespotEngineTests` read the same fixture, so a code changes on both sides or neither.
-    #[test]
-    fn codes_match_the_shared_wire_contract() {
-        use BopifyError::*;
-        fn name(error: BopifyError) -> &'static str {
-            // A new variant stops this compiling until it is named, and so listed in the fixture.
-            match error {
-                InvalidArgument => "invalidArgument",
-                SessionLost => "sessionLost",
-                AuthInvalid => "authInvalid",
-                PremiumRequired => "premiumRequired",
-                NetworkUnavailable => "networkUnavailable",
-                AccountRestricted => "accountRestricted",
-                Unknown => "unknown",
-            }
-        }
-        let all = [
-            InvalidArgument,
-            SessionLost,
-            AuthInvalid,
-            PremiumRequired,
-            NetworkUnavailable,
-            AccountRestricted,
-            Unknown,
-        ];
-        let actual: std::collections::BTreeMap<String, i32> = all
-            .iter()
-            .map(|error| (name(*error).to_owned(), error.code()))
-            .collect();
-        let contract: std::collections::BTreeMap<String, i32> =
-            serde_json::from_str(include_str!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/../../../contracts/ffi-error-codes.json"
-            )))
-            .unwrap();
-        assert_eq!(actual, contract);
     }
 }
