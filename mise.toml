@@ -1,3 +1,6 @@
+[settings]
+idiomatic_version_file_enable_tools = ["rust"]
+
 [tools]
 "cargo:cbindgen" = "0.29.4"
 "github:EmbarkStudios/cargo-about" = "0.9.3"

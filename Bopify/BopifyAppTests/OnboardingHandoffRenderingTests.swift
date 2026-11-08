@@ -11,7 +11,6 @@ struct OnboardingHandoffRenderingTests {
     @Test func theActualPlayerHandoffRendersIntermediateRecordSizes() async throws {
         let fixture = try NativeOnboardingFixture(needsKey: false)
         defer { fixture.close() }
-        let recording = try await fixture.startVideoRecordingIfRequested()
         fixture.environment.onboarding.begin()
         try await liveLyricEventually { fixture.environment.playerWindowController.onboardingHandoff != nil }
         let transfer = try #require(fixture.environment.playerWindowController.onboardingHandoff)
@@ -34,7 +33,6 @@ struct OnboardingHandoffRenderingTests {
                 "Visible motion must occupy the handoff, rather than be compressed into a brief snap followed by a stationary wait")
         #expect(Set(intermediate.map { Int($0) }).count >= 3,
                 "The native player must present multiple intermediate record sizes, rather than jump to its final size")
-        try await recording?.waitForCompletion()
     }
 
     @Test func dismissingTheActualPanelSettlesTheNativeHandoffBounds() async throws {
@@ -62,7 +60,6 @@ struct OnboardingHandoffRenderingTests {
         try await Task.sleep(for: .milliseconds(100))
         let content = try #require(panel.contentView)
         content.layoutSubtreeIfNeeded()
-        try fixture.capture("resized")
         #expect(content.bounds.size == CGSize(width: 430, height: 660))
         let progress = try AppearanceTestAccessibility.element("onboarding.step", in: content)
         let progressOnScreen = try #require(progress.object.accessibilityFrame?())
@@ -100,7 +97,6 @@ struct OnboardingHandoffRenderingTests {
         for permission in ["liked", "artists", "recent", "likes"] {
             try expectInside("onboarding.permission.\(permission)")
         }
-        try fixture.capture("library")
         let libraryFrame = fixture.panel.frame
         let recordWidth = try #require(fixture.environment.onboardingRecordFrame?.width)
         let help = try AppearanceTestAccessibility.element("onboarding.registrationHelp", in: content)
@@ -118,7 +114,6 @@ struct OnboardingHandoffRenderingTests {
         #expect(abs((fixture.environment.onboardingRecordFrame?.width ?? 0) - recordWidth) < 1,
                 "The record must not shrink when a step changes window height")
         #expect(!descendants(in: content).contains { $0 is NSScrollView })
-        try fixture.capture("library-help")
     }
 
     @Test func nativeStartupKeepsTheFormVisibleAndAccessible() async throws {
@@ -128,7 +123,6 @@ struct OnboardingHandoffRenderingTests {
         fixture.panel.contentView?.layoutSubtreeIfNeeded()
         fixture.panel.makeKeyAndOrderFront(nil)
         try #require(fixture.panel.isKeyWindow)
-        try fixture.capture("key-entry")
         let content = try #require(fixture.panel.contentView)
         let field = try #require(findSecureField(in: content))
         let frame = field.convert(field.bounds, to: content)
@@ -156,17 +150,11 @@ struct OnboardingHandoffRenderingTests {
         fixture.environment.onboarding.begin()
         try await liveLyricEventually { fixture.environment.onboarding.phase == .completing }
         #expect(fixture.environment.onboardingStep == .completion)
-        // Capture the confirmation while its entrance is still running; handoff must wait for it.
-        try await Task.sleep(for: .milliseconds(250))
-        try fixture.capture("completion")
         try await liveLyricEventually { fixture.environment.onboarding.phase == .handoff }
         let anchor = try #require(handoffAnchor)
-        try await Task.sleep(for: .milliseconds(300))
-        try fixture.capture("handoff")
         try await liveLyricEventually {
             fixture.environment.onboarding.phase == .idle && !fixture.environment.playerWindowController.isTransitioning
         }
-        try fixture.capture("player")
         #expect(panel.windowNumber == before && fixture.environment.isShowingPlayer)
         #expect(fixture.environment.player?.state.phase == .idle && fixture.environment.player?.state.currentTrack == nil)
         let layout = fixture.environment.playerWindowController.layout
@@ -191,7 +179,6 @@ private final class NativeOnboardingFixture {
     private let controller: StatusItemController
     private let background: NSWindow
     private let saved: [(String, Any?)]
-    private let artifacts: URL
 
     init(needsKey: Bool, section: OnboardingSection = .playback) throws {
         _ = NSApplication.shared
@@ -221,79 +208,6 @@ private final class NativeOnboardingFixture {
         background.isOpaque = true
         background.orderFrontRegardless()
         panel.makeKeyAndOrderFront(nil)
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        artifacts = root.appendingPathComponent("build/test-artifacts/onboarding-composited/\(UUID())")
-    }
-
-    func capture(_ name: String) throws {
-        if let token = ProcessInfo.processInfo.environment["BOPIFY_NATIVE_CAPTURE_TOKEN"],
-           UUID(uuidString: token) != nil {
-            try captureExternally(name, token: token)
-            return
-        }
-        guard CGPreflightScreenCaptureAccess() else {
-            print("Native onboarding composited capture unavailable: screen capture is not authorized")
-            return
-        }
-        try FileManager.default.createDirectory(at: artifacts, withIntermediateDirectories: true)
-        let destination = artifacts.appendingPathComponent("\(name).png")
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-        process.arguments = ["-x", "-o", "-l", String(panel.windowNumber), destination.path]
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
-        try process.run()
-        process.waitUntilExit()
-        try #require(process.terminationStatus == 0, "Unable to capture the isolated native onboarding window")
-        print("Native onboarding composited capture: \(destination.path)")
-    }
-
-    func startVideoRecordingIfRequested() async throws -> NativeOnboardingRecording? {
-        guard let token = ProcessInfo.processInfo.environment["BOPIFY_NATIVE_VIDEO_TOKEN"],
-              UUID(uuidString: token) != nil else { return nil }
-        environment.onboarding.cancel()
-        let root = artifacts.deletingLastPathComponent()
-        let bridge = root.appendingPathComponent("capture-bridge/\(token)")
-        let destination = root.appendingPathComponent("\(token)/handoff.mp4")
-        try FileManager.default.createDirectory(at: bridge, withIntermediateDirectories: true)
-        let request: [String: Any] = ["token": token, "processID": ProcessInfo.processInfo.processIdentifier,
-                                      "windowNumber": panel.windowNumber, "destination": destination.path]
-        try JSONSerialization.data(withJSONObject: request).write(to: bridge.appendingPathComponent("video.request.json"), options: .atomic)
-        let recording = NativeOnboardingRecording(token: token, bridge: bridge, destination: destination)
-        try await recording.waitForReady()
-        return recording
-    }
-
-    private func captureExternally(_ name: String, token: String) throws {
-        let directory = artifacts.deletingLastPathComponent()
-            .appendingPathComponent("capture-bridge/\(token)")
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: artifacts, withIntermediateDirectories: true)
-        let requestID = UUID().uuidString
-        let request = directory.appendingPathComponent("\(requestID).request.json")
-        let response = directory.appendingPathComponent("\(requestID).response.json")
-        let destination = artifacts.appendingPathComponent("\(name).png")
-        let payload: [String: Any] = [
-            "token": token, "requestID": requestID, "name": name,
-            "processID": ProcessInfo.processInfo.processIdentifier,
-            "windowNumber": panel.windowNumber, "destination": destination.path,
-        ]
-        try JSONSerialization.data(withJSONObject: payload).write(to: request, options: .atomic)
-        defer {
-            try? FileManager.default.removeItem(at: request)
-            try? FileManager.default.removeItem(at: response)
-        }
-        // Hold the requested animation frame while the authorized tool process captures this window.
-        let deadline = Date().addingTimeInterval(15)
-        while !FileManager.default.fileExists(atPath: response.path), Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.025)
-        }
-        try #require(FileManager.default.fileExists(atPath: response.path), "External native capture timed out")
-        let result = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: response)) as? [String: Any])
-        try #require(result["requestID"] as? String == requestID && result["token"] as? String == token)
-        try #require(result["success"] as? Bool == true, "External capture failed: \(result["error"] ?? "unknown error")")
-        try #require(FileManager.default.fileExists(atPath: destination.path))
-        print("Native onboarding composited capture: \(destination.path)")
     }
 
     func dismiss() { controller.togglePlayer() }
@@ -307,36 +221,6 @@ private final class NativeOnboardingFixture {
             if let value { UserDefaults.standard.set(value, forKey: key) }
             else { UserDefaults.standard.removeObject(forKey: key) }
         }
-    }
-}
-
-private struct NativeOnboardingRecording {
-    let token: String
-    let bridge: URL
-    let destination: URL
-
-    func waitForReady() async throws { try await waitForResponse("video.ready.json") }
-
-    func waitForCompletion() async throws {
-        try await waitForResponse("video.response.json")
-        try #require(FileManager.default.fileExists(atPath: destination.path))
-        print("Native onboarding video: \(destination.path)")
-    }
-
-    private func waitForResponse(_ name: String) async throws {
-        let response = bridge.appendingPathComponent(name)
-        let failure = bridge.appendingPathComponent("video.response.json")
-        let deadline = Date().addingTimeInterval(20)
-        while !FileManager.default.fileExists(atPath: response.path), Date() < deadline {
-            if FileManager.default.fileExists(atPath: failure.path) {
-                let result = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: failure)) as? [String: Any])
-                try #require(result["success"] as? Bool == true, "Native recording failed: \(result["error"] ?? "unknown error")")
-            }
-            try await Task.sleep(for: .milliseconds(25))
-        }
-        try #require(FileManager.default.fileExists(atPath: response.path), "Native recording timed out")
-        let result = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: response)) as? [String: Any])
-        try #require(result["token"] as? String == token && result["success"] as? Bool == true)
     }
 }
 
