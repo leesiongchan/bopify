@@ -8,7 +8,6 @@ struct TransportControls: View {
     @State private var nextTaps = 0
     @State private var playbackTaps = 0
     @State private var previousPlaying = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var state: PlaybackState { player.state }
     private var isPlaying: Bool { state.phase == .playing }
@@ -19,14 +18,14 @@ struct TransportControls: View {
         HStack(spacing: 4) {
             Button { player.setShuffle(!state.shuffleEnabled) } label: {
                 Image(systemName: "shuffle").frame(width: 28, height: 28)
-                    .symbolEffect(.bounce, value: reduceMotion ? false : state.shuffleEnabled)
+                    .symbolEffect(.bounce, value: state.shuffleEnabled)
             }.buttonStyle(.playerToggle(isOn: state.shuffleEnabled, dimsWhenOff: true))
                 .accessibilityLabel(Text("transport.shuffle"))
                 .accessibilityValue(Text(state.shuffleEnabled ? "control.on" : "control.off"))
                 .help(Text("transport.shuffle"))
-                .disabled(!player.isEngineReady || !state.isActiveDevice)
+                .disabled(!canControl || !state.canShuffle)
             Button {
-                if !reduceMotion { previousTaps += 1 }
+                previousTaps += 1
                 player.previous()
             } label: {
                 Image(systemName: "backward.fill")
@@ -43,7 +42,7 @@ struct TransportControls: View {
             } label: {
                 KeyframeAnimator(initialValue: 1.0, trigger: playbackTaps) { progress in
                     PlaybackButtonFace(isPlaying: isPlaying, previousPlaying: previousPlaying,
-                                       progress: progress, reduceMotion: reduceMotion)
+                                       progress: progress)
                 } keyframes: { _ in
                     MoveKeyframe(0)
                     CubicKeyframe(1, duration: 0.42)
@@ -56,7 +55,7 @@ struct TransportControls: View {
             .help(Text(isPlaying ? "transport.pause" : "transport.play"))
 
             Button {
-                if !reduceMotion { nextTaps += 1 }
+                nextTaps += 1
                 player.next()
             } label: {
                 Image(systemName: "forward.fill")
@@ -77,13 +76,13 @@ struct TransportControls: View {
                 .accessibilityLabel(Text("transport.repeat"))
                 .accessibilityValue(Text(state.repeatMode == .off ? "control.off" : state.repeatMode == .track ? "transport.repeat.track" : "transport.repeat.context"))
                 .help(Text("transport.repeat"))
-                .disabled(!player.isEngineReady || !state.isActiveDevice)
+                .disabled(!canControl || !state.canRepeat)
         }
         .buttonStyle(.playerControl)
         .onChange(of: isPlaying) { old, _ in
             guard state.phase == .playing || state.phase == .paused else { return }
             previousPlaying = old
-            if !reduceMotion { playbackTaps += 1 }
+            playbackTaps += 1
         }
     }
 }

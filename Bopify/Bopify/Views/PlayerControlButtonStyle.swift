@@ -10,7 +10,6 @@ private struct PlaybackButtonBody: View {
     let configuration: ButtonStyleConfiguration
     @State private var isHovered = false
     @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var pressed: Bool { isEnabled && configuration.isPressed }
     private var hovered: Bool { isEnabled && isHovered }
@@ -20,8 +19,8 @@ private struct PlaybackButtonBody: View {
             .contentShape(Circle())
             .background(.primary.opacity(pressed ? 0.22 : hovered ? 0.12 : 0), in: Circle())
             .overlay(Circle().strokeBorder(.primary.opacity(pressed ? 0.22 : hovered ? 0.12 : 0), lineWidth: 0.75))
-            .scaleEffect(reduceMotion ? 1 : pressed ? 0.96 : 1)
-            .animation(reduceMotion ? nil : pressed ? .easeOut(duration: 0.06) : .spring(duration: 0.2, bounce: 0),
+            .scaleEffect(pressed ? 0.96 : 1)
+            .animation(pressed ? .easeOut(duration: 0.06) : .spring(duration: 0.2, bounce: 0),
                        value: pressed)
             .animation(.easeOut(duration: 0.12), value: hovered)
             .onHover { isHovered = $0 }
@@ -42,7 +41,6 @@ private struct SongRowButtonBody: View {
     let configuration: ButtonStyleConfiguration
     @State private var isHovered = false
     @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         configuration.label
@@ -58,7 +56,7 @@ private struct SongRowButtonBody: View {
                         .accessibilityHidden(true).allowsHitTesting(false)
                 }
             }
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isHovered)
+            .animation(.easeOut(duration: 0.12), value: isHovered)
             .onHover { isHovered = $0 }
     }
 }
@@ -85,11 +83,10 @@ private struct PlayerControlBody: View {
     let dimsWhenOff: Bool
     @State private var isHovered = false
     @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Primary rather than white so the highlight reads on light glass too; disabled controls never invite a click.
     private var fill: Double { !isEnabled ? 0 : configuration.isPressed ? 0.2 : isHovered ? 0.12 : 0 }
     private var scale: Double {
-        guard isEnabled, !reduceMotion else { return 1 }
+        guard isEnabled else { return 1 }
         return configuration.isPressed ? 0.86 : isHovered ? 1.06 : 1
     }
     var body: some View {

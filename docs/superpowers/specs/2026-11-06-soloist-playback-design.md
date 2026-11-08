@@ -3,13 +3,15 @@
 Date: 2026-11-06
 Status: Approved by the user on 2026-11-06 for feasibility planning. Live feasibility remains unverified.
 
+Continuation, 2026-11-07: the user explicitly requested an in-app test experience and confirmed proceeding after learning the installer/probe did not enable Soloist in Bopify. This authorizes implementation of native key entry, automatic installation, pairing, playback and librespot support now. Move the unresolved account/device and companion checks into the app's setup/runtime; do not require Terminal or claim that offline tests establish live coexistence. Existing account isolation, ownership, queue and failure requirements still apply. This supersedes the earlier restriction against planning/building the app integration before manual probe execution.
+
 ## Intent and decisions
 
 Use Soloist whenever possible, with librespot filling gaps. Preserve Bopify's existing player, library, lyrics, queue, shortcuts, and Spotify Connect behavior as far as the selected providers can faithfully support them.
 
 The user selected the recommended hybrid approach: Soloist produces audio and handles its supported controls, librespot supplies missing services and playback fallback, and Spotify's Web API assists controls that can keep audio on Soloist. The user subsequently approved this document and planning its initial feasibility checks. Broader implementation remains gated on the results.
 
-The routing, recovery, installation, and queue policies below are the author's proposed defaults. They must not be represented as separately requested user decisions.
+The user subsequently required automatic latest-build download and installation, citing Spotifast as the reference. This overrides the earlier author-selected manual-import policy. Other implementation defaults below must not be represented as separately requested user decisions.
 
 ## Goals and boundaries
 
@@ -104,9 +106,9 @@ Retain the stable player, record/artwork, Now Playing integration, and visible c
 
 ## Installation, credentials, and lifecycle
 
-Spotify's documentation says each user supplies their own key and the binary must not be redistributed. Initial implementation opens Spotify's official download page and imports the user's downloaded macOS executable/archive through Bopify. It does not bundle, mirror, silently download, or re-sign Soloist. This guided import is the author's conservative distribution choice; fully automatic installation requires a clarified supported distribution path.
+Download the current macOS arm64 archive directly from Spotify's official HTTPS CDN when Soloist is enabled. Bopify manages extraction, validation, private installation and renewal; users do not download or select executables themselves. The archive is not bundled, mirrored, or redistributed with Bopify. Keep progress/cancellation visible, retain librespot while setup is pending, and keep the personal-key and first-pairing requirements. A manual executable override remains available only for developer probes.
 
-Validate the selected artifact before execution: regular executable, Mach-O arm64, expected archive structure, bounded extraction, and platform signature/Gatekeeper checks. Do not clear quarantine, use shell execution, or bypass a failed trust check. Record version/build timestamp from a bounded `--version` process. If metadata is missing/unparseable, treat freshness as unknown and use the setup/update path rather than guessing. Stage replacements without overwriting the running executable; retain the previously working artifact until the replacement passes startup checks.
+Validate artifacts before execution: bound download/extraction size, reject archive links/traversal/duplicates, require a regular Mach-O arm64 executable, and verify the intact Apple-issued Spotify signature for `com.spotify.soloist`, team `2FNC3A47ZF`. Preserve quarantine and let normal macOS execution policy apply; never re-sign or disable safeguards. A bare command-line executable must not be assessed as an app bundle with `spctl`: the official build passes publisher validation but that app-bundle assessment rejects it as not an app. Record version/build timestamp from bounded `--version`; reject expired or invalid builds. Stage immutable digest-addressed builds without overwriting the running executable, and retain the prior valid build on failure.
 
 Store the API key in a dedicated Keychain namespace. Pass it directly to the child at runtime, with arguments and child logs redacted. The documented CLI requires an API-key argument; Keychain storage does not eliminate local process-argument exposure. Do not claim otherwise.
 
@@ -114,7 +116,7 @@ Use private Bopify-specific persistent data and bounded cache directories. Keep 
 
 First pairing uses Spotify's app on the same local network; show progress from `auth_state` and complete only when paired and usable. The user does not have to keep Spotify open afterward. Existing sign-in/library behavior stays usable if setup is canceled.
 
-Check build freshness on launch and no more than daily using local version metadata. Warn seven days before the documented 90-day expiry and link the official update page; do not interrupt healthy playback to replace a build. Exit code 10 offers update/import and librespot fallback. Do not promise unattended updates in this version.
+Check the official current build at most daily when running or starting. Download newer builds in the background and retain them as pending while Soloist owns an active session, including a paused session with its queue. Activate pending builds only before launching a stopped child or after confirmed inactivity; preserve the data directory across updates. Expired builds (90 days after build time, or exit code 10) force a refresh before restart. If no usable update is available, keep a still-valid installed build and expose the update failure, or use librespot when Soloist cannot run.
 
 Sign-out stops owned audio and background tasks, cancels in-flight requests, clears OAuth and the Soloist Keychain key, and removes Bopify-owned stored Soloist authentication/device data so a later launch cannot silently restore the old account. Extend the persisted logout-intent cleanup mechanism to cover those resources; fail visibly if cleanup is incomplete. Preserve imported binaries. Quit stops owned processes without erasing credentials. Sleep/wake and output-device changes are verified on Core Audio rather than inferred from Linux behavior.
 
@@ -129,7 +131,21 @@ The complete acceptance checks are:
 3. Snapshot/event ordering, duplicate queue rendering, active-device changes, output switching, sleep/wake, socket loss with continuing audio, process death, invalid key, and expired-build handling behave as designed.
 4. Automatic fallback never starts audio over a remote owner or a still-audible local process. Unsupported queue transfers are disclosed and require the explicit continuation described above.
 
-Use the user's own installed binary and authorized interactive account setup for live checks. Do not read stored credentials opportunistically, embed a key, download or run a binary for a design-only exercise, or use mocked results as evidence of live integration. If a gate fails, revise the design before claiming parity; do not add an unverified fallback.
+### Feasibility progress, 2026-11-06
+
+The separate developer probe is implemented under `tools/SoloistFeasibility`. Its offline Swift boundary tests, the Rust data-session boundary tests, the existing native Clippy/test script, and the native framework rebuild pass. The only shared Rust source change registers a test-only module; the shipping playback engine, FFI, dependency pins and app authorization remain unchanged.
+
+Both playback feasibility gates remain **unverified**. The user's automatic-installation request independently authorizes the installer and its live CDN/signature/version checks; it removes the executable-path prerequisite. No production credentials were read and no Spotify sign-in/pairing or real data lookup was attempted. Live playback checks still require a private key-file path, public developer client ID and interactive pairing. Broader engine implementation remains gated.
+
+The managed installer is implemented in `BopifyPlayback` and consumed by the probe. A real `--install-only` run downloaded, verified and installed official Soloist `1.3.10.50`; a second invocation reused the cache without downloading. Verification passed 441 shared-package tests, 36 probe tests and 267 macOS app tests. These installation results do not establish the playback gates.
+
+The account probe uses the current `/me.account_id` field for OAuth account linkage; it does not substitute usernames or `/me.id`. Process/device association is still an experimental hypothesis based on fresh owned-process lifecycle and simultaneous playback observations. Actual live results must establish or reject it before it becomes the product's identity contract.
+
+For cancellation safety, the runner compiles the Rust test before sign-in, discovers the locked test artifact from Cargo's JSON output, and then runs that test executable directly with a private stdin pipe. This replaces the plan's initial Cargo-child invocation; it gives cleanup direct ownership of the authenticated process. Reports distinguish absent services, failures and unrun gates from actual retrievals. State observations do not certify audible continuity.
+
+Independent review identified and regression coverage now checks restart directory reuse, monitoring through the companion's full lifetime with a final observation, prompt sibling cancellation, terminal ownership/authentication changes after selection, and continuously received WebSocket state. The corrected probe has 35 passing offline Swift tests. One minor reporting distinction remains: the CLI labels an account mismatch inconclusive even though it rejects the mismatch; the pure evaluator labels it failed. This does not permit mixed-account requests.
+
+Use the managed official binary and authorized interactive account setup for live checks. Do not read stored credentials opportunistically, embed a key, or use mocked results as evidence of live integration. Download/signature/version validation is authorized by the automatic-installation request; authenticated playback checks still require the user's interactive setup. If a gate fails, revise the design before claiming parity.
 
 Add meaningful regression coverage for routing, isolated provider failures, command confirmation/ambiguity, stale epochs, queue duplicates, exact-selection rejection, permission migration, lifecycle cancellation, ownership races, secret redaction, artifact validation, logout cleanup, and volume/repeat conversion. Verify native setup/player behavior through app tests and before/after native screenshots, including keyboard access; this is a native app, not a browser UI.
 
@@ -145,6 +161,35 @@ A fresh native macOS/Rust reviewer identified two consequential questions. The s
 
 ## Research basis
 
+### Native sandbox continuation — 2026-11-07
+
+A signed sandbox smoke test found that extraction must preserve an OS-imposed quarantine tag rather than overwrite it. Publisher validation then succeeds, but execution without a user grant is denied. Explicit setup now requests access to Bopify's private installation folder through a native Open panel and retains an app-scoped security bookmark. Launch and background updates only restore that grant; they never display a panel. The app retains its sandbox and Spotify's original signature and quarantine. The user subsequently reported that the permission flow fails. The investigation below supersedes this proposed workaround; it is not an accepted solution.
+
+Apple's [DTS explanation of downloaded executable access](https://developer.apple.com/forums/thread/767612) and [App Sandbox entitlement reference](https://developer.apple.com/library/archive/documentation/Miscellaneous/Reference/EntitlementKeyReference/Chapters/EnablingAppSandbox.html) inform the permission flow. The executable-file entitlement alone did not make the signed sandbox smoke test succeed. An independently scoped installer helper is a larger alternative; none was added.
+
+The implemented handoff prepares and verifies a muted Soloist process before stopping the outgoing librespot engine. Adoption waits for a fresh observation of the requested listening volume before publishing playback events. Data-service initialization is separate and recoverable; failure does not stop Soloist audio. These are automated integration results, not evidence of authenticated live playback.
+
+### Permission failure investigation — 2026-11-07
+
+The screenshot's error is generated by Bopify before installation, not by Spotify. `SoloistInstallationAccess.request()` combines exact-folder equality and `startAccessingSecurityScopedResource()` in one guard, so the screenshot alone cannot identify which branch failed. A signed sandbox diagnostic reproduced a writable own-container URL whose direct scope activation returns false. Resolving an explicitly scoped bookmark then returns true. Folder access and extra scope activation are distinct; treating the Boolean alone as general permission validation is incorrect.
+
+More importantly, replacing that guard is insufficient. An isolated Apple Development-signed arm64 diagnostic tested the unchanged Spotify-signed Soloist `1.3.10.50`, build `1793966524`, using only `--version`. No key, OAuth, pairing, or audio was involved. Each installed copy used mode0700 within the diagnostic app's own container. No quarantine attributes were removed or edited.
+
+| Diagnostic execution context | Scope | Observed outcome |
+| --- | --- | --- |
+| App Sandbox with the current executable/RW/bookmark entitlements | None | Quarantine0086; access(X_OK) fails EPERM; Foundation reports Cocoa4; posix_spawn returns EPERM |
+| Same sandbox | Explicit bookmark resolves and activation returns true | New output has no quarantine attribute; execution still fails with the same EPERM/Cocoa4 |
+| Same sandbox, original binary inside the signed diagnostic bundle | Bundle access | --version exits0, ruling out a general child-launch or original-signature problem |
+| Ordinary Apple Development-signed diagnostic with hardened runtime and empty entitlements | None | New output has no quarantine attribute; Foundation and posix_spawn both exit0 and report the expected version |
+
+These are local diagnostic results, not authenticated playback or a notarized distribution test. They establish that the proposed folder/bookmark workaround does not solve installed-code execution in the tested environment. They do not establish a universal prohibition on execution from sandbox containers; Apple's general documentation allows container execution, while other macOS policies can still deny it. The precise additional policy responsible for the no-quarantine EPERM was not identified by available system logs.
+
+Spotifast at `58ec45608a5a2bb7f18c08afd63e4b931d2f6ba0` does not opt into App Sandbox. Its [bundle signer](https://github.com/crmne/spotifast/blob/58ec45608a5a2bb7f18c08afd63e4b931d2f6ba0/packaging/macos/bundle.sh#L46-L53) enables hardened runtime without sandbox entitlements, and its [installer](https://github.com/crmne/spotifast/blob/58ec45608a5a2bb7f18c08afd63e4b931d2f6ba0/src/soloist/install.rs#L179-L325) uses ordinary HTTPS/file creation followed by execution. Its native-packages0.11.0 [release signer](https://github.com/crmne/native-packages/blob/25a4214d2f203357c84b069f39de7c17c0be6253/lib/native_packages/macos_signing.rb#L94-L113) preserves existing entitlements; it does not inject sandboxing. Thus its download algorithm is not evidence that the same architecture works inside Bopify's sandbox.
+
+Correction to the earlier recommendation: [Apple DTS767612](https://developer.apple.com/forums/thread/767612) describes the executable entitlement with a Save panel, calls that path experimental for this use case, and recommends an embedded XPC service with independent sandbox policy as an alternative. It does not guarantee that an Open panel over an existing private folder permits downloaded execution. [Apple's container documentation](https://developer.apple.com/documentation/security/accessing-files-from-the-macos-app-sandbox) also distinguishes file access from other security-policy denials.
+
+Recommended next design: keep the main app sandboxed and move both fixed-source installation and owned Soloist launch/teardown into an embedded, same-user XPC service with independent policy. Authenticate the app caller, expose fixed operations rather than arbitrary execution, and retain publisher validation, bounded extraction and one-process ownership. Prove a signed installation-to-version-to-owned-launch smoke test before rewiring production setup. A service changes the execution boundary and is a proposal, not an implemented or verified fix. Removing App Sandbox from the main app would instead match Spotifast but requires an explicit security-boundary decision. Another folder retry is not recommended.
+
 Official sources reviewed 2026-11-06. Documented-surface gaps are not proof that an internal capability is impossible.
 
 - [Soloist overview](https://developer.spotify.com/documentation/soloist): supported desktop platform, per-user key, redistribution restriction, and build lifetime.
@@ -158,3 +203,25 @@ Official sources reviewed 2026-11-06. Documented-surface gaps are not proof that
 - [Transfer Playback](https://developer.spotify.com/documentation/web-api/reference/transfer-a-users-playback): target device and playing-intent behavior; ordering with other Player endpoints is not guaranteed.
 - [Available Devices](https://developer.spotify.com/documentation/web-api/reference/get-a-users-available-devices) and [User's Queue](https://developer.spotify.com/documentation/web-api/reference/get-queue): device discovery and the absence of a remotely addressable queue-occurrence identifier in Web API queue entries.
 - [Pinned librespot Connect implementation](https://github.com/leesiongchan/librespot/blob/80f49d50bf46ac454255f02c2fe0ed46ddf01fa6/connect/src/spirc.rs#L1008): current queue selection and context loading operate on librespot's own player.
+- [Spotifast installer](https://github.com/crmne/spotifast/blob/58ec45608a5a2bb7f18c08afd63e4b931d2f6ba0/src/soloist/install.rs), [lifecycle](https://github.com/crmne/spotifast/blob/58ec45608a5a2bb7f18c08afd63e4b931d2f6ba0/src/soloist/mod.rs) and [guide](https://spotifast.rocks/soloist/), inspected at commit `58ec456`: direct Spotify downloads, bounded extraction, immutable builds and safe renewal. These are reference patterns, not Spotify distribution permission or a published checksum guarantee.
+- [Apple signing requirements](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements): publisher/identifier requirements for signed code. Direct inspection of the official macOS archive on 2026-11-06 verified the Spotify team and identifier and version `1.3.10.50`, build `1793966524`.
+
+
+## Approved desktop execution model — 2026-11-07
+
+The user explicitly instructs: “dig deeper make sure it works perfectly and start doing it the Spotifast's model.” This approves replacing App Sandbox with ordinary hardened desktop execution. It supersedes the previous sandbox-preservation assumption, folder-permission workaround and proposed XPC helper. No further architecture approval is needed.
+
+Keep bundle ID, signing identity, Keychain service/account names, publisher validation, bounded extraction, quarantine preservation and process ownership. Remove sandbox/bookmark/executable-folder entitlements and native folder setup. Enable hardened runtime for both Debug and Release. No XPC service or new dependency.
+
+Migrate prior settings before constructing AppEnvironment: preserve existing desktop values, exclude the obsolete installation bookmark, preserve pending logout intent, and atomically move only an inactive old Soloist session. Never import executable caches/manifests. Use a durable migration marker; unreadable/corrupt old cleanup state fails closed before auth restoration. An isolated same-bundle/team signed fixture proved standard preferences do not route automatically after removing sandbox. Access to the legacy container may need macOS approval; handle denial clearly and never bypass platform policy.
+
+Verify a fresh actual signed desktop Bopify build through an opt-in install-only check before AppEnvironment/Keychain creation. Download Spotify's official build into a private temporary root, validate its publisher, run --version and verify cache reuse, then clean that root. The normal user flow stays native key/consent/pairing with no installation-folder dialog. Live account pairing/audio still requires the user's interactive account; never claim perfection from offline or install-only checks.
+
+
+## Soloist default and rate-limit isolation — 2026-11-07
+
+User reports Web API throttling and instructs Soloist must always be the default. A saved personal key now selects Soloist without a previous successful opt-in flag; explicit librespot remains a session override, and missing/invalid key or dead process remains actionable. Local audio readiness, metadata and owned socket controls depend on the local paired child, not Spotify Web API readiness. Inactive paired Soloist can be adopted without forcing playback.
+
+Move account/device verification and data-only services to a separate background path after adoption. Mixed-account safety remains: both immutable OAuth account IDs must agree and a unique per-launch device name plus two fresh advancing Web/local observations must establish association before companion data requests or Web API-assisted loads are enabled. Direct local WebSocket URI loads use the explicitly paired Core account and remain available during Web throttling; Spotify enforces access to the requested content. Web API failure/429 never tears down Soloist or converts it into a failed audio engine. Drop proof on re-pairing/socket loss. Background verification starts only while local playback is active/advancing, uses spaced observations rather than one-second HTTP polling, and respects a shared Retry-After cooldown across engine recreation. Keep local controls available during cooldown. Default does not mean unsolicited autoplay or guessed queue transfer.
+
+Optional service authorization is not a prerequisite for enabling the local player. The explicit Connect Spotify features action revokes and pauses mixed-account services before any OAuth grant can change, then revalidates them. Bind account proof to the exact Web/streaming credentials used; refreshed or replaced credentials invalidate it, including cached-service and in-flight result access. Local playback remains available throughout. Established-account remote mirroring may refresh every 30 polls while inactive; identity-proof polling stays paused while inactive.

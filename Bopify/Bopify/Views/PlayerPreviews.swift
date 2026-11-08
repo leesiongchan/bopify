@@ -2,6 +2,7 @@
 import SwiftUI
 import Observation
 import BopifyDomain
+import BopifyAuth
 import BopifyPlayback
 
 // Original vector samples for native previews; never used for missing live artwork.
@@ -55,7 +56,9 @@ enum PreviewLibrary {
 }
 
 /// An environment whose player runs `scenario` on the preview engine, with library services that never touch the network.
-func makePreviewEnvironment(_ scenario: PreviewScenario = .playing, library: PreviewLibrary = .samples) -> AppEnvironment {
+func makePreviewEnvironment(_ scenario: PreviewScenario = .playing, library: PreviewLibrary = .samples,
+                            libraryClientID: String? = String(repeating: "0", count: 32),
+                            soloistController: SoloistPlaybackController? = nil) -> AppEnvironment {
     let engine = PreviewPlaybackEngine(tracks: Array(previewTracks.prefix(5)))
     let player = PlayerModel(engine: engine)
     let events: [PlaybackEvent] = switch scenario {
@@ -73,9 +76,21 @@ func makePreviewEnvironment(_ scenario: PreviewScenario = .playing, library: Pre
     // Commands from the canvas still arrive through the engine's stream.
     player.start()
     let services = PreviewLibraryServices(library)
+    let suite = FileManager.default.temporaryDirectory.appendingPathComponent("bopify.preview.playback.\(UUID())").path
+    let defaults = UserDefaults(suiteName: suite)!
+    defaults.removePersistentDomain(forName: suite)
+    let controller = soloistController ?? SoloistPlaybackController(defaults: defaults, readyEngine: engine, keys: PreviewPlaybackKeys(),
+        authorize: {}, install: { _, _ in throw SoloistPlaybackError.unavailable }, clearSession: {})
     return AppEnvironment(previewPlayer: player, favoriteService: services, savedTracksService: services, historyService: services,
                           searchService: services, collectionsService: services,
+                          previewLibraryClientID: libraryClientID, soloistController: controller,
                           artworkStore: makePreviewArtworkStore(), radioEngine: engine)
+}
+
+private nonisolated struct PreviewPlaybackKeys: SoloistKeyStoring {
+    func load() throws -> String? { nil }
+    func save(_ key: String) throws {}
+    func clear() throws {}
 }
 
 /// The player as the window shows it once revealed, in a fixed frame of that mode's layout.
@@ -177,7 +192,6 @@ private nonisolated struct PreviewLibraryServices: LibraryService, SavedTracksSe
     var isPlaying = true
     var isVisible = true
     var isArtworkMissing = false
-    var reduceMotion = false
     var diameter: CGFloat = 182
     var image: Image? {
         isArtworkMissing ? nil : artworkStore.image(for: previewArtworkURL(index)).map { Image(nsImage: $0) }
@@ -190,15 +204,14 @@ struct RecordPreviewScene: View {
     @State private var isCoasting = false
     @State private var pressing = PressingAppearance.neutral
     private var motorRequest: RecordMotorRequest {
-        !fixture.isVisible || fixture.reduceMotion ? .snap : fixture.isPlaying ? .drive : .brake
+        !fixture.isVisible ? .snap : fixture.isPlaying ? .drive : .brake
     }
     var body: some View {
         VinylRecordView(image: fixture.image, occurrenceID: fixture.occurrenceID, direction: fixture.direction,
                         diameter: fixture.diameter,
                         isMoving: motorRequest != .snap && (fixture.isPlaying || isCoasting) && rotation.isMoving(at: ProcessInfo.processInfo.systemUptime),
                         isVisible: fixture.isVisible, rotation: rotation,
-                        pressingSeed: pressing.seed, palette: pressing.palette, design: pressing.design,
-                        reduceMotionOverride: fixture.reduceMotion)
+                        pressingSeed: pressing.seed, palette: pressing.palette, design: pressing.design)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .onChange(of: motorRequest, initial: true) { _, request in
                 let now = ProcessInfo.processInfo.systemUptime

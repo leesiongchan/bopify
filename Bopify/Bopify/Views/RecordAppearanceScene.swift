@@ -5,7 +5,6 @@ struct RecordAppearanceScene: View {
     let model: RecordAppearancePickerModel
     @State private var motion: RecordAppearanceMotion
     @State private var hovered: RecordAppearanceChoice?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(model: RecordAppearancePickerModel) {
         self.model = model
@@ -29,7 +28,6 @@ struct RecordAppearanceScene: View {
             }
         }
         .onAppear {
-            motion.setReducedMotion(reduceMotion, at: .now)
             motion.setPaused(model.isMotionPaused, at: .now)
             motion.setVisible(model.isPreviewVisible, at: .now)
         }
@@ -41,7 +39,6 @@ struct RecordAppearanceScene: View {
             if value { motion.settle(material: model.selectedMaterial, pattern: model.selectedPattern, at: .now) }
             motion.setVisible(value, at: .now)
         }
-        .onChange(of: reduceMotion) { _, value in motion.setReducedMotion(value, at: .now) }
         .accessibilityHidden(true)
     }
     private func record(_ frame: RecordAppearanceMotion.RecordFrame, geometry: RecordAppearanceGeometry) -> some View {
@@ -54,7 +51,7 @@ struct RecordAppearanceScene: View {
             .onHover { hovered = $0 ? frame.choice : nil }
             .onTapGesture { model.select(frame.choice) }
             .position(pose.centre).zIndex(frame.zIndex)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: peek)
+            .animation(.easeOut(duration: 0.18), value: peek)
     }
 }
 

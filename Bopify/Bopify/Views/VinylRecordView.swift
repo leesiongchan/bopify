@@ -17,16 +17,13 @@ struct VinylRecordView: View, Animatable {
     var artworkRotationOffset = 0.0
     var rotationOverride: Double? = nil
     var isScrubbing = false
-    var reduceMotionOverride = false
     var loadProgress = 1.0
     var labelRatio: CGFloat = 0.43
     var isIncomingDuringLoad = false
-    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.accessibilityReduceTransparency) private var systemReduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
     @State private var tilt = 0.0
     @State private var depth = 1.0
-    private var reduceMotion: Bool { systemReduceMotion || reduceMotionOverride }
     private var reduceTransparency: Bool { systemReduceTransparency || reduceTransparencyOverride }
     private var material: RecordDesign { recordDesign.resolved(for: palette) }
     private var appearance: PressingAppearance {
@@ -46,7 +43,7 @@ struct VinylRecordView: View, Animatable {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isMoving || !isVisible || reduceMotion || isScrubbing)) { _ in
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isMoving || !isVisible || isScrubbing)) { _ in
             ZStack {
                 Group {
                     if material == .glass && !reduceTransparency {
@@ -59,20 +56,20 @@ struct VinylRecordView: View, Animatable {
                     .mask(revealMask)
                     .id(material)
                     .transition(.opacity)
-                    .animation(isVisible && !isIncomingDuringLoad ? .easeInOut(duration: reduceMotion ? 0.16 : 0.65) : nil,
+                    .animation(isVisible && !isIncomingDuringLoad ? .easeInOut(duration: 0.65) : nil,
                                value: material)
                 ZStack {
                     VinylPressingView(seed: pressingSeed, palette: palette, design: design, recordDesign: material,
                                       diameter: diameter, reduceTransparencyOverride: reduceTransparency)
                         .id(appearance)
                         .transition(.opacity)
-                        .animation(isVisible && !isIncomingDuringLoad ? .easeInOut(duration: reduceMotion ? 0.16 : 0.65) : nil,
+                        .animation(isVisible && !isIncomingDuringLoad ? .easeInOut(duration: 0.65) : nil,
                                    value: appearance)
                         .mask(revealMask)
                     RecordDust().mask(revealMask)
                     MorphingArtworkView(image: image, diameter: labelSize,
                                         occurrenceID: occurrenceID, isVisible: isVisible,
-                                        reduceMotionOverride: reduceMotion || loadProgress < 1)
+                                        transitionDuration: loadProgress < 1 ? 0.16 : 0.65)
                         .overlay(Circle().stroke(.black.opacity(0.4), lineWidth: 1))
                         .rotationEffect(.radians(artworkRotationOffset))
                 }
@@ -90,7 +87,7 @@ struct VinylRecordView: View, Animatable {
         .rotation3DEffect(.degrees(tilt), axis: (x: 0.3, y: 1, z: 0), perspective: 0.3)
         .shadow(color: .black.opacity(0.28), radius: 9, x: 0, y: 6)
         .onChange(of: occurrenceID) { _, _ in
-            guard !reduceMotion, isVisible, direction != .fade else { return }
+            guard isVisible, direction != .fade else { return }
             withAnimation(.spring(duration: 0.25, bounce: 0)) {
                 tilt = direction == .next ? -12 : 12
                 depth = 0.94
@@ -98,13 +95,12 @@ struct VinylRecordView: View, Animatable {
         }
         .task(id: occurrenceID) {
             do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
-            withAnimation(.spring(duration: reduceMotion ? 0.16 : 0.50, bounce: 0.08)) {
+            withAnimation(.spring(duration: 0.50, bounce: 0.08)) {
                 tilt = 0
                 depth = 1
             }
         }
         .onChange(of: isVisible) { _, visible in if !visible { tilt = 0; depth = 1 } }
-        .onChange(of: reduceMotion) { _, reduced in if reduced { tilt = 0; depth = 1 } }
         .accessibilityHidden(true)
     }
 }

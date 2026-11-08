@@ -13,6 +13,11 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     private var appliedMode: PlayerMode?
     private var isApplyingFrame = false
     private var isWindowControllerAttached = false
+    private var holdsOnboardingAttention = false
+    private var awaitsInitialPlayerInteraction = false
+    private var isPointerInside = false
+    private var startupHeight: CGFloat?
+    private var preparedStartupContent: StartupWindowLayout.MeasurementKey?
     private let environment: AppEnvironment
     private let shortcutsWindow = KeyboardShortcutsWindowController()
     private let recordAppearanceWindow = RecordAppearanceWindowController()
@@ -49,8 +54,17 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         panel?.onShowShortcuts = { [weak self] in self?.shortcutsWindow.show() }
         panel?.onDismissPopover = { [weak self] in self?.environment.presentation.dismissPopover() ?? false }
         panel?.onDismissQueue = { [weak self] in self?.environment.presentation.dismissQueue() ?? false }
-        panel?.onKeyChanged = { [weak self] in self?.environment.presentation.sendAttention(.keyboardFocus($0)) }
-        panel?.onPointerChanged = { [weak self] in self?.environment.presentation.sendAttention(.pointer($0)) }
+        panel?.onKeyChanged = { [weak self] focused in
+            guard let self else { return }
+            if focused { self.awaitsInitialPlayerInteraction = false }
+            self.environment.presentation.sendAttention(.keyboardFocus(focused))
+        }
+        panel?.onPointerChanged = { [weak self] inside in
+            guard let self else { return }
+            self.isPointerInside = inside
+            if inside { self.awaitsInitialPlayerInteraction = false }
+            self.environment.presentation.sendAttention(.pointer(inside))
+        }
         panel?.onWindowDragChanged = { [weak self] active in
             guard let self else { return }
             if self.isWindowControllerAttached { self.environment.playerWindowController.setDragging(active) }
@@ -76,42 +90,75 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         }
     }
 
-    private func configure(mode: PlayerMode, keepOnTop: Bool) {
+    private func updateOnboardingAttention() {
+        if !environment.presentation.isVisible || (!environment.isShowingPlayer && !environment.onboarding.isArmed) {
+            awaitsInitialPlayerInteraction = false
+        }
+        let holds = (environment.onboarding.isArmed || awaitsInitialPlayerInteraction) && environment.presentation.isVisible
+        guard holds != holdsOnboardingAttention else { return }
+        holdsOnboardingAttention = holds
+        environment.presentation.sendAttention(.interaction(.onboarding, holds))
+    }
+
+    private func configure(mode: PlayerMode, keepOnTop: Bool, preparingDisplay: Bool = false) {
         guard !environment.isPreparingForQuit, let panel else { return }
+        updateOnboardingAttention()
         let floatingLyrics = environment.isLiveLyricsVisible && environment.presentation.mode == .compact
-        let onboarding = environment.authState != .signedIn
+        let onboarding = environment.isShowingOnboarding
+            || environment.authState != .signedIn
             || (!environment.hasPlaybackConnected && environment.connectionStatus != .ready)
         let level: NSWindow.Level = keepOnTop || floatingLyrics || onboarding ? .floating : .normal
         if panel.level != level {
             panel.level = level
+            if environment.onboarding.phase == .handoff, panel.isVisible {
+                // Lowering the setup window's level otherwise places it behind the authorization browser.
+                panel.orderFrontRegardless()
+                BopifyLog.playback.info("onboarding player brought forward focused=\(panel.isKeyWindow, privacy: .public)")
+            }
             BopifyLog.playback.debug("player window level changed floating=\(level == .floating, privacy: .public)")
         }
         UserDefaults.standard.set(keepOnTop, forKey: "player.keepOnTop")
-        if environment.isListening || environment.isLiveLyricsVisible {
+        if environment.isShowingPlayer {
+            preparedStartupContent = nil
+            environment.startupWindow.cancelPendingResize()
+            startupHeight = nil
             if !isWindowControllerAttached {
-                if !hasPosition, PlayerWindowController.restoredAnchor(defaults: .standard) == nil,
+                let handingOff = environment.onboarding.phase == .handoff
+                if handingOff {
+                    awaitsInitialPlayerInteraction = panel.isVisible && !panel.isKeyWindow && !isPointerInside
+                }
+                if !handingOff, !hasPosition, PlayerWindowController.restoredAnchor(defaults: .standard) == nil,
                    let button = statusItem.button,
                    let frame = button.window?.convertToScreen(button.convert(button.bounds, to: nil)) {
                     panel.setFrame(CGRect(x: frame.midX - 71, y: frame.minY - 148, width: 142, height: 142), display: false)
                 }
-                environment.playerWindowController.attach(to: panel)
+                environment.playerWindowController.attach(to: panel,
+                    onboardingRecordFrame: handingOff ? environment.onboardingRecordFrame : nil,
+                    onboardingID: handingOff ? environment.onboarding.completionID : nil,
+                    onOnboardingSettled: { [weak self] id in
+                        guard let self, self.environment.onboarding.completionID == id,
+                              self.environment.onboarding.phase == .handoff else { return }
+                        self.environment.onboarding.handoffSettled(for: id)
+                    })
                 environment.presentation.sendAttention(.visibility(panel.isVisible))
                 if panel.isKeyWindow { environment.presentation.sendAttention(.keyboardFocus(true)) }
                 isWindowControllerAttached = true
-                // The new composition has no rendered player geometry to animate from yet.
-                environment.playerWindowController.apply(mode: environment.presentation.mode, reduceMotion: true,
+                // Initial restoration has no prior player geometry; onboarding has a visible record to preserve.
+                environment.playerWindowController.apply(mode: environment.presentation.mode,
+                                                         animated: handingOff,
                                                          showsLyrics: environment.isLiveLyricsVisible)
                 BopifyLog.playback.debug("Player listening geometry initialized")
             }
             environment.playerWindowController.apply(mode: environment.presentation.mode,
-                                              reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
-                                              showsLyrics: environment.isLiveLyricsVisible)
+                                                     showsLyrics: environment.isLiveLyricsVisible)
             return
         }
         if isWindowControllerAttached {
             environment.playerWindowController.invalidateTransition()
+            holdsOnboardingAttention = false
             environment.presentation.resetEngagement()
             environment.presentation.sendAttention(.visibility(panel.isVisible))
+            updateOnboardingAttention()
             isWindowControllerAttached = false
             appliedMode = nil
         }
@@ -120,6 +167,31 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         panel.styleMask.insert(.resizable)
         // Like the record's halo, the startup glass would get a hard rectangular outline from the native shadow.
         panel.hasShadow = false
+        if onboarding {
+            let oldFrame = panel.frame
+            let visible = panel.screen?.visibleFrame ?? NSScreen.main?.visibleFrame
+            if let visible { environment.startupWindow.useScreen(height: visible.height) }
+            let requestedWidth = appliedMode == nil ? max(410, oldFrame.width) : oldFrame.width
+            let width = min(visible?.width ?? 430, min(430, max(390, requestedWidth)))
+            if let step = environment.onboardingStep {
+                let root = PlayerRootView(environment: environment)
+                let key = root.startupMeasurementKey(for: step, width: width)
+                if preparingDisplay || preparedStartupContent != key {
+                    root.prepareStartupSizing(for: step, width: width, immediately: !panel.isVisible)
+                    preparedStartupContent = key
+                }
+            }
+            let height = environment.startupWindow.height
+            startupHeight = height
+            guard appliedMode != mode || abs(oldFrame.width - width) >= 0.5 || abs(oldFrame.height - height) >= 0.5 else { return }
+            appliedMode = mode
+            setReachableFrame(origin: NSPoint(x: oldFrame.minX, y: oldFrame.maxY - height),
+                              size: NSSize(width: width, height: height),
+                              animate: panel.isVisible)
+            BopifyLog.playback.debug("startup window resized height=\(Int(panel.frame.height), privacy: .public)")
+            return
+        }
+        startupHeight = nil
         guard appliedMode != mode else { return }
         let compact = mode == .compact
         let oldFrame = panel.frame
@@ -127,7 +199,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         let size = appliedMode == nil || !crossingCompact ? oldFrame.size : NSSize(width: compact ? 380 : 410, height: compact ? 88 : 560)
         appliedMode = mode
         setReachableFrame(origin: NSPoint(x: oldFrame.minX, y: oldFrame.maxY - size.height), size: size,
-                          animate: panel.isVisible && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+                          animate: panel.isVisible)
         BopifyLog.playback.debug("player presentation changed mode=\(mode.rawValue, privacy: .public)")
     }
 
@@ -141,8 +213,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         } ?? NSScreen.main
         guard let visible = screen?.visibleFrame else { return }
         let compact = appliedMode == .compact
-        let minimum = NSSize(width: compact ? 340 : 390, height: compact ? 88 : 560)
-        let maximum = NSSize(width: compact ? 420 : 430, height: compact ? 88 : 800)
+        let minimum = NSSize(width: compact ? 340 : 390, height: compact ? 88 : (startupHeight ?? 680))
+        let maximum = NSSize(width: compact ? 420 : 430, height: compact ? 88 : (startupHeight == nil ? 800 : visible.height))
         let requested = NSSize(width: min(maximum.width, max(minimum.width, size.width)),
                                height: min(maximum.height, max(minimum.height, size.height)))
         isApplyingFrame = true
@@ -156,13 +228,23 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     @objc private func screenParametersDidChange(_ notification: Notification) { reposition() }
 
     private func reposition() {
-        guard let panel else { return }
+        guard !environment.isPreparingForQuit, let panel else { return }
         if isWindowControllerAttached {
-            environment.playerWindowController.apply(mode: environment.presentation.mode, reduceMotion: true,
+            environment.playerWindowController.apply(mode: environment.presentation.mode, animated: false,
                                                      showsLyrics: environment.isLiveLyricsVisible)
             return
         }
-        setReachableFrame(origin: panel.frame.origin, size: panel.frame.size)
+        if startupHeight != nil {
+            if let visible = panel.screen?.visibleFrame ?? NSScreen.main?.visibleFrame {
+                environment.startupWindow.useScreen(height: visible.height)
+            }
+            let height = environment.startupWindow.height
+            startupHeight = height
+            setReachableFrame(origin: NSPoint(x: panel.frame.minX, y: panel.frame.maxY - height),
+                              size: NSSize(width: panel.frame.width, height: height))
+        } else {
+            setReachableFrame(origin: panel.frame.origin, size: panel.frame.size)
+        }
     }
 
     private func saveFrame() {
@@ -173,6 +255,12 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     func windowDidBecomeKey(_ notification: Notification) { Task { await environment.refreshFavorite() } }
     func windowDidMove(_ notification: Notification) { saveFrame() }
     func windowDidResize(_ notification: Notification) { saveFrame() }
+    func windowDidChangeScreen(_ notification: Notification) {
+        Task { @MainActor [weak self] in
+            guard let self, !self.isWindowControllerAttached else { return }
+            self.reposition()
+        }
+    }
     func windowShouldClose(_ sender: NSWindow) -> Bool { dismiss(); return false }
 
 
@@ -203,6 +291,10 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     func showPlayer() {
         guard !environment.isPreparingForQuit, let panel, let button = statusItem.button else { return }
 
+        if !panel.isVisible {
+            configure(mode: environment.playerMode, keepOnTop: environment.presentation.keepOnTop, preparingDisplay: true)
+        }
+
         if isWindowControllerAttached {
             hasPosition = true
             reposition()
@@ -214,7 +306,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         }
         environment.presentation.isVisible = true
         environment.presentation.sendAttention(.keyboardFocus(true))
-        if isWindowControllerAttached { environment.playerWindowController.apply(mode: .expanded, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+        if isWindowControllerAttached { environment.playerWindowController.apply(mode: .expanded,
                                                                                showsLyrics: environment.isLiveLyricsVisible) }
         panel.makeKeyAndOrderFront(nil)
         panel.focusPlayer()
@@ -225,7 +317,9 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     private func dismiss() {
         if environment.searchPopover.isVisible { environment.searchPopover.close() }
         saveFrame()
-        if isWindowControllerAttached { environment.playerWindowController.persistAnchor(); environment.playerWindowController.invalidateTransition() }
+        if isWindowControllerAttached { environment.playerWindowController.hide() }
+        awaitsInitialPlayerInteraction = false
+        holdsOnboardingAttention = false
         environment.presentation.isVisible = false
         panel?.orderOut(nil)
         BopifyLog.playback.debug("player panel hidden")
@@ -249,21 +343,12 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                                     action: #selector(showRecordAppearance(_:)), keyEquivalent: "")
         appearance.target = self
         menu.addItem(appearance)
-        let libraryItem = NSMenuItem(title: String(localized: "menu.libraryAccess"),
-                                     action: #selector(showLibraryAccess(_:)), keyEquivalent: "")
-        libraryItem.target = self
-        menu.addItem(libraryItem)
         let shortcutsItem = NSMenuItem(title: String(localized: "shortcuts.title"),
                                       action: #selector(showShortcuts(_:)), keyEquivalent: "/")
         shortcutsItem.target = self
         menu.addItem(shortcutsItem)
         if environment.isAuthorizingPlayback {
             let cancel = NSMenuItem(title: String(localized: "signIn.cancel"), action: #selector(cancelPlaybackAuthorization(_:)), keyEquivalent: "")
-            cancel.target = self
-            menu.addItem(cancel)
-        }
-        if environment.isAuthorizingLibrary {
-            let cancel = NSMenuItem(title: String(localized: "library.cancelAuthorization"), action: #selector(cancelLibraryAuthorization(_:)), keyEquivalent: "")
             cancel.target = self
             menu.addItem(cancel)
         }
@@ -291,8 +376,6 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         Task { await environment.signOut() }
     }
     @objc private func cancelPlaybackAuthorization(_ sender: Any?) { environment.cancelPlaybackAuthorization() }
-    @objc private func cancelLibraryAuthorization(_ sender: Any?) { environment.cancelLibraryAuthorization() }
-    @objc private func showLibraryAccess(_ sender: Any?) { environment.librarySetupWindow.show(environment: environment) }
     @objc private func showShortcuts(_ sender: Any?) { shortcutsWindow.show() }
     @objc private func showRecordAppearance(_ sender: Any?) { recordAppearanceWindow.show() }
     @objc private func toggleKeepOnTop(_ sender: Any?) { environment.presentation.keepOnTop.toggle() }
@@ -303,11 +386,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 
     @objc private func quit(_ sender: Any?) {
-        // `bopify_engine_destroy` (inside `shutdown()`) joins the Rust
-        // runtime and then librespot's audio thread, with no timeout, so
-        // this await can hang. Do the teardown here, not in
-        // `applicationWillTerminate`, which is synchronous and cannot
-        // await it.
+        // Shutdown joins the owned Soloist process and companion data tasks.
+        // applicationWillTerminate is synchronous and cannot await that teardown.
         Task {
             await environment.prepareForQuit()
             NSApp.terminate(nil)

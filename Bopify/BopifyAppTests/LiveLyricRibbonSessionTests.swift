@@ -224,6 +224,69 @@ struct LiveLyricRibbonSessionTests {
         #expect(f.gate.requests.count == 1 && f.engine.commands.isEmpty)
     }
 
+    @Test(arguments: [LyricFailure.network, .unavailable])
+    func transientFailureRecoversTheVisibleTrackWithoutReopening(failure: LyricFailure) async throws {
+        let f = LiveLyricFixture(); defer { f.stop() }
+        try await f.ready(); f.session.show()
+        try await liveLyricEventually { f.gate.requests.count == 1 }
+        f.gate.fail(0, with: failure)
+        try await liveLyricEventually { f.session.model.content == .failure }
+        try await liveLyricEventually { f.clock.pendingDelays == [.seconds(2)] }
+        f.clock.advance(by: .seconds(2))
+        try await liveLyricEventually { f.gate.requests.count == 2 }
+        f.gate.succeed(1, with: liveLyrics())
+        try await liveLyricEventually { f.session.model.source != nil }
+        #expect(f.gate.requests.allSatisfy { $0.uri == liveLyricURI })
+        #expect(f.player.isEngineReady && f.engine.commands.isEmpty)
+        #expect(f.clock.pendingDelays.isEmpty)
+    }
+
+    @Test func transientFailureRetriesAreBounded() async throws {
+        let f = LiveLyricFixture(); defer { f.stop() }
+        try await f.ready(); f.session.show()
+        for (index, delay) in [Duration.seconds(2), .seconds(5), .seconds(15)].enumerated() {
+            try await liveLyricEventually { f.gate.requests.count == index + 1 }
+            f.gate.fail(index, with: LyricFailure.unavailable)
+            try await liveLyricEventually { f.clock.pendingDelays == [delay] }
+            f.clock.advance(by: delay)
+        }
+        try await liveLyricEventually { f.gate.requests.count == 4 }
+        f.gate.fail(3, with: LyricFailure.unavailable)
+        try await liveLyricEventually { f.session.model.content == .failure }
+        for _ in 0..<30 { await Task.yield() }
+        #expect(f.clock.pendingDelays.isEmpty)
+        f.clock.advance(by: .seconds(60))
+        #expect(f.gate.requests.count == 4)
+    }
+
+    @Test(arguments: [true, false])
+    func hidingOrReplacingTheTrackCancelsPendingRetry(hide: Bool) async throws {
+        let f = LiveLyricFixture(); defer { f.stop() }
+        try await f.ready(); f.session.show()
+        try await liveLyricEventually { f.gate.requests.count == 1 }
+        f.gate.fail(0, with: LyricFailure.network)
+        try await liveLyricEventually { f.clock.pendingDelays == [.seconds(2)] }
+        if hide { f.session.hide() }
+        else {
+            f.engine.emit(.queueChanged(liveLyricQueue(otherLiveLyricURI, id: "two")))
+            f.engine.emit(.trackChanged(liveLyricTrack(otherLiveLyricURI)))
+            try await liveLyricEventually { f.gate.requests.count == 2 }
+        }
+        try await liveLyricEventually { f.clock.pendingDelays.isEmpty }
+        f.clock.advance(by: .seconds(60))
+        for _ in 0..<30 { await Task.yield() }
+        #expect(f.gate.requests.count == (hide ? 1 : 2))
+    }
+
+    @Test func noLyricsDoesNotScheduleRetries() async throws {
+        let f = LiveLyricFixture(); defer { f.stop() }
+        try await f.ready(); f.session.show()
+        try await liveLyricEventually { f.gate.requests.count == 1 }
+        f.gate.fail(0, with: LyricFailure.noLyrics)
+        try await liveLyricEventually { f.session.model.content == .noMatch }
+        #expect(f.clock.pendingDelays.isEmpty)
+    }
+
     @Test func loadingSeekRestartClearsHold() async throws {
         let f = LiveLyricFixture(); defer { f.stop() }
         try await f.load(); f.session.model.beginReading()

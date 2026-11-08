@@ -11,6 +11,67 @@ import BopifyPlayback
 @MainActor
 @Suite("App live lyrics", .serialized, .timeLimit(.minutes(1)))
 struct AppEnvironmentLyricsTests {
+    @Test(arguments: [false, true])
+    func spotifyFailureFallsBackWithoutChangingPlaybackAndShowsTheProvider(timestampedPlainField: Bool) async throws {
+        AppLyricFallbackHTTP.reset(timestampedPlain: timestampedPlainField)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AppLyricFallbackHTTP.self]
+        let resolver = LyricsResolver(cacheDirectory: nil, session: URLSession(configuration: configuration))
+        let f = LyricsAppFixture(lyricsResolver: resolver)
+        do {
+            try await f.ready()
+            f.environment.showLiveLyrics()
+            try await liveLyricEventually { f.firstGate.requests.count == 1 }
+            f.firstGate.fail(0, with: LyricFailure.unavailable)
+            try await liveLyricEventually {
+                f.environment.liveLyricRibbon?.model.source?.providerDisplayName == "LRCLIB"
+            }
+            let session = try #require(f.environment.liveLyricRibbon)
+            guard case let .timed(document) = session.model.content else {
+                Issue.record("Expected synchronized fallback lyrics"); await f.stop(); return
+            }
+            #expect(document.groups.map(\.startMs) == [1000, 2000])
+            #expect(document.groups.map(\.text) == ["A quiet street", "The lamps return"])
+            #expect(session.model.projection?.current?.startMs == 1000)
+            f.first.emit(.paused(positionMs: 2000))
+            try await liveLyricEventually { session.model.projection?.current?.startMs == 2000 }
+            let passage = LyricRibbonLayout.reader(content: session.model.content, projection: session.model.projection,
+                isReading: false, scale: 1)
+            let previous = (passage.string as NSString).range(of: "A quiet street").location
+            let current = (passage.string as NSString).range(of: "The lamps return").location
+            #expect(!passage.string.contains("[00:"))
+            #expect((passage.attribute(.font, at: previous, effectiveRange: nil) as? NSFont)?.pointSize == 14)
+            #expect((passage.attribute(.font, at: current, effectiveRange: nil) as? NSFont)?.pointSize == 19)
+            #expect(passage.attribute(.foregroundColor, at: previous, effectiveRange: nil) as? NSColor == .secondaryLabelColor)
+            #expect(passage.attribute(.foregroundColor, at: current, effectiveRange: nil) as? NSColor == .labelColor)
+            #expect(passage.attribute(.link, at: current, effectiveRange: nil) as? String == "2000")
+            #expect(f.first.commands.isEmpty && f.factoryCount == 1)
+            session.seek(to: 2000, from: session.model.snapshot)
+            try await liveLyricEventually { f.first.seekTargets == [2000] }
+        } catch { await f.stop(); throw error }
+        await f.stop()
+    }
+
+    @Test func hidingLyricsCancelsTheIndependentProviderRequest() async throws {
+        AppLyricFallbackHTTP.reset(hold: true)
+        defer { AppLyricFallbackHTTP.reset() }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AppLyricFallbackHTTP.self]
+        let resolver = LyricsResolver(cacheDirectory: nil, session: URLSession(configuration: configuration))
+        let f = LyricsAppFixture(lyricsResolver: resolver)
+        do {
+            try await f.ready(); f.environment.showLiveLyrics()
+            try await liveLyricEventually { f.firstGate.requests.count == 1 }
+            f.firstGate.fail(0, with: LyricFailure.unavailable)
+            try await liveLyricEventually { AppLyricFallbackHTTP.hasPendingRequest }
+            f.environment.hideLiveLyrics()
+            try await liveLyricEventually { AppLyricFallbackHTTP.wasCancelled }
+            #expect(!f.environment.isLiveLyricsVisible && f.environment.liveLyricRibbon?.model.source == nil)
+            #expect(f.first.commands.isEmpty && f.factoryCount == 1)
+        } catch { await f.stop(); throw error }
+        await f.stop()
+    }
+
     @Test func lyricsCanShowTheirPlaceholderBeforeFirstPlayback() async throws {
         _ = NSApplication.shared
         let keys = ["player.keepOnTop", "player.recordCenter", "player.frame"]
@@ -24,7 +85,7 @@ struct AppEnvironmentLyricsTests {
         try await withLyricsApp { f in
             await f.environment.restoreOrPromptSignIn()
             try await liveLyricEventually { f.environment.player != nil && f.environment.authState == .signedIn }
-            #expect(!f.environment.isListening)
+            #expect(f.environment.player?.state.currentTrack == nil)
             let windows = Set(NSApp.windows.map(ObjectIdentifier.init))
             let controller = StatusItemController(content: PlayerRootView(environment: f.environment), environment: f.environment)
             let panel = try #require(NSApp.windows.compactMap { $0 as? StatusPanel }
@@ -224,7 +285,7 @@ struct AppEnvironmentLyricsTests {
     private let count: LyricsFactoryCount
     var factoryCount: Int { count.value }
 
-    init() {
+    init(lyricsResolver: LyricsResolver? = nil) {
         let a = firstGate, b = secondGate
         let first = LiveLyricTestEngine { try await a.request(for: $0, epoch: nil) }
         let second = LiveLyricTestEngine { try await b.request(for: $0, epoch: nil) }
@@ -236,6 +297,7 @@ struct AppEnvironmentLyricsTests {
             libraryAuth: SpotifyAuthService(clientID: "test-library", store: LyricsTokenStore(
                 TokenSet(accessToken: "LIBRARY", refreshToken: "LIBRARY_RT", expiresAt: .distantFuture,
                          grantedScopes: LibraryAuthorization.requiredScopes))),
+            lyricsResolver: lyricsResolver,
             recoveryEngineFactory: { _, _ in count.next() == 1 ? first : second })
     }
     func ready() async throws {
@@ -250,6 +312,33 @@ struct AppEnvironmentLyricsTests {
         engine.emit(.connectionReady(.local(PlaybackIdentity(trackURI: liveLyricURI))))
     }
     func stop() async { await environment.prepareForQuit(); firstGate.finish(); secondGate.finish() }
+}
+
+private nonisolated final class AppLyricFallbackHTTP: URLProtocol, @unchecked Sendable {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var holdsRequest = false
+    nonisolated(unsafe) private static var pending = false
+    nonisolated(unsafe) private static var cancelled = false
+    nonisolated(unsafe) private static var usesPlainField = false
+    static var hasPendingRequest: Bool { lock.withLock { pending } }
+    static var wasCancelled: Bool { lock.withLock { cancelled } }
+    static func reset(hold: Bool = false, timestampedPlain: Bool = false) {
+        lock.withLock { holdsRequest = hold; pending = false; cancelled = false; usesPlainField = timestampedPlain }
+    }
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func stopLoading() { Self.lock.withLock { Self.cancelled = true; Self.pending = false } }
+    override func startLoading() {
+        if Self.lock.withLock({ Self.pending = Self.holdsRequest; return Self.holdsRequest }) { return }
+        let field = Self.lock.withLock { Self.usesPlainField ? "plainLyrics" : "syncedLyrics" }
+        let body = try! JSONSerialization.data(withJSONObject: ["trackName": "Window Seat", "artistName": "Soft Weather",
+            "albumName": "", "duration": 240, "instrumental": false,
+            field: "[00:01.00]A quiet street\n[00:02.00]The lamps return"])
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: 200,
+            httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: body)
+        client?.urlProtocolDidFinishLoading(self)
+    }
 }
 
 private nonisolated final class LyricsFactoryCount: @unchecked Sendable {

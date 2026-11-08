@@ -18,7 +18,6 @@ struct RadialProgressView: View {
     @State private var pressOrigin: CGPoint?
     @State private var isGestureRejected = false
     @GestureState private var isGestureActive = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
 
     private var progress: Double {
@@ -42,7 +41,7 @@ struct RadialProgressView: View {
                     .shadow(color: .black.opacity(0.16), radius: 5, y: 2)
                     .scaleEffect(scrub == nil ? 0.35 : 1)
                     .opacity(scrub == nil ? 0 : 1)
-                    .animation(.spring(duration: reduceMotion ? 0.12 : 0.2, bounce: 0.12), value: scrub != nil)
+                    .animation(.spring(duration: 0.2, bounce: 0.12), value: scrub != nil)
                     .position(x: radius + cos(angle) * radius, y: radius + sin(angle) * radius)
                     .allowsHitTesting(false)
             }
@@ -57,7 +56,7 @@ struct RadialProgressView: View {
                     ], center: .center, startRadius: radius * 204 / 274, endRadius: radius * 310 / 274))
                     .frame(width: radius * 2 * 310 / 274, height: radius * 2 * 310 / 274)
                     .opacity(scrub == nil ? 0 : 1)
-                    .animation(.easeOut(duration: reduceMotion ? 0.12 : 0.2), value: scrub != nil)
+                    .animation(.easeOut(duration: 0.2), value: scrub != nil)
                     .allowsHitTesting(false)
             }
             .contentShape(RingHitShape(), eoFill: true)

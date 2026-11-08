@@ -3,10 +3,10 @@ import SwiftUI
 struct PlayerSurface<Content: View>: View {
     var cornerRadius: CGFloat = 28
     var artwork: Image? = nil
+    var surfaceOpacity: Double = 1
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var displayedArtwork: ArtworkLayer?
     @ViewBuilder let content: () -> Content
 
@@ -20,31 +20,34 @@ struct PlayerSurface<Content: View>: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background {
                 let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                if reduceTransparency || contrast == .increased {
-                    shape.fill(Color(nsColor: .windowBackgroundColor))
-                        .overlay(shape.strokeBorder(.primary.opacity(0.4), lineWidth: 1))
-                } else {
-                    Color.clear.glassEffect(.regular, in: shape)
-                        .background {
-                            GeometryReader { geometry in
-                                ZStack {
-                                    if let displayedArtwork {
-                                        displayedArtwork.image.resizable().scaledToFill()
-                                            .frame(width: geometry.size.width, height: geometry.size.height)
-                                            .overlay((colorScheme == .dark ? Color.black : .white).opacity(0.25))
-                                            .id(displayedArtwork.id)
-                                            .transition(.opacity)
+                Group {
+                    if reduceTransparency || contrast == .increased {
+                        shape.fill(Color(nsColor: .windowBackgroundColor))
+                            .overlay(shape.strokeBorder(.primary.opacity(0.4), lineWidth: 1))
+                    } else {
+                        Color.clear.glassEffect(.regular, in: shape)
+                            .background {
+                                GeometryReader { geometry in
+                                    ZStack {
+                                        if let displayedArtwork {
+                                            displayedArtwork.image.resizable().scaledToFill()
+                                                .frame(width: geometry.size.width, height: geometry.size.height)
+                                                .overlay((colorScheme == .dark ? Color.black : .white).opacity(0.25))
+                                                .id(displayedArtwork.id)
+                                                .transition(.opacity)
+                                        }
                                     }
+                                    .blur(radius: 40)
+                                    .opacity(0.45)
+                                    .animation(.easeInOut(duration: 0.7), value: displayedArtwork?.id)
                                 }
-                                .blur(radius: 40)
-                                .opacity(0.45)
-                                .animation(.easeInOut(duration: reduceMotion ? 0.16 : 0.7), value: displayedArtwork?.id)
+                                .clipShape(shape)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
                             }
-                            .clipShape(shape)
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
-                        }
+                    }
                 }
+                .opacity(surfaceOpacity)
             }
             .onChange(of: artwork, initial: true) { _, image in
                 displayedArtwork = image.map { ArtworkLayer(image: $0) }

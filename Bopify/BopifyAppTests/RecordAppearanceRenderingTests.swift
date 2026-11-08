@@ -114,7 +114,9 @@ struct RecordAppearanceRenderingTests {
             let node = object as AnyObject
             guard visited.insert(ObjectIdentifier(node)).inserted else { return nil }
             if node.accessibilityIdentifier?() == id { return node }
-            for child in node.accessibilityChildren?() ?? [] {
+            // Scroll areas expose their document's semantic nodes through AXContents.
+            let children = (node.accessibilityChildren?() ?? []) + (node.accessibilityContents?() ?? [])
+            for child in children {
                 if let found = search(child) { return found }
             }
             if let view = object as? NSView {

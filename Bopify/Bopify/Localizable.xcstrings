@@ -1,6 +1,906 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "soloist.connectionUnavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection unavailable"
+          }
+        }
+      }
+    },
+    "soloist.discoveryRecovering": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restoring the connection…"
+          }
+        }
+      }
+    },
+    "onboarding.connectingTitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connecting"
+          }
+        }
+      }
+    },
+    "onboarding.connectingDescription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bopify will be ready in a moment."
+          }
+        }
+      }
+    },
+    "onboarding.finishingConnection": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finishing the connection"
+          }
+        }
+      }
+    },
+    "onboarding.permissionTitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow a local connection"
+          }
+        }
+      }
+    },
+    "onboarding.permissionDescription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enable Local Network access for Bopify."
+          }
+        }
+      }
+    },
+    "onboarding.waitingForSpotify": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for Spotify"
+          }
+        }
+      }
+    },
+    "onboarding.continuing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuing"
+          }
+        }
+      }
+    },
+    "librarySetup.connectedDescription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your music is ready to browse."
+          }
+        }
+      }
+    },
+    "librarySetup.getClientID": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get a Client ID"
+          }
+        }
+      }
+    },
+    "librarySetup.backToLibrary": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back to library"
+          }
+        }
+      }
+    },
+    "librarySetup.consentHint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spotify will ask you to approve access."
+          }
+        }
+      }
+    },
+    "onboarding.step.account": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spotify account"
+          }
+        }
+      }
+    },
+    "onboarding.step.library": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Library"
+          }
+        }
+      }
+    },
+    "onboarding.step.playback": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listening"
+          }
+        }
+      }
+    },
+    "onboarding.step %lld %lld %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Step %1$lld of %2$lld · %3$@"
+          }
+        }
+      }
+    },
+    "librarySetup.guide.create": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create your Spotify app"
+          }
+        }
+      }
+    },
+    "librarySetup.guide.createDetail": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create an app with Web API access."
+          }
+        }
+      }
+    },
+    "librarySetup.guide.redirect": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add the redirect address"
+          }
+        }
+      }
+    },
+    "librarySetup.guide.redirectDetail": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add this redirect address:"
+          }
+        }
+      }
+    },
+    "librarySetup.guide.connect": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect your app to Bopify"
+          }
+        }
+      }
+    },
+    "librarySetup.guide.connectDetail": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy the Client ID. Add your Spotify account under Users and Access if requested."
+          }
+        }
+      }
+    },
+    "librarySetup.clientIDPlaceholder": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paste your Spotify app’s Client ID"
+          }
+        }
+      }
+    },
+    "soloist.keyPlaceholder": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paste your Soloist key"
+          }
+        }
+      }
+    },
+    "soloist.savedKeyPlaceholder": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved key ready to use"
+          }
+        }
+      }
+    },
+    "soloist.savedKeyHint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leave this empty to use the saved key, or paste a replacement."
+          }
+        }
+      }
+    },
+    "player.remote.title %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playing on %@"
+          }
+        }
+      }
+    },
+    "player.empty.subtitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose from your library"
+          }
+        }
+      }
+    },
+    "player.empty.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ready to play"
+          }
+        }
+      }
+    },
+    "soloist.error.discovery": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for your network and Local Network access. Setup resumes automatically."
+          }
+        }
+      }
+    },
+    "onboarding.attentionTitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback needs attention"
+          }
+        }
+      }
+    },
+    "onboarding.attentionDescription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry playback setup to continue listening."
+          }
+        }
+      }
+    },
+    "onboarding.pairingTitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect in Spotify"
+          }
+        }
+      }
+    },
+    "onboarding.pairingDescription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Play a song in Spotify, then choose this device."
+          }
+        }
+      }
+    },
+    "onboarding.preparingTitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Getting ready"
+          }
+        }
+      }
+    },
+    "onboarding.preparingDescription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ""
+          }
+        }
+      }
+    },
+    "onboarding.readyTitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ready to play"
+          }
+        }
+      }
+    },
+    "onboarding.readyDescription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setup is complete."
+          }
+        }
+      }
+    },
+    "soloist.discoveryDenied": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setup continues when you return."
+          }
+        }
+      }
+    },
+    "soloist.discoveryUnavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for your network…"
+          }
+        }
+      }
+    },
+    "soloist.localNetworkSettings": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Settings"
+          }
+        }
+      }
+    },
+    "soloist.error.endpoint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soloist started but its local connection didn’t become ready. Retry setup."
+          }
+        }
+      }
+    },
+    "soloist.error.launch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS couldn’t launch Soloist. Retry to check the installation."
+          }
+        }
+      }
+    },
+    "soloist.error.storage": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bopify couldn’t access its playback files. Check folder permissions, then retry."
+          }
+        }
+      }
+    },
+    "soloist.error.processInUse": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Another playback session is still running. Close the other copy of Bopify, then retry."
+          }
+        }
+      }
+    },
+    "onboarding.playback": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback setup"
+          }
+        }
+      }
+    },
+    "onboarding.playbackTitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start listening"
+          }
+        }
+      }
+    },
+    "onboarding.playbackDescription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add your personal Soloist key."
+          }
+        }
+      }
+    },
+    "onboarding.startListening": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue"
+          }
+        }
+      }
+    },
+    "onboarding.openSpotify": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Spotify"
+          }
+        }
+      }
+    },
+    "librarySetup.registrationIntro": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browse your saved music in Bopify."
+          }
+        }
+      }
+    },
+    "librarySetup.registrationInstructions": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create an app with Web API access, then add this redirect URI in its settings:"
+          }
+        }
+      }
+    },
+    "librarySetup.connected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Library connected"
+          }
+        }
+      }
+    },
+    "librarySetup.editRegistration": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit Spotify app"
+          }
+        }
+      }
+    },
+    "librarySetup.saveAndContinue": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect library"
+          }
+        }
+      }
+    },
+    "soloist.preparing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparing Soloist"
+          }
+        }
+      }
+    },
+    "desktopMigration.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finish updating Bopify"
+          }
+        }
+      }
+    },
+    "desktopMigration.message": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bopify could not safely transfer its previous saved settings. Your saved data has been kept. Close any other copy of Bopify and allow access if macOS asks, then retry."
+          }
+        }
+      }
+    },
+    "desktopMigration.retry": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry"
+          }
+        }
+      }
+    },
+    "desktopMigration.quit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit"
+          }
+        }
+      }
+    },
+    "soloist.adopting": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starting playback…"
+          }
+        }
+      }
+    },
+    "soloist.limitedServices": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback is ready; some Spotify features could not connect yet. Bopify retries them automatically."
+          }
+        }
+      }
+    },
+    "soloist.retryDataServices": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect Spotify features"
+          }
+        }
+      }
+    },
+    "soloist.getKey": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get your key from Spotify"
+          }
+        }
+      }
+    },
+    "soloist.key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soloist key"
+          }
+        }
+      }
+    },
+    "soloist.replaceKey": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New key (leave empty to use the saved key)"
+          }
+        }
+      }
+    },
+    "soloist.keyPrivacy": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stored securely in Keychain."
+          }
+        }
+      }
+    },
+    "soloist.retry": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue"
+          }
+        }
+      }
+    },
+    "soloist.playHere": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Play here"
+          }
+        }
+      }
+    },
+    "soloist.authorizing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Approve playback access in your browser…"
+          }
+        }
+      }
+    },
+    "soloist.installing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparing playback"
+          }
+        }
+      }
+    },
+    "soloist.checkingAccount": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking your Spotify account…"
+          }
+        }
+      }
+    },
+    "soloist.pairing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Spotify on the same network and select this device:"
+          }
+        }
+      }
+    },
+    "soloist.pairingHelp": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for Spotify…"
+          }
+        }
+      }
+    },
+    "soloist.verifying": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verifying your Spotify device…"
+          }
+        }
+      }
+    },
+    "soloist.verifyHelp": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep a song playing on the Bopify device. If it is already paired, choose Play here."
+          }
+        }
+      }
+    },
+    "soloist.ready": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ready to play"
+          }
+        }
+      }
+    },
+    "soloist.reconnecting": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconnecting to Soloist. Its audio may still be playing…"
+          }
+        }
+      }
+    },
+    "soloist.updateReady": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An update is ready and will be applied after Soloist stops."
+          }
+        }
+      }
+    },
+    "soloist.error.invalidKey": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check your personal Soloist key from Spotify and try again."
+          }
+        }
+      }
+    },
+    "soloist.error.credentials": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bopify could not access your saved Soloist key. Retry or enter the key again."
+          }
+        }
+      }
+    },
+    "soloist.error.authorization": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback access needs approval. Retry Soloist and approve the requested permissions."
+          }
+        }
+      }
+    },
+    "soloist.error.accountMismatch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Spotify sign-ins belong to different accounts. Reconnect them using the same account before enabling Soloist."
+          }
+        }
+      }
+    },
+    "soloist.error.missingAccountID": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spotify did not provide the account identifier needed to verify this setup. Reconnect Spotify and retry."
+          }
+        }
+      }
+    },
+    "soloist.error.pairing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spotify has not connected to this device. Open the Spotify desktop app, select Bopify in the device picker, and retry setup."
+          }
+        }
+      }
+    },
+    "soloist.error.installation": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soloist could not be downloaded or verified. Check your connection and retry."
+          }
+        }
+      }
+    },
+    "soloist.error.startup": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soloist could not finish starting. Retry playback setup."
+          }
+        }
+      }
+    },
+    "soloist.error.rateLimited": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spotify asked Bopify to wait. Retry setup later."
+          }
+        }
+      }
+    },
+    "queue.soloistSelection": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use next or previous to move through the queue."
+          }
+        }
+      }
+    },
     "appearance.title" : {
       "localizations": {
         "en": {
@@ -546,6 +1446,16 @@
         }
       }
     },
+    "explore.fromLibrary" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From your library"
+          }
+        }
+      }
+    },
     "explore.loading" : {
       "localizations" : {
         "en" : {
@@ -722,16 +1632,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Not saved to Spotify"
-          }
-        }
-      }
-    },
-    "library.cancelAuthorization" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cancel library sign-in"
           }
         }
       }
@@ -951,7 +1851,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Copy"
+            "value" : "Copy address"
           }
         }
       }
@@ -972,16 +1872,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Connect library"
-          }
-        }
-      }
-    },
-    "librarySetup.intro" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "To finish setup, create your own free Spotify app and approve library access. This connects your saved music, playlists, followed artists and listening history, and lets you save or remove favorites. All requested access is required to use Bopify."
           }
         }
       }
@@ -1061,7 +1951,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Spotify asks for this separately. Bopify uses it for:"
+            "value" : "Browse your saved music in Bopify."
           }
         }
       }
@@ -1076,36 +1966,6 @@
         }
       }
     },
-    "librarySetup.save" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Save and authorize"
-          }
-        }
-      }
-    },
-    "librarySetup.step1" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "1. Open the Spotify Developer Dashboard and click Create app. Your account needs Premium."
-          }
-        }
-      }
-    },
-    "librarySetup.step2" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "2. Add this Redirect URI and tick Web API:"
-          }
-        }
-      }
-    },
     "librarySetup.step3" : {
       "localizations" : {
         "en" : {
@@ -1116,42 +1976,12 @@
         }
       }
     },
-    "librarySetup.step4" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "4. Paste the app's Client ID below — not the Client secret."
-          }
-        }
-      }
-    },
-    "librarySetup.title" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Library Access"
-          }
-        }
-      }
-    },
     "menu.artworkBackground" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Artwork Background"
-          }
-        }
-      }
-    },
-    "menu.libraryAccess" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Library Access…"
           }
         }
       }
@@ -1239,56 +2069,6 @@
         }
       }
     },
-    "player.idle.contextURI.label" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Spotify URI"
-          }
-        }
-      }
-    },
-    "player.idle.contextURI.load" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Play"
-          }
-        }
-      }
-    },
-    "player.idle.contextURI.placeholder" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "spotify:playlist:…"
-          }
-        }
-      }
-    },
-    "player.idle.subtitle" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose Bopify in Spotify’s device menu, or paste a Spotify URI below."
-          }
-        }
-      }
-    },
-    "player.idle.title" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nothing playing"
-          }
-        }
-      }
-    },
     "player.inactiveDevice.title" : {
       "localizations" : {
         "en" : {
@@ -1355,16 +2135,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Paused on another device"
-          }
-        }
-      }
-    },
-    "player.remote.title %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Playing on %@"
           }
         }
       }
@@ -1890,7 +2660,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sign in with Spotify"
+            "value" : "Continue with Spotify"
           }
         }
       }
@@ -1943,7 +2713,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Requires Spotify Premium"
+            "value" : "Spotify Premium required"
           }
         }
       }
@@ -1993,7 +2763,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Play, browse your library and follow lyrics without switching apps."
+            "value" : "Connect your Spotify account."
           }
         }
       }
@@ -2003,7 +2773,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Spotify, in your menu bar"
+            "value" : "Welcome to Bopify"
           }
         }
       }

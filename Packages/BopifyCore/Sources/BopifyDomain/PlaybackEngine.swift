@@ -2,17 +2,21 @@ public struct PlayRequest: Hashable, Sendable {
     public let contextURI: SpotifyURI
     public let startTrackURI: SpotifyURI?
     public let startPositionMs: Int64
+    /// Recommended continuation for a track selection.
+    public let followingTrackURIs: [SpotifyURI]
 
-    public init(contextURI: SpotifyURI, startTrackURI: SpotifyURI? = nil, startPositionMs: Int64 = 0) {
+    public init(contextURI: SpotifyURI, startTrackURI: SpotifyURI? = nil, startPositionMs: Int64 = 0,
+                followingTrackURIs: [SpotifyURI] = []) {
         self.contextURI = contextURI
         self.startTrackURI = startTrackURI
         self.startPositionMs = startPositionMs
+        self.followingTrackURIs = followingTrackURIs
     }
 }
 
-/// The only seam between the app and librespot. The engine emits events
-/// and never exposes state: as a Connect device, another client can pause
-/// or skip us, so state is observed rather than told.
+/// The seam between the app and its playback engine. The engine emits events
+/// and never exposes state: another Spotify client can pause or skip us,
+/// so state is observed rather than told.
 public protocol PlaybackEngine: Sendable {
     var events: AsyncStream<PlaybackEvent> { get }
 

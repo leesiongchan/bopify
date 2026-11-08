@@ -5,21 +5,47 @@ import BopifyPlayback
 struct StartupView<Content: View>: View {
     let step: StartupStep
     var isVisible = true
+    var onRecordFrameChanged: ((CGRect) -> Void)?
+    var recordScale: CGFloat?
+    var completionID: UUID? = nil
+    var onCompletionSettled: ((UUID) -> Void)?
+    var onRecordSideChanged: ((RecordSide) -> Void)?
+    var pocketOpacity: Double = 1
+    var recordOpacity: Double = 1
     @ViewBuilder let content: () -> Content
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 18) {
-            SignInRecordView(step: step, isVisible: isVisible)
-            // Stacked, so outgoing and incoming copy cross-fade in place instead of pushing each other.
-            ZStack {
-                content()
-                    .id(step)
-                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 6)))
+        GeometryReader { geometry in
+            let preferredScale: CGFloat = step.isCompact ? 0.55 : 0.88
+            let scale = min(preferredScale, recordScale ?? max(0.25, (geometry.size.height - 312 - 18) / 324))
+            VStack(spacing: 18) {
+                SignInRecordView(step: step, isVisible: isVisible,
+                                 onRecordFrameChanged: onRecordFrameChanged, scale: scale,
+                                 completionID: completionID, onCompletionSettled: onCompletionSettled,
+                                 onRecordSideChanged: onRecordSideChanged, pocketOpacity: pocketOpacity,
+                                 recordOpacity: recordOpacity)
+                    .overlay(alignment: .bottomTrailing) {
+                        if step == .completion {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 24, weight: .medium))
+                                .foregroundStyle(.green)
+                                .symbolRenderingMode(.hierarchical)
+                                .accessibilityHidden(true)
+                                .opacity(pocketOpacity)
+                                .transition(.opacity)
+                        }
+                    }
+                // Stacked, so outgoing and incoming copy cross-fade in place instead of pushing each other.
+                ZStack {
+                    content()
+                        .id(step.contentIdentity)
+                        .transition(.opacity.combined(with: .offset(y: 6)))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
+            .frame(maxHeight: .infinity)
+            .animation(.easeInOut(duration: 0.3), value: step)
         }
-        .frame(maxHeight: .infinity)
-        .animation(.easeInOut(duration: reduceMotion ? 0.16 : 0.3), value: step)
     }
 }
 
@@ -31,20 +57,29 @@ extension AppEnvironment {
     }
 }
 
-struct StartupStepPips: View {
+struct StartupStepIndicator: View {
     let current: Int
     let total: Int
+
+    private var name: String {
+        switch current {
+        case 1: "onboarding.step.account"
+        case 2: "onboarding.step.library"
+        default: "onboarding.step.playback"
+        }
+    }
 
     var body: some View {
         HStack(spacing: 5) {
             ForEach(1...total, id: \.self) { step in
-                Capsule().fill(.primary.opacity(step <= current ? 0.9 : 0.25))
+                Capsule().fill(.primary.opacity(step <= current ? 0.9 : 0.3))
                     .frame(width: 14, height: 4)
             }
         }
-        .animation(.easeInOut(duration: 0.5), value: current)
-        .accessibilityElement()
-        .accessibilityLabel(Text("onboarding.progress \(current) \(total)"))
+        .accessibilityRepresentation {
+            Text("onboarding.step \(current) \(total) \(SoloistResources.string(name))", bundle: SoloistResources.bundle)
+                .accessibilityIdentifier("onboarding.step")
+        }
     }
 }
 
@@ -54,34 +89,40 @@ struct StartupHeading: View {
     var isCompact = false
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 8) {
             title.font(.system(size: isCompact ? 21 : 24, weight: .semibold))
+                .startupPrimary()
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("onboarding.title")
             if let message {
                 message
-                    .font(.callout)
-                    .foregroundStyle(.primary.opacity(0.7))
+                    .font(.body)
+                    .startupSupporting()
+                    .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .multilineTextAlignment(.center)
-        .frame(maxWidth: 300)
+        .frame(maxWidth: 340)
     }
 }
 
 struct StartupButton: View {
     let key: LocalizedStringKey
     var isSecondary = false
+    var identifier = ""
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Text(key)
-                .font(.system(size: isSecondary ? 12 : 13, weight: isSecondary ? .medium : .semibold))
+            Text(key, bundle: SoloistResources.bundle)
+                .font(.body.weight(isSecondary ? .medium : .semibold))
                 .padding(.horizontal, isSecondary ? 16 : 24)
-                .frame(height: isSecondary ? 30 : 44)
+                .frame(minHeight: isSecondary ? 32 : 44)
         }
         .buttonStyle(.plain)
-        .playerGlass()
+        .accessibilityIdentifier(identifier)
+        .startupActionGlass()
     }
 }
 

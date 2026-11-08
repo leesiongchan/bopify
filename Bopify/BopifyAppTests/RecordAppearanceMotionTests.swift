@@ -133,15 +133,6 @@ struct RecordAppearanceMotionTests {
         m.setPaused(false, at: time(3))
         #expect(m.needsFrames)
     }
-    @Test(arguments: [0.1, 0.7, 1.34, 1.5, 1.75])
-    func reducedMotionDuringEveryPhaseSettlesLatest(_ seconds: Double) {
-        var m = playing()
-        m.select(.material(.glass), at: start)
-        m.select(.material(.nacre), at: time(seconds))
-        m.setReducedMotion(true, at: time(seconds))
-        settled(m, .material(.nacre))
-        #expect(!m.needsFrames)
-    }
     @Test func hiddenDuringFlightSettlesWithoutFrames() {
         var m = playing()
         m.select(.pattern(.bloom), at: start)

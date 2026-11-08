@@ -3,7 +3,7 @@ import os
 import BopifyDomain
 
 public enum CredentialNamespace: String, Codable, Sendable, CaseIterable {
-    case playback, library
+    case playback, library, soloist
 }
 
 /// Non-secret intent survives process restarts even when Keychain deletion fails.

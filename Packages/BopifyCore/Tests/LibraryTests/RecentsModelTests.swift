@@ -11,14 +11,14 @@ struct RecentsModelTests {
         RecentPlay(track: testTrack(id), contextURI: context)
     }
 
-    @Test func collapsesRepeatsToTheNewestPlayAndItsContext() async {
+    @Test func collapsesRepeatsAndPlaysTheExactSelectedTrack() async {
         let history = FakeHistory()
         await history.setPlays(.success([play("a", album), play("b"), play("a", playlist), play("c")]))
         let model = RecentsModel(service: history)
         await model.reveal(at: Date())
         #expect(model.tracks.map(\.uri.rawValue) == ["spotify:track:a", "spotify:track:b", "spotify:track:c"])
         #expect(model.selectedURI == testTrack("a").uri)
-        #expect(model.playRequest(for: testTrack("a")) == PlayRequest(contextURI: album, startTrackURI: testTrack("a").uri))
+        #expect(model.playRequest(for: testTrack("a")) == PlayRequest(contextURI: testTrack("a").uri))
         #expect(model.playRequest(for: testTrack("b")) == PlayRequest(contextURI: testTrack("b").uri))
     }
 

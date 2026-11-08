@@ -54,7 +54,7 @@ struct PlayerSurfaceTests {
     }
 
     private var blendSampleDelay: Duration {
-        .milliseconds(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 60 : 250)
+        .milliseconds(250)
     }
 
     private func window<Content: View>(_ host: NSHostingView<Content>) -> NSWindow {

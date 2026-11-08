@@ -13,6 +13,10 @@ struct QueueView: View {
         ScrollView {
             LazyVStack(spacing: 1) {
                 if let queue = state.queue {
+                    if !state.supportsQueueSelection {
+                        Text("queue.soloistSelection").font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true).padding(6)
+                    }
                     if let current = queue.current { row(for: current, isCurrent: true) }
                     ForEach(queue.next) { entry in row(for: entry, isCurrent: false) }
                     if queue.next.isEmpty {

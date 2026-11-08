@@ -7,6 +7,11 @@ public enum PlaybackEvent: Hashable, Sendable {
     case repeatChanged(RepeatMode)
     case commandRejected(String)
     case trackChanged(Track)
+    case availableActions(canSeek: Bool, canNext: Bool, canPrevious: Bool)
+    case availablePlaybackOptions(canShuffle: Bool, canRepeat: Bool)
+    case queueSelectionSupported(Bool)
+    case playbackIdle
+    case playbackRate(Double)
     case playing(positionMs: Int64)
     case paused(positionMs: Int64)
     case seeked(positionMs: Int64)

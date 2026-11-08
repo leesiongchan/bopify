@@ -253,7 +253,8 @@ struct PlayerModelTests {
         let model = PlayerModel(engine: engine)
         model.start()
         defer { model.stop() }
-        await settle(model, engine, [.trackChanged(makeTrack()), .playing(positionMs: 1000)])
+        await settle(model, engine, [.trackChanged(makeTrack()), .playing(positionMs: 1000),
+                                    .availablePlaybackOptions(canShuffle: true, canRepeat: true)])
         model.next()
         model.previous()
         model.next()
@@ -263,6 +264,23 @@ struct PlayerModelTests {
         #expect(engine.recordedCommands == ["next", "previous", "next", "setShuffle:true", "setRepeat:track"])
         #expect(!model.state.shuffleEnabled)
         #expect(model.state.repeatMode == .off)
+    }
+
+    @Test func unavailablePlaybackOptionsNeverReachTheEngine() async {
+        let engine = StubPlaybackEngine()
+        let model = PlayerModel(engine: engine)
+        model.start()
+        defer { model.stop() }
+        await settle(model, engine, [.trackChanged(makeTrack()), .playing(positionMs: 1000)])
+        model.setShuffle(true)
+        model.setRepeat(.track)
+        // A following allowed command provides a deterministic queue-drain barrier.
+        model.next()
+        await waitUntil { engine.recordedCommands.last == "next" }
+        #expect(engine.recordedCommands == ["next"])
+        await settle(model, engine, [.availablePlaybackOptions(canShuffle: true, canRepeat: true),
+                                    .activeDeviceChanged(isActive: false)])
+        #expect(!model.state.canShuffle && !model.state.canRepeat)
     }
     @Test func inactiveAndObsoleteTargetsNeverReachTheEngine() async {
         let engine = StubPlaybackEngine()

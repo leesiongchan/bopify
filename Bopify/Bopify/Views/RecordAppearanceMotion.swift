@@ -54,7 +54,6 @@ struct RecordAppearanceMotion {
     private var material: Deck
     private var pattern: Deck
     private var visible = false
-    private var reduced = false
     private var paused = false
 
     init(material: RecordDesign, pattern: VinylDesign, at: Instant) {
@@ -63,7 +62,7 @@ struct RecordAppearanceMotion {
         self.pattern = Deck(mounted: .pattern(pattern), desired: .pattern(pattern))
     }
     var needsFrames: Bool {
-        visible && !reduced && (!paused || material.phase != .play || pattern.phase != .play)
+        visible && (!paused || material.phase != .play || pattern.phase != .play)
     }
     var snapshot: Snapshot {
         Snapshot(material: deckSnapshot(material), pattern: deckSnapshot(pattern),
@@ -77,7 +76,7 @@ struct RecordAppearanceMotion {
     private func request(_ choice: RecordAppearanceChoice, deck: inout Deck) {
         guard deck.desired != choice else { return }
         deck.desired = choice
-        guard visible && !reduced else { settleDeck(&deck, choice: choice); return }
+        guard visible else { settleDeck(&deck, choice: choice); return }
         if deck.phase == .play { begin(&deck) }
         else if deck.phase == .prepare, deck.incoming != choice {
             let state = deckSnapshot(deck)
@@ -99,11 +98,6 @@ struct RecordAppearanceMotion {
     mutating func setPaused(_ paused: Bool, at: Instant) {
         advance(to: at)
         self.paused = paused
-    }
-    mutating func setReducedMotion(_ reduced: Bool, at: Instant) {
-        advance(to: at)
-        self.reduced = reduced
-        if reduced { settleLatest() }
     }
     mutating func setVisible(_ visible: Bool, at: Instant) {
         advance(to: at)
@@ -150,7 +144,7 @@ struct RecordAppearanceMotion {
         var cursor = time
         while cursor < target {
             let end = min(target, deck.began + duration(deck.phase))
-            if visible && !reduced && !paused {
+            if visible && !paused {
                 // The smootherstep antiderivative integrates deceleration without frame-rate drift.
                 if deck.phase == .play {
                     deck.angles[deck.mounted, default: 0] += 45 * (end - cursor)
@@ -231,7 +225,7 @@ struct RecordAppearanceMotion {
             lift = deck.returnNeedle + (1 - deck.returnNeedle) * ease(elapsed / Timing.needleLift)
         }
         var speed = 0.0
-        if visible && !reduced && !paused {
+        if visible && !paused {
             if deck.phase == .play { speed = 45 }
             if deck.phase == .prepare { speed = deck.prepareSpeed * (1 - ease(elapsed / Timing.deceleration)) }
             if deck.phase == .returning { speed = deck.returnSpeed * (1 - progress) }

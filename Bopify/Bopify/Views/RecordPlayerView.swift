@@ -7,9 +7,9 @@ import BopifyPlayback
 enum RecordMotorRequest: String {
     case drive, brake, snap
 
-    static func resolve(phase: PlaybackPhase, ready: Bool, active: Bool, visible: Bool, reduced: Bool, pressed: Bool,
+    static func resolve(phase: PlaybackPhase, ready: Bool, active: Bool, visible: Bool, pressed: Bool,
                         loadingFromPlaying: Bool = false) -> Self {
-        guard ready, visible, !reduced, !pressed else { return .snap }
+        guard ready, visible, !pressed else { return .snap }
         switch phase {
         case .loading: return loadingFromPlaying ? .drive : .snap
         case .idle: return active ? .snap : .brake
@@ -32,6 +32,7 @@ struct RecordPlayerView: View {
     let artworkStore: ArtworkStore
     let presentation: PlayerPresentation
     let windowController: PlayerWindowController
+    var recordOpacity: Double = 1
     var lyricModel: LyricRibbonModel? = nil
     var onLyricSeek: ((Int64, LyricPlaybackSnapshot) -> Void)? = nil
     @State private var rotation = RecordRotation()
@@ -65,12 +66,11 @@ struct RecordPlayerView: View {
     @State private var outgoingRecord: OutgoingRecordAppearance?
     @AccessibilityFocusState private var accessibilityFocus: Bool
     @Environment(AppEnvironment.self) private var environment: AppEnvironment?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var canScrub: Bool { player.isEngineReady && player.state.canSeek && player.state.isActiveDevice && player.displayDurationMs > 0 }
     private var motorRequest: RecordMotorRequest {
         .resolve(phase: player.state.phase, ready: player.isEngineReady, active: player.state.isActiveDevice,
-                 visible: presentation.isVisible, reduced: reduceMotion, pressed: pressedAngle != nil,
+                 visible: presentation.isVisible, pressed: pressedAngle != nil,
                  loadingFromPlaying: loadingFromPlaying)
     }
     private var isMoving: Bool {
@@ -151,7 +151,7 @@ struct RecordPlayerView: View {
                 .offset(x: layout.sleeveFrame.minX, y: layout.sleeveFrame.minY)
                 .opacity(isEngaged || showsLyrics ? 1 : 0)
                 // Appears instantly hidden behind the record; on collapse it fades only once mostly folded back into it.
-                .animation(isEngaged || reduceMotion ? nil : .easeIn(duration: 0.12).delay(lyrics?.isVisible == true ? 0 : 0.3), value: isEngaged)
+                .animation(isEngaged ? nil : .easeIn(duration: 0.12).delay(lyrics?.isVisible == true ? 0 : 0.3), value: isEngaged)
                 .allowsHitTesting(isEngaged || showsLyrics)
             ScrollView(layout.controlsFrame.width < 192 ? [.horizontal, .vertical] : .vertical) {
                 // The scroll view swallows clicks on blank space, so the drag region must live inside it.
@@ -178,11 +178,11 @@ struct RecordPlayerView: View {
                     .clipped()
                     .offset(x: layout.lowerFrame.minX, y: top)
                     .opacity(presentation.mode == .expanded ? 1 : 0)
-                    .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: presentation.mode)
+                    .animation(.easeOut(duration: 0.16), value: presentation.mode)
                     .allowsHitTesting(presentation.mode == .expanded)
                     .accessibilityHidden(presentation.mode != .expanded)
-                    .transition(.opacity.combined(with: .offset(y: reduceMotion ? 0 : 18))
-                        .animation(reduceMotion ? nil : .easeOut(duration: 0.16)))
+                    .transition(.opacity.combined(with: .offset(y: 18))
+                        .animation(.easeOut(duration: 0.16)))
             }
             QueueView(player: player, artworkStore: artworkStore, onSelect: select)
                 .frame(width: layout.lowerFrame.width, height: layout.lowerFrame.height)
@@ -208,12 +208,12 @@ struct RecordPlayerView: View {
                         Rectangle().fill(.primary.opacity(0.14)).frame(height: 0.5)
                             .padding(.horizontal, LyricRibbonLayout.horizontalInset)
                             .opacity(isEngaged ? 1 : 0)
-                            .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isEngaged)
+                            .animation(.easeOut(duration: 0.16), value: isEngaged)
                             .allowsHitTesting(false)
                     }
                     .frame(width: layout.lyricsFrame.width, height: layout.lyricsFrame.height)
                     .offset(x: layout.lyricsFrame.minX, y: layout.lyricsFrame.minY)
-                    .transition(.opacity.animation(reduceMotion ? nil : .easeOut(duration: 0.18)))
+                    .transition(.opacity.animation(.easeOut(duration: 0.18)))
                     .onAppear { windowController.configureLyricsKeyboard(model: lyrics) }
             }
             if showsLyrics, !layout.lyricsFrame.isEmpty {
@@ -279,7 +279,6 @@ struct RecordPlayerView: View {
                                                    recordDesign: recordDesignSelection.appearance)
             displayedOccurrenceID = "missing"; artworkRotationOffset = 0
         }
-        .onChange(of: reduceMotion) { _, reduced in if reduced { finishCoverLoad() } }
         .onChange(of: player.commandFailureRevision) { _, _ in finishCoverLoad() }
         .onChange(of: player.state.phase) { _, phase in
             if phase != .loading { loadingFromPlaying = false }
@@ -352,7 +351,7 @@ struct RecordPlayerView: View {
                     recordDesign: outgoingRecord.pressing.recordDesign,
                     artworkRotationOffset: outgoingRecord.artworkRotationOffset,
                     rotationOverride: pressedAngle.map { $0 + (scrub?.angleDelta ?? 0) },
-                    isScrubbing: pressedAngle != nil, reduceMotionOverride: reduceMotion,
+                    isScrubbing: pressedAngle != nil,
                     labelRatio: outgoingRecord.labelRatio)
                     .position(layout.recordCenter)
                     .allowsHitTesting(false)
@@ -363,13 +362,15 @@ struct RecordPlayerView: View {
                     ?? rotation.angle(at: ProcessInfo.processInfo.systemUptime)
                 ZStack(alignment: .topLeading) {
                     recordFace(diameter: layout.recordDiameter, loadProgress: progress,
-                               angle: coverLaunch == nil ? nil : angle).position(layout.recordCenter)
+                               angle: coverLaunch == nil ? nil : angle)
+                        .scaleEffect(windowController.recordPresentationScale)
+                        .position(layout.recordCenter)
                     if showsCoverFunnel, let launch = coverLaunch {
                         RecordLoadTransition(launch: launch,
                             destination: CGRect(x: layout.recordCenter.x - layout.recordDiameter / 2,
                                                 y: layout.recordCenter.y - layout.recordDiameter / 2,
                                                 width: layout.recordDiameter, height: layout.recordDiameter),
-                            progress: progress, reduceMotion: reduceMotion,
+                            progress: progress,
                             rotationAngle: angle + coverRotationOffset)
                     }
                 }
@@ -377,6 +378,7 @@ struct RecordPlayerView: View {
             recordControls(diameter: layout.recordDiameter).position(layout.recordCenter)
         }
         .frame(width: layout.contentSize.width, height: layout.contentSize.height, alignment: .topLeading)
+        .opacity(recordOpacity)
     }
 
     private func loadPressing() async {
@@ -411,7 +413,7 @@ struct RecordPlayerView: View {
         coverEngineEpoch = player.engineEpoch
         player.load(request)
         guard player.isEngineReady, player.isRunning, presentation.isVisible, presentation.mode == .expanded,
-              !reduceMotion, launch.sourceFrame.width > 0, launch.artwork != nil else { finishCoverLoad(); return }
+              launch.sourceFrame.width > 0, launch.artwork != nil else { finishCoverLoad(); return }
         coverLaunch = launch
         designSelection.beginHandoff()
         recordDesignSelection.beginHandoff()
@@ -463,7 +465,7 @@ struct RecordPlayerView: View {
                         recordDesign: displayedPressing.recordDesign,
                         artworkRotationOffset: artworkRotationOffset,
                         rotationOverride: angle ?? pressedAngle.map { $0 + (scrub?.angleDelta ?? 0) }, isScrubbing: pressedAngle != nil,
-                        reduceMotionOverride: reduceMotion, loadProgress: loadProgress,
+                        loadProgress: loadProgress,
                         labelRatio: dockedCoverRatio,
                         isIncomingDuringLoad: coverLaunch != nil)
     }
@@ -523,7 +525,7 @@ struct RecordPlayerView: View {
             }
             .overlay {
                 if isEngaged {
-                    TimelineView(PlaybackClockSchedule(isRunning: player.isPositionAdvancing && presentation.isVisible, reduceMotion: reduceMotion)) { context in
+                    TimelineView(PlaybackClockSchedule(isRunning: player.isPositionAdvancing && presentation.isVisible)) { context in
                         RadialProgressView(positionMs: isScrubbing ? (scrub?.positionMs ?? 0) : player.displayPositionMs(at: context.date), durationMs: player.displayDurationMs,
                                            canSeek: player.isEngineReady && player.state.canSeek && player.state.isActiveDevice,
                                            onSeek: player.seek(to:), onInteractionChanged: { presentation.sendAttention(.interaction(.seek, $0)) },
@@ -590,18 +592,18 @@ struct RecordPlayerView: View {
                         .disabled(track?.uri != player.state.currentTrack?.uri)
                 }
             }
-            .modifier(UnfurlRow(index: 0, isEngaged: isEngaged, reduceMotion: reduceMotion, showsLyrics: lyrics?.isVisible == true))
+            .modifier(UnfurlRow(index: 0, isEngaged: isEngaged, showsLyrics: lyrics?.isVisible == true))
             TransportControls(player: player)
                 .frame(maxWidth: .infinity)
-                .modifier(UnfurlRow(index: 1, isEngaged: isEngaged, reduceMotion: reduceMotion, showsLyrics: lyrics?.isVisible == true))
-            TimelineView(PlaybackClockSchedule(isRunning: player.isPositionAdvancing && presentation.isVisible, reduceMotion: true)) { context in
+                .modifier(UnfurlRow(index: 1, isEngaged: isEngaged, showsLyrics: lyrics?.isVisible == true))
+            TimelineView(PlaybackClockSchedule(isRunning: player.isPositionAdvancing && presentation.isVisible, interval: 1)) { context in
                 HStack {
                     Text(playbackTime(isScrubbing ? (scrub?.positionMs ?? 0) : player.displayPositionMs(at: context.date)))
                     Spacer()
                     Text(playbackTime(player.displayDurationMs))
                 }.font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
             }
-            .modifier(UnfurlRow(index: 2, isEngaged: isEngaged, reduceMotion: reduceMotion, showsLyrics: lyrics?.isVisible == true))
+            .modifier(UnfurlRow(index: 2, isEngaged: isEngaged, showsLyrics: lyrics?.isVisible == true))
             HStack(spacing: 4) {
                 if let environment {
                     Button {
@@ -632,7 +634,7 @@ struct RecordPlayerView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .modifier(UnfurlRow(index: 3, isEngaged: isEngaged, reduceMotion: reduceMotion, showsLyrics: lyrics?.isVisible == true))
+            .modifier(UnfurlRow(index: 3, isEngaged: isEngaged, showsLyrics: lyrics?.isVisible == true))
             // The status keeps its line while empty so the library tabs below don't jump each time a track loads.
             ZStack(alignment: .leading) {
                 Text(verbatim: " ").hidden()
@@ -640,7 +642,7 @@ struct RecordPlayerView: View {
             }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                .modifier(UnfurlRow(index: 4, isEngaged: isEngaged, reduceMotion: reduceMotion, showsLyrics: lyrics?.isVisible == true))
+                .modifier(UnfurlRow(index: 4, isEngaged: isEngaged, showsLyrics: lyrics?.isVisible == true))
         }
         .buttonStyle(.playerControl)
         .onDisappear { presentation.sendAttention(.interaction(.volume, false)) }
@@ -694,15 +696,26 @@ struct PlayerTrackMetadata: View {
     let player: PlayerModel
     let artworkStore: ArtworkStore
     let presentation: PlayerPresentation
+    private var isIdle: Bool { track == nil && player.state.phase == .idle && player.state.mirror == nil }
+    private var title: String {
+        if let track { return track.title }
+        if isIdle { return SoloistResources.string("player.empty.title") }
+        if player.state.phase == .loading { return SoloistResources.string("player.loading") }
+        return SoloistResources.string("player.unknownTrack")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(track?.title ?? String(localized: "player.unknownTrack"))
+            Text(title)
                 .font(.system(size: 17, weight: .medium)).lineLimit(1).help(track?.title ?? "")
                 .frame(height: 21, alignment: .leading)
+                .accessibilityIdentifier("player.trackTitle")
             Group {
                 if let track {
                     ArtistSongsButton(track: track, player: player, artworkStore: artworkStore, presentation: presentation)
+                } else if isIdle {
+                    Text(SoloistResources.string("player.empty.subtitle"))
+                        .font(.callout).foregroundStyle(.secondary).lineLimit(1)
                 } else {
                     Color.clear.accessibilityHidden(true)
                 }
@@ -716,15 +729,13 @@ struct PlayerTrackMetadata: View {
 private struct UnfurlRow: ViewModifier {
     let index: Int
     let isEngaged: Bool
-    let reduceMotion: Bool
     let showsLyrics: Bool
     func body(content: Content) -> some View {
-        let settled = isEngaged || reduceMotion
         content
             .opacity(isEngaged ? 1 : 0)
-            .blur(radius: settled ? 0 : 6)
-            .offset(x: settled ? 0 : -14, y: !settled && showsLyrics ? 18 : 0)
-            .animation(reduceMotion ? nil : isEngaged ? .spring(duration: showsLyrics ? 0.20 : 0.4, bounce: showsLyrics ? 0 : 0.1)
+            .blur(radius: isEngaged ? 0 : 6)
+            .offset(x: isEngaged ? 0 : -14, y: !isEngaged && showsLyrics ? 18 : 0)
+            .animation(isEngaged ? .spring(duration: showsLyrics ? 0.20 : 0.4, bounce: showsLyrics ? 0 : 0.1)
                 .delay(showsLyrics ? Double(index) * 0.02 : 0.12 + Double(index) * 0.04)
                                                       : .easeOut(duration: 0.12), value: isEngaged)
     }

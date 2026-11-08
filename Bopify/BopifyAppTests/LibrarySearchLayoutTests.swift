@@ -67,7 +67,7 @@ struct LibrarySearchLayoutTests {
         panel.isReleasedWhenClosed = false
         defer { panel.close() }
         controller.attach(to: panel)
-        controller.apply(mode: .expanded, reduceMotion: true,
+        controller.apply(mode: .expanded, animated: false,
                          visibleFrame: CGRect(x: 0, y: 0, width: 1000, height: 800))
         panel.makeKeyAndOrderFront(nil)
         try await waitUntil { coverInput(in: panel.contentView)?.input != nil && !environment.likedSongs.tracks.isEmpty }
@@ -116,7 +116,7 @@ struct LibrarySearchLayoutTests {
         panel.isReleasedWhenClosed = false
         defer { panel.close() }
         controller.attach(to: panel)
-        controller.apply(mode: .expanded, reduceMotion: true, visibleFrame: CGRect(x: 0, y: 0, width: width, height: 360))
+        controller.apply(mode: .expanded, animated: false, visibleFrame: CGRect(x: 0, y: 0, width: width, height: 360))
         panel.makeKeyAndOrderFront(nil)
         try await Task.sleep(for: .milliseconds(200))
         panel.contentView?.layoutSubtreeIfNeeded()

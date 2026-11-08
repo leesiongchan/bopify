@@ -43,19 +43,18 @@ final class RecordAppearancePickerModel {
         }
     }
 
-    func activateFocused(reduceMotion: Bool = false) {
+    func activateFocused() {
         switch focused {
         case .choice(let choice): select(choice)
         case .motion:
-            guard !reduceMotion else { return }
             isMotionPaused.toggle()
         }
     }
 
-    func moveTab(backward: Bool, reduceMotion: Bool = false) {
+    func moveTab(backward: Bool) {
         var order = RecordAppearanceFamily.allCases.flatMap { RecordAppearanceChoice.choices(in: $0) }
             .map(RecordAppearanceFocus.choice)
-        if !reduceMotion { order.append(.motion) }
+        order.append(.motion)
         guard let index = order.firstIndex(of: focused) else {
             focused = backward ? order[order.count - 1] : order[0]
             return

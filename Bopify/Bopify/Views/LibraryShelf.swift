@@ -27,7 +27,6 @@ struct LibraryShelf: View {
     let coverBleed: CGFloat
     let onPlay: (PlayRequest, CoverFlowLaunch) -> Void
     @AppStorage("library.tab") private var tab: LibraryTab = .liked
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 4) {
@@ -35,9 +34,9 @@ struct LibraryShelf: View {
                 .frame(maxWidth: .infinity)
                 .padding(.leading, tabsInset)
             shelf.padding(.horizontal, -coverBleed).clipped()
-                .transition(reduceMotion ? AnyTransition.opacity : AnyTransition.opacity.combined(with: .scale(scale: 0.94)))
+                .transition(AnyTransition.opacity.combined(with: .scale(scale: 0.94)))
         }
-        .animation(reduceMotion ? .easeInOut(duration: 0.2) : .snappy, value: tab)
+        .animation(.snappy, value: tab)
         .onChange(of: tab) { _, tab in
             BopifyLog.library.debug("library tab changed tab=\(tab.rawValue, privacy: .public)")
         }
@@ -131,9 +130,13 @@ private struct StationMenu: View {
                 .labelsHidden()
             } label: {
                 HStack(spacing: 3) {
-                    Text("explore.from")
-                    glyph(selected).font(.system(size: 9, weight: .semibold)).opacity(0.7)
-                    Text(selected.name).lineLimit(1)
+                    if model.isUsingLibrarySuggestions {
+                        Text("explore.fromLibrary")
+                    } else {
+                        Text("explore.from")
+                        glyph(selected).font(.system(size: 9, weight: .semibold)).opacity(0.7)
+                        Text(selected.name).lineLimit(1)
+                    }
                     Image(systemName: "chevron.down").font(.system(size: 6, weight: .bold)).opacity(0.6)
                 }
                 .font(.system(size: 10, weight: .medium))
@@ -147,7 +150,7 @@ private struct StationMenu: View {
             .menuIndicator(.hidden)
             .layoutPriority(1)
             .help(Text("explore.stations"))
-            .accessibilityLabel(Text("explore.station \(selected.name)"))
+            .accessibilityLabel(model.isUsingLibrarySuggestions ? Text("explore.fromLibrary") : Text("explore.station \(selected.name)"))
         }
     }
 

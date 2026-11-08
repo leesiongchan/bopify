@@ -9,7 +9,7 @@ extension PlaybackState {
         case .idle:
             switch InactiveStatus(self) {
             case let .playingOn(deviceName):
-                // The device list didn't have this device, so librespot supplied no name.
+                // The device list didn't have this device, so the playback session supplied no name.
                 deviceName.isEmpty ? Text("player.inactiveDevice.title") : Text("player.remote.title \(deviceName)")
             case let .pausedOn(deviceName):
                 deviceName.isEmpty ? Text("player.remote.pausedUnnamed") : Text("player.remote.paused \(deviceName)")

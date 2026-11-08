@@ -54,7 +54,7 @@ impl TryFrom<u8> for RepeatMode {
 pub struct Engine {
     runtime: Runtime,
     reporter: EngineReporter,
-    spirc: Spirc,
+    spirc: Option<Spirc>,
     sink: EventSink,
     session: Session,
 }
@@ -81,6 +81,30 @@ impl Engine {
                 log::error!("engine: runtime build failed kind={:?}", why.kind());
                 BopifyError::Unknown
             })?;
+
+        if options.services_only {
+            let session = runtime.block_on(async {
+                let session = Session::new(SessionConfig::default(), None);
+                with_connect_deadline(
+                    session.connect(Credentials::with_access_token(access_token), false),
+                )
+                .await?;
+                if let Err(error) = options.verify_services_identity(&session.username()) {
+                    session.shutdown();
+                    log::error!("engine: data services rejected mismatched authenticated identity");
+                    return Err(error);
+                }
+                Ok::<_, BopifyError>(session)
+            })?;
+            log::info!("engine: data services connected without audio or Connect registration");
+            return Ok(Self {
+                runtime,
+                reporter,
+                spirc: None,
+                sink,
+                session,
+            });
+        }
 
         let (spirc, session) = runtime.block_on(async {
             // SessionConfig::default() supplies librespot's own client id.
@@ -151,7 +175,7 @@ impl Engine {
         Ok(Self {
             runtime,
             reporter,
-            spirc,
+            spirc: Some(spirc),
             sink,
             session,
         })
@@ -164,33 +188,39 @@ impl Engine {
         });
     }
 
+    fn controller(&self) -> Result<&Spirc, BopifyError> {
+        self.spirc.as_ref().ok_or(BopifyError::InvalidArgument)
+    }
+
     pub fn play(&self) -> Result<(), BopifyError> {
-        self.spirc.play().map_err(command_failed)
+        self.controller()?.play().map_err(command_failed)
     }
     pub fn play_here(&self) -> Result<(), BopifyError> {
-        self.spirc.play_here().map_err(command_failed)
+        self.controller()?.play_here().map_err(command_failed)
     }
     pub fn pause(&self) -> Result<(), BopifyError> {
-        self.spirc.pause().map_err(command_failed)
+        self.controller()?.pause().map_err(command_failed)
     }
     pub fn next(&self) -> Result<(), BopifyError> {
-        self.spirc.next().map_err(command_failed)
+        self.controller()?.next().map_err(command_failed)
     }
     pub fn previous(&self) -> Result<(), BopifyError> {
-        self.spirc.prev().map_err(command_failed)
+        self.controller()?.prev().map_err(command_failed)
     }
     pub fn seek(&self, position_ms: u32) -> Result<(), BopifyError> {
-        self.spirc
+        self.controller()?
             .set_position_ms(position_ms)
             .map_err(command_failed)
     }
     pub fn set_volume(&self, volume: u16) -> Result<(), BopifyError> {
-        self.spirc.set_volume(volume).map_err(command_failed)
+        self.controller()?
+            .set_volume(volume)
+            .map_err(command_failed)
     }
 
     pub fn select_queue(&self, generation: u64, raw_next_index: u32) -> Result<(), BopifyError> {
         let reply = self
-            .spirc
+            .controller()?
             .select_queue_entry(QueueSelection {
                 generation,
                 raw_next_index,
@@ -216,14 +246,14 @@ impl Engine {
     }
 
     pub fn set_shuffle(&self, enabled: bool) -> Result<(), BopifyError> {
-        self.spirc.shuffle(enabled).map_err(command_failed)
+        self.controller()?.shuffle(enabled).map_err(command_failed)
     }
 
     pub fn set_repeat(&self, mode: RepeatMode) -> Result<(), BopifyError> {
-        self.spirc
+        self.controller()?
             .repeat(mode == RepeatMode::Context)
             .map_err(command_failed)?;
-        self.spirc
+        self.controller()?
             .repeat_track(mode == RepeatMode::Track)
             .map_err(command_failed)
     }
@@ -243,7 +273,7 @@ impl Engine {
                 ..Default::default()
             },
         );
-        self.spirc.load(request).map_err(command_failed)
+        self.controller()?.load(request).map_err(command_failed)
     }
 
     /// Queues a station lookup. The answer arrives on the sink as `Radio` or
@@ -429,12 +459,41 @@ fn supervise_audio_output(failed: Arc<AtomicBool>, reporter: EngineReporter) {
 impl Drop for Engine {
     fn drop(&mut self) {
         self.reporter.begin_teardown();
+        self.session.shutdown();
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn services_without_a_controller_reject_every_audio_command() {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let session = runtime.block_on(async { Session::new(SessionConfig::default(), None) });
+        let sink: EventSink = Arc::new(|_| panic!("a service-only audio command emitted an event"));
+        let engine = Engine {
+            runtime,
+            reporter: EngineReporter::new(sink.clone()),
+            spirc: None,
+            sink,
+            session,
+        };
+        for result in [
+            engine.play(),
+            engine.play_here(),
+            engine.pause(),
+            engine.next(),
+            engine.previous(),
+            engine.seek(0),
+            engine.set_volume(0),
+            engine.set_shuffle(true),
+            engine.set_repeat(RepeatMode::Track),
+            engine.select_queue(1, 0),
+            engine.load("spotify:track:6rqhFgbbKwnb9MLmUQDhG6", None, 0),
+        ] {
+            assert_eq!(result, Err(BopifyError::InvalidArgument));
+        }
+    }
     #[tokio::test(start_paused = true)]
     async fn login_deadline_expires_without_waiting_forever() {
         let result =

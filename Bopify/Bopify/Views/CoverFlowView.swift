@@ -51,7 +51,6 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
     let onPlay: (Source.Item, CoverFlowLaunch) -> Void
     /// Follows the artist line, or sits under an empty shelf's message, such as Explore's station menu.
     @ViewBuilder let accessory: () -> Accessory
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Position in covers, driven directly while dragging or scrolling and by the spring after release.
     @State private var spring = CoverFlowSpring(position: 0, velocity: 0, target: 0)
     @State private var isAnimating = false
@@ -78,7 +77,7 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
                         ForEach(visibleIndices(reach: reach), id: \.self) { index in
                             let track = model.items[index]
                             let distance = Double(index) - spring.position
-                            let placement = CoverFlowMotion.transform(distance: distance, reduceMotion: reduceMotion, reach: reach)
+                            let placement = CoverFlowMotion.transform(distance: distance, reach: reach)
                             Button { activate(index) } label: { cover(for: track) }
                                 .buttonStyle(.plain)
                                 .frame(width: 76, height: 76)
@@ -106,7 +105,7 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
                             move(to: (gestureOrigin ?? spring.position) - translation / CoverFlowMotion.spacing, at: time)
                         }, onRelease: release(at:), onSnap: { settle(on: Int(spring.position.rounded()), velocity: 0) },
                         onScroll: scroll, onFrame: { dt in
-                            spring.step(dt: dt, reduceMotion: reduceMotion)
+                            spring.step(dt: dt)
                             if spring.isSettled { isAnimating = false }
                         }, onNavigate: { navigate(by: $0) }, onPlay: { if let selectedItem { play(selectedItem) } })
                         .frame(width: min(geometry.size.width, Double(radius * 2) * CoverFlowMotion.spacing + 76))
@@ -171,7 +170,7 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
         let artwork = item.artwork.flatMap {
             artworkStore.image(for: $0.url, pixelSize: 160) ?? artworkStore.image(for: $0.url)
         }
-        if !reduceMotion, frame.width > 0, artwork != nil {
+        if frame.width > 0, artwork != nil {
             departingURI = item.uri
             departureID = UUID()
         }
@@ -190,7 +189,7 @@ struct CoverFlowView<Source: CoverFlowSource, Accessory: View>: View {
         guard !model.items.isEmpty else { return }
         let index = min(model.items.count - 1, max(0, index))
         spring.target = Double(index)
-        if let velocity { spring.velocity = reduceMotion ? 0 : velocity }
+        if let velocity { spring.velocity = velocity }
         isAnimating = !spring.isSettled
         if model.items[index].uri != model.selectedURI { model.select(model.items[index].uri) }
     }

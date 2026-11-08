@@ -124,55 +124,6 @@ struct RecordAppearancePickerModelTests {
         #expect(model.isMotionPaused)
         #expect(defaults.writes.isEmpty)
     }
-
-    @Test(arguments: [false, true])
-    func reducedMotionActivationPreservesPauseIntent(_ paused: Bool) {
-        let defaults = isolated()
-        let model = RecordAppearancePickerModel(defaults: defaults)
-        model.isMotionPaused = paused
-        model.focused = .motion
-        model.activateFocused(reduceMotion: true)
-        #expect(model.isMotionPaused == paused)
-        #expect(defaults.writes.isEmpty)
-        model.activateFocused(reduceMotion: false)
-        #expect(model.isMotionPaused != paused)
-    }
-
-    @Test func reducedMotionTabSkipsDisabledControlInBothDirections() {
-        let defaults = isolated()
-        let model = RecordAppearancePickerModel(defaults: defaults)
-        let choices = RecordAppearanceFamily.allCases.flatMap { RecordAppearanceChoice.choices(in: $0) }
-        for choice in choices.dropFirst() {
-            model.moveTab(backward: false, reduceMotion: true)
-            #expect(model.focused == .choice(choice))
-        }
-        model.moveTab(backward: false, reduceMotion: true)
-        #expect(model.focused == .choice(.material(.classic)))
-        model.moveTab(backward: true, reduceMotion: true)
-        #expect(model.focused == .choice(.pattern(.carnival)))
-        #expect(defaults.writes.isEmpty)
-    }
-
-    @Test func staleMotionFocusReturnsToEnabledChoices() {
-        let model = RecordAppearancePickerModel(defaults: isolated())
-        model.focused = .motion
-        model.moveTab(backward: false, reduceMotion: true)
-        #expect(model.focused == .choice(.material(.classic)))
-        model.focused = .motion
-        model.moveTab(backward: true, reduceMotion: true)
-        #expect(model.focused == .choice(.pattern(.carnival)))
-    }
-
-    @Test func reducedMotionStillAllowsRecordActivation() {
-        let defaults = isolated()
-        let model = RecordAppearancePickerModel(defaults: defaults)
-        model.focused = .choice(.material(.glass))
-        model.activateFocused(reduceMotion: true)
-        model.focused = .choice(.pattern(.bloom))
-        model.activateFocused(reduceMotion: true)
-        #expect(model.selectedMaterial == .glass && model.selectedPattern == .bloom)
-        #expect(defaults.writes == [RecordDesign.preferenceKey, VinylDesign.preferenceKey])
-    }
 }
 
 nonisolated private final class CountingAppearanceDefaults: UserDefaults, @unchecked Sendable {

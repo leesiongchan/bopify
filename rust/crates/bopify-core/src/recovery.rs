@@ -8,6 +8,9 @@ pub struct EngineCreateOptions {
     pub startup: StartupMode,
     pub snapshot: Option<RecoveryCheckpoint>,
     pub initial_volume: Option<f64>,
+    #[serde(default)]
+    pub services_only: bool,
+    pub expected_username: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -44,6 +47,14 @@ impl EngineCreateOptions {
         Ok(options)
     }
     fn validate(&self) -> Result<(), BopifyError> {
+        if let Some(username) = &self.expected_username
+            && (!self.services_only
+                || username.trim().is_empty()
+                || username.len() > 256
+                || username.chars().any(char::is_control))
+        {
+            return Err(BopifyError::InvalidArgument);
+        }
         if self
             .initial_volume
             .is_some_and(|volume| !volume.is_finite() || !(0.0..=1.0).contains(&volume))
@@ -78,6 +89,17 @@ impl EngineCreateOptions {
             {
                 return Err(BopifyError::InvalidArgument);
             }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn verify_services_identity(&self, username: &str) -> Result<(), BopifyError> {
+        if self
+            .expected_username
+            .as_deref()
+            .is_some_and(|expected| expected != username)
+        {
+            return Err(BopifyError::AuthInvalid);
         }
         Ok(())
     }
@@ -132,6 +154,63 @@ impl From<RecoveryIdentity> for librespot_connect::RecoveryIdentity {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn services_only_accepts_the_expected_authenticated_username() {
+        let options = EngineCreateOptions::parse(
+            r#"{"deviceId":"own","startup":"coldLaunch","servicesOnly":true,"expectedUsername":"listener"}"#,
+        );
+        assert!(options.is_ok());
+    }
+
+    #[test]
+    fn services_identity_must_match_exactly() {
+        let options = EngineCreateOptions::parse(
+            r#"{"deviceId":"own","startup":"coldLaunch","servicesOnly":true,"expectedUsername":"listener"}"#,
+        )
+        .unwrap();
+        assert_eq!(options.verify_services_identity("listener"), Ok(()));
+        for other in ["", "Listener", "other", "listener "] {
+            assert_eq!(
+                options.verify_services_identity(other),
+                Err(BopifyError::AuthInvalid)
+            );
+        }
+    }
+
+    #[test]
+    fn services_identity_rejects_invalid_or_audio_options() {
+        for username in [
+            "".to_owned(),
+            " ".to_owned(),
+            "x\n".to_owned(),
+            "x\0".to_owned(),
+            "é".repeat(129),
+        ] {
+            let json = serde_json::json!({
+                "deviceId": "own", "startup": "coldLaunch", "servicesOnly": true,
+                "expectedUsername": username,
+            });
+            assert!(EngineCreateOptions::parse(&json.to_string()).is_err());
+        }
+        assert!(
+            EngineCreateOptions::parse(
+                r#"{"deviceId":"own","startup":"coldLaunch","expectedUsername":"listener"}"#,
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn services_only_is_explicit_and_defaults_to_audio() {
+        let audio =
+            EngineCreateOptions::parse(r#"{"deviceId":"own","startup":"coldLaunch"}"#).unwrap();
+        assert!(!audio.services_only);
+        let data = EngineCreateOptions::parse(
+            r#"{"deviceId":"own","startup":"coldLaunch","servicesOnly":true}"#,
+        )
+        .unwrap();
+        assert!(data.services_only);
+    }
     #[test]
     fn cold_launch_accepts_saved_volume_without_a_recovery_snapshot() {
         for volume in [0.0, 0.23, 1.0] {

@@ -1,7 +1,7 @@
 import Foundation
 
 public enum PlayerInteraction: Hashable, Sendable {
-    case seek, volume, windowDrag, popover, menu
+    case seek, volume, windowDrag, popover, menu, onboarding
 }
 
 public enum PlayerAttentionEvent: Sendable {

@@ -45,12 +45,12 @@ public enum CoverFlowMotion {
 
     /// Continuous in `distance`, so covers turn smoothly as they cross the center at any speed.
     /// Covers fade out by `reach`, the distance in covers to the strip's edge, so a wider strip shows more of them.
-    public static func transform(distance: Double, reduceMotion: Bool, reach: Double = 3) -> CoverFlowTransform {
+    public static func transform(distance: Double, reach: Double = 3) -> CoverFlowTransform {
         let side = min(1, max(-1, distance))
         // Stretches the fade past the first side cover so it ends at `reach` rather than three covers out.
         let far = abs(distance) <= 1 ? abs(distance) : 1 + (abs(distance) - 1) * 2 / (max(2, reach) - 1)
         let opacity = far <= 1 ? 1 : far <= 2 ? 1 - 0.45 * (far - 1) : max(0, 0.55 * (3 - far))
-        return CoverFlowTransform(offset: distance * spacing, rotation: reduceMotion ? 0 : -48 * side,
+        return CoverFlowTransform(offset: distance * spacing, rotation: -48 * side,
                                   scale: 1 - 0.2 * abs(side), opacity: opacity, zIndex: -far)
     }
 }
@@ -88,10 +88,9 @@ public struct CoverFlowSpring: Equatable, Sendable {
 
     public var isSettled: Bool { position == target && velocity == 0 }
 
-    public mutating func step(dt: Double, reduceMotion: Bool) {
+    public mutating func step(dt: Double) {
         guard dt > 0, !isSettled else { return }
-        // Reduce Motion: quicker and critically damped, never overshooting.
-        let spring = Spring(response: reduceMotion ? 0.2 : 0.35, dampingRatio: reduceMotion ? 1 : 0.85)
+        let spring = Spring(response: 0.35, dampingRatio: 0.85)
         spring.update(value: &position, velocity: &velocity, target: target, deltaTime: dt)
         if abs(position - target) < 0.0005 && abs(velocity) < 0.005 {
             position = target
