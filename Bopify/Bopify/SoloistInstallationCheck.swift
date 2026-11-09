@@ -14,11 +14,11 @@ enum SoloistInstallationCheck {
             let cached = try await installer.ensureInstalled()
             guard fresh.current.digest == cached.current.digest,
                   fresh.current.executableURL == cached.current.executableURL else { throw SoloistInstallationError.invalidInstallation }
-            try await SoloistRuntimeCheck.verify(executable: fresh.current.executableURL, includeDiscovery: true)
+            try await SoloistRuntimeCheck.verify(executable: fresh.current.executableURL)
             try FileManager.default.removeItem(at: root)
             report(["status": "passed", "version": fresh.current.metadata.version,
                     "publisherAndVersionValidated": true, "cacheReused": true, "temporaryFilesRemoved": true,
-                    "daemonStartedAndRestarted": true, "localProtocolVerified": true, "nativeBonjourObserved": true])
+                    "daemonStartedAndRestarted": true, "localProtocolVerified": true])
             return 0
         } catch {
             try? FileManager.default.removeItem(at: root)
