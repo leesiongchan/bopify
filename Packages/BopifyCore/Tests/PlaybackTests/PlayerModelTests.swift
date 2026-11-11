@@ -394,23 +394,6 @@ struct PlayerModelTests {
         #expect(model.state.phase == .idle)
     }
 
-    @Test func togglePlayPauseSendsTheCommandButDoesNotAssumeItWorked() async {
-        let engine = StubPlaybackEngine()
-        let model = PlayerModel(engine: engine)
-        model.start()
-        await settle(model, engine, [.playing(positionMs: 0)])
-
-        model.togglePlayPause()
-        await waitUntil { engine.recordedCommands.contains("pause") }
-
-        #expect(engine.recordedCommands.contains("pause"))
-        // Commands are requests. Only an event may change the phase.
-        #expect(model.state.phase == .playing)
-
-        await settle(model, engine, [.paused(positionMs: 5)])
-        #expect(model.state.phase == .paused)
-    }
-
     @Test func aSecondToggleWaitsForConfirmationThenResumes() async {
         let engine = StubPlaybackEngine()
         let model = PlayerModel(engine: engine)

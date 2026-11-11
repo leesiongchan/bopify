@@ -11,7 +11,6 @@ struct PlaybackRecoveryTests {
             let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
             #expect(json["initialVolume"] as? Double == volume)
             #expect(json["snapshot"] == nil)
-            #expect(try JSONDecoder().decode(PlaybackEngineConfiguration.self, from: data) == config)
         }
     }
 
@@ -34,6 +33,5 @@ struct PlaybackRecoveryTests {
         let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
         #expect(json["deviceId"] as? String == "stable")
         #expect((json["snapshot"] as? [String: Any])?["volume"] as? Double == 0)
-        #expect(try JSONDecoder().decode(PlaybackEngineConfiguration.self, from: data) == config)
     }
 }

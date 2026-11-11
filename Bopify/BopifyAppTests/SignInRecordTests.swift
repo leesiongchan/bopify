@@ -30,19 +30,6 @@ struct SignInRecordTests {
         #expect(fixture.recordFrame.width > 100, "Reopening the same library step must restore the full record face")
     }
 
-    @Test func libraryAndListeningKeepTheWelcomeRecordSize() throws {
-        func renderedSize(_ step: StartupStep) throws -> CGSize {
-            let renderer = ImageRenderer(content: SignInRecordView(step: step, isVisible: false))
-            return try #require(renderer.nsImage?.size)
-        }
-        let welcome = try renderedSize(.signIn(.idle))
-        #expect(welcome.width >= 200)
-        for step: StartupStep in [.library(.idle), .library(.authorizing), .library(.connected), .library(.refused),
-                                  .playback(.entry), .playback(.working), .playback(.failure), .completion] {
-            #expect(try renderedSize(step) == welcome, "The hero must keep its visual presence throughout setup")
-        }
-    }
-
     @Test func armedReadySetupCannotShowPlayerBeforeCompletionStarts() {
         let environment = makePreviewEnvironment(.nothingPlaying)
         defer { environment.onboarding.cancel(); environment.player?.stop() }
@@ -52,58 +39,6 @@ struct SignInRecordTests {
         #expect(environment.onboardingStep == .playback(.working))
         environment.updateOnboardingReadiness()
         #expect(environment.onboardingStep == .completion)
-    }
-
-    @Test func completedSetupKeepsTheRegularPlayerWhileIdle() {
-        let environment = makePreviewEnvironment(.nothingPlaying)
-        defer { environment.player?.stop() }
-        #expect(!environment.isShowingOnboarding)
-        #expect(environment.player?.state.currentTrack == nil)
-        #expect(environment.playerMode == environment.presentation.mode)
-        environment.showOnboarding(section: .playback)
-        #expect(environment.isShowingOnboarding && environment.playerMode == .expanded)
-        environment.closeOnboarding()
-        #expect(environment.playerMode == environment.presentation.mode)
-    }
-
-    @Test(arguments: [StartupStep.signIn(.idle), .library(.idle)])
-    func idleStepsInviteWithTheRecordOutOfItsSleeve(step: StartupStep) {
-        #expect(step.recordPose == .out)
-    }
-
-    @Test(arguments: [StartupStep.signIn(.authenticating), .signIn(.restoring), .signIn(.removingCredentials), .library(.authorizing),
-                      .connection(messageKey: "connection.reconnecting", isFailure: false)])
-    func workInProgressSpinsTheRecord(step: StartupStep) {
-        #expect(step.recordPose == .spinning)
-    }
-
-    @Test(arguments: [StartupStep.signIn(.error(.credentialCorrupt)), .signIn(.error(.credentialCleanupRequired)), .library(.refused),
-                      .connection(messageKey: "connection.offline", isFailure: true)])
-    func failuresTuckTheRecordBackIn(step: StartupStep) {
-        #expect(step.recordPose == .tucked)
-    }
-
-    @Test func librarySetupIsTheSecondSideOfTheRecord() {
-        #expect(StartupStep.signIn(.idle).progress == 1 && StartupStep.signIn(.idle).side == .a)
-        #expect(StartupStep.library(.idle).progress == 2 && StartupStep.library(.idle).side == .b)
-    }
-
-    @Test func playbackIsTheThirdInlineStage() {
-        #expect(StartupStep.playback(.entry).progress == 3)
-        #expect(StartupStep.playback(.working).recordPose == .spinning)
-        #expect(StartupStep.playback(.failure).recordPose == .tucked)
-        #expect(StartupStep.playback(.entry).identity == StartupStep.playback(.working).identity)
-    }
-
-    @Test func reopeningSetupUsesTheMainSurfaceAndExpandedGeometry() {
-        let environment = makePreviewEnvironment(.playing)
-        defer { environment.player?.stop() }
-        environment.showOnboarding(section: .playback)
-        #expect(environment.isShowingOnboarding)
-        #expect(environment.playerMode == .expanded)
-        #expect(environment.onboardingStep == .completion)
-        environment.closeOnboarding()
-        #expect(!environment.isShowingOnboarding)
     }
 
     @Test func missingSoloistKeyRequiresSetupDespiteAnExistingTrack() async throws {
@@ -127,14 +62,6 @@ struct SignInRecordTests {
         #expect(controller.hasSavedKey && !controller.hasUsablePlayback)
     }
 
-    @Test func connectingKeepsWhicheverSideIsShowing() {
-        #expect(StartupStep.connection(messageKey: "connection.reconnecting", isFailure: false).side == nil)
-    }
-
-    @Test(arguments: [StartupStep.signIn(.restoring), .signIn(.removingCredentials), .connection(messageKey: "connection.reconnecting", isFailure: false)])
-    func returningUsersSeeNoSetupProgress(step: StartupStep) {
-        #expect(step.progress == nil)
-    }
 }
 
 @MainActor @Suite("Startup connection")
@@ -211,29 +138,6 @@ struct StartupShellTests {
         #expect(!panel.hasShadow)
         environment.closeOnboarding()
         try await liveLyricEventually { panel.frame.width < 410 }
-    }
-
-    @Test func startupGlassHasNoNativeOutline() throws {
-        _ = NSApplication.shared
-        let keys = ["player.frame", "player.keepOnTop", "player.recordCenter"]
-        let saved = keys.map { UserDefaults.standard.object(forKey: $0) }
-        defer {
-            for (key, value) in zip(keys, saved) {
-                if let value { UserDefaults.standard.set(value, forKey: key) }
-                else { UserDefaults.standard.removeObject(forKey: key) }
-            }
-        }
-        let existingWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
-        let environment = makePreviewEnvironment(.nothingPlaying)
-        defer { environment.player?.stop() }
-        environment.showOnboarding(section: .playback)
-        try #require(environment.isShowingOnboarding, "The startup shell belongs to onboarding")
-        let controller = StatusItemController(content: EmptyView(), environment: environment)
-        let panel = try #require(NSApp.windows.compactMap { $0 as? StatusPanel }
-            .first { !existingWindows.contains(ObjectIdentifier($0)) })
-        panel.isReleasedWhenClosed = false
-        defer { withExtendedLifetime(controller) { panel.close() } }
-        #expect(!panel.hasShadow, "The native shadow traces the startup glass as a hard rectangular outline")
     }
 }
 

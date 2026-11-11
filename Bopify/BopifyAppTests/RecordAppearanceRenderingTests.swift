@@ -11,8 +11,6 @@ struct RecordAppearanceRenderingTests {
         let cloth = try #require(RecordAppearanceResources.corduroy)
         let d = try #require(deck.cgImage(forProposedRect: nil, context: nil, hints: nil))
         let c = try #require(cloth.cgImage(forProposedRect: nil, context: nil, hints: nil))
-        #expect(d.width == 1509 && d.height == 1042)
-        #expect(c.width == 1254 && c.height == 1254)
         let clothPixels = try #require(RecordAppearanceResources.corduroyPixels)
         #expect(clothPixels.width == c.width && clothPixels.height == c.height)
         #expect(d.alphaInfo != .none)

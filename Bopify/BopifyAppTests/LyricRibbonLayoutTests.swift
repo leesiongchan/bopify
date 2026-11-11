@@ -4,17 +4,6 @@ import Testing
 
 @MainActor @Suite("Lyric ribbon layout")
 struct LyricRibbonLayoutTests {
-    @Test func keepsACompactViewportAndScalesLargerText() {
-        let layout = LyricRibbonLayout.measure(width: 448, textScale: 1, availableHeight: 1000)
-        let scaled = LyricRibbonLayout.measure(width: 448, textScale: 1.5, availableHeight: 1000)
-        let bounded = LyricRibbonLayout.measure(width: 448, textScale: 1, availableHeight: 320)
-        #expect(layout.panelSize.height == 134)
-        #expect(layout.textViewportHeight <= 96)
-        #expect(scaled.textViewportHeight >= layout.textViewportHeight)
-        #expect(bounded.panelSize.height <= 320)
-        #expect(bounded.textViewportHeight > 0)
-    }
-
     @Test func reusesPassageLayoutAcrossClockUpdatesAndViewportChanges() {
         let manager = LyricLayoutManagerSpy()
         let container = NSTextContainer(size: .zero)

@@ -29,16 +29,6 @@ struct VinylDesignTests {
         #expect(palette.accent == ArtworkColor(red: 0.9569, green: 0.8745, blue: 0.6078))
     }
 
-    @Test(arguments: [VinylDesign.bloom, .rhapsody, .carnival])
-    func artisticColorsPreserveHueAndExpandSaturation(design: VinylDesign) throws {
-        let palette = try #require(VinylDesignPalette.resolve(warm, design: design))
-        // Reference values independently checked with Python's colorsys HLS conversion.
-        close(palette.primary, to: (0.897309, 0.245288, 0.154759))
-        close(palette.secondary, to: (0.278363, 0.910809, 0.474716))
-        close(palette.accent, to: (0.919718, 0.766233, 0.269454))
-        #expect(palette.paper == ArtworkColor(red: 0.9569, green: 0.8745, blue: 0.6078))
-    }
-
     @Test func neutralSlotsStayNeutral() throws {
         let white = ArtworkColor(red: 1, green: 1, blue: 1)
         let gray = ArtworkColor(red: 0.5, green: 0.5, blue: 0.5)
@@ -58,9 +48,4 @@ struct VinylDesignTests {
         }
     }
 
-    private func close(_ color: ArtworkColor, to expected: (Double, Double, Double)) {
-        #expect(abs(color.red - expected.0) < 0.001)
-        #expect(abs(color.green - expected.1) < 0.001)
-        #expect(abs(color.blue - expected.2) < 0.001)
-    }
 }

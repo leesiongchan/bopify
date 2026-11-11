@@ -650,13 +650,13 @@ struct SpotifyLibraryClientTests {
         #expect(seeds.first?.track == nil)
         #expect(LibraryProtocol.fixture.requests.first?.url?.path == "/v1/me/top/artists")
     }
-    @Test(arguments: [TopItemTimeRange.shortTerm, .mediumTerm, .longTerm])
-    func topItemsHonorExplicitTimeRange(timeRange: TopItemTimeRange) async throws {
+    @Test(arguments: [(TopItemTimeRange.shortTerm, "short_term"), (.mediumTerm, "medium_term"), (.longTerm, "long_term")])
+    func topItemsHonorExplicitTimeRange(timeRange: TopItemTimeRange, wireValue: String) async throws {
         LibraryProtocol.fixture.reset(.init(data: Data(#"{"items":[]}"#.utf8)))
         let history: any ListeningHistoryService = scopedClient(["user-top-read"])
         _ = try await history.topItems(.tracks, timeRange: timeRange)
         #expect(query(LibraryProtocol.fixture.requests.first) == [
-            URLQueryItem(name: "time_range", value: timeRange.rawValue), URLQueryItem(name: "limit", value: "5")])
+            URLQueryItem(name: "time_range", value: wireValue), URLQueryItem(name: "limit", value: "5")])
     }
 
     @Test func historyRequestsShareTheLibraryCooldown() async {

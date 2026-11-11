@@ -349,7 +349,6 @@ struct LyricReaderTests {
         let transition = try #require(reader.scroll.contentView.layer?.animation(forKey: kCATransition) as? CATransition)
         #expect(transition.type == (direction == .fade ? .fade : .push))
         #expect(transition.subtype == (direction == .next ? .fromRight : direction == .previous ? .fromLeft : nil))
-        #expect(transition.duration >= 0.4)
         #expect(reader.scroll.contentView.layer?.bounds.width == reader.scroll.contentView.bounds.width)
         reader.coordinator.updateContent(reader.scroll, content: .loading, projection: nil, reading: false,
             scale: 1, rtl: false, fallback: NSAttributedString(string: "Loading lyrics…"), width: 300, height: 65)

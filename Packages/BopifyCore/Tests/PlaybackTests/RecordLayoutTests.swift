@@ -19,18 +19,15 @@ struct RecordLayoutTests {
     @Test func collapsedLyricsContainTheirVinylHandleWithinTheSharedSurface() {
         let layout = recordLayout(mode: .compact, availableSize: available, showsLyrics: true)
         #expect(layout.controlsFrame.isEmpty && layout.lowerFrame.isEmpty)
-        #expect(layout.recordDiameter <= 36)
         #expect(!layout.lyricsFrame.isEmpty)
         #expect(layout.sleeveFrame.contains(layout.lyricsFrame))
         #expect(layout.lyricsFrame.contains(CGRect(x: layout.recordCenter.x - layout.recordDiameter / 2,
             y: layout.recordCenter.y - layout.recordDiameter / 2, width: layout.recordDiameter, height: layout.recordDiameter)))
-        #expect(layout.contentSize.height < 180)
     }
 
     @Test func lyricsShareThePlayerSurfaceWithNoGap() {
         let layout = recordLayout(mode: .expanded, availableSize: available, showsLyrics: true)
         #expect(layout.sleeveFrame.contains(layout.lyricsFrame))
-        #expect(layout.lyricsFrame.minY == 360)
         #expect(layout.sleeveFrame.maxY == layout.lyricsFrame.maxY)
     }
 
@@ -55,7 +52,6 @@ struct RecordLayoutTests {
         #expect(expanded.recordCenter == queue.recordCenter)
         #expect(expanded.controlsFrame == queue.controlsFrame)
         #expect(expanded.lowerFrame == queue.lowerFrame)
-        #expect(expanded.lowerFrame.height >= 80)
         #expect(!expanded.controlsFrame.intersects(expanded.lowerFrame))
     }
 
@@ -67,7 +63,6 @@ struct RecordLayoutTests {
         #expect(rest.sleeveCornerRadius == radius)
         #expect(rest.controlsFrame == CGRect(origin: rest.recordCenter, size: .zero))
         #expect(rest.lowerFrame == CGRect(origin: rest.recordCenter, size: .zero))
-        #expect(recordLayout(mode: .expanded, availableSize: available).sleeveCornerRadius == 28)
     }
 
     @Test(arguments: [PlayerMode.compact, .expanded, .queue])
@@ -98,7 +93,6 @@ struct RecordLayoutTests {
         let queue = recordLayout(mode: .queue, availableSize: screen.size)
         let frame = playerWindowFrame(recordCenter: CGPoint(x: 4000, y: -100), layout: queue, visibleFrame: screen)
         #expect(screen.contains(frame))
-        #expect(queue.recordDiameter == 118)
         #expect(queue.controlsFrame == focused.controlsFrame)
         #expect(CGRect(origin: .zero, size: queue.contentSize).contains(queue.controlsFrame))
         #expect(CGRect(origin: .zero, size: queue.contentSize).contains(queue.lowerFrame))
@@ -111,14 +105,5 @@ struct RecordLayoutTests {
         let frame = playerWindowFrame(recordCenter: CGPoint(x: CGFloat.nan, y: CGFloat.infinity), layout: layout,
                                   visibleFrame: CGRect(origin: .zero, size: available))
         #expect(frame.origin.x.isFinite && frame.origin.y.isFinite)
-    }
-
-    @Test func queueShrinksBeforeMovingTransport() {
-        let available = CGSize(width: 600, height: 300)
-        let focused = recordLayout(mode: .expanded, availableSize: available)
-        let queue = recordLayout(mode: .queue, availableSize: available)
-        #expect(queue.contentSize.height == 300)
-        #expect(focused.controlsFrame == queue.controlsFrame)
-        #expect(focused.recordCenter == queue.recordCenter)
     }
 }

@@ -30,6 +30,32 @@ extension LiveLyricTestEngine: PreparedPlaybackEngine {
 
 @MainActor @Suite("Soloist native setup", .serialized)
 struct SoloistSetupTests {
+    @Test func openingSetupDuringSessionRestorationCompletesWhenPlaybackBecomesReady() async throws {
+        let suite = "soloist-restored-onboarding-\(UUID())"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let engine = LiveLyricTestEngine()
+        let controller = SoloistPlaybackController(defaults: defaults, keys: SetupKeys(), authorize: {},
+            install: { _, _ in URL(fileURLWithPath: "/fixture/soloist") },
+            start: { _ in engine }, clearSession: {})
+        #expect(await controller.enable(key: "fixture-key"))
+        let environment = makePreviewEnvironment(.nothingPlaying, soloistController: controller)
+        defer { environment.onboarding.cancel(); environment.player?.stop() }
+        try #require(!controller.hasUsablePlayback)
+
+        environment.showOnboarding()
+        _ = try await controller.makeEngine(configuration:
+            PlaybackEngineConfiguration(deviceID: "fixture", startup: .coldLaunch))
+        try #require(controller.hasUsablePlayback)
+
+        try await liveLyricEventually {
+            environment.isShowingPlayer && !environment.onboarding.isArmed
+        }
+        #expect(environment.requestedOnboardingSection == nil)
+        #expect(environment.onboardingStep == nil)
+        await controller.stop()
+    }
+
     @Test func recoveringFailedDiscoveryJoinsOwnedSetupAndPreservesTheExistingTrack() async throws {
         let suite = "soloist-repair-\(UUID())"
         let defaults = UserDefaults(suiteName: suite)!

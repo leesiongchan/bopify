@@ -162,11 +162,11 @@ mod tests {
     #[test]
     fn track_metadata_preserves_the_wire_shape() {
         let item = audio_item(
-            vec![cover(
-                "https://i.scdn.co/image/large",
-                ImageSize::LARGE,
-                640,
-            )],
+            vec![
+                cover("https://i.scdn.co/image/small", ImageSize::SMALL, 64),
+                cover("https://i.scdn.co/image/large", ImageSize::LARGE, 640),
+                cover("https://i.scdn.co/image/default", ImageSize::DEFAULT, 300),
+            ],
             one_track("Harry Styles"),
         );
         let wire = track_metadata(item);
@@ -178,24 +178,6 @@ mod tests {
                 "albumTitle": "Harry Styles", "artworkUrl": "https://i.scdn.co/image/large",
                 "durationMs": 340706
             })
-        );
-    }
-
-    #[test]
-    fn artwork_picks_the_widest_cover_regardless_of_order() {
-        let item = audio_item(
-            vec![
-                cover("https://i.scdn.co/image/small", ImageSize::SMALL, 64),
-                cover("https://i.scdn.co/image/large", ImageSize::LARGE, 640),
-                cover("https://i.scdn.co/image/default", ImageSize::DEFAULT, 300),
-            ],
-            one_track("Harry Styles"),
-        );
-        let wire = track_metadata(item);
-        let artwork_url = wire.artwork_url;
-        assert_eq!(
-            artwork_url.as_deref(),
-            Some("https://i.scdn.co/image/large")
         );
     }
 

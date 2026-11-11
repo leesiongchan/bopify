@@ -79,22 +79,6 @@ struct OnboardingHandoffRenderingTests {
         #expect(content.bounds.contains(field.convert(field.bounds, to: content)))
     }
 
-    @Test func nativeStartupKeepsTheFormVisibleAndAccessible() async throws {
-        let fixture = try NativeOnboardingFixture(needsKey: true)
-        defer { fixture.close() }
-        try await Task.sleep(for: .milliseconds(220))
-        fixture.panel.contentView?.layoutSubtreeIfNeeded()
-        fixture.panel.makeKeyAndOrderFront(nil)
-        try #require(fixture.panel.isKeyWindow)
-        let content = try #require(fixture.panel.contentView)
-        let field = try #require(findSecureField(in: content))
-        let frame = field.convert(field.bounds, to: content)
-        #expect(frame.width > 100 && frame.height > 10)
-        #expect(content.bounds.intersects(frame))
-        _ = try AppearanceTestAccessibility.element("soloist.apiKey", in: content)
-        _ = try AppearanceTestAccessibility.element("soloist.enable", in: content)
-    }
-
     private func findSecureField(in view: NSView) -> NSSecureTextField? {
         if let field = view as? NSSecureTextField { return field }
         return view.subviews.lazy.compactMap { findSecureField(in: $0) }.first

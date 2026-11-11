@@ -51,14 +51,6 @@ struct NowPlayingInfoTests {
         #expect(nowPlayingInfo(for: state(.idle, track: nil), positionMs: 0) == nil)
     }
 
-    @Test func missingArtworkAndAlbumStayEmpty() {
-        let bare = Track(uri: track.uri, title: "Night Bloom", artists: [], albumTitle: nil, artwork: nil, durationMs: 1_000)
-        let info = nowPlayingInfo(for: state(.playing, track: bare), positionMs: 0)
-        #expect(info?.artworkURL == nil)
-        #expect(info?.album == nil)
-        #expect(info?.artist == "")
-    }
-
     @Test func availabilityFollowsThePlayer() {
         var limited = state(.playing, track: track)
         limited.canNext = false

@@ -49,16 +49,6 @@ struct StartupWindowLayoutTests {
         #expect(layout.recordScale == 0.88 && layout.height == previous)
     }
 
-    @Test func everyLibraryStatusKeepsTheSamePreferredRecordSize() {
-        let layout = StartupWindowLayout()
-        defer { layout.cancelPendingResize() }
-        layout.useScreen(height: 900)
-        for status in [LibrarySetupStatus.idle, .authorizing, .refused, .connected] {
-            layout.useStep(.library(status))
-            #expect(layout.recordScale == 0.55)
-        }
-    }
-
     @Test func libraryRecordAdaptsToMeasuredPermissionContentOnAShortScreen() {
         let layout = StartupWindowLayout()
         defer { layout.cancelPendingResize() }

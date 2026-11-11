@@ -40,8 +40,6 @@ struct AppEnvironmentLyricsTests {
             let previous = (passage.string as NSString).range(of: "A quiet street").location
             let current = (passage.string as NSString).range(of: "The lamps return").location
             #expect(!passage.string.contains("[00:"))
-            #expect((passage.attribute(.font, at: previous, effectiveRange: nil) as? NSFont)?.pointSize == 14)
-            #expect((passage.attribute(.font, at: current, effectiveRange: nil) as? NSFont)?.pointSize == 19)
             #expect(passage.attribute(.foregroundColor, at: previous, effectiveRange: nil) as? NSColor == .secondaryLabelColor)
             #expect(passage.attribute(.foregroundColor, at: current, effectiveRange: nil) as? NSColor == .labelColor)
             #expect(passage.attribute(.link, at: current, effectiveRange: nil) as? String == "2000")

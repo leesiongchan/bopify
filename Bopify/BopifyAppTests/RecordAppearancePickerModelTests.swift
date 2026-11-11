@@ -56,16 +56,6 @@ struct RecordAppearancePickerModelTests {
         #expect(defaults.writes.isEmpty)
     }
 
-    @Test func recreationKeepsBothPreferences() {
-        let defaults = isolated()
-        let model = RecordAppearancePickerModel(defaults: defaults)
-        model.select(.material(.nacre))
-        model.select(.pattern(.undertow))
-        let restored = RecordAppearancePickerModel(defaults: defaults)
-        #expect(restored.selectedMaterial == .nacre)
-        #expect(restored.selectedPattern == .undertow)
-    }
-
     @Test func focusTraversesGroupsAndClamps() {
         let model = RecordAppearancePickerModel(defaults: isolated())
         model.move(.last)

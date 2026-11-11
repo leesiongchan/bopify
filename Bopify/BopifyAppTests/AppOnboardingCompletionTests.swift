@@ -35,25 +35,13 @@ struct AppOnboardingCompletionTests {
         try await liveLyricEventually { !environment.onboarding.isArmed && environment.isShowingPlayer }
     }
 
-    @Test func openingAlreadyReadySetupCompletesWithoutAnExtraAction() async throws {
+    @Test func repeatedReadySetupRequestsDoNotReopenTheCompletedStep() async throws {
         let environment = makePreviewEnvironment(.nothingPlaying)
         defer { environment.onboarding.cancel(); environment.player?.stop() }
         let player = try #require(environment.player)
         environment.showOnboarding()
-
-        try #require(environment.onboardingStep == .completion)
-        #expect(environment.onboarding.isArmed)
-        try await liveLyricEventually { environment.onboarding.phase == .idle && environment.isShowingPlayer }
-        #expect(environment.requestedOnboardingSection == nil)
-        #expect(environment.player === player)
-        #expect(player.state.currentTrack == nil && player.state.phase == .idle)
-    }
-
-    @Test func repeatedReadySetupRequestsDoNotReopenTheCompletedStep() async throws {
-        let environment = makePreviewEnvironment(.nothingPlaying)
-        defer { environment.onboarding.cancel(); environment.player?.stop() }
-        environment.showOnboarding()
         try #require(environment.onboarding.phase == .completing)
+        #expect(environment.onboardingStep == .completion && environment.onboarding.isArmed)
         for _ in 0..<3 { environment.showOnboarding() }
         try await liveLyricEventually { environment.onboarding.phase == .handoff }
         for _ in 0..<3 { environment.showOnboarding() }
@@ -62,6 +50,8 @@ struct AppOnboardingCompletionTests {
         try await liveLyricEventually { environment.onboarding.phase == .idle }
         #expect(environment.isShowingPlayer)
         #expect(environment.onboardingStep == nil)
+        #expect(environment.player === player)
+        #expect(player.state.currentTrack == nil && player.state.phase == .idle)
     }
 
     @Test func openingLibraryConfigurationDoesNotDismissAnUnfinishedEdit() {

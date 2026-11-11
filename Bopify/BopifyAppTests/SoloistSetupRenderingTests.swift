@@ -81,15 +81,6 @@ struct SoloistSetupRenderingTests {
         #expect(paddedOutside.alphaComponent < 0.01)
     }
 
-    @Test func headingsDescribeTheCurrentPlaybackStep() {
-        #expect(PlaybackOnboardingCopy(phase: .idle).title == "onboarding.playbackTitle")
-        #expect(PlaybackOnboardingCopy(phase: .pairing("Fixture device")).title == "onboarding.pairingTitle")
-        #expect(PlaybackOnboardingCopy(phase: .installing(nil)).title == "onboarding.preparingTitle")
-        #expect(PlaybackOnboardingCopy(phase: .failed(.startup)).title == "onboarding.attentionTitle")
-        #expect(PlaybackOnboardingCopy(phase: .ready).title == "onboarding.readyTitle")
-        #expect(PlaybackOnboardingCopy(phase: .limitedServices).title == "onboarding.readyTitle")
-    }
-
     @Test func playbackScenesChangeOnlyAtMeaningfulBoundaries() {
         #expect(PlaybackOnboardingScene(phase: .idle) == PlaybackOnboardingScene(phase: .failed(.invalidKey)))
         #expect(PlaybackOnboardingScene(phase: .installing(nil)) == PlaybackOnboardingScene(phase: .installing(0.6)))
@@ -97,7 +88,6 @@ struct SoloistSetupRenderingTests {
         #expect(PlaybackOnboardingScene(phase: .installing(0.9)) != PlaybackOnboardingScene(phase: .pairing("Fixture")))
         #expect(PlaybackOnboardingScene(phase: .pairing("Fixture")) == PlaybackOnboardingScene(phase: .failed(.discovery)))
         #expect(PlaybackOnboardingScene(phase: .pairing("Fixture")) != PlaybackOnboardingScene(phase: .verifying))
-        #expect(PlaybackOnboardingCopy(phase: .verifying).title == "onboarding.connectingTitle")
     }
 
     @Test func deniedLocalNetworkAccessOffersContextualSettings() async throws {

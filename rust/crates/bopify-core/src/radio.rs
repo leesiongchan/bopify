@@ -270,7 +270,7 @@ mod tests {
     const SEED_TRACK: &str = "spotify:track:6rqhFgbbKwnb9MLmUQDhG6";
     const SEED_ARTIST: &str = "spotify:artist:6rqhFgbbKwnb9MLmUQDhG6";
     const TOP_TRACK: &str = "spotify:track:5Ohxk2dO5COHF1krpoPigN";
-    const MIX: &[u8] = br#"{"mediaItems":[{"uri":"spotify:playlist:37i9dQZF1E4MIXFIXTURE1"}]}"#;
+    const MIX: &[u8] = include_bytes!("fixtures/inspiredby_mix.json");
 
     #[derive(Clone)]
     struct Fake {
@@ -328,15 +328,6 @@ mod tests {
         (0..count)
             .map(|i| format!("spotify:track:{i:022}"))
             .collect()
-    }
-
-    #[test]
-    fn the_captured_response_names_its_mix_playlist() {
-        let body = include_bytes!("fixtures/inspiredby_mix.json");
-        assert_eq!(
-            mix_uri(body).as_deref(),
-            Some("spotify:playlist:37i9dQZF1E4MIXFIXTURE1")
-        );
     }
 
     #[test]

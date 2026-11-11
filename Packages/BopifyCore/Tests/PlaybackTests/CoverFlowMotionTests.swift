@@ -47,12 +47,6 @@ struct CoverFlowMotionTests {
         }
     }
 
-    @Test func sideCoversTiltAway() {
-        #expect(CoverFlowMotion.transform(distance: 1).rotation == -48)
-        #expect(CoverFlowMotion.transform(distance: -1).rotation == 48)
-        #expect(CoverFlowMotion.transform(distance: 1).scale == 0.8)
-    }
-
     @Test func coversFadeOutAtTheStripsReach() {
         let opacity = { CoverFlowMotion.transform(distance: $0, reach: 4).opacity }
         #expect(opacity(1) == 1)

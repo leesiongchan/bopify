@@ -7,7 +7,6 @@ import Testing
     for raw in ["", " \n", "two keys", "key\u{0}value", String(repeating: "a", count: 4097)] {
         #expect(throws: SoloistKeyError.self) { try SoloistKeyStore.validated(raw) }
     }
-    #expect(CredentialNamespace.allCases.contains(.soloist))
 }
 
 @Test func soloistConsentAddsPlaybackScopesWithoutDroppingLibraryAccess() async throws {

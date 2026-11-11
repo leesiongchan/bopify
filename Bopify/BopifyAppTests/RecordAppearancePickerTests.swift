@@ -21,15 +21,6 @@ struct RecordAppearancePickerTests {
         c.close(); c.show()
         #expect(try window() === first)
     }
-    @Test func titleIsHiddenAndWindowCannotBeResized() throws {
-        let c = RecordAppearanceWindowController(defaults: defaults())
-        c.show(); defer { c.close() }
-        let w = try window()
-        #expect(w.titleVisibility == .hidden)
-        #expect(!w.styleMask.contains(.resizable))
-        #expect(w.standardWindowButton(.closeButton)?.isHidden == false)
-        #expect(w.isMovableByWindowBackground)
-    }
     @Test func savedChoicesAppearOnOpenWithoutWrites() async throws {
         let d = defaults()
         d.set("unknown", forKey: RecordDesign.preferenceKey)

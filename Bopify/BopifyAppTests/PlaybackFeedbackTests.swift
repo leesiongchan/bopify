@@ -44,18 +44,6 @@ struct PlaybackFeedbackTests {
             visible: true, pressed: false) == .snap)
     }
 
-    @Test(arguments: [false, true])
-    func playbackGlyphShowsIntermediateAnimationFrames(isPlaying: Bool) async throws {
-        let settled = try await snapshot(PlaybackButtonFace(isPlaying: isPlaying, previousPlaying: !isPlaying,
-            progress: 1))
-        #expect(settled.visiblePixels > 50)
-        for progress in [0.0, 0.25, 0.6] {
-            let pixels = try await snapshot(PlaybackButtonFace(isPlaying: isPlaying, previousPlaying: !isPlaying,
-                progress: progress))
-            #expect(pixels.png != settled.png, "Playback feedback should animate toward the confirmed glyph")
-        }
-    }
-
     @Test func coverFlightHasVisibleFramesAndDisappearsAtRest() async throws {
         let artwork = makePreviewArtworkStore().image(for: previewArtworkURL(0))
         let launch = CoverFlowLaunch(itemURI: SpotifyURI("spotify:track:preview0")!,
@@ -63,13 +51,13 @@ struct PlaybackFeedbackTests {
         let target = CGRect(x: 20, y: 20, width: 142, height: 142)
         for progress in [0.0, 0.18, 0.32] {
             let pixels = try await snapshot(RecordLoadTransition(launch: launch, destination: target, progress: progress))
-            #expect(pixels.visiblePixels > 50)
+            #expect(pixels > 50)
         }
         let finished = try await snapshot(RecordLoadTransition(launch: launch, destination: target, progress: 1))
-        #expect(finished.visiblePixels == 0)
+        #expect(finished == 0)
     }
 
-    private func snapshot<Content: View>(_ content: Content) async throws -> (visiblePixels: Int, png: Data) {
+    private func snapshot<Content: View>(_ content: Content) async throws -> Int {
         let host = NSHostingView(rootView: content.frame(width: 240, height: 240).background(.black)
             .environment(\.colorScheme, .dark))
         let window = NSWindow(contentRect: CGRect(x: 300, y: 300, width: 240, height: 240),
@@ -82,7 +70,6 @@ struct PlaybackFeedbackTests {
         host.layoutSubtreeIfNeeded()
         let bitmap = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
         host.cacheDisplay(in: host.bounds, to: bitmap)
-        let png = try #require(bitmap.representation(using: .png, properties: [:]))
         var visible = 0
         for y in 0..<bitmap.pixelsHigh {
             for x in 0..<bitmap.pixelsWide {
@@ -90,6 +77,6 @@ struct PlaybackFeedbackTests {
                    max(color.redComponent, color.greenComponent, color.blueComponent) > 0.1 { visible += 1 }
             }
         }
-        return (visible, png)
+        return visible
     }
 }

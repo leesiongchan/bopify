@@ -90,6 +90,8 @@ final class AppEnvironment {
         } else {
             if onboarding.phase == .completing || onboarding.phase == .handoff { onboarding.cancel() }
             requestedOnboardingSection = section
+            // Restoration can request setup before the saved Soloist session is ready.
+            if section == .playback, !onboarding.isArmed { onboarding.begin() }
         }
         searchPopover.close()
         hideLiveLyrics()

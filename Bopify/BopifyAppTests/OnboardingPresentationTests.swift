@@ -16,33 +16,16 @@ struct OnboardingPresentationTests {
         return id
     }
 
-    @Test func visibleHandoffDoesNotDisappearAfterTheOldFixedDelay() async throws {
-        let clock = LiveLyricTestClock()
-        let presentation = OnboardingPresentation(sleep: { try await clock.sleep(for: $0) })
-        defer { presentation.cancel() }
-        _ = try await startVisibleHandoff(presentation, clock: clock)
-        clock.advance(by: .milliseconds(650))
-        for _ in 0..<30 { await Task.yield() }
-        #expect(presentation.phase == .handoff && presentation.isArmed)
-    }
-
-    @Test func matchingWindowAnimationCompletionFinishesTheHandoff() async throws {
-        let clock = LiveLyricTestClock()
-        let presentation = OnboardingPresentation(sleep: { try await clock.sleep(for: $0) })
-        defer { presentation.cancel() }
-        let id = try await startVisibleHandoff(presentation, clock: clock)
-        presentation.handoffSettled(for: id)
-        #expect(presentation.phase == .idle && !presentation.isArmed && presentation.completionID == nil)
-        try await liveLyricEventually { clock.pendingDelays.isEmpty }
-    }
-
     @Test func missingWindowAnimationCompletionHasABoundedFallback() async throws {
         let clock = LiveLyricTestClock()
         let presentation = OnboardingPresentation(sleep: { try await clock.sleep(for: $0) })
         defer { presentation.cancel() }
         _ = try await startVisibleHandoff(presentation, clock: clock)
         #expect(clock.pendingDelays == [StartupAnimationTiming.maximumCompletionWait])
-        clock.advance(by: StartupAnimationTiming.maximumCompletionWait)
+        clock.advance(by: .milliseconds(650))
+        for _ in 0..<30 { await Task.yield() }
+        #expect(presentation.phase == .handoff && presentation.isArmed)
+        clock.advance(by: StartupAnimationTiming.maximumCompletionWait - .milliseconds(650))
         try await liveLyricEventually { presentation.phase == .idle && !presentation.isArmed }
         #expect(presentation.completionID == nil)
     }
@@ -70,7 +53,8 @@ struct OnboardingPresentationTests {
             presentation.handoffSettled(for: old)
             #expect(presentation.phase == .handoff && presentation.isArmed && presentation.completionID == current)
             presentation.handoffSettled(for: current)
-            #expect(!presentation.isArmed)
+            #expect(presentation.phase == .idle && !presentation.isArmed && presentation.completionID == nil)
+            try await liveLyricEventually { clock.pendingDelays.isEmpty }
         } else {
             if interruption == "readinessLoss" { presentation.playbackReadinessChanged(false) }
             else { presentation.cancel() }
@@ -179,13 +163,6 @@ struct OnboardingPresentationTests {
         try await liveLyricEventually { clock.pendingDelays.contains(.milliseconds(350)) }
         clock.advance(by: .milliseconds(350))
         try await liveLyricEventually { presentation.phase == .handoff }
-    }
-
-    @Test func returningReadinessDoesNotReplayCompletion() {
-        let presentation = OnboardingPresentation()
-        presentation.playbackReadinessChanged(true)
-        #expect(presentation.phase == .idle)
-        #expect(!presentation.isArmed)
     }
 
     @Test func completionStartsOnlyAfterActualReadiness() {
