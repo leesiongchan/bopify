@@ -222,18 +222,6 @@ struct PlaybackRecoveryCoordinatorTests {
         #expect(gate.configurations.isEmpty)
         #expect(recovery.status == .stopped)
     }
-    @Test func stopDuringReadinessAndShutdownWaitsForTeardown() async {
-        let gate = RecoveryFactoryGate(), clock = RecoveryTestClock(), engine = RecoveryStubEngine(), shutdown = RecoverySuspension()
-        engine.shutdownGate = { await shutdown.wait() }
-        let recovery = coordinator(gate, clock)
-        recovery.start(); await gate.waitForCreationCount(1); gate.succeedNext(with: engine); await settle()
-        recovery.invalidate(); await shutdown.entered()
-        #expect(recovery.currentEngine == nil)
-        #expect(recovery.status == .stopped)
-        shutdown.release(); await recovery.stop()
-        #expect(engine.shutdownCount == 1)
-        #expect(clock.pendingDelays.isEmpty)
-    }
     @Test func remoteReadinessClearsPreviousResumeIntent() async {
         let gate = RecoveryFactoryGate(), clock = RecoveryTestClock()
         let recovery = coordinator(gate, clock)

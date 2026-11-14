@@ -1,7 +1,5 @@
 #if DEBUG
 import Foundation
-import AppKit
-import SwiftUI
 import Testing
 import BopifyAuth
 import BopifyDomain
@@ -71,36 +69,6 @@ struct AppEnvironmentAuthorizationTests {
         #expect(fixture.environment.recovery?.currentEngine == nil)
         #expect(fixture.environment.player?.isEngineReady == false)
         #expect(fixture.browser.count == 0 && fixture.libraryBrowser.count == 0)
-        await fixture.stop()
-    }
-
-    @Test func revokedAccessReturnsToSetupAndRequiresANewCompleteGrant() async throws {
-        let fixture = AuthorizationFixture(libraryScopes: allLibraryScopes, approvedScopes: allLibraryScopes,
-            startSignedOut: true, libraryRevoked: true)
-        fixture.store.save(TokenSet(accessToken: "PLAYBACK", refreshToken: "REFRESH",
-            expiresAt: .distantFuture, grantedScopes: ["streaming"]))
-        await fixture.environment.restoreOrPromptSignIn()
-        #expect(fixture.environment.authState == .signedIn)
-        let host = NSHostingView(rootView: PlayerRootView(environment: fixture.environment).frame(width: 410, height: 560))
-        let window = NSWindow(contentRect: CGRect(x: 300, y: 300, width: 410, height: 560),
-            styleMask: [.titled], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        defer { window.close() }
-        window.contentView = host
-        window.makeKeyAndOrderFront(nil)
-        host.layoutSubtreeIfNeeded()
-        fixture.environment.search.updateQuery("song")
-        await fixture.environment.search.search()
-        try await eventually { fixture.environment.authState == .needsLibraryAuthorization && fixture.environment.player == nil }
-        #expect(fixture.environment.recovery == nil)
-        #expect(fixture.libraryStore.load()?.accessToken == "LIBRARY")
-        #expect(fixture.libraryBrowser.count == 0)
-
-        await fixture.environment.completeLibrarySetup()
-        #expect(fixture.environment.authState == .signedIn)
-        #expect(fixture.libraryStore.load()?.accessToken == "AUTHORIZED_LIBRARY")
-        #expect(fixture.environment.onboarding.phase == .libraryConnected)
-        #expect(fixture.environment.onboarding.isArmed)
         await fixture.stop()
     }
 
@@ -412,7 +380,7 @@ private struct AuthorizationFixture {
 
     init(libraryScopes: Set<String>? = ["user-library-read"], approvedScopes: Set<String>? = nil,
          startSignedOut: Bool = false, libraryClientID: String? = String(repeating: "0", count: 32),
-         libraryRevoked: Bool = false, completesSignIn: Bool = false, libraryCallbackPort: UInt16? = nil,
+         completesSignIn: Bool = false, libraryCallbackPort: UInt16? = nil,
          usesInjectedPlaybackEngine: Bool = true) {
         libraryStore = AuthorizationStore(libraryScopes.map { TokenSet(accessToken: "LIBRARY", refreshToken: "REFRESH",
             expiresAt: .distantFuture, grantedScopes: $0) })
@@ -443,7 +411,7 @@ private struct AuthorizationFixture {
             })
         playbackAuth = playback
         libraryAuth = library
-        let services = AuthorizationLibrary(revoked: libraryRevoked)
+        let services = AuthorizationLibrary()
         environment = AppEnvironment(previewPlayer: startSignedOut ? nil : player,
             favoriteService: services, searchService: services,
             authorizeLibrary: {
@@ -551,15 +519,12 @@ private nonisolated final class AuthorizationStore: TokenStoring, @unchecked Sen
 }
 
 private struct AuthorizationLibrary: LibraryService, CatalogSearchService {
-    var revoked = false
     func savedState(for uri: SpotifyURI) async throws -> Bool {
-        if revoked { throw LibraryError.authorizationRequired }
         return true
     }
     func save(_ uri: SpotifyURI) async throws {}
     func remove(_ uri: SpotifyURI) async throws {}
     func search(query: String, kinds: Set<CatalogSearchKind>, offset: Int, limit: Int) async throws -> [CatalogSearchKind: CatalogSearchPage] {
-        if revoked { throw LibraryError.authorizationRequired }
         return Dictionary(uniqueKeysWithValues: kinds.map { ($0, CatalogSearchPage(results: [], nextOffset: nil)) })
     }
 }

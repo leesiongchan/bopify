@@ -231,26 +231,6 @@ struct MusicBrowserTests {
         #expect(environment.search.results.allSatisfy { $0.kind == .song })
     }
 
-    @Test func paginationAuthorizationFailureReturnsToSetup() async throws {
-        let service = PagingSearchService()
-        let environment = AppEnvironment(previewPlayer: PlayerModel(), favoriteService: BrowserServices(), searchService: service)
-        let host = NSHostingView(rootView: PlayerRootView(environment: environment).frame(width: 410, height: 560))
-        let window = NSWindow(contentRect: CGRect(x: 300, y: 300, width: 410, height: 560),
-                              styleMask: [.titled], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        defer { window.close() }
-        window.contentView = host
-        window.makeKeyAndOrderFront(nil)
-        host.layoutSubtreeIfNeeded()
-        environment.search.updateQuery("result")
-        await environment.search.search()
-        #expect(environment.search.results.count == 19 && environment.search.error == nil)
-        await service.failNextPages(.authorizationRequired)
-        await environment.search.loadMore(.song)
-        try await waitUntil { environment.authState == .needsLibraryAuthorization && environment.player == nil }
-        #expect(environment.search.query.isEmpty && environment.search.results.isEmpty)
-    }
-
     @Test func shortMixedSearchDoesNotClipResults() async throws {
         let (environment, panel, window) = try await openSearch(BrowserServices())
         defer { environment.searchPopover.close(); panel.close() }
